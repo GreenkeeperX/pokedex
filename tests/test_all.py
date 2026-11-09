@@ -153,6 +153,31 @@ class Leser(unittest.TestCase):
         data = b"la" + struct.pack("<H", 1) + struct.pack("<II", 12, 12 + len(area)) + area
         self.assertEqual(abruf.pkhex_areas(data), [([4], 0, [(399, 0, 2, 4, 0), (399, 0, 17, 19, 1)])])
 
+    def test_pkhex_fundorte(self):
+        import sqlite3
+        import struct
+        from app import abfragen
+        # Gebiet 7 mit Stellen 8 und 9: Bidiza Lv 2–4 (Alpha 17–19), Fukano Form 1 (Hisui) Lv 5–6
+        slots = [(399, 0, 0, 2, 4), (399, 0, 1, 17, 19), (58, 1, 0, 5, 6)]
+        area = bytes([3, 7, 8, 9, 0, len(slots)]) + b"".join(struct.pack("<HBBBBBB", s, f, a, lo, hi, 0, 0) for s, f, a, lo, hi in slots)
+        data = b"la" + struct.pack("<H", 1) + struct.pack("<II", 12, 12 + len(area)) + area
+        orte = "\n".join(["", "", "", "", "", "", "", "Gebiet A", "Stelle B", "Stelle C"])
+        con = sqlite3.connect(":memory:")
+        con.row_factory = sqlite3.Row
+        con.execute("CREATE TABLE pokemon (id INTEGER, species_id INTEGER, is_default INTEGER)")
+        con.executemany("INSERT INTO pokemon VALUES (?, ?, 1)", [(399, 399), (58, 58), (10229, 58)])
+        con.execute("CREATE TABLE pokemon_forms (pokemon_id INTEGER, form_order INTEGER)")
+        con.executemany("INSERT INTO pokemon_forms VALUES (?, ?)", [(399, 1), (58, 1), (10229, 2)])
+        self.assertEqual(importer._derive_fundort(con, {"legends-arceus": {"begegnungen": data, "orte": orte}}), 3)
+        self.assertEqual([r[0] for r in con.execute("SELECT DISTINCT form FROM fundort ORDER BY form")], [399, 10229])
+        g = {"kennung": "legends-arceus"}
+        e = abfragen._enc_pkhex(con, g, 399)
+        self.assertEqual(len(e), 1)
+        self.assertEqual((e[0]["ort"], e[0]["methode"], e[0]["level"], e[0]["alpha"]), ("Gebiet A", "frei", "2–4", "17–19"))
+        self.assertEqual([x["name"] for x in e[0]["stellen"]], ["Stelle B", "Stelle C"])
+        self.assertEqual(abfragen._enc_pkhex(con, g, 25), [])                 # Spiel mit Daten, Pokémon ohne Fundort
+        self.assertIsNone(abfragen._enc_pkhex(con, {"kennung": "x"}, 399))    # Spiel ohne Daten: PokéAPI
+
     def test_showdown(self):
         text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"
                 "\t\tname: \"Hyper Beam\",\n\t\tpp: 5,\n\t\tpriority: 0,\n\t\tflags: {recharge: 1, protect: 1},\n\t\ttype: \"Normal\",\n\t},\n"

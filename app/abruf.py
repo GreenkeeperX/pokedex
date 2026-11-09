@@ -332,13 +332,16 @@ def _build(st, log, force, at):
         st["sources"]["showdown"] = sd.result(dateien=len(sd_texts))
         if sd.blocked:
             st["rest"]["showdown"] = _iso(now() + timedelta(hours=REST_H))
+    pkhex = _pkhex(st, log, at)
     extra = importer.load_extra(EXTRA_DIR)
     stand = {"csv": sha, "showdown": _hash(*(sd_texts.get(k, "") for k in ("pokedex", "moves"))) if len(sd_texts) == 2 else "",
+             "pkhex": _hash(*(v for src in pkhex.values() for v in src.values())) if pkhex else "",
              "extra": _hash(json.dumps(extra, sort_keys=True)), "importer": importer.VERSION}
     old = st.get("stand") or {}
     if (db.has_data() and not force and sha and stand["csv"] == old.get("csv") and stand["extra"] == old.get("extra")
-            and stand["importer"] == old.get("importer") and (not stand["showdown"] or stand["showdown"] == old.get("showdown"))):
-        log("Keine Änderung bei PokéAPI, Showdown und Ergänzungen, Datenbank bleibt")
+            and stand["importer"] == old.get("importer") and (not stand["showdown"] or stand["showdown"] == old.get("showdown"))
+            and (not stand["pkhex"] or stand["pkhex"] == old.get("pkhex"))):
+        log("Keine Änderung bei PokéAPI, Showdown, PKHeX und Ergänzungen, Datenbank bleibt")
         st["sources"]["pokeapi"] = papi.result(geaendert=False)
         return True
     csvs = {}
@@ -359,7 +362,7 @@ def _build(st, log, force, at):
     STATE.update(step="Datenbank bauen", done=0, total=0)
     tmp = db.pokeapi_path() + ".neu"
     try:
-        stats = importer.build(tmp, csvs, sd_texts, extra)
+        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex)
     except Exception as e:
         log(f"Neue Datenbank verworfen: {e}; die bisherige bleibt")
         if os.path.exists(tmp):
@@ -368,11 +371,33 @@ def _build(st, log, force, at):
     os.replace(tmp, db.pokeapi_path())
     if len(sd_texts) < 2:
         stand["showdown"] = old.get("showdown", "")
+    if not pkhex:
+        stand["pkhex"] = old.get("pkhex", "")
     st["stand"], st["stats"], st["built"] = stand, stats, _iso(now())
     log(f"Datenbank neu: {stats['species']} Arten, {stats['forms']} Formen, {stats['moves']} Attacken, {stats['games']} Spiele, "
         f"{stats['tables']} Tabellen" + (f"; Showdown {stats['sd_pokemon']} Pokémon, {stats['sd_moves']} Attacken, "
-                                         f"{stats['diff']} Abweichungen zu prüfen" if sd_texts else "; ohne Showdown-Abgleich"))
+                                         f"{stats['diff']} Abweichungen zu prüfen" if sd_texts else "; ohne Showdown-Abgleich")
+        + (f"; {stats['fundorte']} Fundorte aus PKHeX" if pkhex else "; ohne Fundorte aus PKHeX"))
     return not papi.stopped and not sd.stopped
+
+
+def _pkhex(st, log, at):
+    """Begegnungsdateien aus PKHeX (Spieldaten, GPL-3.0): {Spielkennung: {"begegnungen": Bytes, "orte": Text}}."""
+    if _resting(st, "pkhex", at):
+        log(f"PKHeX ruht bis {st['rest']['pkhex'][:16].replace('T', ' ')} UTC")
+        return {}
+    src = _Source("pkhex", log)
+    out = {}
+    for spiel, (enc, names) in PKHEX_GAMES.items():
+        STATE["step"] = f"PKHeX: {spiel}"
+        b = src.get(PKHEX_RAW + enc, raw=True)
+        t = src.get(PKHEX_RAW + names) if b else None
+        if b and t:
+            out[spiel] = {"begegnungen": b, "orte": t}
+    st["sources"]["pkhex"] = src.result(dateien=2 * len(out))
+    if src.blocked:
+        st["rest"]["pkhex"] = _iso(now() + timedelta(hours=REST_H))
+    return out
 
 
 def start(force=False):
@@ -403,26 +428,9 @@ PKHEX_RAW = "https://raw.githubusercontent.com/kwsch/PKHeX/master/PKHeX.Core/Res
 PROBE_MAX = 60_000          # so viele Zeichen je Probe-Seite behält der Verbindungstest
 
 
-def pkhex_areas(data):
-    """Begegnungen aus einer PKHeX-Datei encounter_la.pkl (BinLinker „la“): je Gebiet Ortsnummern, Art und Plätze
-    mit Art, Form, Level von–bis und Alpha. Gibt [(orte, art, [(nr, form, min, max, alpha)])] zurück."""
-    import struct
-    n = struct.unpack_from("<H", data, 2)[0]
-    offs = [struct.unpack_from("<I", data, 4 + 4 * i)[0] for i in range(n + 1)]
-    out = []
-    for i in range(n):
-        a = data[offs[i]:offs[i + 1]]
-        lc = a[0]
-        locs = list(a[1:1 + lc])
-        al = lc + 1
-        al += al & 1
-        kind, count, rest = a[al], a[al + 1], a[al + 2:]
-        slots = []
-        for k in range(count):
-            e = rest[8 * k:8 * k + 8]
-            slots.append((struct.unpack_from("<H", e)[0], e[2], e[4], e[5], e[3]))
-        out.append((locs, kind, slots))
-    return out
+pkhex_areas = importer.pkhex_areas
+# Spiele mit Begegnungsdatei und deutschen Ortsnamen (weitere folgen, sobald ihr Format gelesen wird)
+PKHEX_GAMES = {"legends-arceus": ("legality/wild/Gen8/encounter_la.pkl", "text/locations/gen8a/text_la_00000_de.txt")}
 
 
 def diagnose(proben=None):

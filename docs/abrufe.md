@@ -11,7 +11,11 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 2. **PokéAPI**: Dateiliste und letzter Commit von `data/v2/csv` über die GitHub-API. Ohne Antwort (etwa
    Ratenlimit) die feste Liste `importer.NEEDED`.
 3. **Showdown**: `data/pokedex.ts` und `data/moves.ts`.
-4. Hat sich nichts geändert (Commit, Prüfsumme von Showdown und `extra/`, `importer.VERSION`), bleibt die
+   **PKHeX**: Begegnungsdatei und deutsche Ortsnamen je Spiel in `abruf.PKHEX_GAMES` (bisher Legenden: Arceus).
+   `importer.pkhex_areas` liest sie: je Gebiet die Ortsnummern (die erste ist das Gebiet, die übrigen die Stellen),
+   die Art (frei, Raum-Zeit-Verzerrung, Baum oder Erzbrocken, Massenauftreten) und Plätze mit Art, Form, Level und
+   Alpha. Die Formnummer im Spiel wird über `pokemon_forms.form_order` zur Form der PokéAPI (Tabelle `fundort`).
+4. Hat sich nichts geändert (Commit, Prüfsumme von Showdown, PKHeX und `extra/`, `importer.VERSION`), bleibt die
    Datenbank. Sonst alle CSV-Dateien holen (raw.githubusercontent.com), in `pokeapi.db.neu` bauen und nach
    bestandener Selbstprüfung (Mindestzahl Arten, Attacken, Spiele, 18 Typen) austauschen. Scheitert etwas,
    bleibt die alte Datenbank.

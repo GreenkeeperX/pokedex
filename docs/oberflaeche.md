@@ -34,6 +34,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Hinweise (`data-tip`) erscheinen unter dem Ziel, Hover-Karten daneben.
 - Sicherung: `/api/export` lädt herunter, `/api/restore` ersetzt alle eigenen Daten (vorher `vor-einlesen-…` in
   `sicherung/`).
+- Fundorte (`encHtml`): mit Daten aus PKHeX (`fundquelle`) Gebiet, Stellen mit Level (ab sechs Stellen gekürzt, alle im
+  Hinweis), Art, Level und Alpha-Level; sonst die Tabelle der PokéAPI. Filter „Gebiet“ (`areaSelect`) nur bei Spielen
+  mit Gebieten (`/api/meta`, `spiele[].gebiete`), ohne Massenauftreten.
 - Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
   Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
   (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.

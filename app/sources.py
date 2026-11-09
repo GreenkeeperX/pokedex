@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.4.2"
+VERSION = "0.5.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.5.0", "09.11.2026", [
+        "Fundorte in Legenden: Arceus aus den Spieldaten (PKHeX): je Gebiet die Stellen mit Level, Alpha-Level und Art "
+        "(frei, Raum-Zeit-Verzerrung, Baum oder Erzbrocken, Massenauftreten)",
+        "Filter „Gebiet“ in der Liste und bei der Teamsuche: nur Pokémon, die dort frei vorkommen",
+        "PKHeX als neue Quelle im Abgleich und unter „Quellen und Lizenzen“",
+    ]),
     ("0.4.2", "09.11.2026", [
         "Verbindungstest prüft auch mögliche neue Quellen: Items (PokéAPI, Showdown, PKHeX), Fundorte aus den Spieldaten "
         "(PKHeX für Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A), Wikis (PokéWiki, Bulbapedia, Serebii, Pokémon Database), "

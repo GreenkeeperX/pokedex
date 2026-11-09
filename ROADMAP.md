@@ -1,5 +1,19 @@
 # Roadmap
 
+## 0.5.0 (Fundorte aus den Spieldaten)
+
+- Abgleich holt die Begegnungsdatei und die deutschen Ortsnamen von PKHeX für Legenden: Arceus; neue Tabelle
+  `fundort` in pokeapi.db (`importer.VERSION` 2)
+- Detailseite: Gebiet, Stellen mit Level, Art und Alpha-Level; Filter „Gebiet“
+
+## Als Nächstes: 0.6.0
+
+- Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
+- PokéWiki-Leser (vom Heimserver aus erreichbar, Proben aus dem Verbindungstest) für das, was PKHeX nicht hat:
+  Tageszeit und Wetter, Edelhorden, Attackenwerte (Kraft- und Tempostil) und Lehrer-Attacken in Legenden: Arceus
+- Items aus der PokéAPI (Namen, Beschreibungen, je Spiel), später Fundorte der Items
+- Karten: Links auf die Gebietsseiten im PokéWiki statt eigener Bilder (Bildrechte)
+
 ## 0.4.2
 
 - Verbindungstest für mögliche neue Quellen (Items, PKHeX-Begegnungen, Wikis, Karten, Kampfdaten) mit Probe-Seiten
@@ -21,15 +35,6 @@
   als Ablage; Gegner mit Rahmen und Namen; Standard-Attacken auch für Mitglieder ohne Attacken
 - Attacken mit Farben und Erklärungen; Typtabelle in Grautönen; PokéWiki-Links an Attacken, Fähigkeiten und Orten
 - Ansicht-Menü, Version rechts, Stand des Abgleichs; Spielauswahl nach Generationen; Sicherung mit Einlesen
-
-## Als Nächstes: 0.5.0 (Legenden: Arceus vollständig, Items)
-
-- Fundorte aus PKHeX (Begegnungsdateien aus den Spieldaten): Legenden: Arceus mit Alpha und Level, danach
-  Karmesin/Purpur und Legenden: Z-A
-- PokéWiki-Leser (vom Heimserver aus erreichbar) für das, was PKHeX nicht hat: Tageszeit und Wetter, Edelhorden,
-  Attackenwerte (Kraft- und Tempostil) und Lehrer-Attacken in Legenden: Arceus
-- Items aus der PokéAPI (Namen, Beschreibungen, je Spiel), später Fundorte der Items
-- Karten: Links auf die Gebietsseiten im PokéWiki statt eigener Bilder (Bildrechte)
 
 ## 0.3.0 (Rückmeldung zu 0.2, Entscheidung 09.11.2026)
 
