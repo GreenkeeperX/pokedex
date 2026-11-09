@@ -1,7 +1,7 @@
 """Die beiden Datenbanken im Datenordner.
 
 - pokeapi.db: Spieldaten, baut der Abgleich jedes Mal neu (importer.py); wird nur gelesen
-- user.db: deine Teams und Entscheidungen; der Abgleich berührt sie nie. Tabellen legt migrate() an,
+- user.db: deine Teams, Favoriten, Gefangenen und Entscheidungen; der Abgleich berührt sie nie. Tabellen legt migrate() an,
   alte Dateien laden auch nach einem Update weiter (nur neue Tabellen und Spalten, nie löschen).
 """
 import datetime
@@ -21,6 +21,8 @@ USER_SCHEMA = (
     """CREATE TABLE IF NOT EXISTS entscheidung (art TEXT, schluessel TEXT, wert TEXT, at TEXT, PRIMARY KEY (art, schluessel))""",
     # 0.3.0: Favoriten je Spiel, der erweiterte Kader zum schnellen Tauschen
     """CREATE TABLE IF NOT EXISTS favorit (spiel TEXT, form INTEGER, seit TEXT, PRIMARY KEY (spiel, form))""",
+    # 0.4.0: gefangene Pokémon je Spiel (Pokéball), Grundlage für Empfehlungen und die Teamsuche
+    """CREATE TABLE IF NOT EXISTS gefangen (spiel TEXT, form INTEGER, seit TEXT, PRIMARY KEY (spiel, form))""",
 )
 # Spalten, die später dazukamen: (Tabelle, Spalte, Typ). Alte Dateien bekommen sie beim Start
 USER_COLUMNS = (
@@ -75,14 +77,20 @@ def game():
     return con
 
 
-def backup(today=None):
-    """Tägliche Kopie von user.db in sicherung/, die letzten BACKUP_KEEP bleiben. Gibt den Dateinamen oder "" zurück."""
+def backup(today=None, force=False):
+    """Tägliche Kopie von user.db in sicherung/, die letzten BACKUP_KEEP bleiben. Gibt den Dateinamen oder "" zurück.
+    force: zusätzlich eine Kopie vor dem Einlesen einer Sicherung (vor-einlesen-…, die letzten fünf bleiben)."""
     if not os.path.isfile(user_path()):
         return ""
     day = (today or datetime.date.today()).strftime("%Y%m%d")
     folder = os.path.join(data_dir(), "sicherung")
     os.makedirs(folder, exist_ok=True)
     target = os.path.join(folder, f"user-{day}.db")
+    if force:
+        target = os.path.join(folder, "vor-einlesen-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + ".db")
+        old = sorted(f for f in os.listdir(folder) if f.startswith("vor-einlesen-"))
+        for f in old[:-4]:
+            os.remove(os.path.join(folder, f))
     if not os.path.exists(target):
         src, dst = sqlite3.connect(user_path()), sqlite3.connect(target)
         try:

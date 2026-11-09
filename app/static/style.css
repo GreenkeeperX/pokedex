@@ -20,21 +20,41 @@
 h1,h2,h3,h4{color:var(--ink-hi)}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 .wrap{padding:0 16px 60px;margin:0 auto;max-width:1280px}
-.stick{position:sticky;top:0;z-index:7;background:var(--bg);margin-bottom:12px}
+/* Kopfzeile gleitet beim Abwärtsscrollen sanft weg und kommt beim Aufwärtsscrollen zurück (wie im VR-Navigator) */
+.stick{position:sticky;top:0;z-index:7;background:var(--bg);margin-bottom:12px;
+  transition:transform .8s cubic-bezier(.4,0,.2,1),opacity .7s ease}
+.stick.hid{transform:translateY(-100%);opacity:0;pointer-events:none}
+@media (prefers-reduced-motion: reduce){.stick,.dslots{transition:none!important}}
 header.top{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding:12px 0 6px}
 header.top h1{font-size:23px;margin:0;letter-spacing:-.015em}
 header.top h1 a{color:inherit;text-decoration:none;cursor:pointer}
 header.top .brand{color:var(--brand)}
-button.ver{font-size:12px;padding:2px 8px;border-radius:999px;color:var(--muted);margin-left:-10px}
+button.ver{font-size:12px;padding:2px 8px;border-radius:999px;color:var(--muted)}
 button.ver.frisch{color:var(--brand);border-color:var(--brand);font-weight:600}
 .note.neu{background:var(--card);border:1px solid var(--brand);margin:10px 0}
 .note.neu ul{margin:6px 0 8px;padding-left:20px}
-#vdlg{max-width:620px;width:calc(100% - 32px);background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:16px 20px}
+/* Versionen: Kopf mit Schließen-Knopf bleibt oben stehen, nur der Inhalt scrollt; Klick daneben schließt */
+#vdlg{max-width:620px;width:calc(100% - 32px);max-height:min(80vh,720px);background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:0;
+  display:none;flex-direction:column;overflow:hidden}
+#vdlg[open]{display:flex}
 #vdlg::backdrop{background:rgba(0,0,0,.4)}
+#vdlg .dh{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px 20px;border-bottom:1px solid var(--line)}
+#vdlg .dh h2{margin:0;font-size:18px}
+#vdlg .dh .x{width:32px;height:32px;padding:0;border-radius:50%;font-size:15px}
+#vdlg .db{overflow:auto;padding:4px 20px 16px}
 #vdlg h3{font-size:15px;margin:14px 0 4px}
 #vdlg ul{margin:0;padding-left:20px}
-#vdlg form{margin-top:14px;text-align:right}
 header.top .meta{color:var(--muted);font-size:13px;flex:1;min-width:160px}
+header.top .meta .stale{color:var(--warn)}
+/* Ansicht: runder Knopf mit Menü */
+.thm{position:relative}
+.thm>button{width:30px;height:30px;padding:0;border-radius:50%;display:inline-grid;place-items:center}
+.thm-m{position:absolute;right:0;top:36px;z-index:9;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px;display:flex;flex-direction:column;min-width:170px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.thm-m[hidden]{display:none}
+.thm-m button{border:0;background:none;text-align:left;border-radius:6px;padding:6px 10px;white-space:nowrap}
+.thm-m button:hover{background:var(--chip)}
+.thm-m button.on{font-weight:600}
+.thm-m .ic{display:inline-block;width:22px;vertical-align:-3px}
 .game,.game2{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
 .game select{max-width:300px;font-weight:600;color:var(--ink-hi)}
 .game2 select{max-width:280px}
@@ -86,20 +106,41 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
   text-decoration:none;color:var(--ink);cursor:pointer}
 .mon:hover{background:var(--hov);border-color:var(--accent)}
 .mon .mi{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.mon .n{font-weight:600;color:var(--ink-hi)}
+.mon .nl{display:flex;align-items:center;gap:6px;min-width:0}
+.mon .n{font-weight:600;color:var(--ink-hi);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .mon .s{font-size:12px;color:var(--muted)}
 .mon .radar{flex:none}
-.mon .corner{position:absolute;top:4px;right:6px;display:flex;gap:3px}
-.mon .plus,.mon .badge,.star{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
-.mon .star{color:var(--muted);opacity:0;transition:opacity .15s;font-weight:400}
-.mon:hover .star,.mon .star.on{opacity:1}
-.star.on{color:#e0a800}
-button.star{width:auto;border-radius:8px;font-size:14px;font-weight:400}
 .mon.inteam{border-color:var(--go);box-shadow:inset 0 0 0 1px var(--go)}
-.mon .plus{background:var(--accent);color:var(--bg);opacity:0;transition:opacity .15s}
-.mon:hover .plus,.mon .plus:focus{opacity:1}
-@media (hover:none){.mon .plus,.mon .star{opacity:.85}}
-.mon .badge{background:var(--go-bg);color:var(--go);font-size:12px}
+/* Marken hinter dem Namen (SVG): feste Plätze, nicht gesetzte erst beim Hovern sichtbar, nichts verschiebt sich */
+.ic{width:16px;height:16px;flex:none;display:block;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
+.ic-fav{stroke-width:1.6}
+.ic-fav.on{fill:currentColor}
+.ic-ball{stroke-width:1.6}
+.ic-ball .top{fill:none;stroke:none}
+.ic-ball.on .top{fill:currentColor}
+.ic-team{stroke-width:2.8}
+.mk{display:inline-flex;gap:3px;align-items:center;flex:none}
+.mk:empty{display:none}
+.mk .m{display:inline-grid;place-items:center}
+.mk .m-team{color:var(--go)}
+.mk .m-fav{color:#e0a800}
+.mk .m-ball{color:var(--brand)}
+/* Knöpfe zum Setzen: beim Hovern unten auf dem Bild */
+.mon .sp{position:relative;flex:none;width:64px;height:64px}
+.mon .acts{position:absolute;left:-2px;right:-2px;bottom:-4px;display:flex;justify-content:center;gap:2px;opacity:0;transition:opacity .15s}
+.mon:hover .acts,.mon:focus-visible .acts{opacity:1}
+.acts .a{width:21px;height:21px;display:inline-grid;place-items:center;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+.acts .a .ic{width:13px;height:13px}
+.acts .a:hover{color:var(--ink-hi);border-color:var(--accent)}
+.acts .a.on .ic-fav{color:#e0a800}
+.acts .a.on .ic-ball{color:var(--brand)}
+.acts .a.plus{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+@media (hover:none){.mon .acts{opacity:.85}}
+button.mark{display:inline-flex;align-items:center;gap:6px}
+button.mark.on .ic-fav{color:#e0a800}
+button.mark.on .ic-ball{color:var(--brand)}
+a.wl{font-size:11px;text-decoration:none;color:var(--muted);margin-left:2px}
+a.wl:hover{color:var(--accent)}
 .spr{width:64px;height:64px;image-rendering:pixelated;flex:none;object-fit:contain}
 .spr.big{width:200px;height:200px;image-rendering:auto}
 .spr.mid{width:96px;height:96px;image-rendering:auto}
@@ -114,21 +155,22 @@ button.star{width:auto;border-radius:8px;font-size:14px;font-weight:400}
 .radar text{font-size:10.5px;fill:var(--muted)}
 .radar text .v{font-weight:700;fill:var(--ink-hi)}
 .radar text.sc{font-size:8.5px;font-weight:600}
-/* Typ-Bubbles: an = Rahmen, ausgeschlossen = blass und durchgestrichen */
-.bubbles{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 10px}
+/* Typ-Bubbles: gewählt = heller Rahmen mit Schein, ausgeschlossen = roter Rahmen und durchgestrichen; ohne Zeichen,
+   damit die Größe gleich bleibt */
+.bubbles{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 10px;align-items:center}
+.bubbles .bhint{margin:0 0 0 6px;font-size:12px}
 button.tb{border:2px solid transparent;font-size:13px;line-height:22px;padding:0 9px;opacity:.55;border-radius:12px}
 button.tb:hover{opacity:.85;border-color:transparent}
 button.tb.in{opacity:1;border-color:var(--ink-hi);box-shadow:0 0 0 1px var(--card) inset,0 0 8px color-mix(in srgb,var(--tc) 70%,transparent)}
-button.tb.in::before{content:"✓ "}
 button.tb.out{opacity:1;border-color:var(--brand);box-shadow:0 0 0 1px var(--card) inset,0 0 0 1px var(--brand);
   text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:#fff;background:color-mix(in srgb,var(--tc) 55%,#555)}
-button.tb.out::before{content:"✕ ";text-decoration:none}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{border:0;border-radius:0;padding:4px 10px}
 .seg button.on{background:var(--accent);color:var(--bg);box-shadow:none}
 /* Hinweise und Hover-Karte */
 #tip{position:absolute;z-index:30;max-width:360px;background:#1d2426;color:#eef2f1;border:1px solid #3a4547;border-radius:8px;padding:6px 9px;font-size:12.5px;white-space:pre-line;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.3)}
-#tip.rich{white-space:normal;padding:8px 10px}
+#tip.rich{white-space:normal;padding:8px 10px;max-width:none}
+#tip.rich .tg{flex-wrap:nowrap}
 #tip .muted{color:#a6b3b1}
 #tip .th{margin-bottom:4px}
 #tip .th .t{font-size:13px;line-height:22px;padding:0 10px}
@@ -156,17 +198,25 @@ button.tb.out::before{content:"✕ ";text-decoration:none}
 #dock{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.12)}
 #dock .dhead{display:flex;gap:10px;align-items:center;padding:5px 16px;max-width:1280px;margin:0 auto}
 #dock .dhead .link{font-weight:600;text-decoration:none;color:var(--ink-hi)}
-#dock .dmini{display:flex;gap:2px;flex:1}
+#dock .chev{display:inline-block;transition:transform .5s}
+#dock:not(.open) .chev,#dock.fold .chev{transform:rotate(180deg)}
+#dock .dmini{display:flex;gap:2px;flex:1;min-width:0;overflow:hidden;transition:opacity .5s}
+#dock.open:not(.fold) .dmini{opacity:0;pointer-events:none}
 #dock .dmini .spr{width:34px;height:34px}
 #dock .dhead .hint{flex:0 1 auto}
-#dock .dhead a.btn{margin-left:auto}
-.dslots{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:0 16px 8px;max-width:1280px;margin:0 auto}
+#dock .dhead a.btn{margin-left:auto;white-space:nowrap}
+.dslot{min-width:0}
+/* Plätze klappen sanft auf und zu (grid-template-rows von 0fr auf 1fr), auch beim Scrollen */
+.dslots{display:grid;grid-template-rows:0fr;transition:grid-template-rows .8s cubic-bezier(.4,0,.2,1),opacity .6s ease;opacity:0}
+#dock.open:not(.fold) .dslots{grid-template-rows:1fr;opacity:1}
+.dslots>.dgrid{overflow:hidden;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;padding:0 16px;max-width:1280px;margin:0 auto;width:100%}
+#dock.open:not(.fold) .dgrid{padding-bottom:8px}
 .dslot{position:relative;display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:8px;padding:2px 22px 2px 4px;min-height:54px;background:var(--bg);cursor:grab}
 .dslot .spr{width:48px;height:48px}
 .dslot .dn{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dslot .x{position:absolute;top:2px;right:2px;border:0;background:none;padding:0 3px;color:var(--muted)}
 .dslot:hover,.tslot:hover,.foe:hover,.imp:hover,table.vs th[data-hc]:hover,table.matrix th[data-hc]:hover{background:var(--hov)}
-.dslot.empty{border-style:dashed;color:var(--muted);font-size:12px;justify-content:center;cursor:pointer}
+.dslot.empty{border-style:dashed;color:var(--muted);font-size:12px;justify-content:center;cursor:pointer;gap:4px}
 .dslot.warn,.tslot.warn{border-color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn)}
 .wbadge{display:inline-flex;width:16px;height:16px;border-radius:50%;background:var(--warn);color:var(--card);font-size:11px;font-weight:700;align-items:center;justify-content:center}
 #dock .dirty{font-size:12px;color:var(--warn);font-weight:600}
@@ -175,7 +225,7 @@ button.tb.out::before{content:"✕ ";text-decoration:none}
 body.dragging .dslot.empty,body.dragging .tslot.empty{border-color:var(--brand)}
 body{padding-bottom:50px}
 body.dock-open{padding-bottom:120px}
-@media (max-width:700px){.dslots{grid-template-columns:repeat(3,1fr)}body.dock-open{padding-bottom:180px}#dock .dhead .hint{display:none}}
+@media (max-width:700px){.dslots>.dgrid{grid-template-columns:repeat(3,minmax(0,1fr))}#dock .wtext{display:none}body.dock-open{padding-bottom:180px}#dock .dhead .hint{display:none}}
 
 /* Detail */
 .head{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
@@ -192,6 +242,20 @@ body.dock-open{padding-bottom:120px}
 table{border-collapse:collapse;width:100%;font-size:13.5px}
 th,td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
 table.sort tbody tr:hover td,table.rows tr:hover td,table.vs tbody tr:hover td{background:var(--hov)}
+/* Gewählte Attacken in der Tabelle: dunkler hinterlegt als beim Hovern */
+table.sort tbody tr.sel td{background:color-mix(in srgb,var(--ink) 13%,var(--card))}
+table.sort tbody tr.sel:hover td{background:color-mix(in srgb,var(--ink) 17%,var(--card))}
+/* Deine Auswahl: vier feste Zeilen */
+table.mine{margin-bottom:6px}
+table.mine td{vertical-align:middle;height:32px;padding:3px 6px}
+table.mine tr.empty td{border-bottom-style:dashed}
+table.mine td.grip{width:16px;color:var(--muted);font-size:11px;letter-spacing:-2px;cursor:grab}
+table.mine tr.over td{background:color-mix(in srgb,var(--brand) 10%,var(--card))}
+.sugl{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.sugl>div{padding:3px 6px;border-radius:6px;border-bottom:1px solid var(--line)}
+.sugl>div.same{background:color-mix(in srgb,var(--ink) 8%,var(--card))}
+h2.sect{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 0 8px;font-weight:600}
+label.filebtn{cursor:pointer}
 table.sort th[data-sort]{cursor:pointer;user-select:none}
 table.sort th[data-sort]:hover{color:var(--ink-hi)}
 table.sort th[data-dir=asc]::after{content:" ▲";font-size:10px}
@@ -221,9 +285,11 @@ tr.off td{opacity:.55}
 .tslot .note.small{font-size:12px;padding:2px 6px;margin:4px 0}
 .favd summary{margin-top:10px}
 .favlist{margin-top:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
-.mvchip{cursor:grab}
-.mvchip .grip{color:var(--muted);font-size:11px;letter-spacing:-2px;margin-right:2px}
-.mvchip.over{outline:2px dashed var(--brand);outline-offset:1px}
+.mvchip[draggable=true]{cursor:grab}
+.favd summary .ic,.box h2 .ic{display:inline-block;vertical-align:-2px;margin-right:2px}
+.favd summary .ic-fav{color:#e0a800}
+.box h2 .ic-ball{color:var(--brand)}
+.dropmark.over{outline:2px dashed var(--brand);outline-offset:3px;border-radius:8px}
 .mvs{display:flex;flex-direction:column;gap:2px;margin-top:4px;font-size:12px;text-align:left}
 .mv .t{font-size:10px;line-height:16px;padding:0 4px}
 .score{font-size:30px;font-weight:700;color:var(--ink-hi)}
@@ -243,14 +309,23 @@ th.r{text-align:left;white-space:nowrap}
 .sugg .why{padding:2px 4px}
 .optt{border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-bottom:6px}
 .optt .spr{width:44px;height:44px}
-.imp{display:flex;gap:8px;align-items:flex-start;border-bottom:1px solid var(--line);padding:4px 0}
+.imp{display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding:4px 6px;border-radius:6px}
 .imp .spr{width:48px;height:48px}
-/* Gegner: eigene, getönte Leiste über der Auswertung */
-.foes{display:flex;flex-wrap:wrap;gap:8px;padding:10px;border-radius:10px;background:var(--stop-bg);margin-bottom:10px}
-.foe{position:relative;background:var(--card);border-radius:8px;padding:6px 26px 6px 6px;text-align:center;font-size:13px;min-width:120px}
+.imp .arrow{color:var(--muted)}
+/* Verbesserungen: wo ein Vorschlag vom Team abweicht, dezent hinterlegt; „passt so“ blass */
+.imp.diff{background:color-mix(in srgb,var(--info) 8%,var(--card))}
+.imp.same{opacity:.7}
+.imp .new{display:inline-block;border-radius:5px;padding:0 4px;background:color-mix(in srgb,var(--go) 14%,transparent)}
+.imp .plus{color:var(--go)}
+.optt a.new{display:inline-block;border-radius:8px;background:color-mix(in srgb,var(--go) 16%,transparent)}
+/* Gegner: Karten mit rotem Rahmen, ohne getönten Hintergrund */
+.foes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.foe{position:relative;background:var(--card);border:2px solid color-mix(in srgb,var(--stop) 70%,transparent);border-radius:8px;padding:6px 26px 6px 6px;text-align:center;font-size:13px;min-width:120px}
 .foe .spr{width:80px;height:80px;image-rendering:auto;display:block;margin:0 auto}
 .foe .x{position:absolute;top:3px;right:3px;border:0;background:none;color:var(--muted)}
-table.vs td{text-align:center}
+table.vs td{text-align:center;vertical-align:middle}
+table.vs th.foeh{text-align:center;font-weight:400;font-size:12px;color:var(--ink);border-bottom:2px solid color-mix(in srgb,var(--stop) 60%,transparent)}
+table.vs th.foeh .spr{display:block;margin:0 auto}
 table.vs .spr{width:44px;height:44px}
 table.vs th.r .spr{width:36px;height:36px;vertical-align:middle}
 .v-schicken{color:var(--go);font-weight:600;background:var(--go-bg)}.v-schonen{color:var(--stop);font-weight:600;background:var(--stop-bg)}.v-geht{color:var(--muted)}
@@ -267,8 +342,8 @@ table.vs th.r .spr{width:36px;height:36px;vertical-align:middle}
 .chart td,.chart th{cursor:pointer;user-select:none}
 .chart th.corner{cursor:default}
 .chart .hl{background:var(--hov)}
-.chart .pin{background:color-mix(in srgb,var(--brand) 13%,var(--card))}
-.chart .pin.hl{background:color-mix(in srgb,var(--brand) 22%,var(--card))}
+.chart .pin{background:color-mix(in srgb,var(--ink) 13%,var(--card))}
+.chart .pin.hl{background:color-mix(in srgb,var(--ink) 19%,var(--card))}
 
 /* Einstellungen */
 .log{font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:360px;overflow:auto}

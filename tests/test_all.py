@@ -134,6 +134,16 @@ class TeamPlaetze(unittest.TestCase):
         self.assertFalse(abfragen.strong_against([10], 11, ch))     # Feuer gegen Wasser
         self.assertFalse(abfragen.strong_against([12], 12, ch))
 
+    def test_duell_doppeltyp(self):
+        from app import abfragen
+        # Wasser (11) / Gift (4) gegen Feuer (10) und Pflanze (12)
+        ch = {10: {12: 2, 11: 0.5, 4: 1}, 11: {10: 2, 12: 0.5, 4: 1}, 12: {11: 2, 10: 0.5, 4: 0.5}, 4: {12: 2, 4: 0.5}}
+        self.assertEqual(abfragen.duel([11, 4], 10, ch), (2, 0.5, 2))      # klar stark
+        self.assertEqual(abfragen.duel([11, 4], 12, ch), (2, 1.0, 1))      # stark: Pflanze trifft ×2 · ×½
+        self.assertTrue(abfragen.strong_against([11, 4], 12, ch))
+        self.assertFalse(abfragen.strong_against([11, 4], 12, ch, clear=True))
+        self.assertEqual(abfragen.duel([12], 10, ch)[2], -1)               # Pflanze gegen Feuer: schwer
+
 
 class Leser(unittest.TestCase):
     def test_showdown(self):
@@ -272,6 +282,24 @@ class Server(TempData):
         server.set_favorite({"spiel": "legends-arceus", "id": 25, "an": False})
         self.assertEqual([f["form"] for f in server.export()["favoriten"]], [1])
 
+    def test_gefangen_und_einlesen(self):
+        db.migrate()
+        server.set_mark("gefangen", {"spiel": "legends-arceus", "id": [403, 404, 25]})
+        server.set_mark("gefangen", {"spiel": "legends-arceus", "id": 25, "an": False})
+        self.assertEqual(server.marked("gefangen", "legends-arceus"), [403, 404])
+        server.save_team({"name": "Erfunden", "spiel": "legends-arceus", "mitglieder": [1, 4], "details": [{"level": 7}, {}]})
+        dump = json.loads(json.dumps(server.export()))
+        self.assertEqual(len(dump["gefangen"]), 2)
+        server.set_mark("gefangen", {"spiel": "x", "id": 9})
+        server.delete_team({"id": server.teams()[0]["id"]})
+        r = server.restore(dump)
+        self.assertEqual((r["teams"], r["gefangen"]), (1, 2))
+        self.assertEqual(server.marked("gefangen", "x"), [])
+        self.assertEqual(server.teams()[0]["details"][0]["level"], 7)
+        self.assertTrue(any(f.startswith("vor-einlesen-") for f in os.listdir(os.path.join(self.dir, "sicherung"))))
+        with self.assertRaises(ValueError):
+            server.restore({"teams": []})
+
     def test_entscheidung(self):
         db.migrate()
         server.decide({"art": "pruefung", "schluessel": "form:25:KP", "wert": "showdown"})
@@ -345,6 +373,24 @@ class MitDatenbank(TempData):
         self.assertEqual(ev["nicht_im_spiel"], [2])
         sg = abfragen.team_suggest({"spiel": "legends-arceus", "ids": [bauz["id"]], "filter": {"q": "Bauz"}})
         self.assertGreaterEqual(sg["schon_im_team"], 1)
+
+    def test_0_4_0(self):
+        from app import abfragen
+        db.migrate()
+        alle = abfragen.search({"spiel": "legends-arceus", "gen": 4})["n"]
+        nur = abfragen.search({"spiel": "legends-arceus", "gen": 4, "genmodus": "nur", "limit": 500})
+        self.assertLess(nur["n"], alle)
+        self.assertTrue(all(r["gen"] == 4 for r in nur["rows"]))
+        klar = abfragen.search({"spiel": "legends-arceus", "gegen": "10", "klar": 1})["n"]
+        self.assertLessEqual(klar, abfragen.search({"spiel": "legends-arceus", "gegen": "10"})["n"])
+        # Gefangene: Filter und Empfehlungen (Staralili entwickelt sich zu Staraptor)
+        star = abfragen.search({"spiel": "legends-arceus", "q": "Staralili"})["rows"][0]["id"]
+        karp = abfragen.search({"spiel": "legends-arceus", "q": "Karpador"})["rows"][0]["id"]
+        server.set_mark("gefangen", {"spiel": "legends-arceus", "id": [star]})
+        self.assertEqual(abfragen.search({"spiel": "legends-arceus", "nur": "gef"})["n"], 1)
+        r = abfragen.team_caught({"spiel": "legends-arceus", "ids": [karp, karp]})
+        self.assertEqual(r["gefangen"], 1)
+        self.assertTrue(r["alternativen"] or r["potential"])
 
 
 if __name__ == "__main__":

@@ -10,11 +10,25 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.4.0", "09.11.2026", [
+        "Kopfzeile und Team-Leiste gleiten beim Scrollen sanft weg und kommen beim Hochscrollen zurück",
+        "Gefangen (Pokéball) je Spiel: Empfehlungen daraus im Team, Filter „nur Gefangene“ oder „nur Favoriten“, Teamsuche nur aus Gefangenen",
+        "„Im Duell gegen Typen“ auf Hover-Karte und Detailseite: klar stark, stark, schwer, mit der Rechnung beim Hovern",
+        "Marken (im Team, gefangen, Favorit) direkt hinter dem Namen; Knöpfe zum Setzen beim Hovern auf dem Bild",
+        "Filter: „bis“ oder „nur“ Generation, „stark gegen“ wahlweise nur klar",
+        "Deine Attacken als feste Liste mit vier Zeilen, Auswahl in der Tabelle hinterlegt, Status-Attacken offen mit Wirkung",
+        "Team: Sortierung bleibt sichtbar, Abweichungen in Verbesserungen und Teamsuche hinterlegt, volles Team fragt nach dem Platz",
+        "Ziehen aus der Suche ins Team und auf Favoriten oder Gefangene; Gegner mit rotem Rahmen und Namen; Vorteil, Nachteil, ausgeglichen",
+        "Attacken mit Farben für die Werte, Hinweise zu Vorrang und Kontakt; PokéWiki-Links an Attacken, Fähigkeiten und Orten",
+        "Ansicht per rundem Knopf (System, Hell, Dunkel), Version rechts daneben, Stand des letzten Abgleichs in der Kopfzeile",
+        "Spielauswahl nach Generationen gruppiert; Versionen schließen per Klick daneben",
+        "Einstellungen: Sicherung herunterladen und wieder einlesen, Kopieren erst, wenn es etwas gibt",
+    ]),
     ("0.3.0", "09.11.2026", [
         "Nintendo-Rot, dezentere Linien; Klick auf den Titel lädt alles neu",
         "Netzdiagramm mit Speichen und Ringen; außen = Höchstwert aller Pokémon, an den Ecken eine Skala von 0 bis 10",
