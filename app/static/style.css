@@ -359,3 +359,23 @@ details summary{cursor:pointer;font-weight:600}
 /* Fundorte aus den Spieldaten */
 .weitere{border-bottom:1px dotted var(--muted);cursor:help;white-space:nowrap}
 .alpha{color:var(--brand);font-weight:600}
+/* Karte */
+.mapwrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:12px;margin-top:10px}
+.map{position:relative;height:70vh;min-height:360px;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:var(--chip);touch-action:none;cursor:grab}
+.map.grab{cursor:grabbing}
+.mapin{position:absolute;left:0;top:0;width:2048px;height:2048px;transform-origin:0 0}
+.mapin .tiles img{position:absolute;user-select:none}
+.pin{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;padding:0;border-radius:50%;border:2px solid #fff;background:#3a7bd5;box-shadow:0 1px 3px rgba(0,0,0,.5);cursor:pointer;transform:scale(var(--inv,1))}
+.pin.alpha{background:var(--brand)}
+.pin.dim{opacity:.35;width:9px;height:9px;margin:-4.5px 0 0 -4.5px}
+.pin.hit{background:#f5c400;width:16px;height:16px;margin:-8px 0 0 -8px;z-index:2}
+.pin.hit.alpha{background:#ff6a00}
+.pin.sel{outline:3px solid var(--accent);z-index:3}
+.mapside{border:1px solid var(--line);border-radius:10px;padding:10px;max-height:70vh;overflow:auto}
+.mapside h3{margin:0 0 8px}
+.mapside .spr.sm{width:32px;height:32px}
+.mapbox .seg .btn{border:0;border-radius:0;padding:4px 10px}
+.mapbox .seg .btn.on{background:var(--accent);color:var(--bg)}
+.mapbox .bar{flex-wrap:wrap}
+@media (max-width:820px){.mapwrap{grid-template-columns:1fr}.map{height:60vh}}
+.maplink{font-size:12px;margin-left:4px}

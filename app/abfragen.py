@@ -555,6 +555,95 @@ def _range(xs):
     return f"{lo}" if lo == hi else f"{lo}–{hi}"
 
 
+ZEIT_DE = {"Dawn": "Morgen", "Day": "Tag", "Dusk": "Abend", "Night": "Nacht"}
+WETTER_DE = {"None": "klar", "Sunny": "sonnig", "Cloudy": "bewölkt", "Rain": "Regen", "Snow": "Schnee", "Drought": "starke Sonne",
+             "Fog": "Nebel", "Rainstorm": "Gewitter", "Snowstorm": "Schneesturm"}
+
+
+def _pct(x):
+    return f"{x:.0f} %" if x >= 10 else f"{x:.1f} %".replace(".", ",")
+
+
+def _cond_text(d, order, names, all_label):
+    """Anteile je Tageszeit oder Wetter als kurzer Text: „immer“, „Nacht 88 %“ oder „Regen 45 %, sonst 20 %“."""
+    present = [k for k in order if d.get(k)]
+    vals = sorted(d[k] for k in present)
+    if not vals:
+        return ""
+    if len(present) == len(order) and vals[0] >= 0.8 * vals[-1]:
+        return all_label
+    if len(present) < len(order):
+        return ", ".join(f"{names[k]} {_pct(d[k])}" for k in present)
+    base = vals[len(vals) // 2]
+    special = [k for k in present if abs(d[k] - base) > 0.2 * base]
+    return ", ".join(f"{names[k]} {_pct(d[k])}" for k in special) + f", sonst {_pct(base)}"
+
+
+def spawn_summary(con, spiel, pid):
+    """Je Gebiet: höchster Anteil an Spawnpunkten je Tageszeit und je Wetter (Alpha nur, wenn es sonst nichts gibt),
+    als Text, dazu Höchstwert und Zahl der Punkte."""
+    try:
+        rows = con.execute("SELECT gebiet, karte, name, alpha, anteile FROM spawn WHERE spiel = ? AND form = ?", (spiel, pid)).fetchall()
+    except Exception:
+        return {}
+    has_normal = {r["gebiet"] for r in rows if not r["alpha"]}
+    out = {}
+    for r in rows:
+        if r["alpha"] and r["gebiet"] in has_normal:
+            continue
+        e = out.setdefault(r["gebiet"], {"z": {}, "w": {}, "max": 0, "punkte": set(), "karte": r["karte"]})
+        e["punkte"].add(r["name"])
+        for cell, pct in json.loads(r["anteile"]).items():
+            zt, _, wt = cell.partition("/")
+            e["z"][zt] = max(e["z"].get(zt, 0), pct)
+            e["w"][wt] = max(e["w"].get(wt, 0), pct)
+            e["max"] = max(e["max"], pct)
+    return {k: {"zeit": _cond_text(e["z"], importer.ZEITEN, ZEIT_DE, "immer"),
+                "wetter": _cond_text(e["w"], importer.WETTER, WETTER_DE, "jedes"),
+                "max": e["max"], "punkte": len(e["punkte"]), "karte": e["karte"]} for k, e in out.items()}
+
+
+def map_data(karte, p):
+    """Karte eines Gebiets: Spawnpunkte (x, z in Spielkoordinaten) mit den Pokémon dort, Tageszeit und Anteil.
+    p: spiel (bisher nur legends-arceus)."""
+    D = data()
+    if not D:
+        return None
+    spiel = "legends-arceus"
+    con = db.game()
+    try:
+        try:
+            pts = con.execute("SELECT nr, name, x, z, alpha, gebiet FROM spawnpunkt WHERE spiel = ? AND karte = ?", (spiel, karte)).fetchall()
+            rows = con.execute("SELECT name, form, alpha, anteile FROM spawn WHERE spiel = ? AND karte = ?", (spiel, karte)).fetchall()
+            maps = [dict(r) for r in con.execute("SELECT karte, gebiet, COUNT(*) n FROM spawnpunkt WHERE spiel = ? GROUP BY karte "
+                                                  "ORDER BY MIN(rowid)", (spiel,))]
+        except Exception:
+            return None
+    finally:
+        con.close()
+    if not pts:
+        return None
+    mons = {}
+    for r in rows:
+        f = D.forms.get(r["form"])
+        cells = json.loads(r["anteile"])
+        z, w = {}, {}
+        for cell, pct in cells.items():
+            zt, _, wt = cell.partition("/")
+            z[zt] = max(z.get(zt, 0), pct)
+            w[wt] = max(w.get(wt, 0), pct)
+        mons.setdefault(r["name"], []).append({
+            "id": r["form"], "name": f["name"] if f else str(r["form"]), "alpha": bool(r["alpha"]), "max": max(cells.values()),
+            "zeit": _cond_text(z, importer.ZEITEN, ZEIT_DE, "immer"), "wetter": _cond_text(w, importer.WETTER, WETTER_DE, "jedes")})
+    for v in mons.values():
+        v.sort(key=lambda m: (m["alpha"], -m["max"]))
+    folder = os.path.join(db.data_dir(), "karten", karte)
+    return {"karte": karte, "gebiet": pts[0]["gebiet"], "karten": maps,
+            "kacheln": len(os.listdir(folder)) if os.path.isdir(folder) else 0,
+            "punkte": [{"nr": r["nr"], "x": r["x"], "z": r["z"], "alpha": bool(r["alpha"]), "mons": mons.get(r["name"], [])}
+                       for r in pts]}
+
+
 def _enc_pkhex(con, g, pid):
     """Fundorte aus den Spieldaten (PKHeX): je Gebiet und Art die Stellen, Level und Alpha-Level. None ohne Daten."""
     try:
@@ -570,17 +659,21 @@ def _enc_pkhex(con, g, pid):
         lv = (r["min"], r["max"])
         (e["alpha"] if r["alpha"] else e["lv"]).append(lv)
         e["immer"] = e["immer"] or r["alpha"] == 2
-        for x in json.loads(r["stellen"] or "[]") or [""]:
+        for x in (json.loads(r["stellen"] or "[]") or [""]) if r["art"] != importer.FEST else []:
             st = e["stellen"].setdefault(x, {"lv": [], "alpha": []})
             (st["alpha"] if r["alpha"] else st["lv"]).append(lv)
+    spawn = spawn_summary(con, g["kennung"], pid)
     out = []
     for (nr, art), e in sorted(groups.items()):
+        sp = spawn.get(e["gebiet"]) if art == 0 else None
         places = [{"name": k, "level": _range(v["lv"]) if v["lv"] else "", "alpha": _range(v["alpha"]) if v["alpha"] else ""}
                   for k, v in e["stellen"].items()]
         places.sort(key=lambda x: (int((x["level"] or x["alpha"]).split("–")[0] or 0), x["name"]))
         out.append({"ort": e["gebiet"], "stellen": places, "methode": importer.PKHEX_ART.get(art, str(art)),
                     "level": _range(e["lv"]) if e["lv"] else "", "alpha": _range(e["alpha"]) if e["alpha"] else "",
-                    "nur_alpha": not e["lv"] and bool(e["alpha"]), "bedingungen": [], "editionen": []})
+                    "nur_alpha": not e["lv"] and bool(e["alpha"]), "bedingungen": [], "editionen": [],
+                    "zeit": sp["zeit"] if sp else "", "wetter": sp["wetter"] if sp else "",
+                    "chance": sp["max"] if sp else 0, "punkte": sp["punkte"] if sp else 0, "karte": sp["karte"] if sp else ""})
     return out
 
 
