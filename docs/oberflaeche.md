@@ -14,6 +14,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Ein gespeichertes Team speichert jede Änderung selbst (`POST /api/teams`), Level und Attacken liegen unter `details`.
 - Tabellen mit `class="sort"` sortieren per Klick auf die Kopfzeile, nach `data-s` der Zellen.
 - Eigene Attacken-Auswahl: im Team in `details`, sonst je Spiel und Pokémon im Browser.
+- Version: steht neben dem Namen oben links, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
+  Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
+  (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.
 
 ## Farben
 

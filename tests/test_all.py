@@ -110,6 +110,16 @@ class Team(unittest.TestCase):
         self.assertEqual(rows[1]["urteil"], "schonen")
 
 
+class Version(unittest.TestCase):
+    def test_neuigkeiten(self):
+        from app import sources
+        self.assertEqual(sources.NEUIGKEITEN[0][0], sources.VERSION)
+        for v, datum, punkte in sources.NEUIGKEITEN:
+            self.assertRegex(v, r"^\d+\.\d+\.\d+$")
+            self.assertRegex(datum, r"^\d\d\.\d\d\.\d{4}$")
+            self.assertTrue(punkte)
+
+
 class Leser(unittest.TestCase):
     def test_showdown(self):
         text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"

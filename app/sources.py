@@ -10,7 +10,29 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
+
+# Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
+# muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
+NEUIGKEITEN = [
+    ("0.2.1", "09.11.2026", [
+        "Version in der Kopfzeile; nach einem Update erscheint einmal ein Hinweis, was neu ist",
+    ]),
+    ("0.2.0", "09.11.2026", [
+        "Liste: Hover-Karte mit Artwork, Netzdiagramm und Schwächen, Typ-Filter als Bubbles (und/oder, ausschließen), "
+        "Zurücksetzen, Nachladen beim Scrollen, Links lassen sich in neuem Tab öffnen",
+        "Team-Leiste unten in jedem Reiter mit Drag & Drop und „+“ auf jeder Karte",
+        "Teams je Spiel speichern sich selbst, mit Level und vier Attacken je Mitglied und Verbesserungsvorschlägen",
+        "Detailseite: Spielwahl, Level ohne Neuladen, eigene Attacken-Auswahl, mehr Hover-Infos",
+        "Team-Ansicht: alle Filter, Gegner-Team mit bis zu sechs Pokémon",
+        "Attacken: alle Attacken je Spiel inklusive Status, mehr Filter, sortierbare Spalten",
+        "Typtabelle: lesbare Kopfzeile, Linien, Legende, Hervorhebung von Zeile und Spalte",
+        "Offizielle Artworks in 475 × 475 zusätzlich zu den Sprites",
+    ]),
+    ("0.1.0", "09.11.2026", [
+        "Erste Version als Dienst: Abgleich mit PokéAPI und Showdown, Liste, Detailseite, Team-Planer, Typtabelle",
+    ]),
+]
 
 # Das Tool gibt sich immer als es selbst zu erkennen. Antwortet eine Quelle mit einer Sperre
 # (403, 429) oder einer Prüfseite, hört es auf, statt sich zu tarnen.
