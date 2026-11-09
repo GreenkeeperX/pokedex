@@ -46,6 +46,7 @@ Wie im VR-Navigator: Farbtokens in `:root`, dunkle Ansicht über `prefers-color-
 - Typwirkung: rot = schwach (dunkel bei ×4), grün = resistent (dunkel bei ×¼), dunkel = immun
 - Hinweise: blau = Info, gelb = Achtung, rot = Problem, grün = in Ordnung
 - Basiswerte-Summe: Rot (um 200) bis Grün (um 680)
+- Hover-Karte: getönter Hintergrund (`--hcbg`) und Rahmen in Akzentfarbe
 - Gegner: Karten mit rotem Rahmen
 - Akzent: Nintendo-Rot (`--brand`); Typ-Bubbles: gewählt = heller Rahmen mit Schein, ausgeschlossen = roter Rahmen und
   durchgestrichen (ohne Zeichen, gleiche Größe); im Team: grüner Rahmen; festgesetzt (📌): grün; passt nicht zum

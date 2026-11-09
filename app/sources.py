@@ -10,11 +10,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.4.1", "09.11.2026", [
+        "Hover-Karte mit eigenem, getöntem Hintergrund und kräftigerem Rahmen, damit sie sich von den Karten abhebt",
+    ]),
     ("0.4.0", "09.11.2026", [
         "Kopfzeile und Team-Leiste gleiten beim Scrollen sanft weg und kommen beim Hochscrollen zurück",
         "Gefangen (Pokéball) je Spiel: Empfehlungen daraus im Team, Filter „nur Gefangene“ oder „nur Favoriten“, Teamsuche nur aus Gefangenen",

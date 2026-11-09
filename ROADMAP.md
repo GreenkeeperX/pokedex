@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.4.1
+
+- Hover-Karte hebt sich mit getöntem Hintergrund und Rahmen von den Karten ab
+
 ## 0.4.0 (Rückmeldung zu 0.3, Entscheidung 09.11.2026)
 
 - Kopfzeile und Team-Leiste beim Scrollen sanft weg und zurück (wie im VR-Navigator), Leiste klappt nur zu
