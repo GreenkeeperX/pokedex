@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.5.1
+
+- Verbindungstest: feste Begegnungen und Raids (PKHeX), Werte je Form in Legenden: Arceus, Sprites schillernd und
+  animiert, Rufe, Showdown-Stufen und Random-Battle-Sets, ungenutzte Tabellen der PokéAPI
+
 ## 0.5.0 (Fundorte aus den Spieldaten)
 
 - Abgleich holt die Begegnungsdatei und die deutschen Ortsnamen von PKHeX für Legenden: Arceus; neue Tabelle
@@ -8,6 +13,9 @@
 
 ## Als Nächstes: 0.6.0
 
+- Feste Begegnungen aus PKHeX (Geschenke, Legendäre, feste Alphas) in die Fundorte
+- Fangchance je Ball und Level aus der Fangrate (Pokéball-Empfehlung)
+- Forschungsaufgaben in Legenden: Arceus (Quelle nach dem Verbindungstest: PokéWiki)
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
 - PokéWiki-Leser (vom Heimserver aus erreichbar, Proben aus dem Verbindungstest) für das, was PKHeX nicht hat:
   Tageszeit und Wetter, Edelhorden, Attackenwerte (Kraft- und Tempostil) und Lehrer-Attacken in Legenden: Arceus

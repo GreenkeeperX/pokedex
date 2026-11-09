@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.5.1", "09.11.2026", [
+        "Verbindungstest prüft weitere Quellen: feste Begegnungen (Geschenke, Legendäre) und Raids aus PKHeX, "
+        "Werte je Form in Legenden: Arceus, schillernde und animierte Sprites, Rufe, Showdown-Stufen und Random-Battle-Sets",
+        "Verbindungstest zeigt, was die Datenbank schon hat, aber noch nicht nutzt (TM, Wesen, Ei-Gruppen, Fangraten, Beeren)",
+        "Abgleich holt TM-Listen, Wesen, Ei-Gruppen und Beeren auch ohne Dateiliste von GitHub",
+    ]),
     ("0.5.0", "09.11.2026", [
         "Fundorte in Legenden: Arceus aus den Spieldaten (PKHeX): je Gebiet die Stellen mit Level, Alpha-Level und Art "
         "(frei, Raum-Zeit-Verzerrung, Baum oder Erzbrocken, Massenauftreten)",

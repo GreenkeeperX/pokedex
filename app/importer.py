@@ -32,6 +32,8 @@ NEEDED = (
     "pokemon_species_names", "pokemon_stats", "pokemon_types", "pokemon_types_past", "regions", "stat_names", "stats",
     "time_of_day_prose", "type_efficacy", "type_efficacy_past", "type_names", "types", "version_group_regions", "version_groups",
     "version_names", "versions",
+    # noch ungenutzt, für TM-Listen, Wesen, Ei-Gruppen und Beeren
+    "berries", "egg_group_prose", "growth_rates", "machines", "nature_names", "natures", "pokemon_egg_groups",
 )
 # Ohne diese Dateien ist die Datenbank unbrauchbar: Der Abgleich bricht ab und die alte bleibt
 REQUIRED = ("pokemon", "pokemon_species", "pokemon_species_names", "pokemon_types", "pokemon_stats", "types", "type_names",
@@ -302,6 +304,24 @@ def pkhex_areas(data):
             e = rest[8 * k:8 * k + 8]
             slots.append((struct.unpack_from("<H", e)[0], e[2], e[4], e[5], e[3]))
         out.append((locs, kind, slots))
+    return out
+
+
+_STATIC = re.compile(r"new\(([^)]*)\)\s*\{([^}]*)\}")
+_FIELD = re.compile(r"\b(Species|Form|Level|Location)\s*=\s*(\d+)")
+
+
+def pkhex_static(text):
+    """Feste Begegnungen aus einer PKHeX-Quelldatei (Encounters8a.cs, Encounters9.cs …): Geschenke, Legendäre und
+    feste Pokémon. Gibt [(nr, form, level, ort)] zurück; Einträge ohne Ort fehlen."""
+    out = []
+    for m in _STATIC.finditer(text or ""):
+        args = [int(x) for x in re.findall(r"\d+", m.group(1))]
+        f = {k: int(v) for k, v in _FIELD.findall(m.group(2))}
+        if len(args) >= 3:                  # new(Art, Form, Level, …) { Location = … }
+            f.setdefault("Species", args[0]), f.setdefault("Form", args[1]), f.setdefault("Level", args[2])
+        if "Species" in f and "Location" in f:
+            out.append((f["Species"], f.get("Form", 0), f.get("Level", 0), f["Location"]))
     return out
 
 
