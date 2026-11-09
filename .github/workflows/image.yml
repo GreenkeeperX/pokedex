@@ -1,0 +1,33 @@
+name: Image bauen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Nur Code lesen und das Image ablegen, sonst nichts
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Tests
+        run: python3 -m unittest tests.test_all
+
+      - name: Image bauen und ablegen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="ghcr.io/${owner}/pokedex"
+          version="$(python3 -c 'from app import sources; print(sources.VERSION)')"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            -t "$image:latest" -t "$image:$version" -t "$image:${GITHUB_SHA::7}" .
+          docker push --all-tags "$image"
