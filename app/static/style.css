@@ -356,3 +356,6 @@ details summary{cursor:pointer;font-weight:600}
   .stats{grid-template-columns:90px 32px 1fr}
   .list{grid-template-columns:1fr}
 }
+/* Fundorte aus den Spieldaten */
+.weitere{border-bottom:1px dotted var(--muted);cursor:help;white-space:nowrap}
+.alpha{color:var(--brand);font-weight:600}

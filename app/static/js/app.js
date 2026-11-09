@@ -11,7 +11,7 @@ const store = {
   set(k, v) { try { localStorage.setItem("px." + k, JSON.stringify(v)); } catch (e) { /* privates Fenster */ } },
 };
 const filter0 = (extra = {}) => Object.assign({q: "", typen: {}, modus: "und", art: "typ", klar: false, formen: "relevant", sort: "nr", endstufe: false, ohne_leg: false,
-  kampf: false, gen: "", genmodus: "bis", min: "", nur: ""}, extra);
+  kampf: false, gen: "", genmodus: "bis", min: "", nur: "", gebiet: ""}, extra);
 const S = {
   meta: null, types: {}, chart: null, chartGame: null,
   game: store.get("game", "legends-arceus"),
@@ -494,6 +494,31 @@ async function refreshMeta() {
   if (S.meta.has_data || !S.meta.abgleich?.running) route(); else setTimeout(refreshMeta, 5000);
 }
 
+/* Fundorte: aus den Spieldaten (PKHeX) mit Stellen und Alpha, sonst aus der PokéAPI */
+function encHtml(d) {
+  const f = d.fundorte;
+  if (d.fundquelle === "PKHeX") {
+    if (!f.length) return `<p class="hint">Kommt in diesem Spiel nicht frei vor (etwa Geschenk, Entwicklung, Tausch oder fester Ort). <a href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">PokéWiki ↗</a></p>`;
+    const one = (p) => (p.name || "im ganzen Gebiet") + (p.level ? ` (${p.level})` : p.alpha ? ` (Alpha ${p.alpha})` : "");
+    const places = (xs) => xs.length <= 6 ? esc(xs.map(one).join(", "))
+      : `${esc(xs.slice(0, 4).map(one).join(", "))} <span class="weitere" data-tip="${esc(xs.map(one).join(", "))}">und ${xs.length - 4} weitere</span>`;
+    return `<div class="scroll"><table class="sort"><thead><tr>${th("Gebiet")}${th("Stellen")}${th("Art")}${th("Level")}${th("Alpha")}</tr></thead><tbody>
+      ${f.map((e) => `<tr><td>${esc(e.ort)} ${wikiLink(e.ort)}</td><td>${places(e.stellen)}</td><td>${esc(e.methode)}</td>
+        <td data-s="${parseInt(e.level || e.alpha) || 0}">${esc(e.level || "–")}</td>
+        <td data-s="${parseInt(e.alpha) || 0}">${e.alpha ? `<span class="alpha">${esc(e.alpha)}</span>${e.nur_alpha ? " (immer Alpha)" : ""}` : ""}</td></tr>`).join("")}</tbody></table></div>
+      <p class="hint">Aus den Spieldaten (PKHeX). Stellen: wo das Pokémon im Gebiet erscheinen kann, mit Level; Alpha-Pokémon sind höher. Tageszeit und Wetter folgen mit dem PokéWiki-Abruf.</p>`;
+  }
+  if (f.length) return `<div class="scroll"><table class="sort"><thead><tr>${th("Ort")}${th("Methode")}${th("Level")}${th("Bedingungen")}${th("Edition")}</tr></thead><tbody>
+    ${f.map((e) => `<tr><td>${esc(e.ort)} ${wikiLink(e.ort)}</td><td>${esc(e.methode)}</td><td data-s="${parseInt(e.level) || 0}">${esc(e.level)}</td><td>${esc(e.bedingungen.join(", "))}</td><td>${esc(e.editionen.join(", "))}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<p class="hint">${S.game ? "Die PokéAPI kennt hier keine Fundorte" + (["scarlet-violet", "legends-za"].includes(S.game) ? " (für dieses Spiel liefert sie keine; kommt mit PKHeX und dem PokéWiki-Abruf)" : "") + `. Bis dahin: <a href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Fundorte im PokéWiki ↗</a>` : "Wähle oben ein Spiel."}</p>`;
+}
+
+const gameAreas = () => (S.meta?.spiele || []).find((g) => g.kennung === S.game)?.gebiete || [];
+function areaSelect(f) {
+  const gb = gameAreas();
+  if (!gb.length) return "";
+  return `<label data-tip="Nur Pokémon, die in diesem Gebiet frei vorkommen (aus den Spieldaten, ohne Massenauftreten)">Gebiet <select data-f="gebiet"><option value="">alle</option>${gb.map((g) => `<option${f.gebiet === g ? " selected" : ""}>${esc(g)}</option>`).join("")}</select></label>`;
+}
 /* ------------------------------------------------------------------ Filter (Liste und Team) */
 function filterBar(f, id, opts = {}) {
   const bub = Object.entries(S.types).map(([t, n]) => {
@@ -519,6 +544,7 @@ function filterBar(f, id, opts = {}) {
       <label data-tip="„bis“: Pokémon bis zu dieser Generation; „nur“: nur Pokémon, die in dieser Generation neu kamen"><select data-f="genmodus"><option value="bis">bis</option><option value="nur"${f.genmodus === "nur" ? " selected" : ""}>nur</option></select>
         Gen <select data-f="gen"><option value="">alle</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => `<option${+f.gen === g ? " selected" : ""}>${g}</option>`).join("")}</select></label>
       <label data-tip="Nur deine Favoriten (Stern) oder Gefangenen (Pokéball) im gewählten Spiel"><select data-f="nur"><option value="">alle Pokémon</option><option value="fav"${f.nur === "fav" ? " selected" : ""}>nur Favoriten</option><option value="gef"${f.nur === "gef" ? " selected" : ""}>nur Gefangene</option></select></label>
+      ${areaSelect(f)}
       <label>Basiswerte ab <input data-f="min" type="number" min="0" max="800" step="10" style="width:80px" value="${esc(f.min)}"></label>
       <span class="hint grow" data-cnt="${id}"></span></div></div>`;
 }
@@ -552,7 +578,7 @@ function bindFilter(f, id, onChange, save) {
   }));
 }
 const filterQuery = (f) => ({q: f.q, formen: f.formen, sort: f.sort, endstufe: f.endstufe ? 1 : "", ohne_leg: f.ohne_leg ? 1 : "", kampf: f.kampf ? 1 : "",
-  gen: f.gen, genmodus: f.gen && f.genmodus === "nur" ? "nur" : "", min: f.min, modus: f.modus, nur: f.nur || "", klar: f.art === "gegen" && f.klar ? 1 : "",
+  gen: f.gen, genmodus: f.gen && f.genmodus === "nur" ? "nur" : "", min: f.min, modus: f.modus, nur: f.nur || "", gebiet: f.gebiet && gameAreas().includes(f.gebiet) ? f.gebiet : "", klar: f.art === "gegen" && f.klar ? 1 : "",
   [f.art === "gegen" ? "gegen" : "typen"]: Object.keys(f.typen).filter((t) => f.typen[t] === 1).join(","),
   ohne: Object.keys(f.typen).filter((t) => f.typen[t] === -1).join(",")});
 
@@ -859,11 +885,7 @@ async function detailView(id, slot = null) {
         ${evo ? `<h3>Entwicklung</h3><div class="evo">${evo}</div>` : ""}
       </div>
     </div>
-    <div class="box" style="margin-top:12px"><h2>Fundorte in ${esc(gameName())}</h2>
-      ${d.fundorte.length ? `<div class="scroll"><table class="sort"><thead><tr>${th("Ort")}${th("Methode")}${th("Level")}${th("Bedingungen")}${th("Edition")}</tr></thead><tbody>
-        ${d.fundorte.map((e) => `<tr><td>${esc(e.ort)} ${wikiLink(e.ort)}</td><td>${esc(e.methode)}</td><td data-s="${parseInt(e.level) || 0}">${esc(e.level)}</td><td>${esc(e.bedingungen.join(", "))}</td><td>${esc(e.editionen.join(", "))}</td></tr>`).join("")}</tbody></table></div>`
-        : `<p class="hint">${S.game ? "Die PokéAPI kennt hier keine Fundorte" + (["legends-arceus", "scarlet-violet", "legends-za"].includes(S.game) ? " (für dieses Spiel liefert sie keine; kommt mit dem PokéWiki-Abruf)" : "") + `. Bis dahin: <a href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Fundorte im PokéWiki ↗</a>` : "Wähle oben ein Spiel."}</p>`}
-    </div>
+    <div class="box" style="margin-top:12px"><h2>Fundorte in ${esc(gameName())}</h2>${encHtml(d)}</div>
     <div class="box" id="mbox"></div>`;
   header();
   renderMoves(d.attacken, level);
@@ -1348,7 +1370,7 @@ async function settingsView() {
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
       <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
         <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button></div>
-      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("sprites", "Bilder")}</table>
+      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("sprites", "Bilder")}</table>
       <h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
@@ -1382,6 +1404,7 @@ async function settingsView() {
     <div class="box"><h2>Quellen und Lizenzen</h2>
       <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
         <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
+        <a href="https://github.com/kwsch/PKHeX" target="_blank" rel="noopener noreferrer">PKHeX</a> (Fundorte aus den Spieldaten, GPL-3.0) ·
         <a href="https://www.pokewiki.de" target="_blank" rel="noopener noreferrer">PokéWiki</a> (Links; Abruf für Legenden: Arceus folgt, CC BY-SA 3.0 DE).
         Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK; dies ist ein privates Nachschlage-Tool.</p>
       <p class="hint">Pokédex ${esc(S.meta?.version || "")}</p></div>`;

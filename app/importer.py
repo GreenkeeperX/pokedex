@@ -6,6 +6,7 @@ Aufbereitete Tabellen (deutsche Namen, Sprache 6, sonst Englisch 9):
 - form: jede Form mit eigenen Werten (Typ, Basiswerte oder Fähigkeiten anders als die Standardform)
 - attacke: Attacken mit deutschem Namen, Werten, Zusatzangaben und Showdown-Merkmalen
 - pruefung: Abweichungen zwischen PokéAPI und Showdown für „Zu erledigen“
+- fundort: Begegnungen aus den Spieldaten (PKHeX) je Spiel, Form, Gebiet und Art, mit Level und Alpha
 """
 import csv
 import io
@@ -16,7 +17,7 @@ import sqlite3
 
 from . import showdown
 
-VERSION = "1"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "2"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -277,6 +278,70 @@ def _derive_pruefung(con, sd_dex, sd_moves):
     return len(out)
 
 
+# Arten der Begegnung in Legenden: Arceus (SlotType8a in PKHeX)
+PKHEX_ART = {0: "frei", 1: "Raum-Zeit-Verzerrung", 2: "Baum oder Erzbrocken", 3: "Massenauftreten", 4: "Massives Massenauftreten"}
+
+
+def pkhex_areas(data):
+    """Begegnungen aus einer PKHeX-Datei encounter_la.pkl (BinLinker „la“): je Gebiet Ortsnummern (das erste ist das
+    Gebiet, die übrigen die Stellen darin), Art und Plätze mit Art, Form, Level von–bis und Alpha (0 nie, 1 möglich,
+    2 immer). Gibt [(orte, art, [(nr, form, min, max, alpha)])] zurück."""
+    import struct
+    n = struct.unpack_from("<H", data, 2)[0]
+    offs = [struct.unpack_from("<I", data, 4 + 4 * i)[0] for i in range(n + 1)]
+    out = []
+    for i in range(n):
+        a = data[offs[i]:offs[i + 1]]
+        lc = a[0]
+        locs = list(a[1:1 + lc])
+        al = lc + 1
+        al += al & 1
+        kind, count, rest = a[al], a[al + 1], a[al + 2:]
+        slots = []
+        for k in range(count):
+            e = rest[8 * k:8 * k + 8]
+            slots.append((struct.unpack_from("<H", e)[0], e[2], e[4], e[5], e[3]))
+        out.append((locs, kind, slots))
+    return out
+
+
+def pkhex_names(text):
+    """Ortsnamen aus einer PKHeX-Textdatei: Zeile = Ortsnummer."""
+    return (text or "").lstrip("\ufeff").splitlines()
+
+
+def _derive_fundort(con, pkhex):
+    """pkhex: {Spielkennung: {"begegnungen": Bytes, "orte": Text}}. Art und Formnummer im Spiel werden über
+    pokemon_forms (form_order) zur Form der PokéAPI; ohne Treffer zählt die Standardform der Art."""
+    con.execute("CREATE TABLE fundort (spiel TEXT, form INTEGER, gebiet TEXT, gebiet_nr INTEGER, stellen TEXT, art INTEGER, "
+                "min INTEGER, max INTEGER, alpha INTEGER, quelle TEXT)")
+    by_form, by_art = {}, {}
+    if _has(con, "pokemon_forms"):
+        for art, order, pid in con.execute("SELECT p.species_id, f.form_order, f.pokemon_id FROM pokemon_forms f "
+                                           "JOIN pokemon p ON p.id = f.pokemon_id ORDER BY f.form_order"):
+            by_form.setdefault((int(art), int(order or 1) - 1), int(pid))
+    for art, pid in con.execute("SELECT species_id, id FROM pokemon WHERE is_default = 1"):
+        by_art[int(art)] = int(pid)
+    n = 0
+    for spiel, src in (pkhex or {}).items():
+        names = pkhex_names(src.get("orte"))
+        name = lambda i: names[i] if 0 <= i < len(names) and names[i].strip() else f"Ort {i}"
+        rows = []
+        for locs, kind, slots in pkhex_areas(src.get("begegnungen") or b""):
+            if not locs:
+                continue
+            gebiet = name(locs[0])
+            stellen = json.dumps([name(x) for x in locs[1:] if name(x) != gebiet], ensure_ascii=False)
+            for nr, form, lo, hi, alpha in slots:
+                pid = by_form.get((nr, form)) or by_art.get(nr)
+                if pid:
+                    rows.append((spiel, pid, gebiet, locs[0], stellen, kind, lo, hi, alpha, "PKHeX"))
+        con.executemany("INSERT INTO fundort VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        n += len(rows)
+    con.execute("CREATE INDEX fundort_form ON fundort(form, spiel)")
+    return n
+
+
 def load_extra(folder):
     """Gepflegte Ergänzungen: jede JSON-Datei in extra/ als {Name: Inhalt}. Kaputte Dateien brechen ab."""
     out = {}
@@ -307,9 +372,10 @@ def check(con):
     return why
 
 
-def build(path, csvs, sd_texts=None, extra=None, strict=True):
+def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None):
     """Baut die Datenbank unter path (wird überschrieben). csvs: {Name: Text}; sd_texts: {"pokedex": Text,
-    "moves": Text}; extra: {Name: Inhalt} aus extra/. Gibt Zahlen zurück; mit strict wirft die Selbstprüfung."""
+    "moves": Text}; extra: {Name: Inhalt} aus extra/; pkhex: Begegnungen je Spiel (siehe _derive_fundort).
+    Gibt Zahlen zurück; mit strict wirft die Selbstprüfung."""
     missing = [n for n in REQUIRED if n not in csvs]
     if missing:
         raise ValueError("Es fehlen Dateien: " + ", ".join(missing))
@@ -329,6 +395,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True):
         _derive_attacke(con, sd_moves)
         _sd_tables(con, sd_dex, sd_moves)
         n_check = _derive_pruefung(con, sd_dex, sd_moves) if sd_dex or sd_moves else 0
+        n_fund = _derive_fundort(con, pkhex)
         con.execute("CREATE TABLE extra (name TEXT PRIMARY KEY, inhalt TEXT)")
         con.executemany("INSERT INTO extra VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in (extra or {}).items()])
         for sql in ("CREATE INDEX pm_pokemon ON pokemon_moves(pokemon_id, version_group_id)",
@@ -345,7 +412,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True):
                  "species": con.execute("SELECT COUNT(DISTINCT art) FROM form").fetchone()[0],
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
-                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "check": why}
+                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "check": why}
     finally:
         con.close()
     return stats

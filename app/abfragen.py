@@ -7,7 +7,7 @@ import json
 import os
 import threading
 
-from . import attacken, db, team, typen
+from . import attacken, db, importer, team, typen
 
 LA = "legends-arceus"          # Legenden: Arceus kennt keine Fähigkeiten und eigene Attackenwerte
 NO_ABILITIES = {LA}
@@ -81,6 +81,14 @@ class Data:
         self.in_game = {}
         for sp, fid, nr in con.execute("SELECT spiel, form, nr FROM spiel_form"):
             self.in_game.setdefault(sp, {})[fid] = nr
+        # Gebiete je Spiel (PKHeX) mit den Formen, die dort fest vorkommen (ohne Massenauftreten)
+        self.areas = {}
+        try:
+            for sp, gebiet, nr, fid in con.execute("SELECT spiel, gebiet, MIN(gebiet_nr), form FROM fundort WHERE art IN (0, 1, 2) "
+                                                   "GROUP BY spiel, gebiet, form ORDER BY 3"):
+                self.areas.setdefault(sp, {}).setdefault(gebiet, set()).add(fid)
+        except Exception:
+            pass
         self.methods = _names(con, "pokemon_move_method_prose", "pokemon_move_method_id")
         self.method_key = dict(con.execute("SELECT id, identifier FROM pokemon_move_methods"))
         self.charts = {}
@@ -204,7 +212,8 @@ def own_marks(table, spiel):
 
 def candidates(D, p):
     """Formen nach Filtern. p: spiel, q, typ, typ2, gen (genmodus bis|nur), endstufe, ohne_leg, min,
-    formen (relevant|standard|alle), kampf, gegen (klar: nur klar stark), nur (fav|gef: Favoriten oder Gefangene)."""
+    formen (relevant|standard|alle), kampf, gegen (klar: nur klar stark), nur (fav|gef: Favoriten oder Gefangene),
+    gebiet (kommt dort im Spiel vor, aus PKHeX)."""
     g, gen, ch = game_of(D, p.get("spiel"))
     in_game = D.in_game.get(g["id"], {}) if g else None
     q = str(p.get("q") or "").strip().lower()
@@ -216,6 +225,7 @@ def candidates(D, p):
     only_gen = p.get("genmodus") == "nur"
     clear = bool(p.get("klar"))
     nur = {"fav": "favorit", "gef": "gefangen"}.get(p.get("nur"))
+    area = D.areas.get(g["kennung"] if g else "", {}).get(str(p.get("gebiet") or ""))
     mine = own_marks(nur, p.get("spiel")) if nur else None
     mn = _int(p.get("min")) or 0
     formen = p.get("formen") or "relevant"
@@ -230,6 +240,8 @@ def candidates(D, p):
         if not p.get("kampf") and f["kampfform"] and formen != "alle":
             continue
         if mine is not None and f["id"] not in mine:
+            continue
+        if area is not None and f["id"] not in area:
             continue
         if max_gen and (f["gen"] != max_gen if only_gen else f["gen"] > max_gen):
             continue
@@ -538,10 +550,47 @@ def evo_text(r, D, items, trig, locs):
     return ", ".join(x for x in ([key] if key else []) + parts if x) or head
 
 
+def _range(xs):
+    lo, hi = min(a for a, _ in xs), max(b for _, b in xs)
+    return f"{lo}" if lo == hi else f"{lo}–{hi}"
+
+
+def _enc_pkhex(con, g, pid):
+    """Fundorte aus den Spieldaten (PKHeX): je Gebiet und Art die Stellen, Level und Alpha-Level. None ohne Daten."""
+    try:
+        rows = con.execute("SELECT gebiet, gebiet_nr, stellen, art, min, max, alpha FROM fundort WHERE spiel = ? AND form = ?",
+                           (g["kennung"], pid)).fetchall()
+        if not rows and not con.execute("SELECT 1 FROM fundort WHERE spiel = ? LIMIT 1", (g["kennung"],)).fetchone():
+            return None
+    except Exception:
+        return None
+    groups = {}
+    for r in rows:
+        e = groups.setdefault((r["gebiet_nr"], r["art"]), {"gebiet": r["gebiet"], "stellen": {}, "lv": [], "alpha": [], "immer": False})
+        lv = (r["min"], r["max"])
+        (e["alpha"] if r["alpha"] else e["lv"]).append(lv)
+        e["immer"] = e["immer"] or r["alpha"] == 2
+        for x in json.loads(r["stellen"] or "[]") or [""]:
+            st = e["stellen"].setdefault(x, {"lv": [], "alpha": []})
+            (st["alpha"] if r["alpha"] else st["lv"]).append(lv)
+    out = []
+    for (nr, art), e in sorted(groups.items()):
+        places = [{"name": k, "level": _range(v["lv"]) if v["lv"] else "", "alpha": _range(v["alpha"]) if v["alpha"] else ""}
+                  for k, v in e["stellen"].items()]
+        places.sort(key=lambda x: (int((x["level"] or x["alpha"]).split("–")[0] or 0), x["name"]))
+        out.append({"ort": e["gebiet"], "stellen": places, "methode": importer.PKHEX_ART.get(art, str(art)),
+                    "level": _range(e["lv"]) if e["lv"] else "", "alpha": _range(e["alpha"]) if e["alpha"] else "",
+                    "nur_alpha": not e["lv"] and bool(e["alpha"]), "bedingungen": [], "editionen": []})
+    return out
+
+
 def _enc(con, g, pid):
-    """Fundorte im Spiel: Ort, Methode, Level, Bedingungen."""
+    """Fundorte im Spiel: Ort, Methode, Level, Bedingungen. Aus den Spieldaten (PKHeX), wo es sie gibt."""
     if not g:
         return []
+    own = _enc_pkhex(con, g, pid)
+    if own is not None:
+        return own
     try:
         rows = con.execute(
             """SELECT e.location_area_id la, l.id loc, es.encounter_method_id meth, MIN(e.min_level) lo, MAX(e.max_level) hi,
@@ -603,7 +652,7 @@ def detail(fid, p):
         return dict(row(D, f, g, gen, nr), formname=f["formname"], kategorie=genus[0] if genus else "",
                     text=" ".join(str(flavor[0]).split()) if flavor else "", faehigkeiten=abil,
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
-                    entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), formen=siblings, attacken=moves,
+                    entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True,
                     wiki=WIKI + _wiki_title(D, f))
     finally:
@@ -850,7 +899,8 @@ def team_matchup(body):
 
 def games():
     D = data()
-    return [{"kennung": g["kennung"], "name": g["name"], "gen": g["gen"], "pokemon": len(D.in_game.get(g["id"], {}))}
+    return [{"kennung": g["kennung"], "name": g["name"], "gen": g["gen"], "pokemon": len(D.in_game.get(g["id"], {})),
+             "gebiete": list(D.areas.get(g["kennung"], {}))}
             for g in reversed(D.games)] if D else []
 
 
