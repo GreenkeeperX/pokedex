@@ -10,13 +10,13 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="stick">
+  <div class="stick" id="stick">
   <header class="top">
     <h1><a href="#pokemon" id="home" title="Zur Liste, alles neu laden"><span class="brand">Poké</span>dex</a></h1>
-    <button class="ver" id="ver" data-act="neu" title="Was ist neu?" hidden></button>
     <label class="game">Spiel <select class="gamesel" aria-label="Spiel"></select></label>
     <div class="meta" id="meta"></div>
-    <button id="thm" data-act="thm" title="Hell, dunkel oder wie das Gerät"></button>
+    <button class="ver" id="ver" data-act="neu" title="Was ist neu?" hidden></button>
+    <div class="thm"><button id="thmBtn" data-act="thm" aria-haspopup="true" aria-expanded="false"></button><div class="thm-m" id="thmMenu" role="menu" hidden></div></div>
   </header>
   <nav id="nav"></nav>
   </div>

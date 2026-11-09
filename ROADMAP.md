@@ -1,5 +1,26 @@
 # Roadmap
 
+## 0.4.0 (Rückmeldung zu 0.3, Entscheidung 09.11.2026)
+
+- Kopfzeile und Team-Leiste beim Scrollen sanft weg und zurück (wie im VR-Navigator), Leiste klappt nur zu
+- Gefangen je Spiel (user.db, neue Tabelle `gefangen`): bessere Alternativen und langfristiges Potential im Team,
+  Filter „nur Gefangene/Favoriten“, Teamsuche nur aus Gefangenen
+- Typ-Duell statt bloßem „stark gegen“: austeilen (bester eigener Typ) und einstecken (beide Typen zusammen) getrennt,
+  Stufen klar stark, stark, schwer; Filter wahlweise nur klar
+- Marken als SVG hinter dem Namen, Knöpfe beim Hovern auf dem Bild; Bubbles ohne Zeichen; Hinweise unter dem Ziel
+- Filter „bis/nur Generation“; Detailseite ohne Neuaufbau beim Favorisieren; Attacken-Auswahl als feste Liste
+- Team: Sortierung sichtbar, Abweichungen hinterlegt, volles Team fragt, Ziehen aus der Suche, Favoriten und Gefangene
+  als Ablage; Gegner mit Rahmen und Namen; Standard-Attacken auch für Mitglieder ohne Attacken
+- Attacken mit Farben und Erklärungen; Typtabelle in Grautönen; PokéWiki-Links an Attacken, Fähigkeiten und Orten
+- Ansicht-Menü, Version rechts, Stand des Abgleichs; Spielauswahl nach Generationen; Sicherung mit Einlesen
+
+## Als Nächstes: 0.5.0 (Legenden: Arceus vollständig, Items)
+
+- PokéWiki-Leser (vom Heimserver aus erreichbar, Verbindungstest vom 09.11.2026): Fundorte, Elite-Pokémon,
+  Edelhorden, Attackenwerte und Lehrer-Attacken in Legenden: Arceus; danach Karmesin/Purpur und Legenden: Z-A
+- Items aus der PokéAPI (Namen, Beschreibungen, je Spiel), später Fundorte der Items
+- Karten: Links auf die Gebietsseiten im PokéWiki statt eigener Bilder (Bildrechte)
+
 ## 0.3.0 (Rückmeldung zu 0.2, Entscheidung 09.11.2026)
 
 - Farben: Nintendo-Rot statt Blassrot, Linien an Spielauswahl und Team-Leiste dezent; Titel lädt neu
@@ -14,13 +35,6 @@
 - Typtabelle: Zeile/Spalte festhalten, reichere Hinweise; Tabellen mit neutraler dritter Sortierung
 - Protokoll und Verbindungstest kopieren und herunterladen, eigene Daten als JSON
 - Spieldaten werden beim Start vorgeladen (erste Anfrage nach einem Update wartet nicht)
-
-## Als Nächstes: 0.4.0 (Legenden: Arceus vollständig, Items)
-
-- PokéWiki-Leser (vom Heimserver aus erreichbar, Verbindungstest vom 09.11.2026): Fundorte, Elite-Pokémon,
-  Edelhorden, Attackenwerte und Lehrer-Attacken in Legenden: Arceus
-- Items aus der PokéAPI (Namen, Beschreibungen, je Spiel), später Fundorte der Items
-- Karten der Gebiete
 
 ## 0.2.1
 

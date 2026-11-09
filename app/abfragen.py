@@ -162,18 +162,49 @@ SORTS = {"nr": lambda r: (r["nr"] or 99999, r["id"]), "name": lambda r: (r["name
          "kp": lambda r: (-r["werte"][0], r["id"]), "vert": lambda r: (-r["werte"][2] - r["werte"][4], r["id"])}
 
 
-def strong_against(own, target, ch):
-    """Stark gegen einen Typ: ein eigener Typ trifft ihn sehr effektiv, und seine Attacken treffen nicht sehr effektiv."""
-    if not any((ch.get(a) or {}).get(target, 1) > 1 for a in own):
-        return False
-    hurt = 1.0
+def duel(own, target, ch):
+    """Typ-Duell gegen einen Typ: (austeilen, einstecken, Stufe). austeilen = bester eigener Typ gegen den Zieltyp,
+    einstecken = Attacken des Zieltyps gegen beide eigenen Typen (multipliziert). Stufe 2 = klar stark (trifft ×2 und
+    steckt höchstens ×½ ein), 1 = stark (trifft ×2, steckt ×1 ein), 0 = ausgeglichen, -1 = schwach (steckt ×2 ein und
+    trifft höchstens normal). Tentoxa (Wasser/Gift) gegen Pflanze: Gift trifft ×2, Pflanze trifft Wasser ×2, Gift ×½,
+    zusammen ×1: Stufe 1. Gegen Feuer: Wasser trifft ×2, Feuer trifft ×½: Stufe 2."""
+    dealt = max(((ch.get(a) or {}).get(target, 1) for a in own), default=1)
+    taken = 1.0
     for d in own:
-        hurt *= (ch.get(target) or {}).get(d, 1)
-    return hurt <= 1
+        taken *= (ch.get(target) or {}).get(d, 1)
+    if dealt > 1 and taken <= 0.5:
+        level = 2
+    elif dealt > 1 and taken <= 1:
+        level = 1
+    elif taken > 1 and dealt <= 1:
+        level = -1
+    else:
+        level = 0
+    return dealt, taken, level
+
+
+def strong_against(own, target, ch, clear=False):
+    """Stark gegen einen Typ: ein eigener Typ trifft ihn sehr effektiv, und seine Attacken treffen nicht sehr effektiv
+    (clear: höchstens ×½)."""
+    return duel(own, target, ch)[2] >= (2 if clear else 1)
+
+
+def own_marks(table, spiel):
+    """IDs mit Marke (favorit oder gefangen) aus user.db."""
+    if table not in ("favorit", "gefangen"):
+        return set()
+    con = db.user()
+    try:
+        return {r[0] for r in con.execute(f"SELECT form FROM {table} WHERE spiel = ?", (str(spiel or ""),))}
+    except Exception:
+        return set()
+    finally:
+        con.close()
 
 
 def candidates(D, p):
-    """Formen nach Filtern. p: spiel, q, typ, typ2, gen, endstufe, ohne_leg, min, formen (relevant|standard|alle), kampf."""
+    """Formen nach Filtern. p: spiel, q, typ, typ2, gen (genmodus bis|nur), endstufe, ohne_leg, min,
+    formen (relevant|standard|alle), kampf, gegen (klar: nur klar stark), nur (fav|gef: Favoriten oder Gefangene)."""
     g, gen, ch = game_of(D, p.get("spiel"))
     in_game = D.in_game.get(g["id"], {}) if g else None
     q = str(p.get("q") or "").strip().lower()
@@ -182,6 +213,10 @@ def candidates(D, p):
     drop = set(_ints(p.get("ohne")))
     mode_and = (p.get("modus") or "und") == "und"
     max_gen = _int(p.get("gen"))
+    only_gen = p.get("genmodus") == "nur"
+    clear = bool(p.get("klar"))
+    nur = {"fav": "favorit", "gef": "gefangen"}.get(p.get("nur"))
+    mine = own_marks(nur, p.get("spiel")) if nur else None
     mn = _int(p.get("min")) or 0
     formen = p.get("formen") or "relevant"
     out = []
@@ -194,7 +229,9 @@ def candidates(D, p):
             continue
         if not p.get("kampf") and f["kampfform"] and formen != "alle":
             continue
-        if max_gen and f["gen"] > max_gen:
+        if mine is not None and f["id"] not in mine:
+            continue
+        if max_gen and (f["gen"] != max_gen if only_gen else f["gen"] > max_gen):
             continue
         if p.get("endstufe") and not f["endstufe"]:
             continue
@@ -206,7 +243,7 @@ def candidates(D, p):
         if want and (not all(t in ts for t in want) if mode_and else not any(t in ts for t in want)):
             continue
         if against:
-            hits = [strong_against(ts, t, ch) for t in against]
+            hits = [strong_against(ts, t, ch, clear) for t in against]
             if not (all(hits) if mode_and else any(hits)):
                 continue
         if drop and drop & set(ts):
@@ -725,6 +762,59 @@ def team_optimize(body):
         out.append({"wertung": sc, "ids": [m["id"] for m in ms], "kriterien": ev["kriterien"], "offen": ev["offen"],
                     "nicht_abgedeckt": ev["nicht_abgedeckt"], "mitglieder": [row(D, D.forms[m["id"]], g, gen) for m in ms]})
     return {"teams": out, "pool": len(pool)}
+
+
+def team_caught(body):
+    """Empfehlungen aus den gefangenen Pokémon des Spiels: bessere Alternativen (Tausch mit einem Mitglied hebt die
+    Wertung jetzt) und langfristig mehr Potential (ein gefangenes Pokémon, dessen Endstufe das Team heben würde)."""
+    D = data()
+    if not D:
+        return {"alternativen": [], "potential": [], "gefangen": 0}
+    g, gen, ch = game_of(D, body.get("spiel"))
+    ctx = team.Ctx(ch, _int(body.get("tempo")) or team.SPEED)
+    ms = _members(D, body.get("ids"), g, gen, body.get("details"))
+    w = body.get("gewichte")
+    in_game = D.in_game.get(g["id"], {}) if g else None
+    caught = [D.forms[i] for i in sorted(own_marks("gefangen", body.get("spiel"))) if i in D.forms]
+    base = team.evaluate(ms, ctx, w)["wertung"] if ms else 0.0
+    ids = {m["id"] for m in ms}
+
+    def best_place(cand):
+        """Bester Platz für einen Kandidaten: (Zugewinn, Platz oder None = freier Platz)."""
+        c = member(D, cand, g, gen)
+        best = (-1e9, None)
+        if len(ms) < team.SIZE:
+            best = (team.evaluate(ms + [c], ctx, w)["wertung"] - base, None)
+        for k in range(len(ms)):
+            sc = team.evaluate(ms[:k] + [c] + ms[k + 1:], ctx, w)["wertung"] - base
+            if sc > best[0]:
+                best = (sc, k)
+        return best
+
+    alt, pot = [], []
+    for f in caught:
+        if f["id"] in ids:
+            continue
+        gain, k = best_place(f)
+        if gain >= 1:
+            alt.append(dict(row(D, f, g, gen), plus=round(gain, 1), slot=ms[k]["slot"] if k is not None else None,
+                            statt=ms[k]["name"] if k is not None else ""))
+        if f["endstufe"] or not f.get("kette"):
+            continue
+        finals = [x for x in D.forms.values() if x.get("kette") == f["kette"] and x["endstufe"] and x["relevant"] and not x["kampfform"]
+                  and x["id"] not in ids and (in_game is None or x["id"] in in_game)]
+        best = None
+        for x in finals:
+            gain2, k2 = best_place(x)
+            if gain2 >= 1 and gain2 > max(gain, 0) + 1 and (not best or gain2 > best[0]):
+                best = (gain2, k2, x)
+        if best:
+            gain2, k2, x = best
+            pot.append(dict(row(D, f, g, gen), plus=round(gain2, 1), wird=row(D, x, g, gen),
+                            slot=ms[k2]["slot"] if k2 is not None else None, statt=ms[k2]["name"] if k2 is not None else ""))
+    alt.sort(key=lambda r: -r["plus"])
+    pot.sort(key=lambda r: -r["plus"])
+    return {"alternativen": alt[:8], "potential": pot[:8], "gefangen": len(caught), "wertung": base}
 
 
 def team_matchup(body):

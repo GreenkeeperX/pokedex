@@ -24,7 +24,17 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Sortierbare Tabellen: erster Klick absteigend, zweiter aufsteigend, dritter wieder wie geladen.
 - Netzdiagramm: 100 % je Wert = Höchstwert aller Pokémon und Formen ohne Mega und Gigadynamax (`meta.verteilung`);
   Ringe bei 25, 50 (gestrichelt) und 75 %, an den Ecken der Karten eine Skala von 0 bis 10.
-- Version: steht neben dem Namen oben links, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
+- Kopfzeile (`#stick`) und Team-Leiste: nach gut 300 px abwärts gleiten sie weg (`.hid`, die Leiste klappt mit `.fold`
+  auf ihre Kopfzeile zu), 40 px aufwärts holt sie zurück. Ziehen klappt die Leiste auf.
+- Marken hinter dem Namen (SVG, `icon()`): im Team, gefangen (`/api/gefangen`), Favorit. Knöpfe zum Setzen beim
+  Hovern unten auf dem Bild (`.acts`); `redrawMarks()` zeichnet sie überall neu, ohne die Seite aufzubauen.
+- Typ-Duell (`duel()` in JS und `abfragen.duel`): austeilen = bester eigener Typ gegen den Zieltyp, einstecken =
+  Zieltyp gegen beide eigenen Typen. Klar stark: ×2 und höchstens ×½; stark: ×2 und ×1; schwer: ×2 einstecken und
+  höchstens ×1 austeilen. Der Filter „stark gegen“ nutzt dieselbe Rechnung („klar“ = nur Stufe 2).
+- Hinweise (`data-tip`) erscheinen unter dem Ziel, Hover-Karten daneben.
+- Sicherung: `/api/export` lädt herunter, `/api/restore` ersetzt alle eigenen Daten (vorher `vor-einlesen-…` in
+  `sicherung/`).
+- Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
   Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
   (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.
 
@@ -36,9 +46,13 @@ Wie im VR-Navigator: Farbtokens in `:root`, dunkle Ansicht über `prefers-color-
 - Typwirkung: rot = schwach (dunkel bei ×4), grün = resistent (dunkel bei ×¼), dunkel = immun
 - Hinweise: blau = Info, gelb = Achtung, rot = Problem, grün = in Ordnung
 - Basiswerte-Summe: Rot (um 200) bis Grün (um 680)
-- Gegner: rötlich getönte Leiste über der Auswertung
-- Akzent: Nintendo-Rot (`--brand`); Typ-Bubbles: gewählt = heller Rahmen mit ✓, ausgeschlossen = roter Rahmen, ✕
-  und durchgestrichen; im Team: grüner Rahmen; festgesetzt (📌): grün; passt nicht zum Spiel: gelb
+- Gegner: Karten mit rotem Rahmen
+- Akzent: Nintendo-Rot (`--brand`); Typ-Bubbles: gewählt = heller Rahmen mit Schein, ausgeschlossen = roter Rahmen und
+  durchgestrichen (ohne Zeichen, gleiche Größe); im Team: grüner Rahmen; festgesetzt (📌): grün; passt nicht zum
+  Spiel: gelb; Favorit: gelber Stern; gefangen: roter Pokéball
+- Hinterlegt (blau getönt): wo Verbesserungen vom Team abweichen; grün getönt: neu gegenüber dem Team
+- Attackenwerte: Stärke, Genauigkeit und Wertung von Rot nach Grün
+- Typtabelle: festgehaltene Zeile und Spalte in Grau, dunkler als beim Hovern
 - „Spielwert“: Attackenwerte, die im gewählten Spiel anders sind als heute
 
 ## Telefon
