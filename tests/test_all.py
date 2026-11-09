@@ -161,6 +161,34 @@ class Leser(unittest.TestCase):
         """
         self.assertEqual(importer.pkhex_static(src), [(722, 0, 5, 6), (978, 2, 45, 40)])
 
+    def test_spawnpunkte(self):
+        import sqlite3
+        from app import abfragen
+        cells = importer.spawn_cells({"Any Time/All Weather": {"Bidoof": 3, "AlphaBidoof": 1, " None": 5}})
+        self.assertEqual(len(cells), 36)
+        self.assertEqual(cells[("Night", "Rain")], {"Bidoof": 75.0, "AlphaBidoof": 25.0})
+        con = sqlite3.connect(":memory:")
+        con.row_factory = sqlite3.Row
+        con.execute("CREATE TABLE pokemon (id INTEGER, species_id INTEGER, is_default INTEGER)")
+        con.executemany("INSERT INTO pokemon VALUES (?, ?, 1)", [(399, 399), (58, 58), (10229, 58)])
+        con.execute("CREATE TABLE pokemon_forms (pokemon_id INTEGER, form_order INTEGER)")
+        con.executemany("INSERT INTO pokemon_forms VALUES (?, ?)", [(399, 1), (58, 1), (10229, 2)])
+        con.execute("CREATE TABLE pokemon_species (id INTEGER, identifier TEXT)")
+        con.executemany("INSERT INTO pokemon_species VALUES (?, ?)", [(399, "bidoof"), (58, "growlithe")])
+        punkte = json.dumps({"0": {"coords": [100.0, 5.0, 200.0], "icon": "x/alpha.png", "name": "a"},
+                             "1": {"coords": [300.0, 5.0, 400.0], "icon": "x/pokeball.png", "name": "b"}})
+        plaetze = json.dumps({"a": {"Night/All Weather": {"Growlithe-1": 1}},
+                              "b": {"Any Time/All Weather": {"Bidoof": 1, "AlphaBidoof": 0}}})
+        n = importer._derive_spawn(con, {"legends-arceus": {"karte": {"gebiet": "Gebiet A", "punkte": punkte, "plaetze": plaetze}}})
+        self.assertEqual(n, 2)
+        self.assertEqual(len(abruf.map_tiles()), 5 * (4 + 16 + 64))
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM spawnpunkt WHERE alpha = 1").fetchone()[0], 1)
+        s = abfragen.spawn_summary(con, "legends-arceus", 10229)["Gebiet A"]
+        self.assertEqual((s["zeit"], s["wetter"], s["punkte"], s["karte"]), ("Nacht 100 %", "jedes", 1, "karte"))
+        self.assertEqual(abfragen.spawn_summary(con, "legends-arceus", 399)["Gebiet A"]["zeit"], "immer")
+        self.assertEqual(abfragen._cond_text({"Dawn": 20, "Day": 20, "Dusk": 20, "Night": 80}, importer.ZEITEN, abfragen.ZEIT_DE, "immer"),
+                         "Nacht 80 %, sonst 20 %")
+
     def test_pkhex_fundorte(self):
         import sqlite3
         import struct

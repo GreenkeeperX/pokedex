@@ -37,6 +37,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Fundorte (`encHtml`): mit Daten aus PKHeX (`fundquelle`) Gebiet, Stellen mit Level (ab sechs Stellen gekürzt, alle im
   Hinweis), Art, Level und Alpha-Level; sonst die Tabelle der PokéAPI. Filter „Gebiet“ (`areaSelect`) nur bei Spielen
   mit Gebieten (`/api/meta`, `spiele[].gebiete`), ohne Massenauftreten.
+- Karte (`mapView`, `#karte/<Karte>/<Form>`): Welt 2048 px = Spielkoordinate × 2; Kacheln `karten/<Karte>/<z>-<x>-<y>.png`
+  (Zoom 0–2, Stufe nach Maßstab), Punkte behalten ihre Größe (`--inv`). Ziehen mit Pointer-Events, Mausrad und +/−
+  zoomen; mit Form werden ihre Punkte gelb hervorgehoben und die Ansicht passt sich ihnen an. Daten: `/api/karte/<Karte>`.
 - Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
   Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
   (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.

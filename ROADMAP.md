@@ -1,5 +1,12 @@
 # Roadmap
 
+## 0.6.0 (Fundorte und Karte, Entscheidung 09.11.2026)
+
+- Spawnpunkte (JS-Finder) und Tabellen nach Tageszeit und Wetter (PLA-Live-Map) im Abgleich; Tabellen `spawnpunkt` und
+  `spawn` (`importer.VERSION` 3)
+- Feste Begegnungen aus PKHeX in `fundort` (Art 9)
+- Reiter „Karte“ ohne fremde Bibliothek; Kartenkacheln von Serebii im Datenordner (`karten/`), nie im Repo
+
 ## 0.5.1
 
 - Verbindungstest: feste Begegnungen und Raids (PKHeX), Werte je Form in Legenden: Arceus, Sprites schillernd und
@@ -13,9 +20,9 @@
 
 ## Als Nächstes: 0.6.0
 
-- Feste Begegnungen aus PKHeX (Geschenke, Legendäre, feste Alphas) in die Fundorte
-- Fangchance je Ball und Level aus der Fangrate (Pokéball-Empfehlung)
-- Forschungsaufgaben in Legenden: Arceus (Quelle nach dem Verbindungstest: PokéWiki)
+- 0.6.1: Fangchance je Ball und Level aus der Fangrate (Pokéball-Empfehlung); schillernde und animierte Sprites, Rufe;
+  zugeklappte „Mehr Details“ (TM, Wesen, Ei-Gruppen, Wachstum, EV-Ausbeute), je nach Spiel
+- 0.7.0: Lehrer-Attacken und Beherrschung als Markierung in der Attacken-Tabelle, danach bewährte Movesets
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
 - PokéWiki-Leser (vom Heimserver aus erreichbar, Proben aus dem Verbindungstest) für das, was PKHeX nicht hat:
   Tageszeit und Wetter, Edelhorden, Attackenwerte (Kraft- und Tempostil) und Lehrer-Attacken in Legenden: Arceus

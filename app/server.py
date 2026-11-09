@@ -349,6 +349,15 @@ class Handler(BaseHTTPRequestHandler):
                         break
                 else:
                     self._send(404, {"error": "kein Bild"})
+            elif m := re.fullmatch(r"/karten/([a-z]{4,30})/(\d)-(\d{1,2})-(\d{1,2})\.png", path):
+                f = os.path.join(db.data_dir(), "karten", m.group(1), f"{m.group(2)}-{m.group(3)}-{m.group(4)}.png")
+                if m.group(1) in abruf.PLA_MAPS and os.path.isfile(f):
+                    self._file(f, "max-age=604800")
+                else:
+                    self._send(404, {"error": "keine Kachel"})
+            elif m := re.fullmatch(r"/api/karte/([a-z]{4,30})", path):
+                d = abfragen.map_data(m.group(1), q)
+                self._send(200 if d else 404, d or {"error": "keine Karte"})
             elif path == "/healthz":
                 self._send(200, {"ok": True, "version": sources.VERSION})
             elif path == "/api/meta":

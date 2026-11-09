@@ -10,11 +10,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.5.1"
+VERSION = "0.6.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.6.0", "09.11.2026", [
+        "Neuer Reiter „Karte“ für Legenden: Arceus: alle Spawnpunkte je Gebiet zum Ziehen und Zoomen, Alpha rot, "
+        "beim Hovern wer dort erscheint, beim Klick mit Anteil, Tageszeit und Wetter",
+        "Fundorte mit Tageszeit und Wetter (aus den Spawn-Tabellen) und Link „Karte“, der die Spawnpunkte des Pokémon hervorhebt",
+        "Feste Begegnungen (Geschenke, Legendäre, einmalige Pokémon) als eigene Zeilen in den Fundorten",
+        "Abgleich lädt die Kartenbilder einmal und hält sie im Datenordner",
+    ]),
     ("0.5.1", "09.11.2026", [
         "Verbindungstest prüft weitere Quellen: feste Begegnungen (Geschenke, Legendäre) und Raids aus PKHeX, "
         "Werte je Form in Legenden: Arceus, schillernde und animierte Sprites, Rufe, Showdown-Stufen und Random-Battle-Sets",

@@ -1,5 +1,5 @@
 /* Pokédex-Oberfläche: reines JavaScript ohne Build. Reiter über die Adresse (#pokemon, #pokemon/6, #team, #attacken,
-   #typen, #einstellungen), deshalb öffnet „In neuem Tab öffnen“ jede Karte. Gewähltes Spiel, Filter und das aktuelle
+   #typen, #karte/<Karte>/<Form>, #einstellungen), deshalb öffnet „In neuem Tab öffnen“ jede Karte. Gewähltes Spiel, Filter und das aktuelle
    Team merkt sich der Browser; ein gespeichertes Team ändert sich auf dem Server erst mit „Speichern“. */
 "use strict";
 const $ = (s, el = document) => el.querySelector(s);
@@ -21,7 +21,7 @@ const S = {
   tfilter: filter0(Object.assign({endstufe: true}, store.get("tfilter", {}))),
   tleg: store.get("tleg", true), dock: store.get("dock", window.innerWidth > 700), foes: store.get("foes", []),
 };
-const TABS = [["pokemon", "Pokémon"], ["team", "Team"], ["attacken", "Attacken"], ["typen", "Typen"], ["einstellungen", "Einstellungen"]];
+const TABS = [["pokemon", "Pokémon"], ["team", "Team"], ["attacken", "Attacken"], ["typen", "Typen"], ["karte", "Karte"], ["einstellungen", "Einstellungen"]];
 const STAT = ["KP", "Angriff", "Verteidigung", "Sp.-Angriff", "Sp.-Verteidigung", "Initiative"];
 const STAT_K = ["KP", "Ang", "Vert", "SpA", "SpV", "Init"];
 const CRIT = {defensive: "Defensive", abdeckung: "Abdeckung", tempo: "Tempo", staerke: "Stärke", balance: "Balance"};
@@ -433,6 +433,7 @@ async function route() {
     else if (tab === "team") await teamView();
     else if (tab === "attacken") await movesView();
     else if (tab === "typen") await chartView();
+    else if (tab === "karte") await mapView(arg, arg2 === undefined ? null : +arg2);
     else if (tab === "einstellungen") await settingsView();
     else location.hash = "pokemon";
   } catch (e) {
@@ -502,11 +503,13 @@ function encHtml(d) {
     const one = (p) => (p.name || "im ganzen Gebiet") + (p.level ? ` (${p.level})` : p.alpha ? ` (Alpha ${p.alpha})` : "");
     const places = (xs) => xs.length <= 6 ? esc(xs.map(one).join(", "))
       : `${esc(xs.slice(0, 4).map(one).join(", "))} <span class="weitere" data-tip="${esc(xs.map(one).join(", "))}">und ${xs.length - 4} weitere</span>`;
-    return `<div class="scroll"><table class="sort"><thead><tr>${th("Gebiet")}${th("Stellen")}${th("Art")}${th("Level")}${th("Alpha")}</tr></thead><tbody>
-      ${f.map((e) => `<tr><td>${esc(e.ort)} ${wikiLink(e.ort)}</td><td>${places(e.stellen)}</td><td>${esc(e.methode)}</td>
+    return `<div class="scroll"><table class="sort"><thead><tr>${th("Gebiet")}${th("Stellen")}${th("Art")}${th("Tageszeit")}${th("Wetter")}${th("Level")}${th("Alpha")}</tr></thead><tbody>
+      ${f.map((e) => `<tr><td>${esc(e.ort)} ${wikiLink(e.ort)}${e.karte ? ` <a class="maplink" href="#karte/${e.karte}/${d.id}" data-tip="Spawnpunkte auf der Karte">Karte</a>` : ""}</td><td>${places(e.stellen)}</td><td>${esc(e.methode)}</td>
+        <td>${e.zeit ? `<span data-tip="${esc(`An ${e.punkte} Spawnpunkt${e.punkte === 1 ? "" : "en"}, Anteil bis ${String(e.chance).replace(".", ",")} %`)}">${esc(e.zeit)}</span>` : ""}</td>
+        <td>${esc(e.wetter)}</td>
         <td data-s="${parseInt(e.level || e.alpha) || 0}">${esc(e.level || "–")}</td>
         <td data-s="${parseInt(e.alpha) || 0}">${e.alpha ? `<span class="alpha">${esc(e.alpha)}</span>${e.nur_alpha ? " (immer Alpha)" : ""}` : ""}</td></tr>`).join("")}</tbody></table></div>
-      <p class="hint">Aus den Spieldaten (PKHeX). Stellen: wo das Pokémon im Gebiet erscheinen kann, mit Level; Alpha-Pokémon sind höher. Tageszeit und Wetter folgen mit dem PokéWiki-Abruf.</p>`;
+      <p class="hint">Aus den Spieldaten (PKHeX). Stellen: wo das Pokémon im Gebiet erscheinen kann, mit Level; Alpha-Pokémon sind höher. Tageszeit und Wetter: aus den Spawn-Tabellen (PLA-Live-Map), nur für frei auftauchende Pokémon.</p>`;
   }
   if (f.length) return `<div class="scroll"><table class="sort"><thead><tr>${th("Ort")}${th("Methode")}${th("Level")}${th("Bedingungen")}${th("Edition")}</tr></thead><tbody>
     ${f.map((e) => `<tr><td>${esc(e.ort)} ${wikiLink(e.ort)}</td><td>${esc(e.methode)}</td><td data-s="${parseInt(e.level) || 0}">${esc(e.level)}</td><td>${esc(e.bedingungen.join(", "))}</td><td>${esc(e.editionen.join(", "))}</td></tr>`).join("")}</tbody></table></div>`;
@@ -1310,6 +1313,104 @@ async function movesView() {
 
 /* ------------------------------------------------------------------ Typtabelle */
 let PIN = {r: null, c: null};
+/* ------------------------------------------------------------------ Karte (Legenden: Arceus)
+   Spielkoordinaten 0–1024; Welt in Pixeln = Koordinate × 2 (2048 px bei Zoom 2). Kacheln 256 px von Serebii, auf dem Server
+   gespeichert; Zoom 0 hat 2 × 2, Zoom 1 hat 4 × 4, Zoom 2 hat 8 × 8 Kacheln. Ziehen verschiebt, Mausrad zoomt. */
+const WORLD = 2048;
+const mpct = (x) => String(x).replace(".", ",") + " %";
+async function mapView(karte, fid) {
+  const rid = RID;
+  const d = await api("/api/karte/" + encodeURIComponent(karte || "obsidianfieldlands"));
+  if (rid !== RID) return;
+  window.scrollTo(0, 0);
+  const pts = d.punkte.map((p) => Object.assign(p, {hit: fid != null && p.mons.some((m) => m.id === fid)}));
+  const species = {};
+  pts.forEach((p) => p.mons.forEach((m) => { (species[m.id] ||= {id: m.id, name: m.name, n: 0}).n++; }));
+  const list = Object.values(species).sort((a, b) => a.name.localeCompare(b.name, "de"));
+  const hits = pts.filter((p) => p.hit).length;
+  main.innerHTML = `<div class="box mapbox">
+    <div class="bar"><h2 style="margin:0">Karte</h2>
+      <span class="seg">${d.karten.map((k) => `<a class="btn${k.karte === d.karte ? " on" : ""}" href="#karte/${k.karte}${fid != null ? "/" + fid : ""}">${esc(k.gebiet)}</a>`).join("")}</span>
+      <label>Pokémon <select id="mapmon"><option value="">alle Spawnpunkte</option>${list.map((s) => `<option value="${s.id}"${s.id === fid ? " selected" : ""}>${esc(s.name)} (${s.n})</option>`).join("")}</select></label>
+      <span class="hint grow">${fid != null ? (hits ? `${hits} Spawnpunkte hervorgehoben` : "hier an keinem Spawnpunkt") : `${pts.length} Spawnpunkte, davon ${pts.filter((p) => p.alpha).length} Alpha`}</span>
+      <button data-mz="1" title="näher">+</button><button data-mz="-1" title="weiter weg">−</button></div>
+    ${d.kacheln ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
+    <div class="mapwrap"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
+      <aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha.</p></aside></div>
+    <p class="hint">Kartenbild: Serebii; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten.</p></div>`;
+  $("#mapmon").addEventListener("change", (e) => { location.hash = `karte/${d.karte}` + (e.target.value ? "/" + e.target.value : ""); });
+  const box = $("#map"), inner = $(".mapin", box), tiles = $(".tiles", box), pins = $(".pins", box);
+  const tipOf = (p) => (p.alpha ? "Alpha-Spawnpunkt\n" : "") + (p.mons.length ? p.mons.map((m) => `${m.alpha ? "Alpha-" : ""}${m.name}: bis ${mpct(m.max)}`
+    + (m.zeit !== "immer" ? ` (${m.zeit})` : "")).join("\n") : "keine Angaben");
+  pins.innerHTML = pts.map((p, i) => `<button class="pin${p.alpha ? " alpha" : ""}${p.hit ? " hit" : ""}${fid != null && !p.hit ? " dim" : ""}" data-i="${i}"
+    style="left:${p.x * 2}px;top:${p.z * 2}px" data-tip="${esc(tipOf(p))}" aria-label="Spawnpunkt"></button>`).join("");
+  let scale = 1, ox = 0, oy = 0, level = -1;
+  const fit = () => {
+    const r = box.getBoundingClientRect(), on = pts.filter((p) => p.hit);
+    if (on.length) {
+      const xs = on.map((p) => p.x * 2), ys = on.map((p) => p.z * 2), pad = 140;
+      const w = Math.max(...xs) - Math.min(...xs) + pad * 2, h = Math.max(...ys) - Math.min(...ys) + pad * 2;
+      scale = Math.min(1.5, r.width / w, r.height / h);
+      ox = r.width / 2 - (Math.min(...xs) + Math.max(...xs)) / 2 * scale;
+      oy = r.height / 2 - (Math.min(...ys) + Math.max(...ys)) / 2 * scale;
+    } else {
+      scale = Math.min(r.width, r.height) / WORLD;
+      ox = (r.width - WORLD * scale) / 2; oy = (r.height - WORLD * scale) / 2;
+    }
+  };
+  const draw = () => {
+    const z = scale < 0.3 ? 0 : scale < 0.6 ? 1 : 2;
+    if (z !== level) {
+      level = z;
+      const n = 2 ** (z + 1), size = WORLD / n, out = [];
+      for (let x = 0; x < n; x++) for (let y = 0; y < n; y++)
+        out.push(`<img src="karten/${d.karte}/${z}-${x}-${y}.png" alt="" draggable="false" style="left:${x * size}px;top:${y * size}px;width:${size}px;height:${size}px" onerror="this.style.visibility='hidden'">`);
+      tiles.innerHTML = out.join("");
+    }
+    inner.style.transform = `translate(${ox}px,${oy}px) scale(${scale})`;
+    inner.style.setProperty("--inv", 1 / scale);
+  };
+  const zoomAt = (f, cx, cy) => {
+    const ns = Math.max(0.15, Math.min(4, scale * f));
+    ox = cx - (cx - ox) * ns / scale; oy = cy - (cy - oy) * ns / scale; scale = ns; draw();
+  };
+  fit(); draw();
+  box.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const r = box.getBoundingClientRect();
+    zoomAt(e.deltaY < 0 ? 1.25 : 0.8, e.clientX - r.left, e.clientY - r.top);
+  }, {passive: false});
+  $$("[data-mz]").forEach((b) => b.addEventListener("click", () => {
+    const r = box.getBoundingClientRect();
+    zoomAt(b.dataset.mz === "1" ? 1.4 : 1 / 1.4, r.width / 2, r.height / 2);
+  }));
+  let drag = null;
+  box.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".pin")) return;
+    drag = {x: e.clientX, y: e.clientY, ox, oy};
+    box.setPointerCapture(e.pointerId);
+    box.classList.add("grab");
+  });
+  box.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    ox = drag.ox + e.clientX - drag.x; oy = drag.oy + e.clientY - drag.y; draw();
+  });
+  const stop = () => { drag = null; box.classList.remove("grab"); };
+  box.addEventListener("pointerup", stop);
+  box.addEventListener("pointercancel", stop);
+  pins.addEventListener("click", (e) => {
+    const b = e.target.closest(".pin");
+    if (!b) return;
+    $$(".pin.sel", pins).forEach((x) => x.classList.remove("sel"));
+    b.classList.add("sel");
+    const p = pts[+b.dataset.i];
+    $("#mapside").innerHTML = `<h3>${p.alpha ? "Alpha-Spawnpunkt" : "Spawnpunkt"}</h3>` + (p.mons.length ? `<table class="rows"><tr><th></th><th>Pokémon</th><th>Anteil</th><th>Tageszeit</th><th>Wetter</th></tr>
+      ${p.mons.map((m) => `<tr><td>${img(m.id, "sm")}</td><td><a href="#pokemon/${m.id}">${m.alpha ? `<span class="alpha">Alpha</span> ` : ""}${esc(m.name)}</a></td>
+        <td>bis ${mpct(m.max)}</td><td>${esc(m.zeit)}</td><td>${esc(m.wetter)}</td></tr>`).join("")}</table>` : `<p class="hint">keine Angaben</p>`)
+      + `<p class="hint">Anteil: so oft erscheint es an diesem Punkt unter den passenden Bedingungen (höchster Wert).</p>`;
+  });
+}
+
 async function chartView() {
   const ch = S.chart, ts = Object.keys(ch);
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Typtabelle Generation ${S.chartGen}</h2><span class="hint">Spiel</span><select class="gamesel"></select>
@@ -1370,7 +1471,7 @@ async function settingsView() {
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
       <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
         <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button></div>
-      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("sprites", "Bilder")}</table>
+      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}</table>
       <h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
@@ -1405,6 +1506,9 @@ async function settingsView() {
       <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
         <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
         <a href="https://github.com/kwsch/PKHeX" target="_blank" rel="noopener noreferrer">PKHeX</a> (Fundorte aus den Spieldaten, GPL-3.0) ·
+        <a href="https://github.com/Lincoln-LM/PLA-Live-Map" target="_blank" rel="noopener noreferrer">PLA-Live-Map</a> und
+        <a href="https://github.com/Lincoln-LM/JS-Finder" target="_blank" rel="noopener noreferrer">JS-Finder</a> (Spawnpunkte, GPL-3.0) ·
+        <a href="https://www.serebii.net" target="_blank" rel="noopener noreferrer">Serebii</a> (Kartenbilder) ·
         <a href="https://www.pokewiki.de" target="_blank" rel="noopener noreferrer">PokéWiki</a> (Links; Abruf für Legenden: Arceus folgt, CC BY-SA 3.0 DE).
         Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK; dies ist ein privates Nachschlage-Tool.</p>
       <p class="hint">Pokédex ${esc(S.meta?.version || "")}</p></div>`;

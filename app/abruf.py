@@ -251,6 +251,49 @@ def _images(kind, log, limit=SPRITES_MAX):
     return src.result(neu=got, fehlen=absent, offen=left)
 
 
+MAP_TILES = "https://www.serebii.net/pokearth/hisui/"
+MAP_ZOOM = 2                # Kacheln 256 px, Zoom z hat 2^(z+1) × 2^(z+1) Kacheln je Karte
+
+
+def map_tiles():
+    """Alle Kacheln der Karten als (Karte, z, x, y)."""
+    return [(k, z, x, y) for k in PLA_MAPS for z in range(MAP_ZOOM + 1)
+            for x in range(2 ** (z + 1)) for y in range(2 ** (z + 1))]
+
+
+def _tiles(log):
+    """Fehlende Kartenkacheln (Serebii) nach data/karten/<Karte>/<z>-<x>-<y>.png, alle fehlenden je Lauf."""
+    src = _Source("karten", log, pause=1.0)
+    root = os.path.join(db.data_dir(), "karten")
+    miss = store.load_json("karten_fehlen.json", {})
+    cutoff = _iso(now() - timedelta(days=SPRITE_MISS_DAYS))
+    todo = [t for t in map_tiles() if not os.path.isfile(os.path.join(root, t[0], "%d-%d-%d.png" % t[1:]))
+            and (miss.get("%s/%d-%d-%d" % t) or "") < cutoff]
+    got = absent = 0
+    for n, (k, z, x, y) in enumerate(todo):
+        STATE.update(step="Kartenkacheln", done=n, total=len(todo))
+        body = src.get(f"{MAP_TILES}{k}/tile_{z}-{x}-{y}.png", raw=True, absent=(404,))
+        if body is None:
+            if src.stopped:
+                break
+            continue
+        if not body or body[:8] != b"\x89PNG\r\n\x1a\n":
+            miss["%s/%d-%d-%d" % (k, z, x, y)] = _iso(now())
+            absent += 1
+            continue
+        folder = os.path.join(root, k)
+        os.makedirs(folder, exist_ok=True)
+        tmp = os.path.join(folder, f".{z}-{x}-{y}.tmp")
+        with open(tmp, "wb") as f:
+            f.write(body)
+        os.replace(tmp, os.path.join(folder, f"{z}-{x}-{y}.png"))
+        got += 1
+    store.save_json("karten_fehlen.json", miss)
+    if todo:
+        log(f"Kartenkacheln: {got} neu" + (f", {absent} gibt es nicht" if absent else ""))
+    return src.result(neu=got, fehlen=absent)
+
+
 def _sprites(log, limit=SPRITES_MAX):
     return _images("sprites", log, limit)
 
@@ -302,6 +345,12 @@ def _run(by_hand, force):
             st["sources"]["sprites"] = res
             if res["blocked"]:
                 st["rest"]["sprites"] = _iso(now() + timedelta(hours=REST_H))
+        if db.has_data() and settings["sprites"] and not _resting(st, "karten", at):
+            STATE["step"] = "Kartenkacheln"
+            res = _tiles(log)
+            st["sources"]["karten"] = res
+            if res["blocked"]:
+                st["rest"]["karten"] = _iso(now() + timedelta(hours=REST_H))
         st["ok"] = ok
     except Exception as e:          # ein Fehler im Code soll den Dienst nicht beenden
         log(f"Abgebrochen: {type(e).__name__}: {e}")
@@ -333,15 +382,18 @@ def _build(st, log, force, at):
         if sd.blocked:
             st["rest"]["showdown"] = _iso(now() + timedelta(hours=REST_H))
     pkhex = _pkhex(st, log, at)
+    spawns = _spawns(st, log, at)
     extra = importer.load_extra(EXTRA_DIR)
     stand = {"csv": sha, "showdown": _hash(*(sd_texts.get(k, "") for k in ("pokedex", "moves"))) if len(sd_texts) == 2 else "",
              "pkhex": _hash(*(v for src in pkhex.values() for v in src.values())) if pkhex else "",
+             "spawns": _hash(json.dumps(spawns, sort_keys=True)) if spawns else "",
              "extra": _hash(json.dumps(extra, sort_keys=True)), "importer": importer.VERSION}
     old = st.get("stand") or {}
     if (db.has_data() and not force and sha and stand["csv"] == old.get("csv") and stand["extra"] == old.get("extra")
             and stand["importer"] == old.get("importer") and (not stand["showdown"] or stand["showdown"] == old.get("showdown"))
-            and (not stand["pkhex"] or stand["pkhex"] == old.get("pkhex"))):
-        log("Keine Änderung bei PokéAPI, Showdown, PKHeX und Ergänzungen, Datenbank bleibt")
+            and (not stand["pkhex"] or stand["pkhex"] == old.get("pkhex"))
+            and (not stand["spawns"] or stand["spawns"] == old.get("spawns"))):
+        log("Keine Änderung bei PokéAPI, Showdown, PKHeX, Spawnpunkten und Ergänzungen, Datenbank bleibt")
         st["sources"]["pokeapi"] = papi.result(geaendert=False)
         return True
     csvs = {}
@@ -362,7 +414,7 @@ def _build(st, log, force, at):
     STATE.update(step="Datenbank bauen", done=0, total=0)
     tmp = db.pokeapi_path() + ".neu"
     try:
-        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex)
+        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex, spawns=spawns)
     except Exception as e:
         log(f"Neue Datenbank verworfen: {e}; die bisherige bleibt")
         if os.path.exists(tmp):
@@ -373,11 +425,14 @@ def _build(st, log, force, at):
         stand["showdown"] = old.get("showdown", "")
     if not pkhex:
         stand["pkhex"] = old.get("pkhex", "")
+    if not spawns:
+        stand["spawns"] = old.get("spawns", "")
     st["stand"], st["stats"], st["built"] = stand, stats, _iso(now())
     log(f"Datenbank neu: {stats['species']} Arten, {stats['forms']} Formen, {stats['moves']} Attacken, {stats['games']} Spiele, "
         f"{stats['tables']} Tabellen" + (f"; Showdown {stats['sd_pokemon']} Pokémon, {stats['sd_moves']} Attacken, "
                                          f"{stats['diff']} Abweichungen zu prüfen" if sd_texts else "; ohne Showdown-Abgleich")
-        + (f"; {stats['fundorte']} Fundorte aus PKHeX" if pkhex else "; ohne Fundorte aus PKHeX"))
+        + (f"; {stats['fundorte']} Fundorte aus PKHeX" if pkhex else "; ohne Fundorte aus PKHeX")
+        + (f"; {stats['spawns']} Spawn-Einträge mit Tageszeit und Wetter" if spawns else ""))
     return not papi.stopped and not sd.stopped
 
 
@@ -388,16 +443,36 @@ def _pkhex(st, log, at):
         return {}
     src = _Source("pkhex", log)
     out = {}
-    for spiel, (enc, names) in PKHEX_GAMES.items():
+    for spiel, (enc, names, fixed) in PKHEX_GAMES.items():
         STATE["step"] = f"PKHeX: {spiel}"
         b = src.get(PKHEX_RAW + enc, raw=True)
         t = src.get(PKHEX_RAW + names) if b else None
         if b and t:
-            out[spiel] = {"begegnungen": b, "orte": t}
-    st["sources"]["pkhex"] = src.result(dateien=2 * len(out))
+            out[spiel] = {"begegnungen": b, "orte": t, "fest": src.get(PKHEX_SRC + fixed) or ""}
+    st["sources"]["pkhex"] = src.result(dateien=sum(len(v) for v in out.values()))
     if src.blocked:
         st["rest"]["pkhex"] = _iso(now() + timedelta(hours=REST_H))
     return out
+
+
+def _spawns(st, log, at):
+    """Spawnpunkte (JS-Finder) und ihre Tabellen nach Tageszeit und Wetter (PLA-Live-Map), beide GPL-3.0:
+    {Spielkennung: {Karte: {"gebiet": Name, "punkte": Text, "plaetze": Text}}}."""
+    if _resting(st, "spawns", at):
+        log(f"Spawnpunkte ruhen bis {st['rest']['spawns'][:16].replace('T', ' ')} UTC")
+        return {}
+    src = _Source("spawns", log)
+    maps = {}
+    for karte, gebiet in PLA_MAPS.items():
+        STATE["step"] = f"Spawnpunkte: {gebiet}"
+        p = src.get(SPAWN_POINTS + karte + ".json")
+        t = src.get(SPAWN_SLOTS + karte + ".json") if p else None
+        if p and t:
+            maps[karte] = {"gebiet": gebiet, "punkte": p, "plaetze": t}
+    st["sources"]["spawns"] = src.result(dateien=2 * len(maps))
+    if src.blocked:
+        st["rest"]["spawns"] = _iso(now() + timedelta(hours=REST_H))
+    return {"legends-arceus": maps} if maps else {}
 
 
 def start(force=False):
@@ -432,7 +507,14 @@ PROBE_MAX = 60_000          # so viele Zeichen je Probe-Seite behält der Verbin
 
 pkhex_areas = importer.pkhex_areas
 # Spiele mit Begegnungsdatei und deutschen Ortsnamen (weitere folgen, sobald ihr Format gelesen wird)
-PKHEX_GAMES = {"legends-arceus": ("legality/wild/Gen8/encounter_la.pkl", "text/locations/gen8a/text_la_00000_de.txt")}
+# Karten in Legenden: Arceus: Name bei PLA-Live-Map, JS-Finder und Serebii → Gebiet (wie in PKHeX)
+PLA_MAPS = {"obsidianfieldlands": "Obsidian-Grasland", "crimsonmirelands": "Rotes Sumpfland",
+            "cobaltcoastlands": "Kobalt-Küstenland", "coronethighlands": "Kraterberg-Hochland",
+            "alabastericelands": "Weißes Frostland"}
+SPAWN_POINTS = "https://raw.githubusercontent.com/Lincoln-LM/JS-Finder/main/Resources/pla_spawners/jsons/"
+SPAWN_SLOTS = "https://raw.githubusercontent.com/Lincoln-LM/PLA-Live-Map/main/static/resources/"
+PKHEX_GAMES = {"legends-arceus": ("legality/wild/Gen8/encounter_la.pkl", "text/locations/gen8a/text_la_00000_de.txt",
+                                   "Gen8/Encounters8a.cs")}
 
 
 def diagnose(proben=None):
@@ -525,6 +607,14 @@ def diagnose(proben=None):
     probe("PKHeX, feste Symbole Karmesin/Purpur", PKHEX_RAW + "legality/wild/Gen9/encounter_fixed_paldea.pkl", pkl, raw=True)
     probe("PKHeX, Werte je Form Legenden: Arceus", PKHEX_RAW + "byte/personal/personal_la",
           lambda b: f"{len(b)} Bytes (Basiswerte, Fangrate, Formen wie im Spiel)", raw=True)
+
+    section("Karte (Legenden: Arceus)")
+    probe("JS-Finder, Spawnpunkte Obsidian-Grasland", SPAWN_POINTS + "obsidianfieldlands.json",
+          lambda t: f"{len(json.loads(t))} Spawnpunkte mit Koordinaten")
+    probe("PLA-Live-Map, Tabellen Obsidian-Grasland", SPAWN_SLOTS + "obsidianfieldlands.json",
+          lambda t: f"{len(json.loads(t))} Tabellen nach Tageszeit und Wetter")
+    probe("Serebii, Kartenkachel", MAP_TILES + "obsidianfieldlands/tile_0-0-0.png",
+          lambda b: "PNG" if b[:4] == b"\x89PNG" else "kein PNG", raw=True, headers={"Accept": "image/png,image/*;q=0.8"})
 
     section("Bilder und Rufe (PokéAPI-Repos)")
     img = lambda kind: (lambda b: kind if b[:4] in (b"\x89PNG", b"GIF8") else "unbekanntes Format")

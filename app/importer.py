@@ -7,6 +7,7 @@ Aufbereitete Tabellen (deutsche Namen, Sprache 6, sonst Englisch 9):
 - attacke: Attacken mit deutschem Namen, Werten, Zusatzangaben und Showdown-Merkmalen
 - pruefung: Abweichungen zwischen PokéAPI und Showdown für „Zu erledigen“
 - fundort: Begegnungen aus den Spieldaten (PKHeX) je Spiel, Form, Gebiet und Art, mit Level und Alpha
+- spawnpunkt, spawn: Spawnpunkte mit Koordinaten und wer dort bei welcher Tageszeit und welchem Wetter erscheint
 """
 import csv
 import io
@@ -17,7 +18,7 @@ import sqlite3
 
 from . import showdown
 
-VERSION = "2"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "3"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -281,7 +282,9 @@ def _derive_pruefung(con, sd_dex, sd_moves):
 
 
 # Arten der Begegnung in Legenden: Arceus (SlotType8a in PKHeX)
-PKHEX_ART = {0: "frei", 1: "Raum-Zeit-Verzerrung", 2: "Baum oder Erzbrocken", 3: "Massenauftreten", 4: "Massives Massenauftreten"}
+PKHEX_ART = {0: "frei", 1: "Raum-Zeit-Verzerrung", 2: "Baum oder Erzbrocken", 3: "Massenauftreten", 4: "Massives Massenauftreten",
+             9: "fest (Geschenk oder einmalig)"}
+FEST = 9
 
 
 def pkhex_areas(data):
@@ -330,11 +333,8 @@ def pkhex_names(text):
     return (text or "").lstrip("\ufeff").splitlines()
 
 
-def _derive_fundort(con, pkhex):
-    """pkhex: {Spielkennung: {"begegnungen": Bytes, "orte": Text}}. Art und Formnummer im Spiel werden über
-    pokemon_forms (form_order) zur Form der PokéAPI; ohne Treffer zählt die Standardform der Art."""
-    con.execute("CREATE TABLE fundort (spiel TEXT, form INTEGER, gebiet TEXT, gebiet_nr INTEGER, stellen TEXT, art INTEGER, "
-                "min INTEGER, max INTEGER, alpha INTEGER, quelle TEXT)")
+def _form_maps(con):
+    """({(Art, Formnummer im Spiel): Form}, {Art: Standardform}) aus pokemon_forms (form_order) und pokemon."""
     by_form, by_art = {}, {}
     if _has(con, "pokemon_forms"):
         for art, order, pid in con.execute("SELECT p.species_id, f.form_order, f.pokemon_id FROM pokemon_forms f "
@@ -342,6 +342,80 @@ def _derive_fundort(con, pkhex):
             by_form.setdefault((int(art), int(order or 1) - 1), int(pid))
     for art, pid in con.execute("SELECT species_id, id FROM pokemon WHERE is_default = 1"):
         by_art[int(art)] = int(pid)
+    return by_form, by_art
+
+
+# Spawnpunkte in Legenden: Arceus (PLA-Live-Map und JS-Finder, GPL-3.0): Tageszeiten und Wetter der Tabellen
+ZEITEN = ("Dawn", "Day", "Dusk", "Night")
+WETTER = ("None", "Sunny", "Cloudy", "Rain", "Snow", "Drought", "Fog", "Rainstorm", "Snowstorm")
+
+
+def spawn_cells(conds):
+    """Tabelle eines Spawnpunkts {"Day/Rain": {Name: Gewicht}} → {(Zeit, Wetter): {Name: Anteil in %}}; „Any Time“
+    und „All Weather“ gelten für alle Tageszeiten und jedes Wetter."""
+    cells = {}
+    for key, weights in (conds or {}).items():
+        t, _, w = key.partition("/")
+        for zt in (ZEITEN if t == "Any Time" else (t,)):
+            for wt in (WETTER if w in ("All Weather", "") else (w,)):
+                cells[(zt, wt)] = weights
+    out = {}
+    for cell, weights in cells.items():
+        total = sum(v for k, v in weights.items() if v > 0 and k.strip() != "None")
+        if total:
+            out[cell] = {k: round(100 * v / total, 1) for k, v in weights.items() if v > 0 and k.strip() != "None"}
+    return out
+
+
+def _spawn_name(name, by_name):
+    """„AlphaGrowlithe-1“ → (Art, Formnummer, Alpha) über die Kennung der PokéAPI; None, wenn unbekannt."""
+    alpha = name.startswith("Alpha")
+    base = name[5:] if alpha else name
+    base, _, form = base.partition("-") if re.search(r"-\d+$", base) else (base, "", "")
+    key = re.sub(r"[^a-z0-9]+", "-", base.strip().lower().replace("♀", "-f").replace("♂", "-m")).strip("-")
+    art = by_name.get(key)
+    return (art, int(form or 0), alpha) if art else None
+
+
+def _derive_spawn(con, spawns):
+    """spawns: {Spielkennung: {Karte: {"gebiet": Name, "punkte": Text, "plaetze": Text}}}. Tabellen spawnpunkt
+    (Koordinaten) und spawn (wer an welchem Punkt bei welcher Tageszeit und welchem Wetter, Anteil in %)."""
+    con.execute("CREATE TABLE spawnpunkt (spiel TEXT, karte TEXT, gebiet TEXT, nr INTEGER, name TEXT, x REAL, z REAL, alpha INTEGER)")
+    con.execute("CREATE TABLE spawn (spiel TEXT, karte TEXT, gebiet TEXT, name TEXT, form INTEGER, alpha INTEGER, anteile TEXT)")
+    by_form, by_art = _form_maps(con)
+    by_name = dict(con.execute("SELECT identifier, id FROM pokemon_species")) if _has(con, "pokemon_species") else {}
+    n = 0
+    for spiel, maps in (spawns or {}).items():
+        for karte, src in maps.items():
+            punkte = json.loads(src.get("punkte") or "{}")
+            con.executemany("INSERT INTO spawnpunkt VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            [(spiel, karte, src["gebiet"], int(k), p.get("name", ""), p["coords"][0], p["coords"][2],
+                              int("alpha" in str(p.get("icon", "")))) for k, p in punkte.items() if len(p.get("coords", [])) == 3])
+            for name, conds in json.loads(src.get("plaetze") or "{}").items():
+                per = {}
+                for (zt, wt), shares in spawn_cells(conds).items():
+                    for mon, pct in shares.items():
+                        per.setdefault(mon, {})[f"{zt}/{wt}"] = pct
+                for mon, cells in per.items():
+                    hit = _spawn_name(mon, by_name)
+                    if not hit:
+                        continue
+                    art, form, alpha = hit
+                    pid = by_form.get((art, form)) or by_art.get(art)
+                    if pid:
+                        con.execute("INSERT INTO spawn VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                    (spiel, karte, src["gebiet"], name, pid, int(alpha), json.dumps(cells, separators=(",", ":"))))
+                        n += 1
+    con.execute("CREATE INDEX spawn_form ON spawn(form, spiel)")
+    return n
+
+
+def _derive_fundort(con, pkhex):
+    """pkhex: {Spielkennung: {"begegnungen": Bytes, "orte": Text, "fest": Quelltext der festen Begegnungen}}. Art und Formnummer im Spiel werden über
+    pokemon_forms (form_order) zur Form der PokéAPI; ohne Treffer zählt die Standardform der Art."""
+    con.execute("CREATE TABLE fundort (spiel TEXT, form INTEGER, gebiet TEXT, gebiet_nr INTEGER, stellen TEXT, art INTEGER, "
+                "min INTEGER, max INTEGER, alpha INTEGER, quelle TEXT)")
+    by_form, by_art = _form_maps(con)
     n = 0
     for spiel, src in (pkhex or {}).items():
         names = pkhex_names(src.get("orte"))
@@ -356,6 +430,10 @@ def _derive_fundort(con, pkhex):
                 pid = by_form.get((nr, form)) or by_art.get(nr)
                 if pid:
                     rows.append((spiel, pid, gebiet, locs[0], stellen, kind, lo, hi, alpha, "PKHeX"))
+        for nr, form, level, loc in pkhex_static(src.get("fest")):
+            pid = by_form.get((nr, form)) or by_art.get(nr)
+            if pid:
+                rows.append((spiel, pid, name(loc), loc, "[]", FEST, level, level, 0, "PKHeX"))
         con.executemany("INSERT INTO fundort VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
         n += len(rows)
     con.execute("CREATE INDEX fundort_form ON fundort(form, spiel)")
@@ -392,9 +470,10 @@ def check(con):
     return why
 
 
-def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None):
+def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns=None):
     """Baut die Datenbank unter path (wird überschrieben). csvs: {Name: Text}; sd_texts: {"pokedex": Text,
-    "moves": Text}; extra: {Name: Inhalt} aus extra/; pkhex: Begegnungen je Spiel (siehe _derive_fundort).
+    "moves": Text}; extra: {Name: Inhalt} aus extra/; pkhex: Begegnungen je Spiel (siehe _derive_fundort);
+    spawns: Spawnpunkte je Spiel und Karte (siehe _derive_spawn).
     Gibt Zahlen zurück; mit strict wirft die Selbstprüfung."""
     missing = [n for n in REQUIRED if n not in csvs]
     if missing:
@@ -416,6 +495,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None):
         _sd_tables(con, sd_dex, sd_moves)
         n_check = _derive_pruefung(con, sd_dex, sd_moves) if sd_dex or sd_moves else 0
         n_fund = _derive_fundort(con, pkhex)
+        n_spawn = _derive_spawn(con, spawns)
         con.execute("CREATE TABLE extra (name TEXT PRIMARY KEY, inhalt TEXT)")
         con.executemany("INSERT INTO extra VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in (extra or {}).items()])
         for sql in ("CREATE INDEX pm_pokemon ON pokemon_moves(pokemon_id, version_group_id)",
@@ -432,7 +512,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None):
                  "species": con.execute("SELECT COUNT(DISTINCT art) FROM form").fetchone()[0],
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
-                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "check": why}
+                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "check": why}
     finally:
         con.close()
     return stats

@@ -29,6 +29,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Gegner-Modus auch gegen ein ganzes Gegner-Team (Vorteil, Nachteil), Empfehlungen aus den Gefangenen (bessere
   Alternative, langfristig mehr Potential) und Teamsuche nur aus Gefangenen.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten.
+- **Karte** (Legenden: Arceus): Spawnpunkte je Gebiet zum Ziehen und Zoomen, Alpha hervorgehoben, wer dort wann
+  erscheint; von der Detailseite aus mit den Spawnpunkten des Pokémon.
 - **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
   zum Herunterladen), „Zu erledigen“ (Abweichungen zwischen
   PokéAPI und Showdown zum Entscheiden), Kopieren und Herunterladen von Protokoll und Test, Sicherung der eigenen
@@ -41,7 +43,9 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (CSV) | Primärquelle: alle Grunddaten, alle Spiele, deutsche Namen | BSD-3 |
 | [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) | Gegenprüfung von Werten und Attacken, Merkmale wie „Aufladen“ | MIT |
 | [PokéAPI-Sprites](https://github.com/PokeAPI/sprites) | Bilder (Sprites und offizielle Artworks) | siehe dort |
-| [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus: Gebiet, Stellen, Level, Alpha) | GPL-3.0 |
+| [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus: Gebiet, Stellen, Level, Alpha, feste Begegnungen) | GPL-3.0 |
+| [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
+| [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln, nur im Datenordner auf dem Server) | Bilder von Serebii, Spielgrafik von Nintendo |
 | [PokéWiki](https://www.pokewiki.de) | Links; geplant: Legenden: Arceus (Fundorte, Elite-Pokémon, Edelhorden, Karten) | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
