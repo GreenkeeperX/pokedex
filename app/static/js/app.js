@@ -1368,7 +1368,7 @@ async function settingsView() {
     <div class="box"><div class="bar"><h2 style="margin:0">Protokoll</h2><span class="grow"></span>
         ${(st.log || []).length ? `<button class="link" data-act="copy" data-src="#plog">kopieren</button> <button class="link" data-act="dl" data-src="#plog" data-name="pokedex-protokoll">herunterladen</button>` : ""}</div>
       <div class="log" id="plog">${esc((st.log || []).join("\n") || "Noch kein Lauf.")}</div></div>
-    <div class="box"><h2>Verbindungstest</h2><p class="hint">Fragt jede Quelle einmal an und beschreibt die Antwort. Speichert nichts.</p>
+    <div class="box"><h2>Verbindungstest</h2><p class="hint">Fragt jede Quelle einmal an, auch mögliche neue (Items, Fundorte aus den Spieldaten, Wikis, Kampfdaten), und beschreibt die Antwort. Speichert nichts; Probe-Seiten lassen sich herunterladen. Dauert etwa eine Minute.</p>
       <div class="bar"><button data-act="diag">Test starten</button><span class="grow"></span><span id="dlinks"></span></div>
       <div id="diag"></div></div>
     <h2 class="sect">Deine Daten</h2>
@@ -1435,7 +1435,8 @@ async function diag() {
     if (d.running) { el.innerHTML = `<p class="hint">Läuft …</p>`; setTimeout(poll, 1500); return; }
     el.innerHTML = `<div class="log" id="dlog">${esc((d.lines || []).join("\n") || d.error)}</div>`;
     // Kopieren und Herunterladen erst, wenn es ein Ergebnis gibt
-    $("#dlinks").innerHTML = (d.lines || []).length ? `<button class="link" data-act="copy" data-src="#dlog">Ergebnis kopieren</button> <button class="link" data-act="dl" data-src="#dlog" data-name="pokedex-verbindungstest">herunterladen</button>` : "";
+    $("#dlinks").innerHTML = (d.lines || []).length ? `<button class="link" data-act="copy" data-src="#dlog">Ergebnis kopieren</button> <button class="link" data-act="dl" data-src="#dlog" data-name="pokedex-verbindungstest">herunterladen</button>`
+      + (d.proben ? ` <a href="/api/diag/proben" download data-tip="Gekürzte Rohseiten der Quellen (${d.proben}), aus denen sich Leser für sie bauen lassen">Proben herunterladen</a>` : "") : "";
   };
   poll();
 }

@@ -28,7 +28,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Gegner-Modus auch gegen ein ganzes Gegner-Team (Vorteil, Nachteil), Empfehlungen aus den Gefangenen (bessere
   Alternative, langfristig mehr Potential) und Teamsuche nur aus Gefangenen.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten.
-- **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest, „Zu erledigen“ (Abweichungen zwischen
+- **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
+  zum Herunterladen), „Zu erledigen“ (Abweichungen zwischen
   PokéAPI und Showdown zum Entscheiden), Kopieren und Herunterladen von Protokoll und Test, Sicherung der eigenen
   Daten zum Herunterladen und Einlesen.
 

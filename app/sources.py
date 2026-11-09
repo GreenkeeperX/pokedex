@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.4.2", "09.11.2026", [
+        "Verbindungstest prüft auch mögliche neue Quellen: Items (PokéAPI, Showdown, PKHeX), Fundorte aus den Spieldaten "
+        "(PKHeX für Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A), Wikis (PokéWiki, Bulbapedia, Serebii, Pokémon Database), "
+        "Karten (Map Genie) und Kampfdaten (Smogon)",
+        "Probe-Seiten der Quellen zum Herunterladen, damit sich Leser für sie bauen lassen",
+    ]),
     ("0.4.1", "09.11.2026", [
         "Hover-Karte mit eigenem, getöntem Hintergrund und kräftigerem Rahmen, damit sie sich von den Karten abhebt",
     ]),

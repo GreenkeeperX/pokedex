@@ -46,7 +46,7 @@ def host_allowed(host, extra=None):
 
 # ------------------------------------------------------------------ Verbindungstest im Hintergrund
 
-DIAG = {"id": 0, "running": False, "lines": None, "error": ""}
+DIAG = {"id": 0, "running": False, "lines": None, "error": "", "proben": {}}
 _diag_lock = threading.Lock()
 
 
@@ -54,16 +54,17 @@ def start_diag():
     with _diag_lock:
         if DIAG["running"]:
             return False
-        DIAG.update(id=DIAG["id"] + 1, running=True, lines=None, error="")
+        DIAG.update(id=DIAG["id"] + 1, running=True, lines=None, error="", proben={})
 
     def run():
+        proben = {}
         try:
-            lines, error = abruf.diagnose(), ""
+            lines, error = abruf.diagnose(proben), ""
         except Exception as e:
             traceback.print_exc()
             lines, error = None, type(e).__name__
         with _diag_lock:
-            DIAG.update(running=False, lines=lines, error=error)
+            DIAG.update(running=False, lines=lines, error=error, proben=proben)
     threading.Thread(target=run, daemon=True).start()
     return True
 
@@ -377,7 +378,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, abruf.status())
             elif path == "/api/diag":
                 with _diag_lock:
-                    self._send(200, dict(DIAG))
+                    self._send(200, {k: v for k, v in DIAG.items() if k != "proben"} | {"proben": len(DIAG["proben"])})
+            elif path == "/api/diag/proben":
+                with _diag_lock:
+                    body = {"app": "pokedex", "version": sources.VERSION, "proben": dict(DIAG["proben"])}
+                self._send(200, body, extra={"Content-Disposition": f'attachment; filename="pokedex-proben-{_now()[:10]}.json"'})
             elif path == "/api/pruefung":
                 self._send(200, abfragen.pruefung())
             else:

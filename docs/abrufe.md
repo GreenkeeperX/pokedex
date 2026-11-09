@@ -25,8 +25,18 @@ eingestellten Abstand (1 bis 30 Tage, Standard 7); nach einem Fehlschlag frühes
 
 ## Verbindungstest
 
-Fragt jede Quelle einmal an (GitHub-API, eine CSV, Showdown, ein Sprite, PokéWiki-API und eine PokéWiki-Seite) und
-beschreibt die Antwort. Speichert nichts.
+Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen:
+
+- heutige Quellen: GitHub-API, eine CSV der PokéAPI, Showdown, ein Sprite,
+- Items: `items.csv` und `item_flavor_text.csv` der PokéAPI, `items.ts` von Showdown, deutsche Itemnamen aus PKHeX,
+- Fundorte aus den Spieldaten: Begegnungsdateien von PKHeX (GPL-3.0) für Legenden: Arceus (mit Alpha und Level
+  von–bis, `abruf.pkhex_areas` liest sie), Karmesin/Purpur und Legenden: Z-A, dazu deutsche Ortsnamen, Beherrschung
+  und Level-Attacken für Legenden: Arceus,
+- Wikis und Datenbanken: PokéWiki (API und Beispielseiten), Bulbapedia, Serebii, Pokémon Database, Map Genie,
+- Kampfdaten: Smogon-Sets (data.pkmn.cc), Smogon-Nutzungsstatistik, `learnsets.ts` von Showdown.
+
+Speichert nichts. Wiki- und Datenbankseiten bleiben gekürzt (60 000 Zeichen) als Proben im Speicher;
+`/api/diag/proben` lädt sie als JSON herunter, damit sich Leser für neue Quellen bauen lassen.
 
 ## Gegenprüfung
 
