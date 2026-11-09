@@ -91,8 +91,34 @@ def teams():
     finally:
         con.close()
     return [{"id": r["id"], "name": r["name"], "spiel": r["spiel"] or "", "mitglieder": json.loads(r["mitglieder"]),
-             "fest": json.loads(r["fest"] or "[]"), "gewichte": json.loads(r["gewichte"] or "{}"), "geaendert": r["geaendert"]}
+             "fest": json.loads(r["fest"] or "[]"), "gewichte": json.loads(r["gewichte"] or "{}"),
+             "details": json.loads(r["details"] or "{}"), "geaendert": r["geaendert"]}
             for r in rows]
+
+
+def _details(v, members):
+    """{id: {"level": 1–100, "attacken": bis zu 4 IDs}} nur für Mitglieder des Teams."""
+    out = {}
+    for k, d in (v or {}).items():
+        try:
+            i = int(k)
+        except (TypeError, ValueError):
+            continue
+        if i not in members or not isinstance(d, dict):
+            continue
+        lv = d.get("level")
+        try:
+            lv = min(100, max(1, int(lv))) if lv not in (None, "") else None
+        except (TypeError, ValueError):
+            raise ValueError("Level: eine Zahl von 1 bis 100")
+        moves = []
+        for x in (d.get("attacken") or [])[:4]:
+            try:
+                moves.append(int(x))
+            except (TypeError, ValueError):
+                raise ValueError("Attacken: Zahlen erwartet")
+        out[str(i)] = {"level": lv, "attacken": moves}
+    return out
 
 
 def save_team(body):
@@ -103,16 +129,19 @@ def save_team(body):
     fixed = [i for i in _ids(body.get("fest")) if i in members]
     weights = {k: float(v) for k, v in (body.get("gewichte") or {}).items() if k in abfragen.team.CRITERIA}
     spiel = str(body.get("spiel") or "")[:60]
+    details = _details(body.get("details"), set(members))
     con = db.user()
     try:
         tid = body.get("id")
-        args = (name, spiel, json.dumps(members), json.dumps(fixed), json.dumps(weights), _now())
+        args = (name, spiel, json.dumps(members), json.dumps(fixed), json.dumps(weights), json.dumps(details), _now())
         if tid:
-            cur = con.execute("UPDATE team SET name=?, spiel=?, mitglieder=?, fest=?, gewichte=?, geaendert=? WHERE id=?", args + (int(tid),))
+            cur = con.execute("UPDATE team SET name=?, spiel=?, mitglieder=?, fest=?, gewichte=?, details=?, geaendert=? WHERE id=?",
+                              args + (int(tid),))
             if not cur.rowcount:
                 raise ValueError("Team nicht gefunden")
         else:
-            tid = con.execute("INSERT INTO team (name, spiel, mitglieder, fest, gewichte, geaendert) VALUES (?, ?, ?, ?, ?, ?)", args).lastrowid
+            tid = con.execute("INSERT INTO team (name, spiel, mitglieder, fest, gewichte, details, geaendert) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                              args).lastrowid
         con.commit()
     finally:
         con.close()
@@ -222,10 +251,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._file(os.path.join(STATIC, "index.html"))
             elif re.fullmatch(r"/(style\.css|icon\.svg|js/[a-z-]+\.js)", path) and os.path.isfile(os.path.join(STATIC, path[1:])):
                 self._file(os.path.join(STATIC, path[1:]))
-            elif m := re.fullmatch(r"/sprites/(\d{1,6})\.png", path):
-                f = os.path.join(db.data_dir(), "sprites", f"{int(m.group(1))}.png")
-                if os.path.isfile(f):
-                    self._file(f, "max-age=604800")
+            elif m := re.fullmatch(r"/(sprites|artwork)/(\d{1,6})\.png", path):
+                # Artwork fehlt (noch nicht geladen): das kleine Sprite statt dessen
+                for kind in ((m.group(1), "sprites") if m.group(1) == "artwork" else ("sprites",)):
+                    f = os.path.join(db.data_dir(), kind, f"{int(m.group(2))}.png")
+                    if os.path.isfile(f):
+                        self._file(f, "max-age=604800")
+                        break
                 else:
                     self._send(404, {"error": "kein Bild"})
             elif path == "/healthz":
@@ -234,11 +266,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, meta())
             elif path == "/api/pokemon":
                 self._send(200, abfragen.search(q))
+            elif m := re.fullmatch(r"/api/pokemon/(\d{1,6})/attacken", path):
+                d = abfragen.moves_of(int(m.group(1)), q)
+                self._send(200 if d else 404, d or {"error": "Pokémon nicht gefunden"})
             elif m := re.fullmatch(r"/api/pokemon/(\d{1,6})", path):
                 d = abfragen.detail(int(m.group(1)), q)
                 self._send(200 if d else 404, d or {"error": "Pokémon nicht gefunden"})
             elif path == "/api/attacken":
-                self._send(200, abfragen.best_of_type(q))
+                self._send(200, abfragen.move_list(q))
             elif path == "/api/typen":
                 self._send(200, abfragen.type_chart(q))
             elif path == "/api/teams":

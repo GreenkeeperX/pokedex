@@ -56,6 +56,9 @@ class Attacken(unittest.TestCase):
         s, _ = attacken.score({"staerke": 150, "genauigkeit": 90, "klasse": attacken.SPEZ, "typ": NORMAL, "merkmale": ["recharge"]}, self.MON)
         self.assertEqual(s, 81.0)
         self.assertEqual(attacken.score({"staerke": None, "klasse": attacken.STATUS}, self.MON)[0], 0)
+        s, why = attacken.score({"staerke": 250, "genauigkeit": 100, "klasse": attacken.SPEZ, "typ": NORMAL, "kennung": "explosion"}, self.MON)
+        self.assertEqual(s, 75.0)
+        self.assertIn("Anwender wird danach kampfunfähig", why)
 
     def test_anpassung_und_mehrfach(self):
         s, _ = attacken.score({"staerke": 25, "genauigkeit": 100, "klasse": attacken.SPEZ, "typ": FEUER, "mehrfach": [2, 5]},
@@ -206,6 +209,26 @@ class Server(TempData):
         server.delete_team({"id": r["id"]})
         self.assertEqual(server.teams(), [])
 
+    def test_alte_userdb_bekommt_neue_spalten(self):
+        import sqlite3
+        os.makedirs(self.dir, exist_ok=True)
+        con = sqlite3.connect(db.user_path())
+        con.execute("CREATE TABLE team (id INTEGER PRIMARY KEY, name TEXT NOT NULL, spiel TEXT, mitglieder TEXT NOT NULL, fest TEXT, gewichte TEXT, geaendert TEXT)")
+        con.execute("INSERT INTO team (name, mitglieder) VALUES ('alt', '[25]')")
+        con.commit()
+        con.close()
+        db.migrate()
+        t = server.teams()[0]
+        self.assertEqual((t["name"], t["mitglieder"], t["details"]), ("alt", [25], {}))
+
+    def test_team_mit_level_und_attacken(self):
+        db.migrate()
+        r = server.save_team({"name": "A", "mitglieder": [1, 2], "details": {"1": {"level": "250", "attacken": [5, 6, 7, 8, 9]}, "3": {"level": 5}}})
+        t = server.teams()[0]
+        self.assertEqual(t["details"], {"1": {"level": 100, "attacken": [5, 6, 7, 8]}})
+        with self.assertRaises(ValueError):
+            server.save_team({"id": r["id"], "name": "A", "mitglieder": [1], "details": {"1": {"level": "x"}}})
+
     def test_entscheidung(self):
         db.migrate()
         server.decide({"art": "pruefung", "schluessel": "form:25:KP", "wert": "showdown"})
@@ -243,6 +266,19 @@ class MitDatenbank(TempData):
         self.assertEqual(len(d["attacken"]["moveset"]), 4)
         best = abfragen.team_optimize({"spiel": "legends-arceus", "filter": {"ohne_leg": 1, "endstufe": 1}})
         self.assertEqual(len(best["teams"][0]["ids"]), 6)
+        both = abfragen.search({"spiel": "legends-arceus", "typen": "10,8", "modus": "und"})["rows"]
+        self.assertTrue(all({10, 8} <= set(r["typen"]) for r in both))
+        either = abfragen.search({"spiel": "legends-arceus", "typen": "10,8", "modus": "oder", "ohne": "3"})["rows"]
+        self.assertTrue(all((10 in r["typen"] or 8 in r["typen"]) and 3 not in r["typen"] for r in either))
+        moves = abfragen.move_list({"spiel": "legends-arceus"})["rows"]
+        self.assertTrue(any(m["klasse"] == 1 for m in moves))
+        self.assertLess(next(m for m in moves if m["name"] == "Finale")["wertung"], 100)
+        mv = abfragen.moves_of(z["id"], {"spiel": "legends-arceus", "level": 30})
+        ev = abfragen.team_view({"spiel": "legends-arceus", "ids": [z["id"]], "details": {str(z["id"]): {"level": 30, "attacken": [mv["moveset"][0]["id"]]}}})
+        self.assertEqual(ev["verbesserungen"][0]["id"], z["id"])
+        self.assertIn(str(mv["moveset"][0]["id"]), ev["attacken"])
+        mu = abfragen.team_matchup({"spiel": "legends-arceus", "ids": [z["id"]], "gegner": [z["id"], 6]})
+        self.assertEqual(len(mu["einzeln"]), 2)
 
 
 if __name__ == "__main__":

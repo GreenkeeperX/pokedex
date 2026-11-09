@@ -15,7 +15,7 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Datenbank. Sonst alle CSV-Dateien holen (raw.githubusercontent.com), in `pokeapi.db.neu` bauen und nach
    bestandener Selbstprüfung (Mindestzahl Arten, Attacken, Spiele, 18 Typen) austauschen. Scheitert etwas,
    bleibt die alte Datenbank.
-5. **Sprites**: fehlende Bilder je Form, höchstens 1500 je Lauf. Gibt es ein Bild nicht (404), fragt der
+5. **Bilder**: fehlende Sprites (96 × 96) und danach offizielle Artworks (475 × 475) je Form, je Art höchstens 1500 je Lauf. Gibt es ein Bild nicht (404), fragt der
    Abgleich 30 Tage nicht erneut.
 
 ## Zeitplan
