@@ -120,6 +120,21 @@ class Version(unittest.TestCase):
             self.assertTrue(punkte)
 
 
+class TeamPlaetze(unittest.TestCase):
+    def test_details_je_platz(self):
+        from app import abfragen
+        self.assertEqual(abfragen.slot_details({"25": {"level": 9}}, [25, 25, 6]), [{"level": 9}, {"level": 9}, {}])
+        self.assertEqual(abfragen.slot_details([{"level": 9}], [25, 6]), [{"level": 9}, {}])
+        self.assertEqual(abfragen.slot_details(None, [1]), [{}])
+
+    def test_stark_gegen(self):
+        from app import abfragen
+        ch = {10: {12: 2, 11: 0.5}, 11: {10: 2, 12: 0.5}, 12: {11: 2, 10: 0.5}}     # Feuer, Wasser, Pflanze
+        self.assertTrue(abfragen.strong_against([10], 12, ch))      # Feuer gegen Pflanze
+        self.assertFalse(abfragen.strong_against([10], 11, ch))     # Feuer gegen Wasser
+        self.assertFalse(abfragen.strong_against([12], 12, ch))
+
+
 class Leser(unittest.TestCase):
     def test_showdown(self):
         text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"
@@ -235,9 +250,27 @@ class Server(TempData):
         db.migrate()
         r = server.save_team({"name": "A", "mitglieder": [1, 2], "details": {"1": {"level": "250", "attacken": [5, 6, 7, 8, 9]}, "3": {"level": 5}}})
         t = server.teams()[0]
-        self.assertEqual(t["details"], {"1": {"level": 100, "attacken": [5, 6, 7, 8]}})
+        # alte Form {id: ...} wird zur Liste je Platz
+        self.assertEqual(t["details"], [{"level": 100, "attacken": [5, 6, 7, 8]}, {"level": None, "attacken": []}])
         with self.assertRaises(ValueError):
             server.save_team({"id": r["id"], "name": "A", "mitglieder": [1], "details": {"1": {"level": "x"}}})
+        # dasselbe Pokémon zweimal, mit eigenem Level je Platz
+        server.save_team({"id": r["id"], "name": "A", "mitglieder": [1, 1], "details": [{"level": 5}, {"level": 50, "attacken": [3]}]})
+        t = server.teams()[0]
+        self.assertEqual((t["mitglieder"], [d["level"] for d in t["details"]]), ([1, 1], [5, 50]))
+
+    def test_favoriten(self):
+        db.migrate()
+        server.set_favorite({"spiel": "legends-arceus", "id": 25})
+        server.set_favorite({"spiel": "legends-arceus", "id": 25})
+        server.set_favorite({"spiel": "red-blue", "id": 1})
+        con = db.user()
+        try:
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM favorit").fetchone()[0], 2)
+        finally:
+            con.close()
+        server.set_favorite({"spiel": "legends-arceus", "id": 25, "an": False})
+        self.assertEqual([f["form"] for f in server.export()["favoriten"]], [1])
 
     def test_entscheidung(self):
         db.migrate()
@@ -289,6 +322,29 @@ class MitDatenbank(TempData):
         self.assertIn(str(mv["moveset"][0]["id"]), ev["attacken"])
         mu = abfragen.team_matchup({"spiel": "legends-arceus", "ids": [z["id"]], "gegner": [z["id"], 6]})
         self.assertEqual(len(mu["einzeln"]), 2)
+
+    def test_0_3_0(self):
+        from app import abfragen
+        bauz = abfragen.search({"spiel": "legends-arceus", "q": "Bauz"})["rows"][0]
+        self.assertEqual(bauz["nr"], 1)
+        # Standard-Attacken wie im Spiel: höchstens vier, ohne Level die ersten, mit Level die letzten bis dahin
+        first = abfragen.moves_of(bauz["id"], {"spiel": "legends-arceus"})["standard"]
+        late = abfragen.moves_of(bauz["id"], {"spiel": "legends-arceus", "level": 50})["standard"]
+        self.assertEqual(len(first), 4)
+        self.assertNotEqual(first, late)
+        # stark gegen Feuer: kein Feuer-schwaches Pokémon dabei
+        rows = abfragen.search({"spiel": "legends-arceus", "gegen": "10", "limit": 500})["rows"]
+        self.assertTrue(rows)
+        D = abfragen.data()
+        ch = D.chart(8)
+        self.assertTrue(all(abfragen.strong_against(r["typen"], 10, ch) for r in rows))
+        # dasselbe Pokémon zweimal, Level je Platz; Hinweis, wenn ein Mitglied nicht im Spiel ist
+        ev = abfragen.team_view({"spiel": "legends-arceus", "ids": [bauz["id"], bauz["id"], 1],
+                                 "details": [{"level": 5, "attacken": first}, {"level": 50, "attacken": late}, {}]})
+        self.assertEqual([v["slot"] for v in ev["verbesserungen"]], [0, 1, 2])
+        self.assertEqual(ev["nicht_im_spiel"], [2])
+        sg = abfragen.team_suggest({"spiel": "legends-arceus", "ids": [bauz["id"]], "filter": {"q": "Bauz"}})
+        self.assertGreaterEqual(sg["schon_im_team"], 1)
 
 
 if __name__ == "__main__":

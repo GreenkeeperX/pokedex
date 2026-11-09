@@ -8,23 +8,26 @@ dem Vorbild von VR-Navigator und eShopKompass.
 
 - **Pokémon**: alle Arten mit Regional- und anderen Formen, die eigene Werte haben (Typ, Basiswerte oder
   Fähigkeiten). Filter nach Spiel (Regional-Dex, etwa Hisui für Legenden: Arceus), Typen als Bubbles (und/oder,
-  ausschließen), Generation, Endstufe, Legendäre, Basiswerten; Sortierung nach Werten. Hover-Karte mit Artwork,
-  Netzdiagramm und Schwächen; Karten lassen sich in die Team-Leiste ziehen.
+  ausschließen) oder „stark gegen Typ“, Generation, Endstufe, Legendäre, Basiswerten; Sortierung nach Werten.
+  Hover-Karte mit Artwork, Netzdiagramm (außen = Höchstwert aller Pokémon) und Schwächen; Karten lassen sich in die
+  Team-Leiste ziehen; Favoriten (☆) je Spiel als Kader zum schnellen Tauschen.
 - **Detailseite**: Basiswerte, Fähigkeiten, Typwirkung (mit Fähigkeiten wie Schwebe), Entwicklung mit Bedingungen,
   Fundorte im Spiel, Link ins PokéWiki.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
-  Vorschlag für vier Attacken mit Typ-Abdeckung.
+  Vorschlag für vier Attacken mit Typ-Abdeckung. Eigene Auswahl mit Standard-Attacken wie im Spiel, beigebrachten
+  Attacken (TM, Lehrer) und Reihenfolge per Ziehen.
 - **Attacken**: alle Attacken des gewählten Spiels mit Filtern und sortierbaren Spalten.
-- **Team-Leiste** unten in jedem Reiter (Drag & Drop, „+“). Teams je Spiel speichern sich selbst, mit Level und
-  vier Attacken je Mitglied.
+- **Team-Leiste** unten in jedem Reiter (Drag & Drop, „+“, Favoriten). Dasselbe Pokémon darf mehrfach ins Team;
+  Level und vier Attacken je Platz. Gespeicherte Teams ändern sich erst mit „Speichern“ („Verwerfen“ geht zurück).
+  Ein Hinweis zeigt, wenn Mitglieder nicht zum gewählten Spiel passen.
 - **Team**: Bewertung nach fünf Kriterien mit einstellbaren Gewichten (Defensive, Abdeckung, Tempo, Stärke,
   Balance), offene Schwächen, Vorschläge für den nächsten Platz mit Gründen, Suche nach dem besten Team mit
   festgesetzten Plätzen und denselben Filtern wie die Liste, Verbesserungsvorschläge zu den gewählten Attacken,
   Gegner-Modus auch gegen ein ganzes Gegner-Team (wen schicken, wen schonen).
-- **Typtabelle** der Generation des Spiels.
+- **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten.
 - **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest, „Zu erledigen“ (Abweichungen zwischen
-  PokéAPI und Showdown zum Entscheiden).
+  PokéAPI und Showdown zum Entscheiden), Kopieren und Herunterladen von Protokoll und Test, eigene Daten als JSON.
 
 ## Quellen
 
@@ -51,7 +54,7 @@ Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HO
 ### Datenordner (`/data`)
 
 - `pokeapi.db`: Spieldaten, baut jeder Abgleich neu, wenn sich eine Quelle geändert hat
-- `user.db`: deine Teams und Entscheidungen; der Abgleich berührt sie nie. Tägliche Kopie in `sicherung/` (14 Tage)
+- `user.db`: deine Teams, Favoriten und Entscheidungen; der Abgleich berührt sie nie. Tägliche Kopie in `sicherung/` (14 Tage)
 - `sprites/`, `artwork/`: Bilder (Sprites 96 × 96, offizielle Artworks 475 × 475, zusammen gut 180 MB)
 - `settings.json`, `sync.json`: Einstellungen und Stand des Abgleichs
 

@@ -147,7 +147,9 @@ def member(D, f, g, gen, ability=None, attack_types=None):
 
 
 def row(D, f, g, gen, nr=None):
-    """Kurzform für Listen."""
+    """Kurzform für Listen. nr: Nummer im Regional-Dex des Spiels, sonst die nationale."""
+    if nr is None and g:
+        nr = D.in_game.get(g["id"], {}).get(f["id"])
     return {"id": f["id"], "art": f["art"], "nr": nr if nr is not None else f["art"], "name": f["name"],
             "typen": form_types(D, f, gen), "werte": f["werte"], "summe": f["summe"], "gen": f["gen"],
             "legendaer": f["legendaer"] or f["mysterioes"], "endstufe": f["endstufe"], "kampfform": f["kampfform"],
@@ -160,12 +162,23 @@ SORTS = {"nr": lambda r: (r["nr"] or 99999, r["id"]), "name": lambda r: (r["name
          "kp": lambda r: (-r["werte"][0], r["id"]), "vert": lambda r: (-r["werte"][2] - r["werte"][4], r["id"])}
 
 
+def strong_against(own, target, ch):
+    """Stark gegen einen Typ: ein eigener Typ trifft ihn sehr effektiv, und seine Attacken treffen nicht sehr effektiv."""
+    if not any((ch.get(a) or {}).get(target, 1) > 1 for a in own):
+        return False
+    hurt = 1.0
+    for d in own:
+        hurt *= (ch.get(target) or {}).get(d, 1)
+    return hurt <= 1
+
+
 def candidates(D, p):
     """Formen nach Filtern. p: spiel, q, typ, typ2, gen, endstufe, ohne_leg, min, formen (relevant|standard|alle), kampf."""
-    g, gen, _ = game_of(D, p.get("spiel"))
+    g, gen, ch = game_of(D, p.get("spiel"))
     in_game = D.in_game.get(g["id"], {}) if g else None
     q = str(p.get("q") or "").strip().lower()
     want = _ints(p.get("typen")) + [t for t in (_int(p.get("typ")), _int(p.get("typ2"))) if t]
+    against = _ints(p.get("gegen"))
     drop = set(_ints(p.get("ohne")))
     mode_and = (p.get("modus") or "und") == "und"
     max_gen = _int(p.get("gen"))
@@ -192,6 +205,10 @@ def candidates(D, p):
         ts = form_types(D, f, gen)
         if want and (not all(t in ts for t in want) if mode_and else not any(t in ts for t in want)):
             continue
+        if against:
+            hits = [strong_against(ts, t, ch) for t in against]
+            if not (all(hits) if mode_and else any(hits)):
+                continue
         if drop and drop & set(ts):
             continue
         nr = in_game.get(f["id"]) if in_game else None
@@ -201,6 +218,16 @@ def candidates(D, p):
                 continue
         out.append((f, nr))
     return g, gen, out
+
+
+def rows_of(ids, spiel):
+    """Kurzformen zu IDs (für Favoriten), in der Reihenfolge der IDs."""
+    D = data()
+    if not D:
+        return []
+    g, gen, _ = game_of(D, spiel)
+    in_game = D.in_game.get(g["id"], {}) if g else {}
+    return [row(D, D.forms[i], g, gen, in_game.get(i)) for i in ids if i in D.forms]
 
 
 def search(p):
@@ -287,6 +314,15 @@ def ranked_moves(con, D, f, g, gen, level=None):
         entry = by_move.setdefault(mid, {"m": m, "wege": []})
         entry["wege"].append((D.method_key.get(meth, ""), lv, mastery, how(D, meth, lv, mastery)))
     out, status = [], []
+    # Wie im Spiel: ein Pokémon kennt die letzten vier Level-Attacken bis zu seinem Level; ohne Level die ersten vier
+    lvl_moves = sorted(((lv or 0, mid) for mid, meth, lv, _ in ls if D.method_key.get(meth) == "level-up" and mid in D.moves),
+                       key=lambda x: (x[0], x[1]))
+    seen_std = []
+    for lv, mid in (lvl_moves if level is None else [x for x in lvl_moves if x[0] <= level]):
+        if mid in seen_std:
+            seen_std.remove(mid)
+        seen_std.append(mid)
+    standard = seen_std[:4] if level is None else seen_std[-4:]
     for mid, e in by_move.items():
         v = move_view(D, e["m"], used)
         wege = sorted(e["wege"], key=lambda w: (w[0] != "level-up", w[1] or 0))
@@ -312,9 +348,10 @@ def ranked_moves(con, D, f, g, gen, level=None):
     if g and used and used["id"] != g["id"]:
         hint = f"Im gewählten Spiel ohne Lernliste; gezeigt ist {used['name']}."
     elif used and used["kennung"] == LA:
-        hint = "Stärke und Genauigkeit stammen aus den Hauptspielen; in Legenden: Arceus weichen sie teils ab (Kraft- und Tempostil)."
+        hint = ("Stärke und Genauigkeit stammen aus den Hauptspielen: die PokéAPI hat für Legenden: Arceus keine eigenen Werte. "
+                "Dort weichen sie teils ab (Kraft- und Tempostil); die echten Werte kommen mit dem PokéWiki-Abruf.")
     return {"spiel": used["kennung"] if used else "", "spiel_name": used["name"] if used else "", "attacken": out,
-            "moveset": moveset, "status": status, "hinweis": hint}
+            "moveset": moveset, "status": status, "hinweis": hint, "standard": standard}
 
 
 def move_list(p):
@@ -552,16 +589,32 @@ def type_chart(p):
             "tabelle": {str(a): {str(d): f for d, f in ch[a].items()} for a in ch}}
 
 
-def _members(D, ids, g, gen, details=None):
-    """Mitglieder für die Rechnung. details: {id: {"level": n, "attacken": [Attacken-IDs]}}; gewählte Schadens-Attacken
-    bestimmen dann die Angriffstypen (sonst die Eigentypen)."""
+def slot_details(details, ids):
+    """Level und Attacken je Platz als Liste. Seit 0.3.0 eine Liste parallel zu den Mitgliedern (dasselbe Pokémon darf
+    zweimal ins Team); ältere Teams haben {id: {...}}."""
+    ids = list(ids or [])
+    if isinstance(details, list):
+        out = [d if isinstance(d, dict) else {} for d in details[:len(ids)]]
+        return out + [{}] * (len(ids) - len(out))
+    details = details if isinstance(details, dict) else {}
     out = []
-    details = details or {}
-    for i in ids or []:
-        f = D.forms.get(_int(i))
+    for i in ids:
+        d = details.get(str(i)) or details.get(i)
+        out.append(d if isinstance(d, dict) else {})
+    return out
+
+
+def _members(D, ids, g, gen, details=None):
+    """Mitglieder für die Rechnung, je Platz. details: Liste je Platz (oder alt: {id: ...}) mit "level" und "attacken";
+    gewählte Schadens-Attacken bestimmen dann die Angriffstypen (sonst die Eigentypen)."""
+    out = []
+    ids = [_int(x) for x in ids or []]
+    per = slot_details(details, ids)
+    for slot, i in enumerate(ids):
+        f = D.forms.get(i)
         if not f:
             continue
-        d = details.get(str(f["id"])) or details.get(f["id"]) or {}
+        d = per[slot]
         atk = []
         for mid in _ints(d.get("attacken")):
             m = D.moves.get(mid)
@@ -569,7 +622,7 @@ def _members(D, ids, g, gen, details=None):
                 v = move_view(D, m, g)
                 if v["typ"] not in atk:
                     atk.append(v["typ"])
-        out.append(member(D, f, g, gen, attack_types=atk or None))
+        out.append(dict(member(D, f, g, gen, attack_types=atk or None), slot=slot))
     return out
 
 
@@ -580,7 +633,7 @@ def improvements(D, ms, details, g, gen):
     con = db.game()
     try:
         for m in ms:
-            d = details.get(str(m["id"])) or {}
+            d = details[m["slot"]] if m["slot"] < len(details) else {}
             chosen = _ints(d.get("attacken"))
             level = _int(d.get("level"))
             f = D.forms[m["id"]]
@@ -589,7 +642,8 @@ def improvements(D, ms, details, g, gen):
             hints = []
             if not chosen:
                 hints.append("noch keine Attacken gewählt; Vorschlag: " + ", ".join(x["name"] for x in r["moveset"]))
-                out.append({"id": m["id"], "name": m["name"], "hinweise": hints, "besser": []})
+                out.append({"id": m["id"], "slot": m["slot"], "name": m["name"], "hinweise": hints, "besser": [],
+                            "standard": r["standard"]})
                 continue
             dmg = [by[i] for i in chosen if i in by]
             weakest = min((x["wertung"] for x in dmg), default=0)
@@ -603,7 +657,7 @@ def improvements(D, ms, details, g, gen):
                 hints.append(f"nur {len(chosen)} von 4 Plätzen belegt")
             better = [{"id": x["id"], "name": x["name"], "typ": x["typ"], "wertung": x["wertung"], "gruende": x["gruende"][:3]}
                       for x in r["attacken"] if x["jetzt"] and x["id"] not in chosen and x["wertung"] > weakest * 1.15][:3]
-            out.append({"id": m["id"], "name": m["name"], "hinweise": hints, "besser": better,
+            out.append({"id": m["id"], "slot": m["slot"], "name": m["name"], "hinweise": hints, "besser": better,
                         "schwaechste": min(dmg, key=lambda x: x["wertung"])["name"] if dmg else ""})
     finally:
         con.close()
@@ -617,12 +671,14 @@ def team_view(body):
         return {}
     g, gen, ch = game_of(D, body.get("spiel"))
     ctx = team.Ctx(ch, _int(body.get("tempo")) or team.SPEED)
-    details = body.get("details") or {}
-    ms = _members(D, body.get("ids"), g, gen, details)
+    ms = _members(D, body.get("ids"), g, gen, body.get("details"))
+    details = slot_details(body.get("details"), _ints(body.get("ids")))
     ev = team.evaluate(ms, ctx, body.get("gewichte"))
-    ev["verbesserungen"] = improvements(D, ms, {str(k): v for k, v in details.items()}, g, gen) if details else []
+    ev["verbesserungen"] = improvements(D, ms, details, g, gen) if any(details) and not body.get("kurz") else []
+    in_game = D.in_game.get(g["id"], {}) if g else None
+    ev["nicht_im_spiel"] = [m["slot"] for m in ms if in_game is not None and m["id"] not in in_game]
     names = {}
-    for d in details.values():
+    for d in details:
         for mid in _ints((d or {}).get("attacken")):
             if mid in D.moves:
                 v = move_view(D, D.moves[mid], g)
@@ -649,7 +705,9 @@ def team_suggest(body):
     ms = _members(D, body.get("ids"), g, gen, body.get("details"))
     pool = _pool(D, body, g, gen)
     rows = team.suggest(ms, pool, ctx, body.get("gewichte"), n=12, tname=D.tname)
-    return {"rows": [dict(r, **row(D, D.forms[r["id"]], g, gen)) for r in rows]}
+    species = {m["art"] for m in ms}
+    return {"rows": [dict(r, **row(D, D.forms[r["id"]], g, gen)) for r in rows],
+            "schon_im_team": sum(1 for c in pool if c["art"] in species)}
 
 
 def team_optimize(body):
@@ -658,7 +716,7 @@ def team_optimize(body):
         return {"teams": []}
     g, gen, ch = game_of(D, body.get("spiel"))
     ctx = team.Ctx(ch, _int(body.get("tempo")) or team.SPEED)
-    fixed = _members(D, body.get("fest"), g, gen, body.get("details"))
+    fixed = _members(D, body.get("fest"), g, gen)
     pool = _pool(D, body, g, gen)
     best = team.optimize(pool, ctx, body.get("gewichte"), fixed=fixed)
     out = []
