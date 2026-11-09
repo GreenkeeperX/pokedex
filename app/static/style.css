@@ -2,17 +2,17 @@
 :root{
   color-scheme:light dark;
   --bg:#f3f4f1; --card:#fffffc; --ink:#1b2224; --ink-hi:#1b2224; --muted:#61706f; --line:#d9ddd8;
-  --accent:#24383b; --brand:#e60012; --chip:#e8ebe6; --hov:color-mix(in srgb,var(--ink) 8%,var(--card));
+  --accent:#24383b; --brand:#e60012; --chip:#e8ebe6; --hov:color-mix(in srgb,var(--ink) 8%,var(--card)); --hcbg:color-mix(in srgb,var(--accent) 9%,var(--card));
   --go:#0d6b4f; --go-bg:#dcefe4; --stop:#b3261e; --stop-bg:#f8dfdc; --warn:#8a6200; --warn-bg:#fbefd5; --info:#2f6690; --info-bg:#e1ebfa;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme=light]){
   --bg:#121617; --card:#1a2022; --ink:#cdd5d4; --ink-hi:#e5ebea; --muted:#94a3a1; --line:#2c3537;
-  --accent:#cdd5d4; --brand:#ff2d3f; --chip:#252d2f; --hov:color-mix(in srgb,var(--bg) 70%,var(--card));
+  --accent:#cdd5d4; --brand:#ff2d3f; --chip:#252d2f; --hcbg:#253033; --hov:color-mix(in srgb,var(--bg) 70%,var(--card));
   --go:#5fd0a5; --go-bg:#183328; --stop:#ff8a80; --stop-bg:#3b1c19; --warn:#f2c14e; --warn-bg:#3a2e12; --info:#8cc0e8; --info-bg:#1c2b44;
 }}
 :root[data-theme=dark]{color-scheme:dark;
   --bg:#121617; --card:#1a2022; --ink:#cdd5d4; --ink-hi:#e5ebea; --muted:#94a3a1; --line:#2c3537;
-  --accent:#cdd5d4; --brand:#ff2d3f; --chip:#252d2f; --hov:color-mix(in srgb,var(--bg) 70%,var(--card));
+  --accent:#cdd5d4; --brand:#ff2d3f; --chip:#252d2f; --hcbg:#253033; --hov:color-mix(in srgb,var(--bg) 70%,var(--card));
   --go:#5fd0a5; --go-bg:#183328; --stop:#ff8a80; --stop-bg:#3b1c19; --warn:#f2c14e; --warn-bg:#3a2e12; --info:#8cc0e8; --info-bg:#1c2b44;
 }
 :root[data-theme=light]{color-scheme:light}
@@ -180,7 +180,10 @@ button.tb.out{opacity:1;border-color:var(--brand);box-shadow:0 0 0 1px var(--car
 #tip .tg .f{min-width:30px;text-align:center}
 #tip .f.big{font-size:15px;padding:1px 8px}
 #tip .arrow{color:#a6b3b1;margin:0 4px}
-#hc{position:absolute;z-index:25;width:420px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.22)}
+/* Hover-Karte: eigener, getönter Hintergrund und kräftiger Rahmen, damit sie sich von den Karten darunter abhebt */
+#hc{position:absolute;z-index:25;width:420px;background:var(--hcbg);border:1px solid var(--accent);border-radius:12px;padding:10px 12px;pointer-events:none;
+  box-shadow:0 14px 36px rgba(0,0,0,.32),0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+#hc .radar .rg{fill:var(--card)}
 .hc-head{display:flex;gap:10px;align-items:center}
 .hc-head b{font-size:17px;color:var(--ink-hi)}
 .hc-body{display:flex;gap:6px;align-items:flex-start}
