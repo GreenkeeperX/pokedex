@@ -1,10 +1,26 @@
-# Portainer-Stack für hq: Stacks → Add stack → diesen Inhalt einfügen
+# Stack für Portainer auf dem Heimserver: Stacks → Add stack → diesen Inhalt einfügen.
 services:
   pokedex:
     image: ghcr.io/greenkeeperx/pokedex:latest
     container_name: pokedex
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
     ports:
-      - "8789:80"
+      - "8789:8789"
+    # Nur nötig, wenn du das Tool über eine Domain aufrufst. IP-Adressen, Namen ohne Punkt und
+    # Namen im eigenen Netz (.home.arpa, .local, .lan, .internal) gelten ohne Eintrag
+    # environment:
+    #   ALLOWED_HOSTS: "pokedex.beispiel.de"
+    volumes:
+      - pokedex-daten:/data
     labels:
-      - com.centurylinklabs.watchtower.enable=true
+      - "com.centurylinklabs.watchtower.enable=true"
+
+volumes:
+  pokedex-daten:

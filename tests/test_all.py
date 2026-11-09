@@ -1,0 +1,249 @@
+"""Tests ohne Netz: Rechenlogik, Leser, Abgleich mit Attrappe, Server-Hilfen. Start: python -m unittest discover -s tests"""
+import json
+import os
+import shutil
+import tempfile
+import unittest
+from datetime import datetime, timedelta, timezone
+from unittest import mock
+
+from app import abruf, attacken, db, importer, server, showdown, sources, store, team, typen
+from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, STAHL, UNLICHT, WASSER
+
+# Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
+EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
+SPECIAL = {(FEUER, PFLANZE): 200, (WASSER, FEUER): 200, (FEUER, WASSER): 50, (PFLANZE, WASSER): 200, (ELEKTRO, WASSER): 200,
+           (BODEN, ELEKTRO): 200, (ELEKTRO, BODEN): 0, (EIS, DRACHE): 200, (EIS, FLUG): 200, (EIS, BODEN): 200, (NORMAL, GEIST): 0,
+           (GEIST, NORMAL): 0, (KAMPF, GEIST): 0, (GEIST, STAHL): 100, (UNLICHT, STAHL): 100, (DRACHE, FEE): 0, (BODEN, FLUG): 0}
+EFF = [(a, d, SPECIAL.get((a, d), f)) for a, d, f in EFF]
+PAST = [(GEIST, STAHL, 50, 5), (UNLICHT, STAHL, 50, 5)]
+TYPE_GEN = {t: 1 for t in range(1, 19)} | {STAHL: 2, UNLICHT: 2, FEE: 6}
+
+
+def ch(gen=9):
+    return typen.chart(EFF, PAST, TYPE_GEN, gen)
+
+
+class Typen(unittest.TestCase):
+    def test_generationen(self):
+        self.assertNotIn(FEE, ch(5))
+        self.assertNotIn(STAHL, ch(1))
+        self.assertEqual(ch(5)[GEIST][STAHL], 0.5)      # bis Gen 5 resistiert Stahl gegen Geist
+        self.assertEqual(ch(6)[GEIST][STAHL], 1.0)
+
+    def test_doppeltyp_und_faehigkeit(self):
+        d = typen.defense([DRACHE, FLUG], ch())
+        self.assertEqual(d[EIS], 4.0)
+        self.assertEqual(d[BODEN], 0.0)
+        self.assertEqual(typen.defense([ELEKTRO], ch(), "levitate")[BODEN], 0.0)
+        self.assertEqual(typen.defense([WASSER], ch(), "dry-skin")[FEUER], 0.625)
+
+    def test_wirkung(self):
+        self.assertEqual(typen.attack(EIS, [DRACHE, FLUG], ch()), 4.0)
+        self.assertEqual(typen.super_effective(ELEKTRO, ch()), {WASSER})
+        self.assertEqual(typen.label(0.25), "¼")
+
+
+class Attacken(unittest.TestCase):
+    MON = {"typen": [FEUER], "ang": 60, "spang": 120}
+
+    def test_wertung(self):
+        s, why = attacken.score({"staerke": 90, "genauigkeit": 100, "klasse": attacken.SPEZ, "typ": FEUER}, self.MON)
+        self.assertEqual(s, 135.0)
+        self.assertIn("Eigentyp-Bonus", why)
+        s, why = attacken.score({"staerke": 90, "genauigkeit": 100, "klasse": attacken.PHYS, "typ": FEUER}, self.MON)
+        self.assertEqual(s, 67.5)                        # nutzt den halb so hohen Angriff
+        s, _ = attacken.score({"staerke": 150, "genauigkeit": 90, "klasse": attacken.SPEZ, "typ": NORMAL, "merkmale": ["recharge"]}, self.MON)
+        self.assertEqual(s, 81.0)
+        self.assertEqual(attacken.score({"staerke": None, "klasse": attacken.STATUS}, self.MON)[0], 0)
+
+    def test_anpassung_und_mehrfach(self):
+        s, _ = attacken.score({"staerke": 25, "genauigkeit": 100, "klasse": attacken.SPEZ, "typ": FEUER, "mehrfach": [2, 5]},
+                              dict(self.MON, faehigkeit="adaptability"))
+        self.assertAlmostEqual(s, 25 * 3.1 * 2, places=1)
+
+    def test_werte_im_spiel(self):
+        move = {"typ": FEE, "staerke": 95, "ap": 15, "genauigkeit": 100, "prio": 0}
+        # Eintrag: bis Spiel Nr. 10 (vor der Änderung) war die Attacke Normal mit 80 Stärke
+        changes = [(10, NORMAL, 80, None, None, None)]
+        self.assertEqual(attacken.in_game(move, changes, 5)["typ"], NORMAL)
+        self.assertEqual(attacken.in_game(move, changes, 5)["staerke"], 80)
+        self.assertEqual(attacken.in_game(move, changes, 12)["staerke"], 95)
+
+    def test_moveset_mit_abdeckung(self):
+        ranked = [(100, {"typ": FEUER, "n": 1}), (95, {"typ": FEUER, "n": 2}), (80, {"typ": ELEKTRO, "n": 3}), (70, {"typ": EIS, "n": 4})]
+        got = [m["n"] for m, _ in attacken.moveset(ranked, {}, ch())]
+        self.assertEqual(got[:3], [1, 4, 3])             # die zweite Feuer-Attacke rutscht nach hinten
+
+
+def mon(i, name, types, werte=(80, 100, 80, 60, 80, 95), art=None):
+    return {"id": i, "art": art or i, "name": name, "typen": types, "werte": list(werte), "summe": sum(werte)}
+
+
+class Team(unittest.TestCase):
+    def test_offene_schwaeche(self):
+        ctx = team.Ctx(ch())
+        ev = team.evaluate([mon(1, "A", [PFLANZE]), mon(2, "B", [PFLANZE])], ctx)
+        self.assertIn(FEUER, ev["offen"])
+        ev2 = team.evaluate([mon(1, "A", [PFLANZE]), mon(3, "C", [WASSER])], ctx)
+        self.assertNotIn(FEUER, ev2["offen"])
+
+    def test_vorschlag_und_suche(self):
+        ctx = team.Ctx(ch())
+        pool = [mon(i, f"P{i}", [t]) for i, t in enumerate(range(1, 19), start=1)]
+        rows = team.suggest([pool[PFLANZE - 1]], pool, ctx, n=3)
+        self.assertEqual(len(rows), 3)
+        self.assertNotIn(PFLANZE, [r["id"] for r in rows])
+        best = team.optimize(pool, ctx, fixed=[pool[0]], beam=5)
+        self.assertTrue(best and len(best[0][1]) == 6)
+        self.assertEqual(best[0][1][0]["id"], 1)
+        self.assertEqual(len({m["art"] for m in best[0][1]}), 6)
+
+    def test_gegner(self):
+        ctx = team.Ctx(ch())
+        rows = team.matchup([mon(1, "W", [WASSER]), mon(2, "P", [PFLANZE])], {"typen": [FEUER], "init": 200}, ctx)
+        self.assertEqual(rows[0]["name"] if "name" in rows[0] else rows[0]["id"], 1)
+        self.assertEqual(rows[0]["urteil"], "schicken")
+        self.assertEqual(rows[1]["urteil"], "schonen")
+
+
+class Leser(unittest.TestCase):
+    def test_showdown(self):
+        text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"
+                "\t\tname: \"Hyper Beam\",\n\t\tpp: 5,\n\t\tpriority: 0,\n\t\tflags: {recharge: 1, protect: 1},\n\t\ttype: \"Normal\",\n\t},\n"
+                "\tswift: {\n\t\tnum: 129,\n\t\taccuracy: true,\n\t\tbasePower: 60,\n\t\tcategory: \"Special\",\n\t\tname: \"Swift\",\n"
+                "\t\tpp: 20,\n\t\tpriority: 0,\n\t\tflags: {},\n\t\ttype: \"Normal\",\n\t},\n};\n")
+        mv = showdown.moves(text)
+        self.assertEqual(mv["hyperbeam"]["basePower"], 150)
+        self.assertIn("recharge", mv["hyperbeam"]["flags"])
+        self.assertIs(mv["swift"]["accuracy"], True)
+        self.assertEqual(showdown.sd_id("raichu-alola"), "raichualola")
+
+    def test_spielname(self):
+        self.assertEqual(importer.game_name(["Schwert: Die Insel der Rüstung", "Schild: Die Insel der Rüstung"]),
+                         "Schwert / Schild: Die Insel der Rüstung")
+        self.assertEqual(importer.game_name(["Rot", "Blau"]), "Rot / Blau")
+
+    def test_csv_typen(self):
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        importer.import_csv(con, "types", "id,identifier,generation_id,damage_class_id\n1,normal,1,2\n10002,shadow,3,\n")
+        rows = con.execute("SELECT id, identifier, damage_class_id FROM types ORDER BY id").fetchall()
+        self.assertEqual(rows, [(1, "normal", 2), (10002, "shadow", None)])
+
+
+class TempData(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self._old = store.DATA_DIR
+        store.DATA_DIR = self.dir
+
+    def tearDown(self):
+        store.DATA_DIR = self._old
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+
+class Abgleich(TempData):
+    def test_faellig(self):
+        self.assertTrue(abruf.due())                     # ohne Datenbank immer
+        open(db.pokeapi_path(), "w").close()
+        at = datetime(2026, 11, 9, tzinfo=timezone.utc)
+        store.save_json("sync.json", {"started": (at - timedelta(days=2)).isoformat(), "ok": True})
+        self.assertFalse(abruf.due(at=at))
+        self.assertTrue(abruf.due(at=at + timedelta(days=6)))
+        abruf.save_settings({"auto": False})
+        self.assertFalse(abruf.due(at=at + timedelta(days=30)))
+        with self.assertRaises(ValueError):
+            abruf.save_settings({"tage": "x"})
+
+    def test_dateiliste_ohne_github(self):
+        def fake(url, timeout=40, headers=None, raw=False):
+            raise sources.FetchError(url, 403)
+        log = []
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            src = abruf._Source("pokeapi", log.append)
+            names, sha = abruf.csv_list(src, log.append)
+        self.assertEqual(names, list(importer.NEEDED))
+        self.assertEqual(sha, "")
+        self.assertFalse(src.blocked)                    # 403 der GitHub-API heißt nur: keine Liste
+
+    def test_sperre(self):
+        def fake(url, timeout=40, headers=None, raw=False):
+            raise sources.FetchError(url, 429)
+        log = []
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            src = abruf._Source("showdown", log.append)
+            self.assertIsNone(src.get("https://example.org/a"))
+            self.assertIsNone(src.get("https://example.org/b"))
+        self.assertTrue(src.blocked)
+        self.assertEqual(src.n, 1)                       # nach der Sperre keine weitere Anfrage
+
+    def test_lauf_ohne_quellen_behaelt_alte_daten(self):
+        def fake(url, timeout=40, headers=None, raw=False):
+            raise sources.FetchError(url, 404)
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            self.assertTrue(abruf.run())
+        st = store.load_json("sync.json", {})
+        self.assertFalse(st["ok"])
+        self.assertFalse(db.has_data())
+        self.assertTrue(any("es fehlen" in x for x in st["log"]))
+
+
+class Server(TempData):
+    def test_host(self):
+        for h in ("127.0.0.1:8789", "server", "server:8789", "pokedex.home.arpa", "localhost", "[::1]:8789"):
+            self.assertTrue(server.host_allowed(h, ""), h)
+        self.assertFalse(server.host_allowed("evil.example.com", ""))
+        self.assertTrue(server.host_allowed("dex.example.com", ".example.com"))
+
+    def test_teams(self):
+        db.migrate()
+        with self.assertRaises(ValueError):
+            server.save_team({"name": "", "mitglieder": [1]})
+        r = server.save_team({"name": "  Hisui  Team ", "mitglieder": [1, 2, "3", 4, 5, 6, 7], "fest": [2, 9], "gewichte": {"tempo": 5, "x": 1}})
+        t = server.teams()[0]
+        self.assertEqual((t["id"], t["name"], t["mitglieder"], t["fest"], t["gewichte"]), (r["id"], "Hisui Team", [1, 2, 3, 4, 5, 6], [2], {"tempo": 5.0}))
+        server.delete_team({"id": r["id"]})
+        self.assertEqual(server.teams(), [])
+
+    def test_entscheidung(self):
+        db.migrate()
+        server.decide({"art": "pruefung", "schluessel": "form:25:KP", "wert": "showdown"})
+        con = db.user()
+        self.assertEqual(con.execute("SELECT wert FROM entscheidung").fetchone()[0], "showdown")
+        con.close()
+        with self.assertRaises(ValueError):
+            server.decide({"art": "anders", "schluessel": "x", "wert": "pokeapi"})
+
+    def test_sicherung(self):
+        db.migrate()
+        for d in range(20):
+            db.backup(datetime(2026, 1, 1).date() + timedelta(days=d))
+        self.assertEqual(len(os.listdir(os.path.join(self.dir, "sicherung"))), db.BACKUP_KEEP)
+
+
+@unittest.skipUnless(os.environ.get("POKEAPI_DB"), "POKEAPI_DB: Pfad zu einer gebauten pokeapi.db")
+class MitDatenbank(TempData):
+    """Gegen eine echte Datenbank (lokal, nicht in CI): POKEAPI_DB=/pfad/pokeapi.db python -m unittest tests.test_all"""
+
+    def setUp(self):
+        super().setUp()
+        os.symlink(os.environ["POKEAPI_DB"], db.pokeapi_path())
+        db.migrate()
+
+    def test_hisui(self):
+        from app import abfragen
+        r = abfragen.search({"spiel": "legends-arceus", "limit": 3})
+        self.assertGreaterEqual(r["n"], 240)
+        z = abfragen.search({"spiel": "legends-arceus", "q": "Zoroark"})["rows"][0]
+        self.assertEqual(z["name"], "Hisui Zoroark")
+        d = abfragen.detail(z["id"], {"spiel": "legends-arceus"})
+        self.assertEqual(d["faehigkeiten"], [])
+        self.assertEqual(d["entwicklung"][0]["name"], "Hisui Zorua")
+        self.assertEqual(len(d["attacken"]["moveset"]), 4)
+        best = abfragen.team_optimize({"spiel": "legends-arceus", "filter": {"ohne_leg": 1, "endstufe": 1}})
+        self.assertEqual(len(best["teams"][0]["ids"]), 6)
+
+
+if __name__ == "__main__":
+    unittest.main()

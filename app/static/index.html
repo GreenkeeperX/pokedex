@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pokédex</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<script>try{var t=localStorage.getItem("px.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="stick">
+  <header class="top">
+    <h1><a href="#pokemon">Poké<span class="brand">dex</span></a></h1>
+    <label class="game">Spiel <select id="game" aria-label="Spiel"></select></label>
+    <div class="meta" id="meta"></div>
+    <button id="thm" data-act="thm" title="Hell, dunkel oder wie das Gerät"></button>
+  </header>
+  <nav id="nav"></nav>
+  </div>
+  <main id="main"><p class="hint">Lädt …</p></main>
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>

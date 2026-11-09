@@ -1,4 +1,6 @@
 .git
 .github
 data
-sprites
+docs
+tests
+**/__pycache__
