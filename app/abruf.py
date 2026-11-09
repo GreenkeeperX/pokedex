@@ -205,24 +205,30 @@ def csv_list(src, log):
     return names, sha
 
 
-def _sprites(log, limit=SPRITES_MAX):
-    """Fehlende Bilder nach data/sprites/<id>.png. Gibt das Ergebnis der Quelle zurück."""
+# Bilder: kleine Pixel-Sprites (96 × 96) für Listen, offizielle Artworks (475 × 475) für Karten und Detailseite
+IMAGES = {"sprites": SPRITE_RAW, "artwork": SPRITE_RAW + "other/official-artwork/"}
+
+
+def _images(kind, log, limit=SPRITES_MAX):
+    """Fehlende Bilder nach data/<kind>/<id>.png. Gibt das Ergebnis der Quelle zurück."""
     src = _Source("sprites", log, pause=0.2)
-    folder = os.path.join(db.data_dir(), "sprites")
+    folder = os.path.join(db.data_dir(), kind)
     os.makedirs(folder, exist_ok=True)
     con = db.game()
     try:
         ids = [r[0] for r in con.execute("SELECT id FROM form ORDER BY id")]
     finally:
         con.close()
-    miss = store.load_json("sprites_fehlen.json", {})
+    miss_file = f"{kind}_fehlen.json"
+    miss = store.load_json(miss_file, {})
     cutoff = _iso(now() - timedelta(days=SPRITE_MISS_DAYS))
     have = set(os.listdir(folder))
     todo = [i for i in ids if f"{i}.png" not in have and (miss.get(str(i)) or "") < cutoff]
     got = absent = 0
+    label = "Sprites" if kind == "sprites" else "Artworks"
     for n, i in enumerate(todo[:limit]):
-        STATE.update(step="Sprites", done=n, total=min(len(todo), limit))
-        body = src.get(f"{SPRITE_RAW}{i}.png", raw=True, absent=(404,))
+        STATE.update(step=label, done=n, total=min(len(todo), limit))
+        body = src.get(f"{IMAGES[kind]}{i}.png", raw=True, absent=(404,))
         if body is None:
             if src.stopped:
                 break
@@ -238,11 +244,15 @@ def _sprites(log, limit=SPRITES_MAX):
             f.write(body)
         os.replace(tmp, os.path.join(folder, f"{i}.png"))
         got += 1
-    store.save_json("sprites_fehlen.json", miss)
+    store.save_json(miss_file, miss)
     left = max(0, len(todo) - limit)
     if todo:
-        log(f"Sprites: {got} neu" + (f", {absent} gibt es nicht" if absent else "") + (f", {left} im nächsten Lauf" if left else ""))
+        log(f"{label}: {got} neu" + (f", {absent} gibt es nicht" if absent else "") + (f", {left} im nächsten Lauf" if left else ""))
     return src.result(neu=got, fehlen=absent, offen=left)
+
+
+def _sprites(log, limit=SPRITES_MAX):
+    return _images("sprites", log, limit)
 
 
 def run(by_hand=False, force=False):
@@ -284,6 +294,11 @@ def _run(by_hand, force):
         if db.has_data() and settings["sprites"] and not _resting(st, "sprites", at):
             STATE["step"] = "Sprites"
             res = _sprites(log)
+            if not res["blocked"]:
+                STATE["step"] = "Artworks"
+                art = _images("artwork", log)
+                res = dict(art, requests=res["requests"] + art["requests"], errors=res["errors"] + art["errors"],
+                           neu=res["neu"] + art["neu"], fehlen=res["fehlen"] + art["fehlen"], offen=res["offen"] + art["offen"])
             st["sources"]["sprites"] = res
             if res["blocked"]:
                 st["rest"]["sprites"] = _iso(now() + timedelta(hours=REST_H))

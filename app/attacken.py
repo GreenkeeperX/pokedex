@@ -17,6 +17,8 @@ SELF_DROP = (0.85, "senkt eigene Werte")
 PRIO_UP = (1.1, "greift zuerst an")
 PRIO_DOWN = (0.9, "greift zuletzt an")
 DRAIN = (1.05, "heilt den Anwender")
+SELF_KO = (0.3, "Anwender wird danach kampfunfähig")
+SELF_KO_MOVES = {"explosion", "self-destruct", "misty-explosion", "memento", "final-gambit"}
 
 
 def in_game(move, changes, game_order):
@@ -66,7 +68,7 @@ def score(move, mon, ch=None):
     for cond, (fac, text) in (("recharge" in flags, RECHARGE), ("charge" in flags, CHARGE),
                               (any(v < 0 for k, v in (move.get("selbst") or {}).items() if k in ("atk", "spa", "def", "spd", "spe")), SELF_DROP),
                               ((move.get("prio") or 0) > 0, PRIO_UP), ((move.get("prio") or 0) < 0, PRIO_DOWN),
-                              ((move.get("entzug") or 0) > 0, DRAIN)):
+                              ((move.get("entzug") or 0) > 0, DRAIN), (move.get("kennung") in SELF_KO_MOVES, SELF_KO)):
         if cond:
             s *= fac
             why.append(text)

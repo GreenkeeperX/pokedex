@@ -7,17 +7,21 @@ dem Vorbild von VR-Navigator und eShopKompass.
 ## Was es kann
 
 - **Pokémon**: alle Arten mit Regional- und anderen Formen, die eigene Werte haben (Typ, Basiswerte oder
-  Fähigkeiten). Filter nach Spiel (Regional-Dex, etwa Hisui für Legenden: Arceus), Typ, Generation, Endstufe,
-  Legendäre, Basiswerten; Sortierung nach Werten.
+  Fähigkeiten). Filter nach Spiel (Regional-Dex, etwa Hisui für Legenden: Arceus), Typen als Bubbles (und/oder,
+  ausschließen), Generation, Endstufe, Legendäre, Basiswerten; Sortierung nach Werten. Hover-Karte mit Artwork,
+  Netzdiagramm und Schwächen; Karten lassen sich in die Team-Leiste ziehen.
 - **Detailseite**: Basiswerte, Fähigkeiten, Typwirkung (mit Fähigkeiten wie Schwebe), Entwicklung mit Bedingungen,
   Fundorte im Spiel, Link ins PokéWiki.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
   Vorschlag für vier Attacken mit Typ-Abdeckung.
-- **Beste Attacken je Typ** im gewählten Spiel.
+- **Attacken**: alle Attacken des gewählten Spiels mit Filtern und sortierbaren Spalten.
+- **Team-Leiste** unten in jedem Reiter (Drag & Drop, „+“). Teams je Spiel speichern sich selbst, mit Level und
+  vier Attacken je Mitglied.
 - **Team**: Bewertung nach fünf Kriterien mit einstellbaren Gewichten (Defensive, Abdeckung, Tempo, Stärke,
   Balance), offene Schwächen, Vorschläge für den nächsten Platz mit Gründen, Suche nach dem besten Team mit
-  festgesetzten Plätzen, Gegner-Modus (wen schicken, wen schonen). Teams lassen sich speichern.
+  festgesetzten Plätzen und denselben Filtern wie die Liste, Verbesserungsvorschläge zu den gewählten Attacken,
+  Gegner-Modus auch gegen ein ganzes Gegner-Team (wen schicken, wen schonen).
 - **Typtabelle** der Generation des Spiels.
 - **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest, „Zu erledigen“ (Abweichungen zwischen
   PokéAPI und Showdown zum Entscheiden).
@@ -28,7 +32,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 |---|---|---|
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (CSV) | Primärquelle: alle Grunddaten, alle Spiele, deutsche Namen | BSD-3 |
 | [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) | Gegenprüfung von Werten und Attacken, Merkmale wie „Aufladen“ | MIT |
-| [PokéAPI-Sprites](https://github.com/PokeAPI/sprites) | Bilder | siehe dort |
+| [PokéAPI-Sprites](https://github.com/PokeAPI/sprites) | Bilder (Sprites und offizielle Artworks) | siehe dort |
 | [PokéWiki](https://www.pokewiki.de) | Links; geplant: Legenden: Arceus (Fundorte, Elite-Pokémon, Edelhorden, Karten) | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
@@ -48,7 +52,7 @@ Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HO
 
 - `pokeapi.db`: Spieldaten, baut jeder Abgleich neu, wenn sich eine Quelle geändert hat
 - `user.db`: deine Teams und Entscheidungen; der Abgleich berührt sie nie. Tägliche Kopie in `sicherung/` (14 Tage)
-- `sprites/`: Bilder
+- `sprites/`, `artwork/`: Bilder (Sprites 96 × 96, offizielle Artworks 475 × 475, zusammen gut 180 MB)
 - `settings.json`, `sync.json`: Einstellungen und Stand des Abgleichs
 
 ## Entwicklung

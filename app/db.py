@@ -20,6 +20,10 @@ USER_SCHEMA = (
     # Entscheidungen zu „Zu erledigen“: welcher Wert gilt (art: pruefung; schluessel: form:25:Typen …)
     """CREATE TABLE IF NOT EXISTS entscheidung (art TEXT, schluessel TEXT, wert TEXT, at TEXT, PRIMARY KEY (art, schluessel))""",
 )
+# Spalten, die später dazukamen: (Tabelle, Spalte, Typ). Alte Dateien bekommen sie beim Start
+USER_COLUMNS = (
+    ("team", "details", "TEXT"),        # 0.2.0: Level und Attacken je Mitglied
+)
 
 
 def data_dir():
@@ -45,6 +49,9 @@ def migrate():
         try:
             for sql in USER_SCHEMA:
                 con.execute(sql)
+            for table, col, typ in USER_COLUMNS:
+                if col not in [r[1] for r in con.execute(f"PRAGMA table_info({table})")]:
+                    con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
             con.commit()
         finally:
             con.close()
