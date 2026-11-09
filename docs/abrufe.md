@@ -37,7 +37,12 @@ Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen:
   von–bis, `abruf.pkhex_areas` liest sie), Karmesin/Purpur und Legenden: Z-A, dazu deutsche Ortsnamen, Beherrschung
   und Level-Attacken für Legenden: Arceus,
 - Wikis und Datenbanken: PokéWiki (API und Beispielseiten), Bulbapedia, Serebii, Pokémon Database, Map Genie,
-- Kampfdaten: Smogon-Sets (data.pkmn.cc), Smogon-Nutzungsstatistik, `learnsets.ts` von Showdown.
+- weitere Spieldaten: feste Begegnungen aus den Quelldateien von PKHeX (`importer.pkhex_static`), Raids in
+  Karmesin/Purpur, Werte je Form in Legenden: Arceus,
+- Bilder und Rufe: schillernde und animierte Sprites, Rufe (PokéAPI-Repos),
+- schon geladen, noch ungenutzt: TM, Wesen, Ei-Gruppen, Fangraten, Beeren und EV-Ausbeute in pokeapi.db,
+- Kampfdaten: Smogon-Sets (data.pkmn.cc), Smogon-Nutzungsstatistik, `learnsets.ts`, `formats-data.ts`,
+  Random-Battle-Sets und `abilities.ts` von Showdown.
 
 Speichert nichts. Wiki- und Datenbankseiten bleiben gekürzt (60 000 Zeichen) als Proben im Speicher;
 `/api/diag/proben` lädt sie als JSON herunter, damit sich Leser für neue Quellen bauen lassen.

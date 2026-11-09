@@ -153,6 +153,14 @@ class Leser(unittest.TestCase):
         data = b"la" + struct.pack("<H", 1) + struct.pack("<II", 12, 12 + len(area)) + area
         self.assertEqual(abruf.pkhex_areas(data), [([4], 0, [(399, 0, 2, 4, 0), (399, 0, 17, 19, 1)])])
 
+    def test_pkhex_feste_begegnungen(self):
+        src = """
+        new(722,000,05,M,M) { Location = 006, FixedBall = Ball.LAPoke }, // erfunden
+        new(SV) { Species = 0978, Level = 45, Location = 040, Form = 2, IVs = new(30,30,30,30,30,30) },
+        new(SV) { Species = 0001, Level = 5 },
+        """
+        self.assertEqual(importer.pkhex_static(src), [(722, 0, 5, 6), (978, 2, 45, 40)])
+
     def test_pkhex_fundorte(self):
         import sqlite3
         import struct
