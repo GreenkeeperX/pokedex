@@ -1,0 +1,10 @@
+# Portainer-Stack für hq: Stacks → Add stack → diesen Inhalt einfügen
+services:
+  pokedex:
+    image: ghcr.io/greenkeeperx/pokedex:latest
+    container_name: pokedex
+    restart: unless-stopped
+    ports:
+      - "8788:80"
+    labels:
+      - com.centurylinklabs.watchtower.enable=true

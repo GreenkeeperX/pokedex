@@ -40,31 +40,22 @@ img{width:56px;height:56px}.li{display:flex;gap:8px;align-items:center;padding:5
 <h2>Pokémon suchen</h2><div id="rs"></div>
 </main>
 <script>
-const $=s=>document.querySelector(s),B='https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/',SP='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/';
+const $=s=>document.querySelector(s),SP='sprites/';
 let E={},TN={},M=[],byId={},MV={},MC={},team=[],cur=0;
 const H=[0,40,355,200,285,35,20,85,265,200,15,220,130,52,330,175,250,30,310],SA=[0,12,55,55,55,55,55,55,55,12,55,55,55,55,55,55,55,12,55];
 const ty=i=>`<span class=t style="background:hsl(${H[i]} ${SA[i]}% var(--L1));color:hsl(${H[i]} ${SA[i]}% var(--L2))">${TN[i]}</span>`;
-async function txt(u){try{const c=await caches.open('pk1');let r=await c.match(u);if(!r){r=await fetch(u);if(!r.ok)throw 0;await c.put(u,r.clone())}return r.text()}catch(e){return (await fetch(u)).text()}}
-function csv(t){const o=[];let r=[],f='',q=0;for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c=='"'){if(t[i+1]=='"'){f+='"';i++}else q=0}else f+=c}else if(c=='"')q=1;else if(c==','){r.push(f);f=''}else if(c=='\n'){r.push(f);o.push(r);r=[];f=''}else if(c!='\r')f+=c}if(f||r.length){r.push(f);o.push(r)}const h=o.shift();return o.filter(x=>x.length>1).map(x=>Object.fromEntries(h.map((k,i)=>[k,x[i]])))}
 async function init(){try{
-const [pk,sp,spn,pt,ps,tn,te,mv,mn,vg]=await Promise.all(['pokemon','pokemon_species','pokemon_species_names','pokemon_types','pokemon_stats','type_names','type_efficacy','moves','move_names','version_groups'].map(n=>txt(B+n+'.csv').then(csv)));
-tn.filter(r=>r.local_language_id==6&&+r.type_id<=18).forEach(r=>TN[r.type_id]=r.name);
-for(let a=1;a<=18;a++){E[a]={};for(let d=1;d<=18;d++)E[a][d]=1}
-te.filter(r=>+r.damage_type_id<=18&&+r.target_type_id<=18).forEach(r=>E[r.damage_type_id][r.target_type_id]=r.damage_factor/100);
-const S={},par=new Set(),N={},T0={},ST={};
-sp.forEach(r=>{S[r.id]={i:r.identifier,g:+r.generation_id,l:r.is_legendary==1||r.is_mythical==1};if(r.evolves_from_species_id)par.add(r.evolves_from_species_id)});
-spn.forEach(r=>{if(r.local_language_id==6||(r.local_language_id==9&&!N[r.pokemon_species_id]))N[r.pokemon_species_id]=r.name});
-pt.forEach(r=>(T0[r.pokemon_id]=T0[r.pokemon_id]||[])[r.slot-1]=+r.type_id);
-ps.forEach(r=>(ST[r.pokemon_id]=ST[r.pokemon_id]||[])[r.stat_id-1]=+r.base_stat);
-M=pk.filter(r=>T0[r.id]&&ST[r.id]&&S[r.species_id]).map(r=>{const s=S[r.species_id],sf=r.identifier.slice(s.i.length+1),st=ST[r.id];return{id:+r.id,sp:r.species_id,sf,e:r.identifier,n:(N[r.species_id]||s.i)+(sf?' ('+sf+')':''),t:T0[r.id].filter(Boolean),st,bst:st.reduce((a,b)=>a+b,0),gen:s.g,leg:s.l,fin:!par.has(r.species_id)}});
+const r=await fetch('data/core.json');if(!r.ok)throw 'HTTP '+r.status;const D=await r.json();
+Object.assign(TN,D.types);
+for(let a=1;a<=18;a++){E[a]={};for(let d=1;d<=18;d++)E[a][d]=D.eff[a-1][d-1]/100}
+M=D.pokemon.map(([id,sp,sf,e,n,t,st,gen,leg,fin])=>({id,sp,sf,e,n:n+(sf?' ('+sf+')':''),t,st,bst:st.reduce((a,b)=>a+b,0),gen,leg:!!leg,fin:!!fin}));
 M.forEach(m=>byId[m.id]=m);
-mn.forEach(r=>{if(r.local_language_id==6)(MV[r.move_id]=MV[r.move_id]||{}).n=r.name});
-mv.forEach(r=>{const o=MV[r.id]=MV[r.id]||{};o.n=o.n||r.identifier;o.ty=+r.type_id;o.pow=+r.power||0;o.acc=+r.accuracy||0;o.pp=+r.pp;o.cls=+r.damage_class_id});
+for(const[id,[n,ty,pow,acc,pp,cls]]of Object.entries(D.moves))MV[id]={n,ty,pow,acc,pp,cls};
 $('#gm').innerHTML=[9,8,7,6,5,4,3,2,1].map(g=>`<option value=${g}>bis Generation ${g}</option>`).join('');
-$('#vg').innerHTML=vg.sort((a,b)=>b.order-a.order).map(v=>`<option ${v.identifier=='scarlet-violet'?'selected':''}>${v.identifier}</option>`).join('');
+$('#vg').innerHTML=D.versionGroups.map(([v,n])=>`<option value="${v}" ${v=='scarlet-violet'?'selected':''}>${n}</option>`).join('');
 $('#ts').innerHTML=Object.keys(TN).map(i=>`<option value=${i}>${TN[i]}</option>`).join('');
 try{team=JSON.parse(localStorage.k||'[]').filter(i=>byId[i])}catch(e){}
-$('#st').textContent=M.length+' Pokémon-Formen, '+Object.keys(MV).length+' Attacken geladen (Quelle: PokéAPI, lokal zwischengespeichert)';
+$('#st').textContent=M.length+' Pokémon-Formen, '+Object.keys(MV).length+' Attacken geladen (Quelle: PokéAPI, Stand '+new Date(D.generated).toLocaleDateString('de-DE')+')';
 R();T();tb()}catch(e){$('#st').textContent='Daten konnten nicht geladen werden: '+e}}
 const dm=(a,t)=>t.reduce((p,x)=>p*E[a][x],1);
 function ev(A){let open=[],unc=[],cov=0,sc=0;
@@ -73,25 +64,26 @@ for(let d=1;d<=18;d++)A.some(m=>m.t.some(a=>E[a][d]>1))?cov++:unc.push(d);
 return{open,unc,cov,sc,bst:A.reduce((s,m)=>s+m.bst,0)}}
 const gs=(e,g)=>g=='def'?e.sc:g=='off'?e.cov*4+e.sc/4:g=='bst'?e.bst/30:e.sc+e.cov+e.bst/50;
 function pool(){const f=$('#fm').value,g=+$('#gm').value,b=+$('#mb').value||0;return M.filter(m=>(f=='all'||(f=='reg'?(!m.sf||/^(alola|galar|hisui|paldea)/.test(m.sf)):!m.sf))&&m.gen<=g&&(!$('#fin').checked||m.fin)&&(!$('#leg').checked||!m.leg)&&m.bst>=b)}
-const li=(m,x,b)=>`<div class=li><img src="${SP}${m.id}.png" alt=""><div><b>${m.n}</b> ${m.t.map(ty).join('')}<div class=m>Basiswerte ${m.bst}${x?' · '+x:''}</div></div>${b===0?'':`<button onclick="add(${m.id})">+ Team</button>`}</div>`;
+const li=(m,x,b)=>`<div class=li><img src="${SP}${m.id}.png" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><div><b>${m.n}</b> ${m.t.map(ty).join('')}<div class=m>Basiswerte ${m.bst}${x?' · '+x:''}</div></div>${b===0?'':`<button onclick="add(${m.id})">+ Team</button>`}</div>`;
 function R(){const q=$('#q').value.toLowerCase().trim(),L=pool().filter(m=>!q||m.n.toLowerCase().includes(q)||m.e.includes(q));
 $('#rs').innerHTML=`<div class=m>${L.length} Treffer${L.length>40?', zeige 40':''}</div>`+L.slice(0,40).map(m=>li(m)).join('')}
 const add=i=>{if(team.length<6&&!team.includes(i))team.push(i);T()},rm=i=>{team=team.filter(x=>x!=i);T()};
 function T(){try{localStorage.k=JSON.stringify(team)}catch(e){}$('#cn').textContent=team.length;const A=team.map(i=>byId[i]);
-$('#tm').innerHTML=A.map(m=>`<div class=card><img src="${SP}${m.id}.png" alt=""><br><b>${m.n}</b><br>${m.t.map(ty).join('')}<div class=m>Basiswerte ${m.bst} · Atk ${m.st[1]} · SpA ${m.st[3]} · Init ${m.st[5]}</div><div class=row><button onclick="mv(${m.id})">Attacken</button><button onclick="rm(${m.id})">×</button></div></div>`).join('');
+$('#tm').innerHTML=A.map(m=>`<div class=card><img src="${SP}${m.id}.png" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><br><b>${m.n}</b><br>${m.t.map(ty).join('')}<div class=m>Basiswerte ${m.bst} · Atk ${m.st[1]} · SpA ${m.st[3]} · Init ${m.st[5]}</div><div class=row><button onclick="mv(${m.id})">Attacken</button><button onclick="rm(${m.id})">×</button></div></div>`).join('');
 let h='';if(A.length){const e=ev(A);h=`<div class=card style="margin-top:8px"><p>Offen (Verteidigung): ${e.open.length?e.open.map(ty).join(''):'keine'}<br>Angriff: ${e.cov}/18 Typen doppelt getroffen${e.unc.length?' · nicht abgedeckt: '+e.unc.map(ty).join(''):''}<br>Summe Basiswerte: ${e.bst}</p><div style="overflow-x:auto"><table><tr><th></th>${A.map(m=>'<th>'+m.n.slice(0,7)+'</th>').join('')}</tr>`;
 for(let a=1;a<=18;a++)h+=`<tr><td>${ty(a)}</td>`+A.map(m=>{const v=dm(a,m.t);return v>1?`<td class=w>${v>=4?'x4':'x2'}</td>`:v<1?`<td class=r>${v==0?'0':v<.5?'¼':'½'}</td>`:'<td></td>'}).join('')+'</tr>';h+='</table></div></div>'}
 $('#ev').innerHTML=h}
 function sg(){const g=$('#goal').value,A=team.map(i=>byId[i]),L=pool().filter(m=>!team.includes(m.id)&&!A.some(x=>x.sp==m.sp)).map(m=>{const e=ev(A.concat(m));return{m,e,s:gs(e,g)}}).sort((a,b)=>b.s-a.s).slice(0,12);
 $('#sug').innerHTML='<div class=card>'+L.map(x=>li(x.m,`danach offen: ${x.e.open.length?x.e.open.map(ty).join(''):'keine'} · Angriff ${x.e.cov}/18`)).join('')+'</div>'}
 async function mv(id){cur=id;const m=byId[id],box=$('#mv');box.innerHTML='Lade …';
-try{const j=MC[id]=MC[id]||await(await fetch('https://pokeapi.co/api/v2/pokemon/'+id)).json(),vg=$('#vg').value,atk=m.st[1]>=m.st[3]?2:3,L=[];
-j.moves.forEach(x=>{const d=x.version_group_details.find(v=>v.version_group.name==vg);if(!d)return;const o=MV[x.move.url.split('/').filter(Boolean).pop()];if(!o||!o.pow)return;
+try{if(!MC[id]){const r=await fetch('data/learn/'+id+'.json');MC[id]=r.ok?await r.json():{}}
+const vg=$('#vg').value,vn=$('#vg').selectedOptions[0].text,atk=m.st[1]>=m.st[3]?2:3,L=[],seen={};
+(MC[id][vg]||[]).forEach(([mid,meth,lv])=>{const o=MV[mid];if(!o||!o.pow||seen[mid])return;seen[mid]=1;const d={move_learn_method:{name:meth},level_learned_at:lv};
 const stab=m.t.includes(o.ty),cl=o.cls==atk,own=new Set();m.t.forEach(a=>{for(let k=1;k<=18;k++)if(E[a][k]>1)own.add(k)});
 const cv=[];for(let k=1;k<=18;k++)if(E[o.ty][k]>1&&!own.has(k))cv.push(TN[k]);
 L.push({o,d,stab,cl,cv,s:o.pow*(o.acc||100)/100*(stab?1.5:1)*(cl?1:.55)})});
 L.sort((a,b)=>b.s-a.s);const mt={'level-up':d=>'Level '+d.level_learned_at,machine:()=>'TM/VM',egg:()=>'Ei',tutor:()=>'Lehrer'};
-box.innerHTML=`<div class=card><b>${m.n}</b> in ${vg}: ${L.length?'':'keine Angriffsattacken gefunden'}`+L.slice(0,10).map(x=>`<div class=li><div><b>${x.o.n}</b> ${ty(x.o.ty)}<span class=m>${x.o.cls==2?'physisch':'speziell'} · Stärke ${x.o.pow} · Genauigkeit ${x.o.acc||'–'} · ${(mt[x.d.move_learn_method.name]||(()=>x.d.move_learn_method.name))(x.d)}</span><div class=m>Warum: ${x.stab?'Eigentyp-Bonus, ':''}${x.cl?'passt zum stärkeren Angriffswert':'passt nicht zum stärkeren Angriffswert (abgewertet)'}${!x.stab&&x.cv.length?', trifft zusätzlich '+x.cv.slice(0,4).join(', '):''}</div></div></div>`).join('')+`<div class=m>Wertung: Stärke × Genauigkeit × Eigentyp-Bonus; Zusatzeffekte nicht bewertet.</div></div>`}
+box.innerHTML=`<div class=card><b>${m.n}</b> in ${vn}: ${L.length?'':'keine Angriffsattacken gefunden'}`+L.slice(0,10).map(x=>`<div class=li><div><b>${x.o.n}</b> ${ty(x.o.ty)}<span class=m>${x.o.cls==2?'physisch':'speziell'} · Stärke ${x.o.pow} · Genauigkeit ${x.o.acc||'–'} · ${(mt[x.d.move_learn_method.name]||(()=>x.d.move_learn_method.name))(x.d)}</span><div class=m>Warum: ${x.stab?'Eigentyp-Bonus, ':''}${x.cl?'passt zum stärkeren Angriffswert':'passt nicht zum stärkeren Angriffswert (abgewertet)'}${!x.stab&&x.cv.length?', trifft zusätzlich '+x.cv.slice(0,4).join(', '):''}</div></div></div>`).join('')+`<div class=m>Wertung: Stärke × Genauigkeit × Eigentyp-Bonus; Zusatzeffekte nicht bewertet.</div></div>`}
 catch(e){box.textContent='Attacken konnten nicht geladen werden: '+e}}
 function tb(){const t=+$('#ts').value,L=Object.values(MV).filter(o=>o.ty==t&&o.pow&&o.cls>1).sort((a,b)=>b.pow*(b.acc||100)-a.pow*(a.acc||100)).slice(0,10);
 $('#tbx').innerHTML='<div class=card>'+L.map(o=>`<div class=li><div><b>${o.n}</b> <span class=m>${o.cls==2?'physisch':'speziell'} · Stärke ${o.pow} · Genauigkeit ${o.acc||'–'} · AP ${o.pp}</span></div></div>`).join('')+'<div class=m>Rang nach Stärke × Genauigkeit, ohne Zusatzeffekte und Nachteile.</div></div>'}
