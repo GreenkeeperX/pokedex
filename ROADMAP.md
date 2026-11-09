@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.2.1
+
+- Version in der Kopfzeile, Liste aller Versionen per Klick, einmaliger Hinweis nach einem Update
+
 ## 0.2.0 (Oberfläche nach erster Nutzung, Entscheidung 09.11.2026)
 
 - Liste: Hover-Karte mit Artwork, Netzdiagramm und Schwächen (verdeckt die Karte nie), Mini-Netzdiagramm je Karte,

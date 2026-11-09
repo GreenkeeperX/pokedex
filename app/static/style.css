@@ -25,6 +25,15 @@ header.top{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding:1
 header.top h1{font-size:23px;margin:0;letter-spacing:-.015em}
 header.top h1 a{color:inherit;text-decoration:none}
 header.top .brand{color:var(--brand)}
+button.ver{font-size:12px;padding:2px 8px;border-radius:999px;color:var(--muted);margin-left:-10px}
+button.ver.frisch{color:var(--brand);border-color:var(--brand);font-weight:600}
+.note.neu{background:var(--card);border:1px solid var(--brand);margin:10px 0}
+.note.neu ul{margin:6px 0 8px;padding-left:20px}
+#vdlg{max-width:620px;width:calc(100% - 32px);background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:16px 20px}
+#vdlg::backdrop{background:rgba(0,0,0,.4)}
+#vdlg h3{font-size:15px;margin:14px 0 4px}
+#vdlg ul{margin:0;padding-left:20px}
+#vdlg form{margin-top:14px;text-align:right}
 header.top .meta{color:var(--muted);font-size:13px;flex:1;min-width:160px}
 .game,.game2{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
 .game select{max-width:300px;font-weight:600;border:2px solid var(--brand);color:var(--ink-hi)}

@@ -203,8 +203,33 @@ function header() {
   const a = S.meta?.abgleich || {};
   $("#meta").textContent = !S.meta?.has_data ? (a.running ? "Erster Abgleich läuft …" : "Noch keine Daten")
     : `${S.meta.formen} Pokémon und Formen · ${S.meta.attacken} Attacken · ${gs.length} Spiele` + (a.running ? " · Abgleich läuft" : "");
+  version();
   const t = document.documentElement.dataset.theme;
   $("#thm").textContent = t === "dark" ? "Dunkel" : t === "light" ? "Hell" : "Ansicht: Gerät";
+}
+/* Version in der Kopfzeile; nach einem Update einmal ein Hinweis, was neu ist. Wer das Tool zum
+   ersten Mal öffnet, bekommt keinen Hinweis, nur die Version. */
+function version() {
+  const v = S.meta?.version;
+  if (!v) return;
+  let seen = null;
+  try { seen = localStorage.getItem("px.version"); if (seen === null) localStorage.setItem("px.version", seen = v); } catch (x) { seen = v; }
+  const neu = seen !== v;
+  const b = $("#ver");
+  b.hidden = false; b.textContent = "v" + v; b.classList.toggle("frisch", neu);
+  const box = $("#neu");
+  if (!neu) { box.innerHTML = ""; return; }
+  const cur = (S.meta.neu || []).find((n) => n[0] === v);
+  box.innerHTML = `<div class="note neu"><b>Neu in Version ${esc(v)}</b>${cur ? `<ul>${cur[2].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    <button data-act="neu">Alle Versionen</button> <button class="primary" data-act="neuok">Verstanden</button></div>`;
+}
+function versionsDialog() {
+  let d = $("#vdlg");
+  if (!d) { d = document.createElement("dialog"); d.id = "vdlg"; document.body.append(d); }
+  d.innerHTML = `<h2>Was ist neu?</h2>` + (S.meta?.neu || []).map(([v, datum, punkte]) =>
+    `<h3>Version ${esc(v)} <span class="hint">${esc(datum)}</span></h3><ul>${punkte.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("")
+    + `<form method="dialog"><button class="primary">Schließen</button></form>`;
+  d.showModal();
 }
 function nav(tab) {
   $("#nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
@@ -852,7 +877,9 @@ document.addEventListener("click", async (e) => {
       if (next) document.documentElement.dataset.theme = next; else delete document.documentElement.dataset.theme;
       try { if (next) localStorage.setItem("px.theme", next); else localStorage.removeItem("px.theme"); } catch (x) { /* egal */ }
       header();
-    } else if (act === "dock") { S.dock = !S.dock; store.set("dock", S.dock); dock(); }
+    } else if (act === "neu") versionsDialog();
+    else if (act === "neuok") { try { localStorage.setItem("px.version", S.meta.version); } catch (x) { /* egal */ } version(); }
+    else if (act === "dock") { S.dock = !S.dock; store.set("dock", S.dock); dock(); }
     else if (act === "teamadd") { addToTeam(id); if (location.hash.startsWith("#pokemon/")) route(); }
     else if (act === "teamdel") { removeFromTeam(id); if (location.hash.startsWith("#pokemon/")) route(); }
     else if (act === "pin") {

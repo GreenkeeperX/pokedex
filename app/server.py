@@ -180,7 +180,7 @@ def decide(body):
 
 def meta():
     st = abruf.status()
-    return {"app": "pokedex", "version": sources.VERSION, "has_data": db.has_data(), **abfragen.meta(),
+    return {"app": "pokedex", "version": sources.VERSION, "neu": sources.NEUIGKEITEN, "has_data": db.has_data(), **abfragen.meta(),
             "spiele": abfragen.games(), "einstellungen": abruf.load_settings(),
             "abgleich": {k: st.get(k) for k in ("running", "started", "finished", "ok", "built", "step")}}
 

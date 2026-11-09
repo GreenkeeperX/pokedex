@@ -20,7 +20,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - nur die Python-Standardbibliothek und reines JavaScript ohne Build, keine Abhängigkeiten,
 - Quellen schonend abrufen: Pausen je Server, Abbruch bei 403 und 429 (Quelle ruht 24 Stunden), ehrliche Kennung,
 - die Härtung des Containers bleibt (read_only, cap_drop ALL, no-new-privileges, Benutzer 10001),
-- jede Version mit Tests (`python3 -m unittest tests.test_all`), neuer Nummer in `app/sources.py`,
+- jede Version mit Tests (`python3 -m unittest tests.test_all`), neuer Nummer und Eintrag in `NEUIGKEITEN` in `app/sources.py`,
   aktueller README und ROADMAP.md,
 - user.db lädt nach jedem Update weiter: nur neue Tabellen und Spalten, nie löschen (`app/db.py`),
 - ändern sich die aufbereiteten Tabellen in `app/importer.py`, `importer.VERSION` erhöhen; dann baut der nächste Abgleich neu.
