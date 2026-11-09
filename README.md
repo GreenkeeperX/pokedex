@@ -16,9 +16,9 @@ node scripts/build-data.mjs data          # Node 18+
 # Sprites optional: ohne Ordner sprites/ bleiben die Bilder leer
 python3 -m http.server 8000
 ```
-Oder komplett per Docker: `docker build -t pokedex . && docker run -p 8788:80 pokedex`
+Oder komplett per Docker: `docker build -t pokedex . && docker run -p 8789:80 pokedex`
 
 ## Betrieb auf hq
 1. Push auf `main` baut per GitHub Actions das Image `ghcr.io/greenkeeperx/pokedex:latest` (amd64). Montags baut die Action automatisch neu, damit neue PokéAPI-Daten ankommen.
-2. In Portainer: Stacks → Add stack → Inhalt von `docker-compose.yml` einfügen → Deploy. Erreichbar unter `http://hq:8788`.
+2. In Portainer: Stacks → Add stack → Inhalt von `docker-compose.yml` einfügen → Deploy. Erreichbar unter `http://hq:8789`.
 3. Watchtower holt neue Images automatisch (Label `com.centurylinklabs.watchtower.enable=true` ist gesetzt).
