@@ -97,15 +97,10 @@ def teams():
 
 
 def _details(v, members):
-    """{id: {"level": 1–100, "attacken": bis zu 4 IDs}} nur für Mitglieder des Teams."""
-    out = {}
-    for k, d in (v or {}).items():
-        try:
-            i = int(k)
-        except (TypeError, ValueError):
-            continue
-        if i not in members or not isinstance(d, dict):
-            continue
+    """Je Platz {"level": 1–100, "attacken": bis zu 4 IDs}, als Liste parallel zu den Mitgliedern. Ältere Oberflächen
+    schicken {id: {...}}; das wird hier zur Liste."""
+    out = []
+    for d in abfragen.slot_details(v, members):
         lv = d.get("level")
         try:
             lv = min(100, max(1, int(lv))) if lv not in (None, "") else None
@@ -117,7 +112,7 @@ def _details(v, members):
                 moves.append(int(x))
             except (TypeError, ValueError):
                 raise ValueError("Attacken: Zahlen erwartet")
-        out[str(i)] = {"level": lv, "attacken": moves}
+        out.append({"level": lv, "attacken": moves})
     return out
 
 
@@ -129,7 +124,7 @@ def save_team(body):
     fixed = [i for i in _ids(body.get("fest")) if i in members]
     weights = {k: float(v) for k, v in (body.get("gewichte") or {}).items() if k in abfragen.team.CRITERIA}
     spiel = str(body.get("spiel") or "")[:60]
-    details = _details(body.get("details"), set(members))
+    details = _details(body.get("details"), members)
     con = db.user()
     try:
         tid = body.get("id")
@@ -146,6 +141,46 @@ def save_team(body):
     finally:
         con.close()
     return {"id": int(tid)}
+
+
+def favorites(spiel):
+    con = db.user()
+    try:
+        ids = [r[0] for r in con.execute("SELECT form FROM favorit WHERE spiel = ? ORDER BY seit", (str(spiel or ""),))]
+    finally:
+        con.close()
+    return abfragen.rows_of(ids, spiel)
+
+
+def set_favorite(body):
+    """Favorit an- oder abwählen: {spiel, id, an}."""
+    spiel = str(body.get("spiel") or "")[:60]
+    try:
+        fid = int(body.get("id"))
+    except (TypeError, ValueError):
+        raise ValueError("id: eine Zahl")
+    con = db.user()
+    try:
+        if body.get("an", True):
+            con.execute("INSERT OR IGNORE INTO favorit (spiel, form, seit) VALUES (?, ?, ?)", (spiel, fid, _now()))
+        else:
+            con.execute("DELETE FROM favorit WHERE spiel = ? AND form = ?", (spiel, fid))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True}
+
+
+def export():
+    """Alles Eigene als JSON: Teams, Favoriten, Entscheidungen."""
+    con = db.user()
+    try:
+        fav = [dict(r) for r in con.execute("SELECT spiel, form, seit FROM favorit ORDER BY spiel, seit")]
+        dec = [dict(r) for r in con.execute("SELECT art, schluessel, wert, at FROM entscheidung ORDER BY art, schluessel")]
+    finally:
+        con.close()
+    return {"app": "pokedex", "version": sources.VERSION, "exportiert": _now(), "teams": teams(), "favoriten": fav,
+            "entscheidungen": dec}
 
 
 def delete_team(body):
@@ -278,6 +313,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, abfragen.type_chart(q))
             elif path == "/api/teams":
                 self._send(200, teams())
+            elif path == "/api/favoriten":
+                self._send(200, favorites(q.get("spiel")))
+            elif path == "/api/export":
+                day = _now()[:10]
+                self._send(200, export(), extra={"Content-Disposition": f'attachment; filename="pokedex-daten-{day}.json"'})
             elif path == "/api/status":
                 self._send(200, abruf.status())
             elif path == "/api/diag":
@@ -297,6 +337,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/team/gegner": abfragen.team_matchup,
         "/api/teams": save_team,
         "/api/teams/loeschen": delete_team,
+        "/api/favoriten": set_favorite,
         "/api/entscheidung": decide,
         "/api/einstellungen": abruf.save_settings,
         "/api/abgleich": lambda b: {"started": abruf.start(force=bool(b.get("neu")))},
@@ -328,6 +369,8 @@ def main():
     db.migrate()
     port = int(os.environ.get("PORT", "8789"))
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    # Spieldaten gleich in den Speicher laden, damit die erste Anfrage nach einem Update nicht wartet
+    threading.Thread(target=abfragen.data, daemon=True, name="vorladen").start()
     if os.environ.get("AUTO_SYNC", "1") != "0":
         threading.Thread(target=abruf.scheduler, daemon=True, name="zeitplan").start()
     print(f"Pokédex {sources.VERSION} läuft auf Port {port}", flush=True)

@@ -19,6 +19,8 @@ USER_SCHEMA = (
        fest TEXT, gewichte TEXT, geaendert TEXT)""",
     # Entscheidungen zu „Zu erledigen“: welcher Wert gilt (art: pruefung; schluessel: form:25:Typen …)
     """CREATE TABLE IF NOT EXISTS entscheidung (art TEXT, schluessel TEXT, wert TEXT, at TEXT, PRIMARY KEY (art, schluessel))""",
+    # 0.3.0: Favoriten je Spiel, der erweiterte Kader zum schnellen Tauschen
+    """CREATE TABLE IF NOT EXISTS favorit (spiel TEXT, form INTEGER, seit TEXT, PRIMARY KEY (spiel, form))""",
 )
 # Spalten, die später dazukamen: (Tabelle, Spalte, Typ). Alte Dateien bekommen sie beim Start
 USER_COLUMNS = (

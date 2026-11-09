@@ -10,11 +10,25 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.3.0", "09.11.2026", [
+        "Nintendo-Rot, dezentere Linien; Klick auf den Titel lädt alles neu",
+        "Netzdiagramm mit Speichen und Ringen; außen = Höchstwert aller Pokémon, an den Ecken eine Skala von 0 bis 10",
+        "Team: dasselbe Pokémon darf mehrfach hinein, Plätze per Drag & Drop umsortieren, Sortieren nach Werten",
+        "Gespeicherte Teams ändern sich erst mit „Speichern“; bis dahin „Verwerfen“ möglich",
+        "Favoriten je Spiel (☆): Klick auf einen leeren Platz oder ⇄ tauscht schnell ein",
+        "Hinweis, wenn Team-Mitglieder nicht zum gewählten Spiel passen",
+        "Hover-Karten auch im Team, in der Team-Leiste, bei Verbesserungen und Gegnern",
+        "Filter „stark gegen Typ“; ausgeschlossene Typen rot umrandet und durchgestrichen; Festgesetzte grün",
+        "Attacken: Reihenfolge per Ziehen, Standard-Attacken wie im Spiel, beigebrachte Attacken (TM, Lehrer) hinzufügen",
+        "„Zurück“ führt dorthin, woher du kamst; Tabellen: dritter Klick stellt die ursprüngliche Reihenfolge her",
+        "Typtabelle: Zeile und Spalte per Klick festhalten, Hinweise mit Typ-Bubbles",
+        "Protokoll und Verbindungstest kopieren oder herunterladen; eigene Daten als JSON herunterladen",
+    ]),
     ("0.2.1", "09.11.2026", [
         "Version in der Kopfzeile; nach einem Update erscheint einmal ein Hinweis, was neu ist",
     ]),

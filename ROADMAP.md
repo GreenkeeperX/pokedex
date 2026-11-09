@@ -1,5 +1,27 @@
 # Roadmap
 
+## 0.3.0 (Rückmeldung zu 0.2, Entscheidung 09.11.2026)
+
+- Farben: Nintendo-Rot statt Blassrot, Linien an Spielauswahl und Team-Leiste dezent; Titel lädt neu
+- Netzdiagramm: Speichen, Ringe bei 25/50/75 %, 100 % = Höchstwert aller Pokémon je Wert, Skala 0–10 an den Ecken
+- Team je Platz statt je Pokémon (dasselbe Pokémon mehrfach), Umsortieren per Drag & Drop, Sortieren
+- Gespeicherte Teams: Änderungen bleiben im Browser, bis „Speichern“ oder „Verwerfen“
+- Favoriten je Spiel (user.db, neue Tabelle `favorit`), Auswahl beim Klick auf einen Platz
+- Hinweis bei Mitgliedern, die nicht im gewählten Spiel vorkommen
+- Hover-Karten im Team, in der Leiste, bei Verbesserungen und Gegnern; Hinweise immer dunkel
+- Filter „stark gegen Typ“; deutlichere Ausschluss-Bubbles; festgesetzte Mitglieder grün
+- Attacken: Reihenfolge ziehen, Standard-Attacken (die letzten vier bis zum Level), beigebrachte Attacken
+- Typtabelle: Zeile/Spalte festhalten, reichere Hinweise; Tabellen mit neutraler dritter Sortierung
+- Protokoll und Verbindungstest kopieren und herunterladen, eigene Daten als JSON
+- Spieldaten werden beim Start vorgeladen (erste Anfrage nach einem Update wartet nicht)
+
+## Als Nächstes: 0.4.0 (Legenden: Arceus vollständig, Items)
+
+- PokéWiki-Leser (vom Heimserver aus erreichbar, Verbindungstest vom 09.11.2026): Fundorte, Elite-Pokémon,
+  Edelhorden, Attackenwerte und Lehrer-Attacken in Legenden: Arceus
+- Items aus der PokéAPI (Namen, Beschreibungen, je Spiel), später Fundorte der Items
+- Karten der Gebiete
+
 ## 0.2.1
 
 - Version in der Kopfzeile, Liste aller Versionen per Klick, einmaliger Hinweis nach einem Update

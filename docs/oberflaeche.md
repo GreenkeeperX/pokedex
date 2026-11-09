@@ -14,6 +14,16 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Ein gespeichertes Team speichert jede Änderung selbst (`POST /api/teams`), Level und Attacken liegen unter `details`.
 - Tabellen mit `class="sort"` sortieren per Klick auf die Kopfzeile, nach `data-s` der Zellen.
 - Eigene Attacken-Auswahl: im Team in `details`, sonst je Spiel und Pokémon im Browser.
+- Titel: führt zur Liste und lädt Spieldaten, Favoriten und Typtabelle neu.
+- Team: Mitglieder je Platz (`ids` und parallel `details` mit Level und Attacken), dasselbe Pokémon darf mehrfach
+  hinein. Die Detailseite eines Platzes ist `#pokemon/<id>/<platz>`. Ein gespeichertes Team ändert sich auf dem Server
+  erst mit „Speichern“; bis dahin steht „nicht gespeichert“ in der Leiste (`dirty`), „Verwerfen“ lädt den Serverstand.
+- Favoriten je Spiel (`/api/favoriten`): ☆ auf Karten und der Detailseite; Klick auf einen leeren Platz oder ⇄.
+- Neue Mitglieder bekommen die Standard-Attacken (wie im Spiel die letzten vier Level-Attacken bis zum Level, ohne
+  Level die ersten vier).
+- Sortierbare Tabellen: erster Klick absteigend, zweiter aufsteigend, dritter wieder wie geladen.
+- Netzdiagramm: 100 % je Wert = Höchstwert aller Pokémon und Formen ohne Mega und Gigadynamax (`meta.verteilung`);
+  Ringe bei 25, 50 (gestrichelt) und 75 %, an den Ecken der Karten eine Skala von 0 bis 10.
 - Version: steht neben dem Namen oben links, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
   Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
   (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.
@@ -27,6 +37,8 @@ Wie im VR-Navigator: Farbtokens in `:root`, dunkle Ansicht über `prefers-color-
 - Hinweise: blau = Info, gelb = Achtung, rot = Problem, grün = in Ordnung
 - Basiswerte-Summe: Rot (um 200) bis Grün (um 680)
 - Gegner: rötlich getönte Leiste über der Auswertung
+- Akzent: Nintendo-Rot (`--brand`); Typ-Bubbles: gewählt = heller Rahmen mit ✓, ausgeschlossen = roter Rahmen, ✕
+  und durchgestrichen; im Team: grüner Rahmen; festgesetzt (📌): grün; passt nicht zum Spiel: gelb
 - „Spielwert“: Attackenwerte, die im gewählten Spiel anders sind als heute
 
 ## Telefon
