@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.4.2
+
+- Verbindungstest für mögliche neue Quellen (Items, PKHeX-Begegnungen, Wikis, Karten, Kampfdaten) mit Probe-Seiten
+
 ## 0.4.1
 
 - Hover-Karte hebt sich mit getöntem Hintergrund und Rahmen von den Karten ab
@@ -20,8 +24,10 @@
 
 ## Als Nächstes: 0.5.0 (Legenden: Arceus vollständig, Items)
 
-- PokéWiki-Leser (vom Heimserver aus erreichbar, Verbindungstest vom 09.11.2026): Fundorte, Elite-Pokémon,
-  Edelhorden, Attackenwerte und Lehrer-Attacken in Legenden: Arceus; danach Karmesin/Purpur und Legenden: Z-A
+- Fundorte aus PKHeX (Begegnungsdateien aus den Spieldaten): Legenden: Arceus mit Alpha und Level, danach
+  Karmesin/Purpur und Legenden: Z-A
+- PokéWiki-Leser (vom Heimserver aus erreichbar) für das, was PKHeX nicht hat: Tageszeit und Wetter, Edelhorden,
+  Attackenwerte (Kraft- und Tempostil) und Lehrer-Attacken in Legenden: Arceus
 - Items aus der PokéAPI (Namen, Beschreibungen, je Spiel), später Fundorte der Items
 - Karten: Links auf die Gebietsseiten im PokéWiki statt eigener Bilder (Bildrechte)
 

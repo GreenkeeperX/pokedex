@@ -399,12 +399,41 @@ def scheduler():
         time.sleep(60)
 
 
-def diagnose():
-    """Verbindung testen: jede Quelle einmal abfragen und beschreiben, was zurückkommt. Speichert nichts."""
-    lines = [f"Pokédex {sources.VERSION}, Test vom {now().strftime('%d.%m.%Y %H:%M')} UTC"]
+PKHEX_RAW = "https://raw.githubusercontent.com/kwsch/PKHeX/master/PKHeX.Core/Resources/"
+PROBE_MAX = 60_000          # so viele Zeichen je Probe-Seite behält der Verbindungstest
 
-    def probe(name, url, info, raw=False):
-        r = sources.request(url, raw=raw)
+
+def pkhex_areas(data):
+    """Begegnungen aus einer PKHeX-Datei encounter_la.pkl (BinLinker „la“): je Gebiet Ortsnummern, Art und Plätze
+    mit Art, Form, Level von–bis und Alpha. Gibt [(orte, art, [(nr, form, min, max, alpha)])] zurück."""
+    import struct
+    n = struct.unpack_from("<H", data, 2)[0]
+    offs = [struct.unpack_from("<I", data, 4 + 4 * i)[0] for i in range(n + 1)]
+    out = []
+    for i in range(n):
+        a = data[offs[i]:offs[i + 1]]
+        lc = a[0]
+        locs = list(a[1:1 + lc])
+        al = lc + 1
+        al += al & 1
+        kind, count, rest = a[al], a[al + 1], a[al + 2:]
+        slots = []
+        for k in range(count):
+            e = rest[8 * k:8 * k + 8]
+            slots.append((struct.unpack_from("<H", e)[0], e[2], e[4], e[5], e[3]))
+        out.append((locs, kind, slots))
+    return out
+
+
+def diagnose(proben=None):
+    """Verbindung testen: jede Quelle einmal abfragen und beschreiben, was zurückkommt. Speichert nichts.
+    proben: dict, in das Probe-Seiten (gekürzt) kommen, damit sich Leser für neue Quellen bauen lassen."""
+    lines = [f"Pokédex {sources.VERSION}, Test vom {now().strftime('%d.%m.%Y %H:%M')} UTC"]
+    proben = {} if proben is None else proben
+    html = {"Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"}
+
+    def probe(name, url, info, raw=False, keep=False, headers=None):
+        r = sources.request(url, raw=raw, headers=headers)
         if r["error"]:
             lines.append(f"{name}: keine Verbindung ({r['error']})")
             return None
@@ -412,14 +441,23 @@ def diagnose():
         head = f"{name}: HTTP {r['status']}, Server {r['server'] or '?'}, {size} {'Bytes' if raw else 'Zeichen'}"
         if r["status"] >= 400 or (not raw and sources.challenge(r["text"])):
             lines.append(head + (", gesperrt" if r["status"] in sources.BLOCKED else "") +
+                         (", Prüfseite (Cloudflare)" if not raw and sources.challenge(r["text"]) else "") +
                          ("" if raw else f". Anfang: {' '.join(r['text'][:160].split())}"))
             return None
         try:
             lines.append(f"{head}, {info(r.get('body') if raw else r['text'])}")
         except Exception as e:
             lines.append(f"{head}, nicht auswertbar ({type(e).__name__}: {e})")
+        if keep and not raw:
+            proben[name] = r["text"][:PROBE_MAX]
         sleep(PAUSE)
         return r
+
+    def section(title):
+        lines.append("")
+        lines.append(f"== {title}")
+
+    section("Heutige Quellen")
 
     def gh_list(text):
         n = [x for x in json.loads(text) if str(x.get("name", "")).endswith(".csv")]
@@ -437,15 +475,60 @@ def diagnose():
     probe("Showdown, pokedex.ts", SD_RAW + "pokedex.ts", sd_info)
     probe("Sprites, Bild 25", SPRITE_RAW + "25.png", lambda b: "PNG" if b[:4] == b"\x89PNG" else "kein PNG", raw=True)
 
+    section("Items (Namen, Beschreibungen, je Spiel)")
+    probe("PokéAPI, items.csv", CSV_RAW + "items.csv", csv_info)
+    probe("PokéAPI, item_flavor_text.csv", CSV_RAW + "item_flavor_text.csv", csv_info)
+    probe("Showdown, items.ts", SD_RAW + "items.ts", lambda t: f"{t.count('num:')} Items mit Nummer")
+    probe("PKHeX, Itemnamen deutsch", PKHEX_RAW + "text/items/text_Items_de.txt",
+          lambda t: f"{sum(1 for x in t.splitlines() if x.strip())} Namen (alle Spiele bis Legenden: Z-A)")
+
+    section("Fundorte aus den Spieldaten (PKHeX, GPL-3.0)")
+
+    def la_info(b):
+        areas = pkhex_areas(b)
+        slots = sum(len(x[2]) for x in areas)
+        alpha = sum(1 for x in areas for s in x[2] if s[4])
+        return f"{len(areas)} Gebiete, {slots} Begegnungen, davon {alpha} Alpha (mit Level von–bis)"
+    probe("PKHeX, Begegnungen Legenden: Arceus", PKHEX_RAW + "legality/wild/Gen8/encounter_la.pkl", la_info, raw=True)
+    names = lambda t: f"{sum(1 for x in t.splitlines() if x.strip() and not x.startswith('－'))} Ortsnamen"
+    probe("PKHeX, Orte Legenden: Arceus deutsch", PKHEX_RAW + "text/locations/gen8a/text_la_00000_de.txt", names)
+    pkl = lambda b: f"Datei {b[:2].decode('ascii', 'replace')!r}, {int.from_bytes(b[2:4], 'little')} Einträge"
+    probe("PKHeX, Begegnungen Karmesin/Purpur", PKHEX_RAW + "legality/wild/Gen9/encounter_wild_paldea.pkl", pkl, raw=True)
+    probe("PKHeX, Orte Karmesin/Purpur deutsch", PKHEX_RAW + "text/locations/gen9/text_sv_00000_de.txt", names)
+    probe("PKHeX, Begegnungen Legenden: Z-A", PKHEX_RAW + "legality/wild/Gen9/encounter_za.pkl", pkl, raw=True)
+    probe("PKHeX, Orte Legenden: Z-A deutsch", PKHEX_RAW + "text/locations/gen9a/text_za_00000_de.txt", names)
+    probe("PKHeX, Beherrschung Legenden: Arceus", PKHEX_RAW + "legality/misc/mastery_la.pkl", pkl, raw=True)
+    probe("PKHeX, Level-Attacken Legenden: Arceus", PKHEX_RAW + "byte/levelup/lvlmove_la.pkl", pkl, raw=True)
+
+    section("Wikis und Datenbanken (Fundorte mit Tageszeit, Attackenwerte, Karten)")
+
     def wiki_info(text):
         g = json.loads(text)["query"]["general"]
         return f"{g.get('sitename')} auf MediaWiki {g.get('generator', '?').split()[-1]}"
-    probe("PokéWiki, API", POKEWIKI_API + "?action=query&meta=siteinfo&format=json", wiki_info)
 
     def wiki_page(text):
         p = json.loads(text)["parse"]
         wt = p["wikitext"]["*"] if isinstance(p["wikitext"], dict) else p["wikitext"]
         return f"Seite „{p['title']}“, {len(wt)} Zeichen Wikitext, {wt.count('{{')} Vorlagen"
-    probe("PokéWiki, Seite Legenden: Arceus", POKEWIKI_API + "?action=parse&page=" + urllib.parse.quote("Pokémon-Legenden: Arceus")
-          + "&prop=wikitext&format=json&redirects=1", wiki_page)
+    probe("PokéWiki, API", POKEWIKI_API + "?action=query&meta=siteinfo&format=json", wiki_info)
+    for page in ("Pokémon-Legenden: Arceus", "Bidiza", "Obsidian-Grasland", "Tackle", "Kraftstil", "Alpha-Pokémon"):
+        probe(f"PokéWiki, Seite {page}", POKEWIKI_API + "?action=parse&page=" + urllib.parse.quote(page)
+              + "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
+    probe("Bulbapedia, API", "https://bulbapedia.bulbagarden.net/w/api.php?action=query&meta=siteinfo&format=json", wiki_info)
+    probe("Bulbapedia, Seite Bidoof", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=Bidoof_(Pok%C3%A9mon)"
+          "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
+    page_info = lambda t: f"Titel „{(t.split('<title>')[1].split('</title>')[0].strip() if '<title>' in t else '?')[:80]}“"
+    probe("Serebii, Legenden: Arceus Bidiza", "https://www.serebii.net/pokedex-swsh/bidoof/", page_info, keep=True, headers=html)
+    probe("Serebii, Legenden: Arceus Übersicht", "https://www.serebii.net/legendsarceus/", page_info, keep=True, headers=html)
+    probe("Pokémon Database, Legenden: Arceus", "https://pokemondb.net/pokedex/game/legends-arceus", page_info, keep=True, headers=html)
+    probe("Map Genie, Karte Legenden: Arceus", "https://mapgenie.io/pokemon-legends-arceus/maps/hisui", page_info, headers=html)
+
+    section("Kampfdaten (Movesets, Nutzung)")
+    probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",
+          lambda t: f"{len(json.loads(t))} Pokémon mit Sets")
+    probe("Smogon, Nutzungsstatistik", "https://www.smogon.com/stats/", lambda t: f"{t.count('href=')} Einträge")
+    probe("Showdown, learnsets.ts", SD_RAW + "learnsets.ts", lambda t: f"{t.count('learnset:')} Lernlisten (TM, Lehrer, Ei je Generation)")
+    if proben:
+        lines.append("")
+        lines.append(f"{len(proben)} Probe-Seiten zum Herunterladen (Knopf „Proben herunterladen“).")
     return lines

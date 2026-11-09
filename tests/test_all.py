@@ -146,6 +146,13 @@ class TeamPlaetze(unittest.TestCase):
 
 
 class Leser(unittest.TestCase):
+    def test_pkhex_begegnungen(self):
+        import struct
+        # ein Gebiet: Ort 4, Art 0, zwei Plätze (Bidiza Lv 2–4, Alpha-Bidiza Lv 17–19)
+        area = bytes([1, 4, 0, 2]) + struct.pack("<HBBBBBB", 399, 0, 0, 2, 4, 0, 0) + struct.pack("<HBBBBBB", 399, 0, 1, 17, 19, 0, 3)
+        data = b"la" + struct.pack("<H", 1) + struct.pack("<II", 12, 12 + len(area)) + area
+        self.assertEqual(abruf.pkhex_areas(data), [([4], 0, [(399, 0, 2, 4, 0), (399, 0, 17, 19, 1)])])
+
     def test_showdown(self):
         text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"
                 "\t\tname: \"Hyper Beam\",\n\t\tpp: 5,\n\t\tpriority: 0,\n\t\tflags: {recharge: 1, protect: 1},\n\t\ttype: \"Normal\",\n\t},\n"
