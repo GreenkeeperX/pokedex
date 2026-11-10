@@ -10,11 +10,21 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.8.1", "10.11.2026", [
+        "Dunkle Ansicht: Hover-Karte und Hinweise wieder wie vor 0.7.1; nichts ist dunkler als die Team-Plätze, Festhalten macht nichts heller",
+        "Liste: größere Bilder und Netze; Stern, Pokéball und Team-Häkchen stehen genau dort, wo die Knöpfe sind, und sind größer",
+        "Hover-Karte: Angriff (mit den eigenen Typen), Verteidigung und „gut einzusetzen gegen“ statt doppelter Listen",
+        "Detailseite: Fangchance sortierbar und mit Paralyse, Gift und Verbrennung; „Alle entfernen“ für die eigene Attacken-Auswahl",
+        "Sortieren überall: Text erst A–Z, Zahlen erst absteigend, dann umgekehrt, beim dritten Klick wie am Anfang",
+        "Artworks: alte Ersatzbilder aus dem Browser-Speicher werden ersetzt",
+        "Team: „aus deiner Sammlung“ statt „Gefangene“, Verbesserungen untereinander mit der zu ersetzenden Attacke fett, Gegner beim Ziehen mit Zielrahmen",
+        "Attacken: Beschreibung erscheint am Namen, nicht mehr bei der Klasse",
+    ]),
     ("0.8.0", "10.11.2026", [
         "Items: Bilder (nach dem nächsten Abgleich), Spalte „Art“ mit Filter, sortierbare Spalten, gemerkte Tasche",
         "Items je Tasche: Medizin und Bälle mit Wirkung (etwa „KP +20“, „Fangfaktor ×1,5“), Maschinen mit Attacke, Typ, Stärke und AP",

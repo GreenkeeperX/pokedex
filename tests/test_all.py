@@ -225,7 +225,8 @@ class Leser(unittest.TestCase):
         self.assertGreater(abfragen.catch_chance(45, gen=5), abfragen.catch_chance(45, gen=6))   # drei statt vier Proben
         t = abfragen.catch_table(45, 9)
         self.assertEqual([x["ball"] for x in t], ["Pokéball", "Superball", "Hyperball"])
-        self.assertTrue(all(x["voll"] <= x["rot"] <= x["schlaf"] for x in t))
+        self.assertTrue(all(x["voll"] <= x["rot"] <= x["status"] <= x["schlaf"] for x in t))
+        self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
     def test_tm_und_extras(self):
         from app import abfragen
