@@ -102,7 +102,7 @@ const RADAR_ORDER = [0, 1, 2, 5, 4, 3];
 const statMax = (i) => S.meta?.verteilung?.werte?.[i]?.at(-1) || 255;
 const scale10 = (i, v) => Math.round(Math.min(1, v / statMax(i)) * 10);
 function radar(werte, size = 78, big = false) {
-  const pad = big ? 36 : 10, r = size / 2 - pad, c = size / 2;
+  const pad = big ? 36 : Math.round(size * 0.14), r = size / 2 - pad, c = size / 2;
   const pt = (k, f) => { const a = -Math.PI / 2 + (k * Math.PI) / 3; return [c + Math.cos(a) * r * f, c + Math.sin(a) * r * f]; };
   const xy = (k, f) => pt(k, f).map((x) => x.toFixed(1)).join(",");
   const poly = (f) => RADAR_ORDER.map((_, k) => xy(k, typeof f === "number" ? f : f(k))).join(" ");
@@ -119,8 +119,12 @@ function radar(werte, size = 78, big = false) {
   });
   return s + "</svg>";
 }
-const radarTip = (werte) => "Netzdiagramm: außen = Höchstwert aller Pokémon, Ringe bei 25, 50 und 75 %. Zahlen: Skala 0 bis 10.\n"
-  + RADAR_ORDER.map((i) => `${STAT[i]} ${werte[i]} (${scale10(i, werte[i])}/10, Höchstwert ${statMax(i)})`).join("\n");
+function radarTipHtml(werte) {
+  return `<div class="tt" style="margin-top:0">Netzdiagramm</div><div class="muted">Außen = Höchstwert aller Pokémon, Ringe bei 25, 50 und 75 %</div>
+    <table class="rtip"><thead><tr><th></th><th>Wert</th><th></th><th>Skala</th><th>Höchstwert</th></tr></thead><tbody>${[0, 1, 2, 3, 4, 5].map((i) => `<tr><td>${STAT[i]}</td><td class="num"><b>${werte[i]}</b></td>
+      <td><span class="sbar"><i style="width:${Math.min(100, werte[i] / statMax(i) * 100)}%;background:${statColor(werte[i])}"></i></span></td>
+      <td class="num">${scale10(i, werte[i])}/10</td><td class="num muted">${statMax(i)}</td></tr>`).join("")}</tbody></table>`;
+}
 
 const teamFull = () => S.team.ids.length >= 6;
 const isFav = (id) => S.favs.some((f) => f.id === id);
@@ -135,17 +139,17 @@ function marks(id) {
 }
 function acts(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
-  return `<span class="acts">${inTeam ? `<span class="a team on" data-tip="Im Team">${icon("team")}</span>` : ""}`
+  return `<span class="acts">${inTeam ? `<span class="a team on" data-tip="Im Team">${icon("team")}</span>` : `<span class="a team ph"></span>`}`
     + `<span class="a${fav ? " on" : ""}" data-act="fav" data-id="${id}" data-tip="${fav ? "Favorit; Klick: aus den Favoriten" : "Zu den Favoriten (Kader zum schnellen Tauschen)"}">${icon("fav", fav)}</span>`
     + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${got ? `In deiner Sammlung (${esc(gameName())}); Klick: doch nicht` : "Als gefangen markieren"}">${icon("ball", got)}</span>`
-    + `${teamFull() ? "" : `<span class="a plus" data-act="teamadd" data-id="${id}" data-tip="${inTeam ? "Noch einmal ins Team" : "Ins Team"}">${icon("plus")}</span>`}</span>`;
+    + `${teamFull() ? `<span class="a ph"></span>` : `<span class="a plus" data-act="teamadd" data-id="${id}" data-tip="${inTeam ? "Noch einmal ins Team" : "Ins Team"}">${icon("plus")}</span>`}</span>`;
 }
 function monCard(r) {
   const inTeam = S.team.ids.includes(r.id);
-  return `<a class="mon${inTeam ? " inteam" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="sp">${img(r.id)}${acts(r.id)}</span>
+  return `<a class="mon${inTeam ? " inteam" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="nr">#${r.nr ?? r.art}</span><span class="sp">${img(r.id)}${acts(r.id)}</span>
     <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span></span><span class="ty">${tchips(r.typen)}</span>
-    <span class="s">#${r.nr ?? r.art}${r.legendaer ? " · legendär" : ""}</span><span class="s">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b></span></span>
-    ${radar(r.werte, 92)}</a>`;
+    ${r.legendaer ? `<span class="s">legendär</span>` : ""}<span class="s">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b></span></span>
+    ${radar(r.werte, 100)}</a>`;
 }
 // Marken überall neu zeichnen, ohne die Seite neu aufzubauen
 function redrawMarks() {
@@ -272,12 +276,13 @@ function cellTip(a, v) {
 let tipTimer, cardTimer;
 document.addEventListener("mouseover", (e) => {
   if (e.pointerType === "touch") return;
-  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell]");
+  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats]");
   if (t) {
     clearTimeout(tipTimer);
     tipTimer = setTimeout(() => {
       if (t.dataset.tipType) tip.innerHTML = typeTipHtml(t.dataset.tipType);
       else if (t.dataset.tipCell) tip.innerHTML = cellTip(...t.dataset.tipCell.split(":"));
+      else if (t.dataset.tipStats) tip.innerHTML = radarTipHtml(t.dataset.tipStats.split(",").map(Number));
       else tip.textContent = t.dataset.tip;
       tip.classList.toggle("rich", !t.dataset.tip);
       tip.hidden = !t.isConnected || !tip.textContent.trim();
@@ -294,7 +299,7 @@ document.addEventListener("mouseover", (e) => {
 // Klick vor dem Erscheinen: keine Karte mehr (sonst blieb sie auf der nächsten Seite oben links stehen)
 document.addEventListener("pointerdown", () => { clearTimeout(cardTimer); clearTimeout(tipTimer); card.hidden = true; tip.hidden = true; }, true);
 document.addEventListener("mouseout", (e) => {
-  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell]");
+  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats]");
   if (t && !t.contains(e.relatedTarget)) { clearTimeout(tipTimer); tip.hidden = true; }
   const c = e.target.closest(".mon,[data-hc]");
   if (c && !c.contains(e.relatedTarget)) { clearTimeout(cardTimer); card.hidden = true; }
@@ -377,7 +382,40 @@ document.addEventListener("click", (e) => {
   });
   rows.forEach((r) => tb.appendChild(r));
 });
-const th = (label, tipText = "", noSort = false) => `<th${noSort ? "" : " data-sort"}${tipText ? ` data-tip="${esc(tipText)}"` : ""}>${label}</th>`;
+const th = (label, tipText = "", noSort = false, cls = "") => `<th${noSort ? "" : " data-sort"}${cls ? ` class="${cls}"` : ""}${tipText ? ` data-tip="${esc(tipText)}"` : ""}>${label}</th>`;
+const thc = (label, tipText = "") => th(label, tipText, false, "c");
+// Schadens- und Status-Attacken der Detailseite: dieselben Spalten
+const MVCOLS = `<colgroup><col style="width:20%"><col style="width:86px"><col style="width:78px"><col style="width:58px"><col style="width:50px"><col style="width:64px"><col style="width:160px"><col><col style="width:44px"></colgroup>`;
+// Statuswörter in Kurztexten farbig (schläfert ein, friert ein, paralysiert …)
+const STATUSW = [[/(schläfert ein|schläft|Schlaf\w*)/g, "st-slp"], [/(friert ein|friert|Einfrieren)/g, "st-frz"], [/(paralysiert|Paralyse)/g, "st-par"],
+  [/(verbrennt|Verbrennung)/g, "st-brn"], [/(schwer vergiftet|vergiftet|Vergiftung)/g, "st-psn"], [/(verwirrt|Verwirrung)/g, "st-cnf"], [/(zurückschrecken|schreckt zurück)/g, "st-fln"]];
+const kurzHtml = (s) => STATUSW.reduce((h, [re, c]) => h.replace(re, `<span class="${c}">$1</span>`), esc(s || ""));
+// Art des Fundorts farbig: frei grün, Verzerrung violett, Massenauftreten blau …
+const ARTCLS = {"frei": "fa-frei", "Raum-Zeit-Verzerrung": "fa-rzv", "Baum oder Erzbrocken": "fa-baum", "Massenauftreten": "fa-mass", "Massives Massenauftreten": "fa-mmass"};
+const artCell = (m) => `<span class="fa ${ARTCLS[m] || "fa-fest"}">${esc(m)}</span>`;
+/* Eigene Rückfrage statt confirm() und prompt(): ein kleiner Dialog im Stil der Seite, Enter bestätigt, Esc bricht ab */
+function dialogBox(title, text, okLabel, danger, input) {
+  return new Promise((resolve) => {
+    const dlg = document.createElement("dialog");
+    dlg.className = "ask";
+    dlg.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3>${text ? `<p>${esc(text)}</p>` : ""}
+      ${input ? `<input name="v" type="text" value="${esc(input.value || "")}" aria-label="${esc(input.label)}" placeholder="${esc(input.label)}">` : ""}
+      <div class="bar"><span class="grow"></span><button value="no" type="submit">Abbrechen</button><button value="ok" type="submit" class="${danger ? "danger" : "primary"}">${esc(okLabel)}</button></div></form>`;
+    document.body.append(dlg);
+    const inp = $("input", dlg);
+    dlg.addEventListener("close", () => {
+      const ok = dlg.returnValue === "ok";
+      resolve(input ? (ok && inp.value.trim() ? inp.value.trim() : null) : ok);
+      dlg.remove();
+    });
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close("no"); });
+    dlg.showModal();
+    if (inp) { inp.focus(); inp.select(); } else $("button[value=ok]", dlg).focus();
+    if (inp) inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); dlg.close("ok"); } });
+  });
+}
+const ask = (title, text, okLabel = "OK", danger = false) => dialogBox(title, text, okLabel, danger, null);
+const askText = (title, label, value, okLabel = "OK") => dialogBox(title, "", okLabel, false, {label, value});
 
 /* ------------------------------------------------------------------ Kopf, Reiter, Adresse */
 // „vor 3 Tagen“ zu einer ISO-Zeit
@@ -573,12 +611,12 @@ async function refreshMeta() {
 function encHtml(d) {
   const f = d.fundorte;
   if (d.fundquelle === "PKHeX") {
-    if (!f.length) return `<p class="hint">Kommt in diesem Spiel nicht frei vor (etwa Geschenk, Entwicklung, Tausch oder fester Ort). <a href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">PokéWiki ↗</a></p>`;
+    if (!f.length) return `<p class="hint">Kommt in diesem Spiel nicht frei vor (etwa Geschenk, Entwicklung, Tausch oder fester Ort). <a class="wl" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">PokéWiki</a></p>`;
     const one = (p) => (p.name || "im ganzen Gebiet") + (p.level ? ` (${p.level})` : p.alpha ? ` (Alpha ${p.alpha})` : "");
     const places = (xs) => xs.length <= 6 ? esc(xs.map(one).join(", "))
       : `${esc(xs.slice(0, 4).map(one).join(", "))} <span class="weitere" data-tip="${esc(xs.map(one).join(", "))}">und ${xs.length - 4} weitere</span>`;
     return `<div class="scroll"><table class="sort"><thead><tr>${th("Gebiet")}${th("Stellen")}${th("Art")}${th("Tageszeit")}${th("Wetter")}${th("Level")}${th("Alpha")}</tr></thead><tbody>
-      ${f.map((e) => `<tr><td>${esc(e.ort)} ${wikiLink(e.ort)}${e.karte ? ` <a class="maplink" href="#karte/${e.karte}/${d.id}" data-tip="Spawnpunkte auf der Karte">Karte</a>` : ""}</td><td>${places(e.stellen)}</td><td>${esc(e.methode)}</td>
+      ${f.map((e) => `<tr><td>${wikiLink(e.ort)}${e.karte ? ` <a class="maplink" href="#karte/${e.karte}/${d.id}" data-tip="Spawnpunkte auf der Karte">Karte</a>` : ""}</td><td>${places(e.stellen)}</td><td>${artCell(e.methode)}</td>
         <td>${e.zeit ? `<span data-tip="${esc(`An ${e.punkte} Spawnpunkt${e.punkte === 1 ? "" : "en"}, Anteil bis ${String(e.chance).replace(".", ",")} %`)}">${esc(e.zeit)}</span>` : ""}</td>
         <td>${esc(e.wetter)}</td>
         <td data-s="${parseInt(e.level || e.alpha) || 0}">${esc(e.level || "–")}</td>
@@ -586,8 +624,8 @@ function encHtml(d) {
       <p class="hint">Aus den Spieldaten (PKHeX). Stellen: wo das Pokémon im Gebiet erscheinen kann, mit Level; Alpha-Pokémon sind höher. Tageszeit und Wetter: aus den Spawn-Tabellen (PLA-Live-Map), nur für frei auftauchende Pokémon.</p>`;
   }
   if (f.length) return `<div class="scroll"><table class="sort"><thead><tr>${th("Ort")}${th("Methode")}${th("Level")}${th("Bedingungen")}${th("Edition")}</tr></thead><tbody>
-    ${f.map((e) => `<tr><td>${esc(e.ort)} ${wikiLink(e.ort)}</td><td>${esc(e.methode)}</td><td data-s="${parseInt(e.level) || 0}">${esc(e.level)}</td><td>${esc(e.bedingungen.join(", "))}</td><td>${esc(e.editionen.join(", "))}</td></tr>`).join("")}</tbody></table></div>`;
-  return `<p class="hint">${S.game ? "Die PokéAPI kennt hier keine Fundorte" + (["scarlet-violet", "legends-za"].includes(S.game) ? " (für dieses Spiel liefert sie keine; kommt mit PKHeX und dem PokéWiki-Abruf)" : "") + `. Bis dahin: <a href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Fundorte im PokéWiki ↗</a>` : "Wähle oben ein Spiel."}</p>`;
+    ${f.map((e) => `<tr><td>${wikiLink(e.ort)}</td><td>${esc(e.methode)}</td><td data-s="${parseInt(e.level) || 0}">${esc(e.level)}</td><td>${esc(e.bedingungen.join(", "))}</td><td>${esc(e.editionen.join(", "))}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<p class="hint">${S.game ? "Die PokéAPI kennt hier keine Fundorte" + (["scarlet-violet", "legends-za"].includes(S.game) ? " (für dieses Spiel liefert sie keine; kommt mit PKHeX und dem PokéWiki-Abruf)" : "") + `. Bis dahin: <a class="wl" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Fundorte im PokéWiki</a>` : "Wähle oben ein Spiel."}</p>`;
 }
 
 const gameAreas = () => (S.meta?.spiele || []).find((g) => g.kennung === S.game)?.gebiete || [];
@@ -910,7 +948,7 @@ function moveMove(a, b) {
 }
 // PokéWiki: Suche mit „Seite“, springt bei genauem Treffer direkt auf die Seite (Attacke, Fähigkeit, Ort, Typ)
 const wikiUrl = (q) => `https://www.pokewiki.de/index.php?title=Spezial:Suche&go=Seite&search=${encodeURIComponent(q)}`;
-const wikiLink = (q, label = "↗") => `<a class="wl" href="${esc(wikiUrl(q))}" target="_blank" rel="noopener noreferrer" data-tip="${esc(q)} im PokéWiki">${label}</a>`;
+const wikiLink = (q, label = esc(q)) => `<a class="wl" href="${esc(wikiUrl(q))}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 function backLink() {
   const tab = (FROM.slice(1) || "").split("/")[0];
   const names = {team: "Team", attacken: "Attacken", typen: "Typen", pokemon: "Liste"};
@@ -938,16 +976,16 @@ async function detailView(id, slot = null) {
       ${teamFull() ? (inTeam ? "" : `<span class="hint">Team voll</span>`) : `<button class="${inTeam ? "" : "primary"}" data-act="teamadd" data-id="${d.id}">${inTeam ? "Noch einmal ins Team" : "Ins Team"}</button>`}
       <button data-act="fav" data-id="${d.id}" data-markbtn="fav" class="mark${isFav(d.id) ? " on" : ""}">${markLabel("fav", isFav(d.id))}</button>
       <button data-act="caught" data-id="${d.id}" data-markbtn="gef" class="mark${isCaught(d.id) ? " on" : ""}">${markLabel("gef", isCaught(d.id))}</button>
-      <a href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Im PokéWiki öffnen ↗</a>
+      <a class="btn" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Im PokéWiki öffnen</a>
       ${d.formen.length ? `<span class="hint">Formen:</span>` + d.formen.map((f) => `<a class="btn small" href="#pokemon/${f.id}">${esc(f.name)}</a>`).join("") : ""}</div>
     ${!d.im_spiel && S.game ? `<div class="note warn">In ${esc(gameName())} nicht enthalten.</div>` : ""}
     ${inTeam && S.team.ids.filter((x) => x === id).length > 1 ? `<div class="note info">${esc(d.name)} ist mehrmals im Team; hier geht es um Platz ${DSLOT + 1}.</div>` : ""}
     <div class="cols">
       <div class="box"><div class="head"><div class="pic">${img(d.id, "big", true)}${extrasHtml(d)}</div><div><h2>${esc(d.name)}</h2><div class="muted">#${d.nr ?? d.art} · ${esc(d.kategorie)}</div>
-        <div style="margin-top:4px">${tchips(d.typen)}</div><span data-tip="${esc(radarTip(d.werte))}">${radar(d.werte, 220, true)}</span></div></div>
+        <div style="margin-top:4px">${tchips(d.typen)}</div><span data-tip-stats="${d.werte.join(",")}">${radar(d.werte, 220, true)}</span></div></div>
         <p>${esc(d.text)}</p><div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
         ${moreHtml(d)}
-        ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${esc(a.name)}</b> ${wikiLink(a.name)}${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
+        ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${wikiLink(a.name)}</b>${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
           : S.game === "legends-arceus" ? `<p class="hint">In Legenden: Arceus gibt es keine Fähigkeiten.</p>` : ""}
       </div>
       <div class="stack">
@@ -983,7 +1021,7 @@ function wireExtras(d) {
   const pic = $(".head .pic img");
   $$("[data-pic]").forEach((b) => b.addEventListener("click", () => {
     $$("[data-pic]").forEach((x) => x.classList.toggle("on", x === b));
-    pic.src = b.dataset.pic === "art" ? `artwork/${d.id}.png` : `${b.dataset.pic}/${d.id}`;
+    pic.src = b.dataset.pic === "art" ? `artwork/${d.id}.png?v=2` : `${b.dataset.pic}/${d.id}`;
     pic.classList.toggle("px", b.dataset.pic === "shiny" || b.dataset.pic === "anim");
   }));
   const rb = $("[data-ruf]");
@@ -993,11 +1031,11 @@ function wireExtras(d) {
 function catchHtml(d) {
   const m = d.mehr || {};
   if (!m.fangen) return "";
-  const pc = (v) => String(v).replace(".", ",") + " %";
+  const pc = (v) => `<span style="color:${ramp(Math.sqrt(v / 100))}">${String(v).replace(".", ",")} %</span>`;
   const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
   return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
-    <table class="rows sort"><thead><tr>${th("Ball")}${th("volle KP")}${th("1 KP")}${th("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${th("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
-    <tbody>${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td data-s="${f.voll}">${pc(f.voll)}</td><td data-s="${f.rot}">${pc(f.rot)}</td><td data-s="${f.status ?? ""}">${f.status != null ? pc(f.status) : "–"}</td><td data-s="${f.schlaf}">${pc(f.schlaf)}</td></tr>`).join("")}</tbody></table>
+    <table class="rows sort"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: der beste Fall, etwa dreimal so gut wie volle KP. Die Chance steigt gleichmäßig, je weniger KP übrig sind, ohne Schwellen")}${thc("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${thc("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
+    <tbody>${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}">${pc(f.voll)}</td><td class="c" data-s="${f.rot}">${pc(f.rot)}</td><td class="c" data-s="${f.status ?? ""}">${f.status != null ? pc(f.status) : "–"}</td><td class="c" data-s="${f.schlaf}">${pc(f.schlaf)}</td></tr>`).join("")}</tbody></table>
     <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
       : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p></details>`;
 }
@@ -1048,20 +1086,20 @@ function renderMoves(A, level) {
   const mv = (x) => all[x] || MOVES[x];
   const covered = new Set();
   mine.map(mv).filter((m) => m.klasse !== 1 && m.staerke).forEach((m) => Object.entries(S.chart?.[m.typ] || {}).forEach(([t, f]) => f > 1 && covered.add(t)));
-  const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${esc(m.name)} ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${moveMarks(m)}</td>
-    <td data-s="${tname(m.typ)}">${tchip(m.typ)}</td><td><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="num" data-s="${m.staerke ?? 0}">${powCell(m.staerke)}</td><td class="num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
-    ${status ? "" : `<td class="num" data-s="${m.wertung}"><b style="color:${scoreColor(m.wertung)}">${m.wertung}</b></td>`}<td data-s="${esc(m.wege[0] || "")}">${esc(m.wege.join(", "))}</td><td class="why">${status ? (m.kurz ? `<b>${esc(m.kurz)}</b>` : esc(m.text || "")) : esc((m.kurz ? [m.kurz] : []).concat(m.gruende).join(" · "))}</td>
-    <td>${mine.includes(m.id) ? `<button class="small on" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✓</button>` : mine.length < 4 ? `<button class="small" data-act="mvadd" data-mid="${m.id}" data-tip="In deine Auswahl (4 Plätze)">+</button>` : ""}</td></tr>`;
+  const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"><span${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</span>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${moveMarks(m)}</td>
+    <td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td><td class="c"><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="c num" data-s="${m.staerke ?? 0}">${powCell(m.staerke)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
+    <td class="c num" data-s="${status ? 0 : m.wertung}">${status ? "–" : `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>`}</td><td class="c weg" data-s="${esc(m.wege[0] || "")}">${m.wege.map((w) => esc(w).replace(", Beherrschung", "<br>Beherrschung")).join("<br>")}</td><td class="why">${status ? (m.kurz ? `<b>${kurzHtml(m.kurz)}</b>` : esc(m.text || "")) : (m.kurz ? kurzHtml(m.kurz) + (m.gruende.length ? " · " : "") : "") + esc(m.gruende.join(" · "))}</td>
+    <td class="c">${mine.includes(m.id) ? `<button class="small on" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✓</button>` : mine.length < 4 ? `<button class="small" data-act="mvadd" data-mid="${m.id}" data-tip="In deine Auswahl (4 Plätze)">+</button>` : ""}</td></tr>`;
   const std = (A.standard || []).map((x) => all[x]?.name).filter(Boolean);
   // Deine Auswahl als feste Tabelle mit vier Zeilen: springt nicht, wenn Attacken dazukommen oder gehen
   const mineRow = (i) => {
     const m = mv(mine[i]);
     if (!m) return `<tr class="mvchip empty" data-i="${i}"><td class="grip"></td><td colspan="7" class="hint">Platz ${i + 1}: mit + in der Tabelle wählen</td></tr>`;
     const r = all[m.id];
-    return `<tr class="mvchip" draggable="true" data-i="${i}"><td class="grip" data-tip="Ziehen zum Umsortieren">⋮⋮</td><td>${tchip(m.typ)}</td>
+    return `<tr class="mvchip" draggable="true" data-i="${i}"><td class="grip" data-tip="Ziehen zum Umsortieren">⋮⋮</td><td class="c">${tchip(m.typ)}</td>
       <td${m.text ? ` data-tip="${esc(m.text)}"` : ""}><b>${esc(m.name)}</b>${r ? "" : ` <span class="cls" data-tip="Nicht in der Lernliste dieses Spiels (TM, Lehrer, Trainingsgelände)">beigebracht</span>`}</td>
-      <td><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="num">${powCell(m.staerke)}</td><td class="num">${accCell(m.genauigkeit)}</td>
-      <td class="num">${r?.wertung ? `<b style="color:${scoreColor(r.wertung)}">${r.wertung}</b>` : ""}</td>
+      <td class="c"><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="c num">${powCell(m.staerke)}</td><td class="c num">${accCell(m.genauigkeit)}</td>
+      <td class="c num">${r?.wertung ? `<b style="color:${scoreColor(r.wertung)}">${r.wertung}</b>` : ""}</td>
       <td><button class="link" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✕</button></td></tr>`;
   };
   $("#mbox").innerHTML = `<h2>Attacken${A.spiel_name ? " in " + esc(A.spiel_name) : ""}</h2>
@@ -1071,7 +1109,7 @@ function renderMoves(A, level) {
     <div class="cols">
       <div><h3>Deine Auswahl${inTeam ? ` (Team, Platz ${DSLOT + 1})` : ""}</h3>
         <table class="mine"><thead><tr><th></th>${[["typ", "Typ"], ["name", "Attacke"], ["klasse", "Klasse"], ["staerke", "Stärke"], ["genauigkeit", "Gen."], ["wertung", "Wertung"]]
-          .map(([k, n]) => `<th data-ms="${k}"${MSORT.k === k ? ` data-dir="${MSORT.dir}"` : ""} data-tip="Auswahl danach sortieren (ändert die Reihenfolge)">${n}</th>`).join("")}<th></th></tr></thead>
+          .map(([k, n]) => `<th data-ms="${k}"${k === "name" ? "" : ` class="c"`}${MSORT.k === k ? ` data-dir="${MSORT.dir}"` : ""} data-tip="Auswahl danach sortieren (ändert die Reihenfolge)">${n}</th>`).join("")}<th></th></tr></thead>
           <tbody>${[0, 1, 2, 3].map(mineRow).join("")}</tbody></table>
         ${mine.length ? `<p class="hint">Trifft sehr effektiv: ${covered.size ? [...covered].map(tchip).join(" ") : "nichts"} (${covered.size} von ${Object.keys(S.chart || {}).length} Typen)</p>`
           : `<p class="hint">Mit + in der Tabelle wählen. ${inTeam ? "Die Auswahl zählt in der Team-Bewertung." : "Gespeichert in diesem Browser; im Team zählt sie für die Bewertung."}</p>`}
@@ -1083,9 +1121,9 @@ function renderMoves(A, level) {
     </div>
     <h3>Schadens-Attacken nach Wertung</h3>
     <p class="hint">Wertung = Stärke × Genauigkeit × Eigentyp-Bonus × passender Angriffswert, mit Zu- und Abschlägen (Aussetzen, Anlauf, Rückstoß, Werte senken, Vorrang). Spalten zum Sortieren anklicken; deine Auswahl ist hinterlegt.</p>
-    <div class="scroll"><table class="sort"><thead><tr>${th("Attacke")}${th("Typ")}${th("Klasse")}${th("Stärke")}${th("Gen.", "Genauigkeit in Prozent; – trifft immer")}${th("Wertung")}${th("Weg", "Wie das Pokémon die Attacke lernt")}${th("Gründe", "", true)}<th></th></tr></thead>
+    <div class="scroll"><table class="sort fixed mvt">${MVCOLS}<thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("Wertung")}${thc("Weg", "Wie das Pokémon die Attacke lernt")}${th("Gründe", "", true)}<th></th></tr></thead>
       <tbody>${A.attacken.map((m) => mrow(m)).join("") || `<tr><td colspan="9" class="hint">Keine Lernliste.</td></tr>`}</tbody></table></div>
-    ${A.status.length ? `<details open><summary>Status-Attacken (${A.status.length})</summary><div class="scroll"><table class="sort"><thead><tr>${th("Attacke")}${th("Typ")}${th("Klasse")}${th("Stärke")}${th("Gen.")}${th("Weg")}${th("Wirkung", "", true)}<th></th></tr></thead>
+    ${A.status.length ? `<details open><summary>Status-Attacken (${A.status.length})</summary><div class="scroll"><table class="sort fixed mvt">${MVCOLS}<thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.")}${thc("Wertung", "Status-Attacken haben keine Wertung")}${thc("Weg")}${th("Wirkung", "", true)}<th></th></tr></thead>
       <tbody>${A.status.map((m) => mrow(m, true)).join("")}</tbody></table></div></details>` : ""}`;
   $("#lvl").addEventListener("change", async (e) => {
     const v = e.target.value;
@@ -1284,10 +1322,10 @@ async function teamView() {
   $("#tleg").addEventListener("change", (e) => { S.tleg = e.target.checked; store.set("tleg", S.tleg); teamRefresh(); });
   $("#tsort").addEventListener("change", (e) => { if (e.target.value) sortTeam(e.target.value); else S.tsort = ""; });
   $("#tgef").addEventListener("change", (e) => { S.tfilter.nur = e.target.checked ? "gef" : ""; store.set("tfilter", S.tfilter); teamView(); });
-  $("#saved").addEventListener("change", (e) => {
+  $("#saved").addEventListener("change", async (e) => {
     const tt = TEAMS.find((x) => x.id === +e.target.value);
     if (!tt) return;
-    if (S.team.dirty && !confirm(`„${S.team.name}“ hat ungespeicherte Änderungen. Verwerfen und „${tt.name}“ laden?`)) { e.target.value = ""; return; }
+    if (S.team.dirty && !await ask(S.team.name ? `„${S.team.name}“ hat ungespeicherte Änderungen.` : "Das Team hat ungespeicherte Änderungen.", `Verwerfen und „${tt.name}“ laden?`, "Verwerfen und laden")) { e.target.value = ""; return; }
     loadTeam(tt);
   });
   $("#preset").addEventListener("change", (e) => {
@@ -1468,13 +1506,13 @@ async function movesView() {
       (!q || m.name.toLowerCase().includes(q)) && (!f.min || (m.staerke || 0) >= +f.min) && (!f.prio || m.prio > 0) &&
       (f.kontakt === "" || m.merkmale.includes("contact") === (f.kontakt === "1")));
     $("#mcnt").textContent = `${xs.length} von ${rows.length} Attacken in ${gameName()}`;
-    $("#mv").innerHTML = `<div class="box scroll"><table class="sort fixed" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:62px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${th("Typ")}${th("Klasse")}${th("Stärke")}${th("Gen.", "Genauigkeit in Prozent; – trifft immer")}${th("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
-      ${th("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${th("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${th("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${th("Gen", "Generation, seit der es die Attacke gibt")}${th("Wirkung", "Kurz-Info aus den Spieldaten; die ganze Beschreibung beim Hovern über die Zeile", true)}</tr></thead><tbody>
-      ${xs.map((m) => `<tr><td data-s="${esc(m.name)}"><b${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${esc(m.name)}</b> ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
-        <td><span class="cls">${CLS[m.klasse]}</span></td><td class="num" data-s="${m.staerke || 0}">${powCell(m.staerke)}</td><td class="num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
-        <td class="num">${m.ap ?? ""}</td><td class="num">${m.prio ? `<span data-tip="${m.prio > 0 ? `Vorrang +${m.prio}: kommt vor normalen Attacken` : `Vorrang ${m.prio}: kommt nach normalen Attacken`}">${m.prio > 0 ? "+" : ""}${m.prio}</span>` : ""}</td>
-        <td class="num" data-s="${m.wertung}"${m.gruende.length ? ` data-tip="${esc(m.gruende.join("\n"))}"` : ""}>${m.wertung ? `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>` : ""}</td>
-        <td class="num">${m.lernen || ""}</td><td class="num">${m.gen || ""}</td><td class="kurz">${esc(m.kurz || (m.klasse === 1 ? m.text || "" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
+    $("#mv").innerHTML = `<div class="box scroll"><table class="sort fixed lines" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:62px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
+      ${thc("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${thc("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${thc("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${thc("Gen", "Generation, seit der es die Attacke gibt")}${th("Wirkung", "Kurz-Info aus den Spieldaten; die ganze Beschreibung beim Hovern über die Zeile", true)}</tr></thead><tbody>
+      ${xs.map((m) => `<tr><td data-s="${esc(m.name)}"><b${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</b>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
+        <td class="c"><span class="cls">${CLS[m.klasse]}</span></td><td class="c num" data-s="${m.staerke || 0}">${powCell(m.staerke)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
+        <td class="c num">${m.ap ?? ""}</td><td class="c num">${m.prio ? `<span data-tip="${m.prio > 0 ? `Vorrang +${m.prio}: kommt vor normalen Attacken` : `Vorrang ${m.prio}: kommt nach normalen Attacken`}">${m.prio > 0 ? "+" : ""}${m.prio}</span>` : ""}</td>
+        <td class="c num" data-s="${m.wertung}"${m.gruende.length ? ` data-tip="${esc(m.gruende.join("\n"))}"` : ""}>${m.wertung ? `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>` : ""}</td>
+        <td class="c num">${m.lernen || ""}</td><td class="c num">${m.gen || ""}</td><td class="kurz">${kurzHtml(m.kurz || (m.klasse === 1 ? m.text || "" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
   };
   const load = async () => {
     const d = await api("/api/attacken?" + qs({spiel: S.game, lernbar: f.lernbar ? 1 : 0}));
@@ -1651,21 +1689,21 @@ async function itemsView() {
     <div class="scroll" id="itembox"></div>
     <p class="hint">Quelle: PokéAPI. Englisch, wo es keinen deutschen Text gibt. Bilder lädt der Abgleich.</p></div>`;
   header();
-  const num = (v) => `<td class="num" data-s="${v ?? -1}">${v || "–"}</td>`;
+  const num = (v) => `<td class="c num" data-s="${v ?? -1}">${v || "–"}</td>`;
   const name = (x) => `<td><span class="iname">${itemImg(x)}<b>${esc(x.name)}</b></span></td>`;
   const text = (x) => `<td class="why"${x.englisch ? ` lang="en"` : ""}>${esc(x.text)}</td>`;
   // Spalten je Tasche: [Kopf, Breite, Zelle]
   const COLS = {
-    "": [[th("Name"), "24%", name], [th("Tasche"), "11%", (x) => `<td>${esc(x.tasche)}</td>`], [th("Art"), "15%", (x) => `<td>${esc(x.art)}</td>`],
-         [th("Beschreibung", "", true), "", text], [th("Preis"), "8%", (x) => num(x.preis)]],
-    wirkung: [[th("Name"), "22%", name], [th("Art"), "13%", (x) => `<td>${esc(x.art)}</td>`],
+    "": [[th("Name"), "24%", name], [thc("Preis"), "8%", (x) => num(x.preis)], [th("Tasche"), "11%", (x) => `<td>${esc(x.tasche)}</td>`], [th("Art"), "15%", (x) => `<td>${esc(x.art)}</td>`],
+         [th("Beschreibung", "", true), "", text]],
+    wirkung: [[th("Name"), "22%", name], [thc("Preis"), "8%", (x) => num(x.preis)], [th("Art"), "13%", (x) => `<td>${esc(x.art)}</td>`],
               [th("Wirkung", "Aus dem Kurztext der PokéAPI gelesen; leer, wo er sich nicht sicher lesen lässt"), "21%", (x) => `<td data-s="${x.wert ?? -1}">${esc(x.wirkung)}</td>`],
-              [th("Beschreibung", "", true), "", text], [th("Preis"), "8%", (x) => num(x.preis)]],
-    Maschinen: [[th("Name"), "13%", name], [th("Attacke"), "17%", (x) => `<td><b>${esc(x.attacke?.name || "")}</b></td>`],
-                [th("Typ"), "9%", (x) => `<td data-s="${x.attacke ? esc(tname(x.attacke.typ)) : ""}">${x.attacke ? tchip(x.attacke.typ) : ""}</td>`],
-                [th("Klasse"), "9%", (x) => `<td>${esc(MKLASSE[x.attacke?.klasse] || "")}</td>`],
-                [th("Stärke"), "7%", (x) => num(x.attacke?.staerke)], [th("Gen."), "6%", (x) => num(x.attacke?.genauigkeit)], [th("AP"), "6%", (x) => num(x.attacke?.ap)],
-                [th("Wirkung", "", true), "", (x) => `<td class="why">${esc(x.attacke?.kurz || x.text)}</td>`], [th("Preis"), "7%", (x) => num(x.preis)]],
+              [th("Beschreibung", "", true), "", text]],
+    Maschinen: [[th("Name"), "16%", name], [thc("Preis"), "7%", (x) => num(x.preis)], [th("Attacke"), "15%", (x) => `<td><b>${esc(x.attacke?.name || "")}</b></td>`],
+                [thc("Typ"), "9%", (x) => `<td class="c" data-s="${x.attacke ? esc(tname(x.attacke.typ)) : ""}">${x.attacke ? tchip(x.attacke.typ) : ""}</td>`],
+                [thc("Klasse"), "8%", (x) => `<td class="c">${esc(MKLASSE[x.attacke?.klasse] || "")}</td>`],
+                [thc("Stärke"), "6%", (x) => num(x.attacke?.staerke)], [thc("Gen."), "6%", (x) => num(x.attacke?.genauigkeit)], [thc("AP"), "5%", (x) => num(x.attacke?.ap)],
+                [th("Wirkung", "", true), "", (x) => `<td class="why">${x.attacke?.kurz ? kurzHtml(x.attacke.kurz) : esc(x.text)}</td>`]],
   };
   const draw = () => {
     const ql = q.toLowerCase();
@@ -1676,11 +1714,10 @@ async function itemsView() {
     const xs = inPocket.filter((x) => (!art || x.art === art) && (!ql || x.name.toLowerCase().includes(ql) || x.text.toLowerCase().includes(ql)
       || (x.attacke?.name || "").toLowerCase().includes(ql)));
     const kind = pocket === "Maschinen" ? "Maschinen" : pocket === "Medizin" || pocket === "Bälle" ? "wirkung" : "";
-    const cols = COLS[kind].filter((c, i) => !(pocket && !kind && i === 1));      // in einer Tasche braucht es die Spalte Tasche nicht
+    const cols = COLS[kind].filter((c, i) => !(pocket && !kind && i === 2));      // in einer Tasche braucht es die Spalte Tasche nicht
     $("#itemn").textContent = `${xs.length} Items`;
     $("#itembox").innerHTML = `<table class="rows sort fixed items"><colgroup>${cols.map((c) => `<col${c[1] ? ` style="width:${c[1]}"` : ""}>`).join("")}</colgroup>
-      <thead><tr>${cols.map((c) => c[0]).join("")}</tr></thead><tbody>${xs.slice(0, 400).map((x) => `<tr${x.unfertig ? ` class="odd"` : ""}>${cols.map((c) => c[2](x)).join("")}</tr>`).join("")
-      + (xs.length > 400 ? `<tr><td colspan="${cols.length}" class="hint">… ${xs.length - 400} weitere, Suche oder Art eingrenzen</td></tr>` : "")
+      <thead><tr>${cols.map((c) => c[0]).join("")}</tr></thead><tbody>${xs.map((x) => `<tr${x.unfertig ? ` class="odd"` : ""}>${cols.map((c) => c[2](x)).join("")}</tr>`).join("")
       + (xs.length ? "" : `<tr><td colspan="${cols.length}" class="hint">Nichts gefunden.</td></tr>`)}</tbody></table>`;
     $$("#itemseg button").forEach((x) => x.classList.toggle("on", x.dataset.t === pocket));
   };
@@ -1781,7 +1818,7 @@ async function settingsView() {
     let body;
     try { body = JSON.parse(await file.text()); } catch (x) { $("#restmsg").innerHTML = `<div class="note stop">Keine lesbare JSON-Datei.</div>`; return; }
     const n = (k) => (body[k] || []).length;
-    if (!confirm(`Sicherung vom ${String(body.exportiert || "?").slice(0, 10)} einlesen?\n${n("teams")} Teams, ${n("favoriten")} Favoriten, ${n("gefangen")} in der Sammlung, ${n("entscheidungen")} Entscheidungen.\n\nDas ersetzt alle eigenen Daten.`)) return;
+    if (!await ask(`Sicherung vom ${String(body.exportiert || "?").slice(0, 10)} einlesen?`, `${n("teams")} Teams, ${n("favoriten")} Favoriten, ${n("gefangen")} in der Sammlung, ${n("entscheidungen")} Entscheidungen. Das ersetzt alle eigenen Daten.`, "Einlesen", true)) return;
     try {
       const r = await api("/api/restore", body);
       $("#restmsg").innerHTML = `<div class="note go">Eingelesen: ${r.teams} Teams, ${r.favoriten} Favoriten, ${r.gefangen} in der Sammlung, ${r.entscheidungen} Entscheidungen.</div>`;
@@ -1869,12 +1906,12 @@ document.addEventListener("click", async (e) => {
       ids.forEach((x, i) => fillStandard(i));
     } else if (act === "tclear") { Object.assign(S.team, {ids: [], fest: [], details: []}); teamChanged(); teamView(); }
     else if (act === "tnew") {
-      if (S.team.dirty && !confirm(`„${S.team.name}“ hat ungespeicherte Änderungen. Trotzdem ein neues Team beginnen?`)) return;
+      if (S.team.dirty && !await ask(S.team.name ? `„${S.team.name}“ hat ungespeicherte Änderungen.` : "Das Team hat ungespeicherte Änderungen.", "Trotzdem ein neues Team beginnen? Die Änderungen gehen verloren.", "Neues Team")) return;
       S.team = normTeam({spiel: S.game});
       store.set("team", S.team); dock(); location.hash.startsWith("#team") ? teamView() : (location.hash = "#team");
     } else if (act === "tsave" && S.team.tid) { await saveToServer(); dock(); if (location.hash.startsWith("#team")) teamView(); }
     else if (act === "tsave" || act === "tsaveas" || act === "trename") {
-      const name = prompt(act === "trename" ? "Neuer Name" : "Name des Teams", act === "tsaveas" && S.team.tid ? S.team.name + " (Kopie)" : S.team.name || "Team " + gameName());
+      const name = await askText(act === "trename" ? "Team umbenennen" : "Team speichern", "Name des Teams", act === "tsaveas" && S.team.tid ? S.team.name + " (Kopie)" : S.team.name || "Team " + gameName(), act === "trename" ? "Umbenennen" : "Speichern");
       if (!name) return;
       if (act === "trename") { S.team.name = name; await saveToServer(name); }
       else await saveToServer(name, act === "tsaveas");
@@ -1884,7 +1921,7 @@ document.addEventListener("click", async (e) => {
       if (tt) loadTeam(tt); else { S.team.dirty = false; store.set("team", S.team); }
       dock(); if (!location.hash.startsWith("#team")) route();
     } else if (act === "tdel") {
-      if (!confirm(`Team „${S.team.name}“ löschen?`)) return;
+      if (!await ask(`Team „${S.team.name}“ löschen?`, "Das gespeicherte Team geht verloren; die Plätze bleiben als ungespeichertes Team stehen.", "Löschen", true)) return;
       await api("/api/teams/loeschen", {id: S.team.tid});
       S.team = normTeam({ids: S.team.ids, fest: S.team.fest, details: S.team.details});
       store.set("team", S.team); dock(); teamView();
