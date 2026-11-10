@@ -926,20 +926,31 @@ def type_chart(p):
 
 def item_list(p):
     """Items im Spiel, sortiert nach Tasche und Name. Hat die PokéAPI Beschreibungen für das Spiel, sind das genau seine
-    Items; sonst die Items der Generation laut Spielindex, mit Hinweis (zu viele, aber keins fehlt)."""
+    Items; sonst die Items der Generation laut Spielindex, mit Hinweis (zu viele, aber keins fehlt). Maschinen tragen die
+    Attacke des Spiels, Items mit Bild die Marke `bild`; unfertige Einträge (Platzhalter im Text) sind markiert."""
     D = data()
     if not D:
         return {}
     g, gen, _ = game_of(D, p.get("spiel"))
+    vg = g["id"] if g else None
     con = db.game()
     try:
         try:
-            rows = con.execute("SELECT id, kennung, name, tasche, text, sprache, preis, gens, spiele FROM item").fetchall()
+            rows = con.execute("SELECT * FROM item").fetchall()
         except Exception:
             rows = []
+        tms = {}
+        if vg:
+            try:
+                for r in con.execute("SELECT m.item_id, a.name, a.typ, a.klasse, a.staerke, a.genauigkeit, a.ap, a.kurz FROM machines m "
+                                     "JOIN attacke a ON a.id = m.move_id WHERE m.version_group_id = ?", (vg,)):
+                    tms[r[0]] = {"name": r[1], "typ": r[2], "klasse": r[3], "staerke": r[4], "genauigkeit": r[5], "ap": r[6], "kurz": r[7] or ""}
+            except Exception:
+                tms = {}
     finally:
         con.close()
-    vg = g["id"] if g else None
+    folder = os.path.join(db.data_dir(), "itembild")
+    have = {os.path.splitext(x)[0] for x in os.listdir(folder)} if os.path.isdir(folder) else set()
     exact = bool(vg) and sum(1 for r in rows if vg in json.loads(r["spiele"] or "[]")) >= 50
     out = []
     for r in rows:
@@ -947,8 +958,16 @@ def item_list(p):
             continue
         if g and not exact and gen not in json.loads(r["gens"] or "[]"):
             continue
-        out.append({"id": r["id"], "name": r["name"], "tasche": r["tasche"], "text": r["text"], "englisch": r["sprache"] == "en",
-                    "preis": r["preis"]})
+        if g and not exact and not tms and r["tasche"] == "Maschinen":       # Spiel ohne Maschinen (etwa Legenden: Arceus)
+            continue
+        keys = r.keys()
+        e = {"id": r["id"], "name": r["name"], "tasche": r["tasche"], "text": r["text"], "englisch": r["sprache"] == "en",
+             "preis": r["preis"], "art": r["art"] if "art" in keys else "", "wirkung": r["wirkung"] if "wirkung" in keys else "",
+             "wert": r["wert"] if "wert" in keys else None, "unfertig": bool(r["unfertig"]) if "unfertig" in keys else "[VAR" in (r["text"] or ""),
+             "bild": str(r["id"]) in have}
+        if r["id"] in tms:
+            e["attacke"] = tms[r["id"]]
+        out.append(e)
     order = list(importer.TASCHEN.values())
     out.sort(key=lambda x: (order.index(x["tasche"]) if x["tasche"] in order else 99, x["name"].lower()))
     note = "" if exact or not g else (f"Die PokéAPI hat für dieses Spiel keine eigene Item-Liste; gezeigt sind alle Items "

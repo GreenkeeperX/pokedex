@@ -214,7 +214,45 @@ IMAGES = {"sprites": SPRITE_RAW, "artwork": SPRITE_RAW + "other/official-artwork
 # Extras: schillernde und animierte Sprites (Showdown-Stil), Rufe (PokéAPI-Repos); Endung und Kennung der Datei
 EXTRAS = {"shiny": (SPRITE_RAW + "shiny/", ".png"), "shinyart": (SPRITE_RAW + "other/official-artwork/shiny/", ".png"),
           "anim": (SPRITE_RAW + "other/showdown/", ".gif"),
-          "rufe": ("https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/", ".ogg")}
+          "rufe": ("https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/", ".ogg"),
+          # Item-Bilder: Datei heißt wie die Kennung des Items, gespeichert unter der Nummer
+          "itembild": (SPRITE_RAW.replace("/pokemon/", "/items/"), ".png")}
+MEDIA_LABEL = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernde Sprites", "shinyart": "Schillernde Artworks",
+               "anim": "Animierte Sprites", "rufe": "Rufe", "itembild": "Item-Bilder"}
+
+
+def media_ids(kind):
+    """Was es für eine Bildart geben sollte: {Nummer: Name der Datei bei der Quelle}. Items ohne Maschinen (die haben kein
+    eigenes Bild) und ohne unfertige Einträge."""
+    con = db.game()
+    try:
+        if kind == "itembild":
+            try:
+                return {r[0]: r[1] for r in con.execute("SELECT id, kennung FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 ORDER BY id")}
+            except Exception:           # Datenbank noch ohne die Spalten von 0.8.0
+                return {}
+        return {r[0]: str(r[0]) for r in con.execute("SELECT id FROM form ORDER BY id")}
+    finally:
+        con.close()
+
+
+def media_inventory():
+    """Je Bildart: wie viele Dateien da sind und welche Nummern fehlen (für den Download der Spieldaten)."""
+    out = {}
+    for kind in list(IMAGES) + list(EXTRAS):
+        folder = os.path.join(db.data_dir(), kind)
+        have = {os.path.splitext(x)[0] for x in os.listdir(folder)} if os.path.isdir(folder) else set()
+        want = media_ids(kind)
+        gone = store.load_json(f"{kind}_fehlen.json", {})
+        missing = [i for i in want if str(i) not in have]
+        out[kind] = {"name": MEDIA_LABEL[kind], "erwartet": len(want), "vorhanden": len(want) - len(missing),
+                     "fehlen": [i for i in missing if str(i) not in gone],
+                     "gibt_es_nicht": [i for i in missing if str(i) in gone]}
+    tiles = map_tiles()
+    folder = os.path.join(db.data_dir(), "karten")
+    lost = [f"{k}/{z}-{x}-{y}" for k, z, x, y in tiles if not os.path.isfile(os.path.join(folder, k, f"{z}-{x}-{y}.png"))]
+    out["karten"] = {"name": "Kartenkacheln", "erwartet": len(tiles), "vorhanden": len(tiles) - len(lost), "fehlen": lost, "gibt_es_nicht": []}
+    return out
 
 
 def file_kind(body):
@@ -236,22 +274,18 @@ def _images(kind, log, limit=SPRITES_MAX):
     prefix, ext = EXTRAS.get(kind, (IMAGES.get(kind), ".png"))
     folder = os.path.join(db.data_dir(), kind)
     os.makedirs(folder, exist_ok=True)
-    con = db.game()
-    try:
-        ids = [r[0] for r in con.execute("SELECT id FROM form ORDER BY id")]
-    finally:
-        con.close()
+    names = media_ids(kind)
+    ids = list(names)
     miss_file = f"{kind}_fehlen.json"
     miss = store.load_json(miss_file, {})
     cutoff = _iso(now() - timedelta(days=SPRITE_MISS_DAYS))
     have = {os.path.splitext(x)[0] for x in os.listdir(folder)}
     todo = [i for i in ids if str(i) not in have and (miss.get(str(i)) or "") < cutoff]
     got = absent = 0
-    label = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernde Sprites", "shinyart": "Schillernde Artworks", "anim": "Animierte Sprites",
-             "rufe": "Rufe"}[kind]
+    label = MEDIA_LABEL[kind]
     for n, i in enumerate(todo[:limit]):
         STATE.update(step=label, done=n, total=min(len(todo), limit))
-        body = src.get(f"{prefix}{i}{ext}", raw=True, absent=(404,))
+        body = src.get(f"{prefix}{names[i]}{ext}", raw=True, absent=(404,))
         if body is None:
             if src.stopped:
                 break
@@ -378,7 +412,7 @@ def _run(by_hand, force):
         if db.has_data() and settings["sprites"] and not _resting(st, "extras", at):
             total = None
             for kind in EXTRAS:
-                STATE["step"] = kind
+                STATE["step"] = MEDIA_LABEL[kind]
                 res = _images(kind, log)
                 total = res if total is None else dict(res, **{k: total[k] + res[k] for k in ("requests", "errors", "neu", "fehlen", "offen")})
                 if res["blocked"]:

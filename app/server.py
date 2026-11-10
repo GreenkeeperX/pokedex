@@ -1,6 +1,7 @@
 """Kleiner Webserver: liefert die Oberfläche, die Sprites und eine JSON-Schnittstelle. Wie im VR-Navigator."""
 import datetime
 import gzip
+import io
 import ipaddress
 import json
 import os
@@ -9,9 +10,10 @@ import sys
 import threading
 import traceback
 import urllib.parse
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, db, sources
+from . import abfragen, abruf, aufgaben, db, sources, store
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -247,6 +249,49 @@ def delete_team(body):
     return {"ok": True}
 
 
+def spieldaten():
+    """Alle Spieldaten als ZIP: die gebaute Datenbank, Stand und Protokoll des Abgleichs, Einstellungen und eine Liste,
+    welche Bilder, Rufe und Kartenkacheln da sind und welche fehlen. Ohne die Medien selbst und ohne eigene Daten."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        if db.has_data():
+            z.write(os.path.join(db.data_dir(), "pokeapi.db"), "pokeapi.db")
+        z.writestr("abgleich.json", json.dumps(store.load_json("sync.json", {}), ensure_ascii=False, indent=1))
+        z.writestr("einstellungen.json", json.dumps(abruf.load_settings(), ensure_ascii=False, indent=1))
+        z.writestr("medien.json", json.dumps(abruf.media_inventory(), ensure_ascii=False, indent=1))
+        z.writestr("zu-erledigen.json", json.dumps(abfragen.pruefung(), ensure_ascii=False, indent=1))
+        z.writestr("LIESMICH.txt", SPIELDATEN_TEXT.format(version=sources.VERSION, tag=_now()[:10]))
+    return buf.getvalue()
+
+
+SPIELDATEN_TEXT = """Pokédex {version}, Spieldaten vom {tag}
+
+pokeapi.db          SQLite-Datenbank mit allen Spieldaten (PokéAPI, Showdown, PKHeX, Spawnpunkte, gepflegte Ergänzungen)
+abgleich.json       Stand und Protokoll des letzten Abgleichs
+einstellungen.json  Zeitplan und Bilder-Schalter
+medien.json         je Bildart: erwartet, vorhanden, fehlende Nummern, bei der Quelle nicht vorhanden
+zu-erledigen.json   Abweichungen zwischen PokéAPI und Showdown mit der Entscheidung dazu
+
+Nicht enthalten: die Bilder, Rufe und Kartenkacheln selbst und eigene Daten (Teams, Favoriten, Gefangene);
+die stehen in der Sicherung.
+"""
+
+
+def answer(body):
+    """Antwort auf den Auftrag aus „Zu erledigen“: mit dry nur Vorschau, sonst Entscheidungen übernehmen."""
+    res = aufgaben.parse(str(body.get("text") or ""), abfragen.pruefung())
+    if not body.get("dry"):
+        con = db.user()
+        try:
+            for r in res["uebernehmen"]:
+                con.execute("INSERT OR REPLACE INTO entscheidung VALUES (?, ?, ?, ?)", ("pruefung", r["key"], r["wert"], _now()))
+            con.commit()
+        finally:
+            con.close()
+        res["gespeichert"] = len(res["uebernehmen"])
+    return res
+
+
 def decide(body):
     art = str(body.get("art") or "")
     key = str(body.get("schluessel") or "")[:200]
@@ -349,7 +394,7 @@ class Handler(BaseHTTPRequestHandler):
                         break
                 else:
                     self._send(404, {"error": "kein Bild"})
-            elif m := re.fullmatch(r"/(shiny|shinyart|anim|rufe)/(\d{1,6})", path):
+            elif m := re.fullmatch(r"/(shiny|shinyart|anim|rufe|itembild)/(\d{1,6})", path):
                 folder = os.path.join(db.data_dir(), m.group(1))
                 f = next((os.path.join(folder, m.group(2) + e) for e in (".png", ".gif", ".mp3", ".ogg")
                           if os.path.isfile(os.path.join(folder, m.group(2) + e))), None)
@@ -393,6 +438,11 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/export":
                 day = _now()[:10]
                 self._send(200, export(), extra={"Content-Disposition": f'attachment; filename="pokedex-daten-{day}.json"'})
+            elif path == "/api/spieldaten":
+                self._send(200, spieldaten(), "application/zip",
+                           {"Content-Disposition": f'attachment; filename="pokedex-spieldaten-{_now()[:10]}.zip"'})
+            elif path == "/api/aufgabe":
+                self._send(200, aufgaben.task(abfragen.pruefung()))
             elif path == "/api/status":
                 self._send(200, abruf.status())
             elif path == "/api/diag":
@@ -421,6 +471,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/team/gefangen": abfragen.team_caught,
         "/api/restore": restore,
         "/api/entscheidung": decide,
+        "/api/antwort": answer,
         "/api/einstellungen": abruf.save_settings,
         "/api/abgleich": lambda b: {"started": abruf.start(force=bool(b.get("neu")))},
         "/api/diag": lambda b: {"started": start_diag()},

@@ -18,7 +18,7 @@ import sqlite3
 
 from . import showdown
 
-VERSION = "6"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "7"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -242,7 +242,8 @@ def move_short(cat, ailment, ail_chance, stat_chance, changes, healing, drain, t
     return " · ".join(parts)
 
 
-def _derive_attacke(con, sd_moves):
+def _derive_attacke(con, sd_moves, kurz_extra=None):
+    kurz_extra = kurz_extra or {}
     names = _names(con, "move_names", "move_id")
     meta = {}
     if _has(con, "move_meta"):
@@ -268,6 +269,7 @@ def _derive_attacke(con, sd_moves):
             continue
         m = meta.get(mid, (None,) * 10)
         kurz = move_short(m[6], m[7], m[8], m[9], changes.get(mid), m[3], m[2], targets.get(mid), cls == 1) if m[6] is not None else ""
+        kurz = kurz or str(kurz_extra.get(ident) or "")        # gepflegt in extra/attacken_kurz.json, wo die Metadaten nichts hergeben
         sd = sd_moves.get(showdown.sd_id(ident), {})
         flags = sorted(f for f in (sd.get("flags") or {}) if f in SD_FLAGS)
         hits = sd.get("multihit")
@@ -501,6 +503,64 @@ ITEM_SUFFIX = ((re.compile(r"^la[a-z]+-ball$"), "Hisui"), (re.compile(r"--letsgo
                (re.compile(r"--pikachu$"), "Pikachu"), (re.compile(r"--eevee$"), "Evoli"))
 
 
+# Art eines Items: Kategorie der PokéAPI auf Deutsch
+ITEM_ART = {1: "Kampf-Verstärker", 2: "FP senken", 3: "Medizin", 4: "Sonstige Beere", 5: "Beere für die Not", 6: "Heilbeere mit Geschmack",
+            7: "Beere gegen Typ", 8: "Backzutat", 9: "Sammelstück", 10: "Entwicklung", 11: "Erkundung", 12: "Getragenes Item",
+            13: "Wahl-Item", 14: "FP-Training", 15: "Getragenes Item mit Nachteil", 16: "Training", 17: "Tafel", 18: "Nur für eine Art",
+            19: "Typ-Verstärker", 20: "Ereignis", 21: "Spielablauf", 22: "Handlung", 24: "Wertsache", 25: "Brief", 26: "Nährstoff",
+            27: "Heilung", 28: "AP-Heilung", 29: "Beleber", 30: "Statusheilung", 32: "Mulch", 33: "Spezialball", 34: "Standardball",
+            35: "Pokédex", 36: "Schal", 37: "Maschine", 38: "Flöte", 39: "Aprikoko-Ball", 40: "Aprikoko", 41: "Datenkarte",
+            42: "Juwel", 43: "Wundereinsatz", 44: "Mega-Stein", 45: "Erinnerung", 46: "Z-Kristall", 47: "Bonbon für eine Art",
+            48: "Fangbonus", 49: "Dyna-Kristall", 50: "Minze", 51: "Curry-Zutat", 52: "Tera-Stück", 53: "Sandwich-Zutat",
+            54: "TM-Material", 55: "Picknick"}
+ODD_TEXT = "[VAR"           # Platzhalter aus den Spieltexten: unfertiger Eintrag
+_CURE = (("poison", "Gift"), ("burn", "Verbrennung"), ("freez", "Einfrieren"), ("sleep", "Schlaf"), ("paralysis", "Paralyse"),
+         ("confusion", "Verwirrung"), ("infatuation", "Anziehung"))
+
+
+def item_effect(eff):
+    """Kurz-Wirkung eines Items aus dem englischen Kurztext der PokéAPI: (Text, Zahl zum Sortieren). Nur, was sich sicher
+    lesen lässt (Heilung, AP, Beleben, Statusheilung, Fangfaktor); sonst ("", None)."""
+    e = " ".join(str(eff or "").split())
+    parts, val = [], None
+    if m := re.search(r"Restores (\d+) HP", e):
+        val = int(m.group(1))
+        parts.append(f"KP +{val}")
+    elif m := re.search(r"Restores (\d+)% (?:of )?(?:max )?HP|Restores 1/(\d+) (?:of )?(?:max )?HP", e):
+        pct = int(m.group(1)) if m.group(1) else round(100 / int(m.group(2)))
+        parts.append(f"KP +{pct} %")
+    elif re.search(r"Restores HP to full|Fully restores HP", e):
+        val = 999
+        parts.append("KP voll")
+    if m := re.search(r"Restores (\d+) PP for (one|each) move", e):
+        val = int(m.group(1))
+        parts.append(f"AP +{val} ({'eine Attacke' if m.group(2) == 'one' else 'alle Attacken'})")
+    elif m := re.search(r"Restores PP to full for (one|each) move", e):
+        val = 99
+        parts.append(f"AP voll ({'eine Attacke' if m.group(1) == 'one' else 'alle Attacken'})")
+    if m := re.search(r"Revives with (half|full) HP", e):
+        val = 50 if m.group(1) == "half" else 100
+        parts.append("belebt mit halben KP" if m.group(1) == "half" else "belebt mit vollen KP")
+    if re.search(r"[Cc]ures any (major )?status ailment", e):
+        parts.append("heilt alle Statusprobleme" + (" und Verwirrung" if "confusion" in e else ""))
+    elif m := re.search(r"[Cc]ures ([a-z ,]+?)(?:\.|,? but|$)", e):
+        names = [de for en, de in _CURE if en in m.group(1)]
+        if names:
+            parts.append("heilt " + ", ".join(names))
+    if m := re.search(r"Success rate is (\d+(?:\.\d+)?)×", e):
+        val = float(m.group(1))
+        parts.append("Fangfaktor ×" + m.group(1).replace(".", ","))
+    elif e.startswith("Catches a wild Pokémon every time"):
+        val = 255.0
+        parts.append("fängt immer")
+    elif e.rstrip(".") == "Tries to catch a wild Pokémon":
+        val = 1.0
+        parts.append("Fangfaktor ×1")
+    if parts and "lowers happiness" in e:
+        parts.append("senkt die Freundschaft")
+    return ", ".join(parts), val
+
+
 def item_name(ident, name):
     for rx, suffix in ITEM_SUFFIX:
         if rx.search(ident or ""):
@@ -513,7 +573,7 @@ def _derive_item(con):
     die Spiele mit Beschreibung (genau: dort gibt es das Item) und die Generationen laut Spielindex der PokéAPI (grob).
     Ohne items.csv bleibt die Tabelle leer."""
     con.execute("CREATE TABLE item (id INTEGER PRIMARY KEY, kennung TEXT, name TEXT, tasche TEXT, text TEXT, sprache TEXT, "
-                "preis INTEGER, gens TEXT, spiele TEXT)")
+                "preis INTEGER, gens TEXT, spiele TEXT, art TEXT, wirkung TEXT, wert REAL, unfertig INTEGER)")
     if not _has(con, "items"):
         return 0
     names = _names(con, "item_names", "item_id")
@@ -529,8 +589,10 @@ def _derive_item(con):
             key = (lang == 6, order.get(vg, vg or 0))
             if txt and (iid not in texts or key > texts[iid][0]):
                 texts[iid] = (key, " ".join(txt.split()), "de" if lang == 6 else "en")
+    effects = {}
     if _has(con, "item_prose"):
         for iid, eff in con.execute("SELECT item_id, short_effect FROM item_prose WHERE local_language_id = 9"):
+            effects[iid] = item_effect(eff)
             if eff and iid not in texts:
                 texts[iid] = (None, " ".join(eff.split()), "en")
     gens = {}
@@ -542,9 +604,11 @@ def _derive_item(con):
         if cat == UNUSED_CATEGORY or not names.get(iid):
             continue
         t = texts.get(iid)
+        eff = effects.get(iid, ("", None))
         rows.append((iid, ident, item_name(ident, names[iid]), pockets.get(cat, ""), t[1] if t else "", t[2] if t else "", cost or 0,
-                     json.dumps(sorted(gens.get(iid, ()))), json.dumps(sorted(games.get(iid, ())))))
-    con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+                     json.dumps(sorted(gens.get(iid, ()))), json.dumps(sorted(games.get(iid, ()))), ITEM_ART.get(cat, ""),
+                     eff[0], eff[1], int(ODD_TEXT in (t[1] if t else ""))))
+    con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     return len(rows)
 
 
@@ -625,7 +689,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         _derive_spiel(con)
         _derive_form(con)
         _derive_spiel_form(con)
-        _derive_attacke(con, sd_moves)
+        _derive_attacke(con, sd_moves, (extra or {}).get("attacken_kurz"))
         _sd_tables(con, sd_dex, sd_moves)
         n_check = _derive_pruefung(con, sd_dex, sd_moves) if sd_dex or sd_moves else 0
         n_fund = _derive_fundort(con, pkhex)

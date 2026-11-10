@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.8.0 (Rückmeldung zu 0.7.0, zweiter Teil)
+
+- Tabelle `item` mit `art` (Kategorie der PokéAPI auf Deutsch, `importer.ITEM_ART`), `wirkung` und `wert` (aus dem Kurztext
+  gelesen, `importer.item_effect`) und `unfertig` (Platzhalter im Text); `importer.VERSION` 7
+- Item-Bilder als Extra `itembild` (Datei bei der Quelle nach Kennung, gespeichert nach Nummer)
+- `extra/attacken_kurz.json`: gepflegte Kurz-Infos für Status-Attacken, zu denen die Metadaten nichts hergeben
+- `/api/spieldaten`: ZIP mit pokeapi.db, Stand des Abgleichs, Einstellungen und `medien.json` (da, fehlt, gibt es nicht)
+- `app/aufgaben.py`: Auftrag zu „Zu erledigen“ und Antwort mit Vorschau (`/api/aufgabe`, `/api/antwort`)
+- Karte: Pokémon-Auswahl mit Bildern und Suche
+
 ## 0.7.1 (Rückmeldung zu 0.7.0, Entscheidung 10.11.2026)
 
 - Kartenpunkte heißen `.mpin`, festgehaltene Zellen `.fix`: die Klasse `.pin` der Karte traf auch Pin-Nadel und Typtabelle
@@ -43,8 +53,9 @@
 
 ## Als Nächstes
 
-- 0.8.0: Items mit Bildern, Art und passenden Spalten je Tasche; Spieldaten zum Herunterladen; „Zu erledigen“ als
-  KI-Prompt; Karte mit Pokémon-Auswahl mit Bildern und weiteren Ebenen; Kurz-Infos für die übrigen Status-Attacken
+- Karte: weitere Ebenen (etwa Irrlichter, Icognito, Ausgrabungen), sobald es eine verlässliche Quelle für die
+  Koordinaten gibt; Karten für weitere Spiele
+- Items: Wirkung auch für Beeren und getragene Items; Fundorte der Items
 - Smogon-Sets (Wettkampf, mit Items und Wesen), sobald vom Server aus erreichbar
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
 - PokéWiki-Leser (vom Heimserver aus erreichbar, Proben aus dem Verbindungstest) für das, was PKHeX nicht hat:

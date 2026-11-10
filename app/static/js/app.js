@@ -1488,7 +1488,9 @@ async function mapView(karte, fid) {
   main.innerHTML = `<div class="box mapbox">
     <div class="bar"><h2 style="margin:0">Karte</h2>
       <span class="seg">${d.karten.map((k) => `<a class="btn${k.karte === d.karte ? " on" : ""}" href="#karte/${k.karte}${fid != null ? "/" + fid : ""}">${esc(k.gebiet)}</a>`).join("")}</span>
-      <label>Pokémon <select id="mapmon"><option value="">alle Spawnpunkte</option>${list.map((s) => `<option value="${s.id}"${s.id === fid ? " selected" : ""}>${esc(s.name)} (${s.n})</option>`).join("")}</select></label>
+      <div class="pick" id="mapmon"><button class="pickbtn" aria-haspopup="true" aria-expanded="false">${fid != null && species[fid] ? img(fid) + `<b>${esc(species[fid].name)}</b>` : "Pokémon wählen"} <span class="hint">▾</span></button>
+        <div class="pickm" hidden><input type="search" placeholder="Pokémon suchen" aria-label="Pokémon suchen">
+          <div class="pickl"><a href="#karte/${d.karte}" class="${fid == null ? "on" : ""}"><span class="spr none"></span><span>alle Spawnpunkte</span><span class="hint">${pts.length}</span></a>${list.map((s) => `<a href="#karte/${d.karte}/${s.id}" class="${s.id === fid ? "on" : ""}" data-n="${esc(s.name.toLowerCase())}">${img(s.id)}<span>${esc(s.name)}</span><span class="hint" data-tip="Spawnpunkte in diesem Gebiet">${s.n}</span></a>`).join("")}</div></div></div>
       <span class="hint grow">${fid != null ? (hits ? `${hits} Spawnpunkte hervorgehoben` : "hier an keinem Spawnpunkt") : `${pts.length} Spawnpunkte, davon ${pts.filter((p) => p.alpha).length} Alpha`}</span>
 </div>
     ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus.</div>` : ""}
@@ -1497,7 +1499,16 @@ async function mapView(karte, fid) {
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
       <aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha.</p></aside></div>
     <p class="hint">Kartenbild: Serebii; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten.</p></div>`;
-  $("#mapmon").addEventListener("change", (e) => { location.hash = `karte/${d.karte}` + (e.target.value ? "/" + e.target.value : ""); });
+  const pick = $("#mapmon"), pickM = $(".pickm", pick);
+  const pickOpen = (on) => { pickM.hidden = !on; $(".pickbtn", pick).setAttribute("aria-expanded", on); if (on) { const f = $("input", pickM); f.value = ""; pickFilter(""); f.focus(); $("a.on", pickM)?.scrollIntoView({block: "center"}); } };
+  const pickFilter = (v) => $$(".pickl a[data-n]", pick).forEach((a) => { a.hidden = !!v && !a.dataset.n.includes(v); });
+  $(".pickbtn", pick).addEventListener("click", () => pickOpen(pickM.hidden));
+  $("input", pickM).addEventListener("input", (e) => pickFilter(e.target.value.trim().toLowerCase()));
+  pick.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") pickOpen(false);
+    else if (e.key === "Enter" && e.target.tagName === "INPUT") { const a = $$(".pickl a[data-n]", pick).find((x) => !x.hidden); if (a) location.hash = a.getAttribute("href"); }
+  });
+  document.addEventListener("click", function away(e) { if (!document.body.contains(pick)) document.removeEventListener("click", away); else if (!pick.contains(e.target)) pickOpen(false); });
   const box = $("#map"), inner = $(".mapin", box), tiles = $(".tiles", box), pins = $(".pins", box);
   const tipOf = (p) => (p.alpha ? "Alpha-Spawnpunkt\n" : "") + (p.mons.length ? p.mons.map((m) => `${m.alpha ? "Alpha-" : ""}${m.name}: bis ${mpct(m.max)}`
     + (m.zeit !== "immer" ? ` (${m.zeit})` : "")).join("\n") : "keine Angaben");
@@ -1587,32 +1598,66 @@ async function mapView(karte, fid) {
   });
 }
 
-// Items des Spiels: Suche und Tasche
+// Items des Spiels: Suche, Tasche und Art. Je Tasche passende Spalten (Wirkung bei Medizin und Bällen, die Attacke bei
+// Maschinen); unfertige Einträge (Platzhalter im Text) nur auf Wunsch.
+const MKLASSE = {1: "Status", 2: "physisch", 3: "speziell"};
+const itemImg = (x) => x.bild ? `<img class="ibild" src="itembild/${x.id}" alt="" loading="lazy">`
+  : `<span class="ibild none">${x.attacke ? "TM" : ""}</span>`;
 async function itemsView() {
   const rid = RID;
   const d = await api("/api/items?" + qs({spiel: S.game}));
   if (rid !== RID) return;
-  let pocket = "", q = "";
+  const items = d.items || [];
+  const nOdd = items.filter((x) => x.unfertig).length;
+  let pocket = store.get("itemPocket", ""), q = "", art = "", odd = false;
+  if (!(d.taschen || []).includes(pocket)) pocket = "";
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Items</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <input id="itemq" type="search" placeholder="Name oder Beschreibung" style="width:220px">
-      <span class="seg" id="itemseg"><a class="btn on" data-t="">alle</a>${(d.taschen || []).map((t) => `<a class="btn" data-t="${esc(t)}">${esc(t)}</a>`).join("")}</span>
+      <select id="itemart" aria-label="Art"></select>
+      ${nOdd ? `<label data-tip="Einträge, deren Text in den Spieldaten noch Platzhalter wie [VAR] enthält"><input type="checkbox" id="itemodd"> unfertige Einträge (${nOdd})</label>` : ""}
       <span class="hint grow" id="itemn"></span></div>
+    <div class="bar"><span class="seg" id="itemseg"><button data-t="">alle</button>${(d.taschen || []).map((t) => `<button data-t="${esc(t)}">${esc(t)}</button>`).join("")}</span></div>
     ${d.hinweis ? `<div class="note info">${esc(d.hinweis)}</div>` : ""}
-    <div class="scroll"><table class="rows"><thead><tr><th>Name</th><th>Tasche</th><th>Beschreibung</th><th class="num">Preis</th></tr></thead><tbody id="itemrows"></tbody></table></div>
-    <p class="hint">Quelle: PokéAPI. Englisch, wo es keinen deutschen Text gibt.</p></div>`;
+    <div class="scroll" id="itembox"></div>
+    <p class="hint">Quelle: PokéAPI. Englisch, wo es keinen deutschen Text gibt. Bilder lädt der Abgleich.</p></div>`;
   header();
-  const items = d.items || [];
+  const num = (v) => `<td class="num" data-s="${v ?? -1}">${v || "–"}</td>`;
+  const name = (x) => `<td><span class="iname">${itemImg(x)}<b>${esc(x.name)}</b></span></td>`;
+  const text = (x) => `<td class="why"${x.englisch ? ` lang="en"` : ""}>${esc(x.text)}</td>`;
+  // Spalten je Tasche: [Kopf, Breite, Zelle]
+  const COLS = {
+    "": [[th("Name"), "24%", name], [th("Tasche"), "11%", (x) => `<td>${esc(x.tasche)}</td>`], [th("Art"), "15%", (x) => `<td>${esc(x.art)}</td>`],
+         [th("Beschreibung", "", true), "", text], [th("Preis"), "8%", (x) => num(x.preis)]],
+    wirkung: [[th("Name"), "22%", name], [th("Art"), "13%", (x) => `<td>${esc(x.art)}</td>`],
+              [th("Wirkung", "Aus dem Kurztext der PokéAPI gelesen; leer, wo er sich nicht sicher lesen lässt"), "21%", (x) => `<td data-s="${x.wert ?? -1}">${esc(x.wirkung)}</td>`],
+              [th("Beschreibung", "", true), "", text], [th("Preis"), "8%", (x) => num(x.preis)]],
+    Maschinen: [[th("Name"), "13%", name], [th("Attacke"), "17%", (x) => `<td><b>${esc(x.attacke?.name || "")}</b></td>`],
+                [th("Typ"), "9%", (x) => `<td data-s="${x.attacke ? esc(tname(x.attacke.typ)) : ""}">${x.attacke ? tchip(x.attacke.typ) : ""}</td>`],
+                [th("Klasse"), "9%", (x) => `<td>${esc(MKLASSE[x.attacke?.klasse] || "")}</td>`],
+                [th("Stärke"), "7%", (x) => num(x.attacke?.staerke)], [th("Gen."), "6%", (x) => num(x.attacke?.genauigkeit)], [th("AP"), "6%", (x) => num(x.attacke?.ap)],
+                [th("Wirkung", "", true), "", (x) => `<td class="why">${esc(x.attacke?.kurz || x.text)}</td>`], [th("Preis"), "7%", (x) => num(x.preis)]],
+  };
   const draw = () => {
-    const ql = q.toLowerCase(), xs = items.filter((x) => (!pocket || x.tasche === pocket) && (!ql || x.name.toLowerCase().includes(ql) || x.text.toLowerCase().includes(ql)));
+    const ql = q.toLowerCase();
+    const inPocket = items.filter((x) => (!pocket || x.tasche === pocket) && (odd || !x.unfertig));
+    const arts = [...new Set(inPocket.map((x) => x.art).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
+    if (art && !arts.includes(art)) art = "";
+    $("#itemart").innerHTML = `<option value="">jede Art</option>` + arts.map((a) => `<option${a === art ? " selected" : ""}>${esc(a)}</option>`).join("");
+    const xs = inPocket.filter((x) => (!art || x.art === art) && (!ql || x.name.toLowerCase().includes(ql) || x.text.toLowerCase().includes(ql)
+      || (x.attacke?.name || "").toLowerCase().includes(ql)));
+    const kind = pocket === "Maschinen" ? "Maschinen" : pocket === "Medizin" || pocket === "Bälle" ? "wirkung" : "";
+    const cols = COLS[kind].filter((c, i) => !(pocket && !kind && i === 1));      // in einer Tasche braucht es die Spalte Tasche nicht
     $("#itemn").textContent = `${xs.length} Items`;
-    $("#itemrows").innerHTML = xs.slice(0, 600).map((x) => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.tasche)}</td>
-      <td class="why"${x.englisch ? ` lang="en"` : ""}>${esc(x.text)}</td><td class="num">${x.preis || "–"}</td></tr>`).join("")
-      + (xs.length > 600 ? `<tr><td colspan="4" class="hint">… ${xs.length - 600} weitere, Suche eingrenzen</td></tr>` : "");
+    $("#itembox").innerHTML = `<table class="rows sort fixed items"><colgroup>${cols.map((c) => `<col${c[1] ? ` style="width:${c[1]}"` : ""}>`).join("")}</colgroup>
+      <thead><tr>${cols.map((c) => c[0]).join("")}</tr></thead><tbody>${xs.slice(0, 400).map((x) => `<tr${x.unfertig ? ` class="odd"` : ""}>${cols.map((c) => c[2](x)).join("")}</tr>`).join("")
+      + (xs.length > 400 ? `<tr><td colspan="${cols.length}" class="hint">… ${xs.length - 400} weitere, Suche oder Art eingrenzen</td></tr>` : "")
+      + (xs.length ? "" : `<tr><td colspan="${cols.length}" class="hint">Nichts gefunden.</td></tr>`)}</tbody></table>`;
+    $$("#itemseg button").forEach((x) => x.classList.toggle("on", x.dataset.t === pocket));
   };
   $("#itemq").addEventListener("input", (e) => { q = e.target.value.trim(); draw(); });
-  $$("#itemseg .btn").forEach((b) => b.addEventListener("click", () => {
-    pocket = b.dataset.t; $$("#itemseg .btn").forEach((x) => x.classList.toggle("on", x === b)); draw();
-  }));
+  $("#itemart").addEventListener("change", (e) => { art = e.target.value; draw(); });
+  $("#itemodd")?.addEventListener("change", (e) => { odd = e.target.checked; draw(); });
+  $$("#itemseg button").forEach((b) => b.addEventListener("click", () => { pocket = b.dataset.t; store.set("itemPocket", pocket); art = ""; draw(); }));
   draw();
 }
 async function chartView() {
@@ -1650,11 +1695,16 @@ async function settingsView() {
       <h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
-      <div class="bar"><label><input type="checkbox" id="sprites"${s.sprites ? " checked" : ""}> Bilder laden (Sprites 96 × 96 und offizielle Artworks 475 × 475, zusammen gut 180 MB; dazu schillernde und animierte Sprites und Rufe, gut 40 MB)</label></div>
+      <div class="bar"><label><input type="checkbox" id="sprites"${s.sprites ? " checked" : ""}> Bilder laden (Sprites 96 × 96 und offizielle Artworks 475 × 475, zusammen gut 180 MB; dazu schillernde und animierte Sprites, Rufe und Item-Bilder, gut 45 MB)</label></div>
       <p class="hint">Ändert sich bei keiner Quelle etwas, bleibt die Datenbank. Eine neue gilt erst nach bestandener Selbstprüfung; deine Teams liegen getrennt (user.db) und werden täglich gesichert.</p>
     </div>
     <div class="box"><h2>Zu erledigen</h2>
-      ${open.length ? `<p class="hint">PokéAPI und Showdown sind sich hier nicht einig. Wähle, welcher Wert stimmt; im Zweifel im PokéWiki nachsehen.</p>
+      ${open.length ? `<p class="hint">PokéAPI und Showdown sind sich hier nicht einig. Wähle, welcher Wert stimmt; im Zweifel im PokéWiki nachsehen. Oder gib die Liste als Auftrag an eine KI und lies ihre Antwort ein.</p>
+        <div class="bar slim"><button data-act="todotask" data-tip="Auftrag für einen KI-Chat: die offenen Punkte mit der Bitte, sie zu prüfen. Die Antwort fügst du unter „Antwort einlesen“ ein und siehst erst eine Vorschau.">Auftrag kopieren${open.length > 60 ? ` (60 von ${open.length})` : ""}</button>
+          <button data-act="todoans">Antwort einlesen</button>
+          <button data-act="todocsv" data-tip="Die offenen Punkte als CSV-Datei, etwa für LibreOffice">herunterladen</button></div>
+        <div id="todoans" hidden><textarea id="todotext" rows="5" placeholder="Antwort der KI hier einfügen (JSON)" style="width:100%"></textarea>
+          <div class="bar slim"><button class="primary" data-act="todoprev">Vorschau</button><span class="hint">Übernommen wird erst nach der Vorschau.</span></div><div id="todoprev"></div></div>
         <div class="scroll"><table class="rows"><tr><th>Was</th><th>Feld</th><th>PokéAPI</th><th>Showdown</th><th></th></tr>
         ${open.slice(0, 80).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.feld)}</td><td>${esc(r.pokeapi)}</td><td>${esc(r.showdown)}</td>
           <td><button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="pokeapi">PokéAPI</button> <button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="showdown">Showdown</button>
@@ -1663,6 +1713,10 @@ async function settingsView() {
       ${pr.length - open.length ? `<details><summary>Entschieden (${pr.length - open.length})</summary><table class="rows">${pr.filter((r) => r.entscheidung).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.feld)}</td><td>${esc(r.entscheidung)}</td><td><button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="">zurück</button></td></tr>`).join("")}</table></details>` : ""}
     </div></div>
     <h2 class="sect">Spieldaten aus den Quellen</h2>
+    <div class="box"><h2>Spieldaten</h2>
+      <p class="hint">Alles, was der Abgleich gesammelt hat, als ZIP-Datei: die gebaute Datenbank (SQLite), Stand und Protokoll, Einstellungen, die Liste „Zu erledigen“
+        und eine Übersicht, welche Bilder, Rufe und Kartenkacheln da sind und welche fehlen. Ohne die Bilder selbst und ohne eigene Daten. Etwa 20 MB.</p>
+      <div class="bar"><a class="btn" href="/api/spieldaten" download>Spieldaten herunterladen</a></div></div>
     <div class="box"><div class="bar"><h2 style="margin:0">Protokoll</h2><span class="grow"></span>
         ${(st.log || []).length ? `<button class="link" data-act="copy" data-src="#plog">kopieren</button> <button class="link" data-act="dl" data-src="#plog" data-name="pokedex-protokoll">herunterladen</button>` : ""}</div>
       <div class="log" id="plog">${esc((st.log || []).join("\n") || "Noch kein Lauf.")}</div></div>
@@ -1818,6 +1872,26 @@ document.addEventListener("click", async (e) => {
       await api("/api/abgleich", {neu: act === "rebuild"});
       setTimeout(refreshMeta, 800);
     } else if (act === "diag") await diag();
+    else if (act === "todotask") {
+      const t = await api("/api/aufgabe");
+      if (t.text) await copyText(t.text, b);
+    } else if (act === "todoans") { $("#todoans").hidden = !$("#todoans").hidden; if (!$("#todoans").hidden) $("#todotext").focus(); }
+    else if (act === "todocsv") {
+      const cell = (v) => { v = String(v ?? ""); return /[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+      const rows = (await api("/api/pruefung")).filter((x) => !x.entscheidung).map((x) => [x.name, x.feld, x.pokeapi, x.showdown, x.key]);
+      download(`pokedex-zu-erledigen-${new Date().toISOString().slice(0, 10)}.csv`, "\ufeff" + [["Was", "Feld", "PokéAPI", "Showdown", "Kennung"], ...rows].map((x) => x.map(cell).join(";")).join("\r\n"), "text/csv");
+    } else if (act === "todoprev" || act === "todotake") {
+      const out = $("#todoprev");
+      try {
+        const res = await api("/api/antwort", {text: $("#todotext").value, dry: act === "todoprev"});
+        if (act === "todotake") { settingsView(); return; }
+        const W = {pokeapi: "PokéAPI", showdown: "Showdown", egal: "egal"};
+        out.innerHTML = (res.uebernehmen.length ? `<table class="rows"><tr><th>Was</th><th>Feld</th><th>Antwort</th><th>Grund</th></tr>${res.uebernehmen.map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.feld)}</td><td><b>${W[x.wert]}</b></td>
+            <td class="why">${esc(x.grund)}${/^https:\/\/\S+$/.test(x.quelle) ? ` <a href="${esc(x.quelle)}" target="_blank" rel="noopener noreferrer">Quelle</a>` : ""}</td></tr>`).join("")}</table>` : "")
+          + (res.liegen.length ? `<p class="hint">Bleibt liegen: ${res.liegen.map((x) => `${esc(x.key)} (${esc(x.warum)})`).join(", ")}</p>` : "")
+          + (res.uebernehmen.length ? `<div class="bar slim"><button class="primary" data-act="todotake">${res.uebernehmen.length} übernehmen</button></div>` : `<div class="note warn">Nichts zu übernehmen.</div>`);
+      } catch (x) { out.innerHTML = `<div class="note stop">${esc(x.message)}</div>`; }
+    }
     else if (act === "dec") {
       await api("/api/entscheidung", {art: "pruefung", schluessel: b.dataset.k, wert: b.dataset.v});
       settingsView();

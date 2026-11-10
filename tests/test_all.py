@@ -7,7 +7,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from app import abruf, attacken, db, importer, server, showdown, sources, store, team, typen
+from app import abruf, attacken, aufgaben, db, importer, server, showdown, sources, store, team, typen
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, STAHL, UNLICHT, WASSER
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
@@ -297,6 +297,53 @@ class Leser(unittest.TestCase):
                                                      "2,18,6,Ein Hieb\n2,20,6,Diese Attacke kann nicht eingesetzt werden.\n")
         importer._derive_attacke(con, {})
         self.assertEqual(dict(con.execute("SELECT id, text FROM attacke")), {1: "Neuer Text", 2: "Ein Hieb"})
+
+    def test_item_wirkung(self):
+        f = importer.item_effect
+        self.assertEqual(f("Restores 20 HP."), ("KP +20", 20))
+        self.assertEqual(f("Restores HP to full and cures any status ailment and confusion."),
+                         ("KP voll, heilt alle Statusprobleme und Verwirrung", 999))
+        self.assertEqual(f("Revives with half HP, but lowers happiness."), ("belebt mit halben KP, senkt die Freundschaft", 50))
+        self.assertEqual(f("Restores 10 PP for each move."), ("AP +10 (alle Attacken)", 10))
+        self.assertEqual(f("Cures paralysis."), ("heilt Paralyse", None))
+        self.assertEqual(f("Tries to catch a wild Pokémon.  Success rate is 1.5×."), ("Fangfaktor ×1,5", 1.5))
+        self.assertEqual(f("Held: boosts Fire moves."), ("", None))
+
+    def test_attacken_kurz_extra(self):
+        """extra/attacken_kurz.json: Kennung → kurzer Text; gilt nur, wo die Metadaten nichts hergeben."""
+        import sqlite3
+        extra = importer.load_extra(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "extra"))
+        kurz = extra["attacken_kurz"]
+        self.assertGreater(len(kurz), 100)
+        for k, v in kurz.items():
+            self.assertRegex(k, r"^[a-z0-9-]+$")
+            self.assertTrue(isinstance(v, str) and 3 < len(v) < 110, k)
+        con = sqlite3.connect(":memory:")
+        importer.import_csv(con, "moves", "id,identifier,generation_id,type_id,power,pp,accuracy,priority,target_id,damage_class_id,effect_id\n"
+                                          "1,protect,2,1,,10,,4,7,1,112\n2,swords-dance,1,1,,20,,0,7,1,51\n")
+        importer.import_csv(con, "move_names", "move_id,local_language_id,name\n1,6,Schutzschild\n2,6,Schwerttanz\n")
+        importer.import_csv(con, "move_meta", "move_id,meta_category_id,meta_ailment_id,min_hits,max_hits,min_turns,max_turns,drain,healing,"
+                                              "crit_rate,ailment_chance,flinch_chance,stat_chance\n1,13,0,,,,,0,0,0,0,0,0\n2,2,0,,,,,0,0,0,0,0,0\n")
+        importer.import_csv(con, "move_meta_stat_changes", "move_id,stat_id,change\n2,2,2\n")
+        importer._derive_attacke(con, {}, {"protect": "schützt", "swords-dance": "gepflegt, gilt nicht"})
+        self.assertEqual(dict(con.execute("SELECT id, kurz FROM attacke")), {1: "schützt", 2: "Angriff +2 (selbst)"})
+
+    def test_auftrag(self):
+        rows = [{"key": "attacke:1:AP", "name": "Klaps", "feld": "AP", "pokeapi": "35", "showdown": "40", "entscheidung": ""},
+                {"key": "attacke:2:AP", "name": "Hieb", "feld": "AP", "pokeapi": "1", "showdown": "2", "entscheidung": ""},
+                {"key": "attacke:3:AP", "name": "Alt", "feld": "AP", "pokeapi": "1", "showdown": "2", "entscheidung": "egal"}]
+        t = aufgaben.task(rows)
+        self.assertEqual((t["offen"], t["im_auftrag"]), (2, 2))
+        self.assertIn("Kennung attacke:1:AP | Klaps | AP | PokéAPI: 35 | Showdown: 40", t["text"])
+        self.assertNotIn("attacke:3:AP", t["text"])
+        self.assertEqual(aufgaben.task(rows[2:])["text"], "")
+        ans = 'Gern:\n```json\n{"pokedex-aufgaben": 1, "antworten": [{"key": "attacke:1:AP", "wert": "Showdown", "grund": "g"}, ' \
+              '{"key": "attacke:2:AP", "wert": "unklar"}, {"key": "attacke:3:AP", "wert": "pokeapi"}, {"key": "x", "wert": "egal"}]}\n```'
+        res = aufgaben.parse(ans, rows)
+        self.assertEqual([(r["key"], r["wert"]) for r in res["uebernehmen"]], [("attacke:1:AP", "showdown")])
+        self.assertEqual([r["warum"] for r in res["liegen"]], ["unklar", "schon entschieden", "unbekannte Kennung"])
+        with self.assertRaises(ValueError):
+            aufgaben.parse('{"antworten": []}', rows)
 
     def test_showdown(self):
         text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"

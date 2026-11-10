@@ -30,6 +30,11 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 6. **Kartenkacheln** (Legenden: Arceus): fehlende Kacheln von Serebii (`abruf.MAP_TILES`, 5 Karten × 84 Kacheln) nach
    `karten/<Karte>/<z>-<x>-<y>.png`, eine Sekunde Pause je Kachel; fehlende (404) 30 Tage nicht erneut.
 
+## Item-Bilder
+
+Extra `itembild`: `sprites/items/<Kennung>.png` aus dem Sprite-Repository der PokéAPI, gespeichert als
+`itembild/<Nummer>.png`. Ohne Maschinen und unfertige Einträge; was es nicht gibt (404), wird 30 Tage nicht erneut gefragt.
+
 ## Zeitplan
 
 Prüfung jede Minute, erster Blick fünf Minuten nach dem Start (ohne Datenbank sofort). Passt `importer.VERSION`
