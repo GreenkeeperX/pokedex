@@ -10,7 +10,8 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 1. Sicherung von user.db (einmal am Tag, 14 bleiben).
 2. **PokéAPI**: Dateiliste und letzter Commit von `data/v2/csv` über die GitHub-API. Ohne Antwort (etwa
    Ratenlimit) die feste Liste `importer.NEEDED`.
-3. **Showdown**: `data/pokedex.ts` und `data/moves.ts`.
+3. **Showdown**: `data/pokedex.ts` und `data/moves.ts`, dazu die Random-Battle-Sets je Generation
+   (`abruf.sets_url`, Generation 1 nur `data.json`) für die bewährten Sets (Tabelle `moveset`).
    **PKHeX**: Begegnungsdatei und deutsche Ortsnamen je Spiel in `abruf.PKHEX_GAMES` (bisher Legenden: Arceus).
    `importer.pkhex_areas` liest sie: je Gebiet die Ortsnummern (die erste ist das Gebiet, die übrigen die Stellen),
    die Art (frei, Raum-Zeit-Verzerrung, Baum oder Erzbrocken, Massenauftreten) und Plätze mit Art, Form, Level und

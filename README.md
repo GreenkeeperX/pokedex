@@ -19,7 +19,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
   Vorschlag für vier Attacken mit Typ-Abdeckung. Eigene Auswahl mit Standard-Attacken wie im Spiel, beigebrachten
-  Attacken (TM, Lehrer) und Reihenfolge per Ziehen. TM-Nummern des Spiels.
+  Attacken (TM, Lehrer) und Reihenfolge per Ziehen. TM-Nummern des Spiels, Marken für Lehrer-Attacken und
+  Beherrschung, bewährte Sets aus Pokémon Showdown (Random Battle) zum Übernehmen.
 - **Attacken**: alle Attacken des gewählten Spiels mit Filtern und sortierbaren Spalten.
 - **Team-Leiste** unten in jedem Reiter (Drag & Drop, „+“, Favoriten). Dasselbe Pokémon darf mehrfach ins Team;
   Level und vier Attacken je Platz. Gespeicherte Teams ändern sich erst mit „Speichern“ („Verwerfen“ geht zurück).

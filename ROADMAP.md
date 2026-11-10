@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.7.0
+
+- Bewährte Sets: Random-Battle-Sets von Showdown je Generation im Abgleich (Tabelle `moveset`, `importer.VERSION` 5),
+  nur für die Generation des Spiels, nicht für die Legenden-Spiele
+- Marken für Lehrer-Attacken und Beherrschung in der Attacken-Tabelle
+
 ## 0.6.1
 
 - Reiter „Items“ (Tabelle `item`, `importer.VERSION` 4): je Spiel genau, wo die PokéAPI Beschreibungen für das Spiel
@@ -28,7 +34,7 @@
 
 ## Als Nächstes
 
-- 0.7.0: Lehrer-Attacken und Beherrschung als Markierung in der Attacken-Tabelle, danach bewährte Movesets
+- Smogon-Sets (Wettkampf, mit Items und Wesen), sobald vom Server aus erreichbar
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
 - PokéWiki-Leser (vom Heimserver aus erreichbar, Proben aus dem Verbindungstest) für das, was PKHeX nicht hat:
   Tageszeit und Wetter, Edelhorden, Attackenwerte (Kraft- und Tempostil) und Lehrer-Attacken in Legenden: Arceus

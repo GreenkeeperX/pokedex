@@ -388,3 +388,9 @@ details.mehr { margin: 10px 0; }
 details.mehr summary { cursor: pointer; font-weight: 600; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 8px 0; }
 .kv > span:nth-child(odd) { color: var(--muted, #777); }
+
+/* Attacken: Marken, bewährte Sets */
+.pset { border-top: 1px solid var(--line); padding: 6px 0; }
+.pset > div { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0; }
+.pmv.off { opacity: .45; }
+.pmv.same { font-weight: 600; }

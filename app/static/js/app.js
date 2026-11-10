@@ -951,6 +951,22 @@ async function allMoves() {
   ALLMOVES[k].forEach((m) => { MOVES[m.id] = Object.assign(MOVES[m.id] || {}, m); });
   return ALLMOVES[k];
 }
+// Marken: nur per Lehrer lernbar, Beherrschung (Legenden: Arceus)
+function moveMarks(m) {
+  const w = m.wege || [], out = [];
+  if (w.includes("Lehrer")) out.push(`<span class="cls mk-lehrer" data-tip="${esc(w.length > 1 ? "Auch beim Attacken-Lehrer" : "Nur beim Attacken-Lehrer")}">Lehrer</span>`);
+  const mast = w.find((x) => x.includes("Beherrschung"));
+  if (mast) out.push(`<span class="cls mk-meister" data-tip="${esc(mast)}">Beherrschung</span>`);
+  return out.length ? " " + out.join(" ") : "";
+}
+// Bewährte Sets (Showdown, Random Battle): Rolle, Attacken, Übernehmen
+function setsHtml(A, mine) {
+  if (!A.sets || !A.sets.length) return "";
+  return `<h3 style="margin-top:12px" data-tip="Aus den Random-Battle-Sets von Pokémon Showdown: erprobte Kombinationen für Kämpfe der Generation ${A.sets_gen}. Grau: nicht in der Lernliste dieses Spiels.">Bewährte Sets <span class="hint">(Showdown, Generation ${A.sets_gen})</span></h3>
+    ${A.sets.map((x, i) => `<div class="pset"><b>${esc(x.rolle || "Set")}</b>${x.faehigkeiten.length ? ` <span class="hint">· ${esc(x.faehigkeiten.join(", "))}</span>` : ""}
+      <div>${x.attacken.map((m) => `<span class="pmv${m.lernbar ? "" : " off"}${mine.includes(m.id) ? " same" : ""}"${m.lernbar ? "" : ` data-tip="Nicht in der Lernliste dieses Spiels"`}>${tchip(m.typ)} ${esc(m.name)}</span>`).join("")}</div>
+      ${x.vorschlag.length ? `<button class="small" data-act="settake" data-i="${i}" data-tip="${esc("Übernimmt die vier stärksten lernbaren: " + x.vorschlag.map((id) => x.attacken.find((m) => m.id === id).name).join(", "))}">Übernehmen</button>` : ""}</div>`).join("")}`;
+}
 function renderMoves(A, level) {
   const d = DETAIL, id = d.id, inTeam = DSLOT !== null;
   const all = Object.fromEntries([...A.attacken, ...A.status].map((m) => [m.id, m]));
@@ -958,7 +974,7 @@ function renderMoves(A, level) {
   const mv = (x) => all[x] || MOVES[x];
   const covered = new Set();
   mine.map(mv).filter((m) => m.klasse !== 1 && m.staerke).forEach((m) => Object.entries(S.chart?.[m.typ] || {}).forEach(([t, f]) => f > 1 && covered.add(t)));
-  const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${esc(m.name)} ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}</td>
+  const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${esc(m.name)} ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${moveMarks(m)}</td>
     <td data-s="${tname(m.typ)}">${tchip(m.typ)}</td><td><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="num" data-s="${m.staerke ?? 0}">${powCell(m.staerke)}</td><td class="num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
     ${status ? "" : `<td class="num" data-s="${m.wertung}"><b style="color:${scoreColor(m.wertung)}">${m.wertung}</b></td>`}<td data-s="${esc(m.wege[0] || "")}">${esc(m.wege.join(", "))}</td><td class="why">${esc(status ? m.text || "" : m.gruende.join(" · "))}</td>
     <td>${mine.includes(m.id) ? `<button class="small on" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✓</button>` : mine.length < 4 ? `<button class="small" data-act="mvadd" data-mid="${m.id}" data-tip="In deine Auswahl (4 Plätze)">+</button>` : ""}</td></tr>`;
@@ -986,7 +1002,8 @@ function renderMoves(A, level) {
         <div class="bar">${std.length ? `<button class="small" data-act="mvstd" data-tip="${esc("Wie im Spiel: die letzten vier Level-Attacken bis zum Level (ohne Level die ersten vier): " + std.join(", "))}">Standard-Attacken</button>` : ""}
           <div class="ac"><input id="mvextra" type="search" placeholder="Andere Attacke (TM, Lehrer …)" style="width:240px"></div></div></div>
       <div><h3>Vorschlag: vier Attacken</h3><div class="sugl">${A.moveset.map((m) => `<div class="${mine.includes(m.id) ? "same" : ""}">${tchip(m.typ)} <b>${esc(m.name)}</b> <span class="why">${esc(m.grund)}</span></div>`).join("") || `<span class="hint">Keine Schadens-Attacke.</span>`}</div>
-        ${A.moveset.length ? `<button class="small" data-act="mvtake" style="margin-top:6px">Als eigene Auswahl übernehmen</button>` : ""}</div>
+        ${A.moveset.length ? `<button class="small" data-act="mvtake" style="margin-top:6px">Als eigene Auswahl übernehmen</button>` : ""}
+        ${setsHtml(A, mine)}</div>
     </div>
     <h3>Schadens-Attacken nach Wertung</h3>
     <p class="hint">Wertung = Stärke × Genauigkeit × Eigentyp-Bonus × passender Angriffswert, mit Zu- und Abschlägen (Aussetzen, Anlauf, Rückstoß, Werte senken, Vorrang). Spalten zum Sortieren anklicken; deine Auswahl ist hinterlegt.</p>
@@ -1001,6 +1018,12 @@ function renderMoves(A, level) {
     d.attacken = A2;
     renderMoves(A2, v);
   });
+  $$("[data-act=settake]").forEach((b) => b.addEventListener("click", () => {
+    const x = A.sets[+b.dataset.i];
+    x.attacken.forEach((m) => { if (!MOVES[m.id]) MOVES[m.id] = all[m.id] || m; });
+    setOwnSet(id, x.vorschlag.slice(0, 4));
+    renderMoves(DETAIL.attacken, $("#lvl")?.value);
+  }));
   moveSearch($("#mvextra"), (m) => {
     const cur = ownSet(id);
     if (cur.length >= 4) return alert("Alle vier Plätze sind belegt. Nimm erst eine Attacke heraus.");

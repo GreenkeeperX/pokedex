@@ -43,6 +43,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Mehr Details (`moreHtml`, `detail.mehr`): eingeklappt; Fangchance ohne kritischen Fang und Boni, in Generation 1
   und 2 und den Legenden-Spielen nur als Richtung (`fang_grob`). Keine Eier und EVs in Legenden: Arceus.
 - Extras (`extrasHtml`, `detail.extras`): Knöpfe nur für schon geladene Dateien; `/shiny/<id>`, `/anim/<id>`, `/rufe/<id>`.
+- Attacken: `moveMarks` setzt Marken für Lehrer und Beherrschung nach den Wegen; `setsHtml` zeigt die bewährten
+  Sets (`sets`, `sets_gen` aus `/api/pokemon/<id>/attacken`), grau, was nicht in der Lernliste steht. „Übernehmen“
+  nimmt `vorschlag` (die vier lernbaren mit der höchsten Wertung, Status zuletzt).
 - Items (`itemsView`, `#items`): Daten aus `/api/items?spiel=…`, Suche und Taschen filtern im Browser, höchstens 600
   Zeilen auf einmal.
 - Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
