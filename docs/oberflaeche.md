@@ -35,7 +35,7 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Sicherung: `/api/export` lädt herunter, `/api/restore` ersetzt alle eigenen Daten (vorher `vor-einlesen-…` in
   `sicherung/`).
 - Fundorte (`encHtml`): mit Daten aus PKHeX (`fundquelle`) Gebiet, Stellen mit Level (ab sechs Stellen gekürzt, alle im
-  Hinweis), Art, Level und Alpha-Level; sonst die Tabelle der PokéAPI. Filter „Gebiet“ (`areaSelect`) nur bei Spielen
+  Hinweis), Art, Level und Alpha-Level; Spalten nur, wo ein Eintrag Daten hat; sonst die Tabelle der PokéAPI. Filter „Gebiet“ (`areaSelect`) nur bei Spielen
   mit Gebieten (`/api/meta`, `spiele[].gebiete`), ohne Massenauftreten.
 - Karte (`mapView`, `#karte/<Karte>/<Form>`): Welt 2048 px = Spielkoordinate × 2; Kacheln `karten/<Karte>/<z>-<x>-<y>.png`
   (Zoom 0–2, Stufe nach Maßstab), Punkte behalten ihre Größe (`--inv`). Ziehen mit Pointer-Events, Mausrad und +/−

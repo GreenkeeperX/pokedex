@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, showdown
 
-VERSION = "9"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "10"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -343,12 +343,63 @@ def _derive_pruefung(con, sd_dex, sd_moves):
 PKHEX_ART = {0: "frei", 1: "Raum-Zeit-Verzerrung", 2: "Baum oder Erzbrocken", 3: "Massenauftreten", 4: "Massives Massenauftreten",
              9: "fest (Geschenk oder einmalig)"}
 FEST = 9
+# Erweiterungen teilen die Begegnungen ihres Hauptspiels (PKHeX führt sie in einer Datei)
+PKHEX_SHARE = {"scarlet-violet": ("the-teal-mask", "the-indigo-disk"), "legends-za": ("mega-dimension",)}
 
 
 def pkhex_areas(data):
-    """Begegnungen aus einer PKHeX-Datei encounter_la.pkl (BinLinker „la“): je Gebiet Ortsnummern (das erste ist das
-    Gebiet, die übrigen die Stellen darin), Art und Plätze mit Art, Form, Level von–bis und Alpha (0 nie, 1 möglich,
-    2 immer). Gibt [(orte, art, [(nr, form, min, max, alpha)])] zurück."""
+    """Begegnungen aus einer PKHeX-Datei, nach der Kennung am Anfang: „la“ (Legenden: Arceus), „sv“ (Karmesin/Purpur)
+    oder „za“ (Legenden: Z-A). Gibt [(orte, art, [(nr, form, min, max, alpha)])] zurück; orte: das erste ist das Gebiet,
+    die übrigen die Stellen darin. Alpha: 0 nie, 1 möglich, 2 immer."""
+    if len(data) < 4:
+        return []
+    kind = data[:2]
+    if kind == b"sv":
+        return _areas_sv(data)
+    if kind == b"za":
+        return _areas_za(data)
+    return _areas_la(data)
+
+
+def _binlinker(data):
+    """Einträge einer BinLinker-Datei (2 Byte Kennung, u16 Anzahl, u32-Offsets)."""
+    import struct
+    n = struct.unpack_from("<H", data, 2)[0]
+    offs = [struct.unpack_from("<I", data, 4 + 4 * i)[0] for i in range(n + 1)]
+    return [data[offs[i]:offs[i + 1]] for i in range(n)]
+
+
+def _areas_sv(data):
+    """Karmesin/Purpur (encounter_wild_paldea.pkl): Ort (Byte 0), Herkunft (Byte 2, nur bei Pokémon aus dem Nachbargebiet),
+    dann Plätze zu 8 Bytes (u16 Art, Form, Geschlecht, Level von, bis, Tageszeit, Wetter). Gebiete mit Herkunft sind
+    Doppel der Nachbargebiete und fallen weg."""
+    import struct
+    out = []
+    for a in _binlinker(data):
+        if a[2]:
+            continue
+        slots = [(struct.unpack_from("<H", a, k)[0], a[k + 2], a[k + 4], a[k + 5], 0) for k in range(4, len(a) - 7, 8)]
+        out.append(([a[0]], 0, slots))
+    return out
+
+
+def _areas_za(data):
+    """Legenden: Z-A (encounter_za.pkl, encounter_hyperspace_za.pkl; BinLinker16: u16 Anfang und Ende je Eintrag):
+    Ort (u16), 2 Bytes frei, dann Plätze zu 8 Bytes (u16 Art, Form, Geschlecht, Level von, bis, Alpha, Schillernd)."""
+    import struct
+    n = struct.unpack_from("<H", data, 2)[0]
+    out = []
+    for i in range(n):
+        s, e = struct.unpack_from("<HH", data, 4 + 2 * i)
+        a = data[s:e]
+        slots = [(struct.unpack_from("<H", a, k)[0], a[k + 2], a[k + 4], a[k + 5], 2 if a[k + 6] == 1 else 0)
+                 for k in range(4, len(a) - 7, 8)]
+        out.append(([struct.unpack_from("<H", a)[0]], 0, slots))
+    return out
+
+
+def _areas_la(data):
+    """Legenden: Arceus (encounter_la.pkl): Ortsnummern, Art und Plätze mit Art, Form, Alpha und Level."""
     import struct
     n = struct.unpack_from("<H", data, 2)[0]
     offs = [struct.unpack_from("<I", data, 4 + 4 * i)[0] for i in range(n + 1)]
@@ -478,8 +529,11 @@ def _derive_fundort(con, pkhex):
     for spiel, src in (pkhex or {}).items():
         if spiel.startswith("_"):           # _items: Itemlisten, keine Begegnungen
             continue
-        names = pkhex_names(src.get("orte"))
-        name = lambda i: names[i] if 0 <= i < len(names) and names[i].strip() else f"Ort {i}"
+        names, names3 = pkhex_names(src.get("orte")), pkhex_names(src.get("orte3"))
+
+        def name(i):
+            lst, k = (names3, i - 30000) if i >= 30000 else (names, i)
+            return lst[k] if 0 <= k < len(lst) and lst[k].strip() else f"Ort {i}"
         rows = []
         for locs, kind, slots in pkhex_areas(src.get("begegnungen") or b""):
             if not locs:
@@ -494,8 +548,9 @@ def _derive_fundort(con, pkhex):
             pid = by_form.get((nr, form)) or by_art.get(nr)
             if pid:
                 rows.append((spiel, pid, name(loc), loc, "[]", FEST, level, level, 0, "PKHeX"))
-        con.executemany("INSERT INTO fundort VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
-        n += len(rows)
+        for sp in (spiel, *PKHEX_SHARE.get(spiel, ())):
+            con.executemany("INSERT INTO fundort VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [(sp, *r[1:]) for r in rows])
+            n += len(rows)
     con.execute("CREATE INDEX fundort_form ON fundort(form, spiel)")
     return n
 

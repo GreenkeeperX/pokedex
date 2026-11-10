@@ -10,11 +10,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.10.1"
+VERSION = "0.11.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.11.0", "10.11.2026", [
+        "Fundorte aus den Spieldaten auch für Karmesin/Purpur (mit beiden Erweiterungen), Legenden: Z-A (mit Alpha) "
+        "und Mega-Dimension, dazu Filter „Gebiet“ für diese Spiele",
+        "Fundorte: Spalten nur, wo es Daten gibt (Stellen, Tageszeit, Wetter, Alpha)",
+        "Einstellungen: Lesezeichen „Seite untersuchen“ liest Seiten, deren Karten erst im Browser laden (etwa das PokéWiki), als Datei",
+        "Verbindungstest: Karten von GamerGuides und Pokébip zum Vergleich",
+    ]),
     ("0.10.1", "10.11.2026", [
         "Karte: Geisterlichter und Gedichte heißen jetzt wie im Spiel",
         "Verbindungstest: mögliche Quellen für bessere Item-Bilder (Serebii, PokéWiki) sowie Lager und Schnellreise "
