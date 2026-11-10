@@ -264,6 +264,21 @@ class Leser(unittest.TestCase):
         self.assertEqual(rows["poke-ball"][3:5], ("Catches.", "en"))
         self.assertEqual(rows["lapoke-ball"][1], "Pokéball (Hisui)")
 
+    def test_bewaehrte_sets(self):
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        sets = {9: {"pikachu": {"level": 93, "sets": [{"role": "Fast Attacker", "movepool": ["Fake Out", "Volt Tackle"],
+                                                        "abilities": ["Lightning Rod"], "teraTypes": ["Water"]}]},
+                    "kaputt": "kein Eintrag"},
+                1: {"pikachu": {"level": 91, "moves": ["surf", "thunderbolt"]}}}
+        self.assertEqual(importer._derive_moveset(con, sets), 2)
+        rows = {r[0]: r for r in con.execute("SELECT gen, pokemon, rolle, attacken, faehigkeiten, level FROM moveset")}
+        self.assertEqual(rows[9][1:], ("pikachu", "Fast Attacker", '["fakeout", "volttackle"]', '["Lightning Rod"]', 93))
+        self.assertEqual(rows[1][2:4], ("", '["surf", "thunderbolt"]'))
+        self.assertTrue(abruf.sets_url(1).endswith("random-battles/gen1/data.json"))
+        self.assertTrue(abruf.sets_url(9).endswith("random-battles/gen9/sets.json"))
+
+    def test_showdown(self):
         text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"
                 "\t\tname: \"Hyper Beam\",\n\t\tpp: 5,\n\t\tpriority: 0,\n\t\tflags: {recharge: 1, protect: 1},\n\t\ttype: \"Normal\",\n\t},\n"
                 "\tswift: {\n\t\tnum: 129,\n\t\taccuracy: true,\n\t\tbasePower: 60,\n\t\tcategory: \"Special\",\n\t\tname: \"Swift\",\n"

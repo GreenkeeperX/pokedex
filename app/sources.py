@@ -10,11 +10,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.6.1"
+VERSION = "0.7.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.7.0", "10.11.2026", [
+        "Attacken: bewährte Sets aus Pokémon Showdown (Random Battle) für die Generation des Spiels, mit Rolle und "
+        "Fähigkeit; „Übernehmen“ setzt die vier stärksten lernbaren als eigene Auswahl",
+        "Attacken: Marken für Lehrer-Attacken und Beherrschung (Legenden: Arceus) hinter dem Namen",
+    ]),
     ("0.6.1", "10.11.2026", [
         "Neuer Reiter „Items“: alle Items des Spiels mit Tasche, Beschreibung und Preis, mit Suche",
         "Detailseite: „Mehr Details“ zum Aufklappen mit Fangchance je Ball (volle KP, 1 KP, schlafend), Geschlecht, "

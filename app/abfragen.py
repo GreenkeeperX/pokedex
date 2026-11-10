@@ -8,7 +8,7 @@ import os
 import re
 import threading
 
-from . import attacken, db, importer, team, typen
+from . import attacken, db, importer, showdown, team, typen
 
 LA = "legends-arceus"          # Legenden: Arceus kennt keine Fähigkeiten und eigene Attackenwerte
 NO_ABILITIES = {LA}
@@ -368,6 +368,60 @@ def how(D, meth, lv, mastery, mid=None, vg=None):
     return {"machine": "TM", "egg": "Ei", "tutor": "Lehrer"}.get(key) or D.methods.get(meth) or key
 
 
+ROLLEN = {"Fast Attacker": "schneller Angreifer", "Bulky Attacker": "robuster Angreifer", "Setup Sweeper": "Aufbau und Angriff",
+          "Bulky Setup": "robuster Aufbau", "Fast Bulky Setup": "schneller, robuster Aufbau", "Bulky Support": "robuste Unterstützung",
+          "Fast Support": "schnelle Unterstützung", "Wallbreaker": "Mauerbrecher", "Staller": "Hinhalten", "Tera Blast user": "Tera-Blast",
+          "AV Pivot": "Wechsler mit Offensivweste", "Generalist": "Allrounder", "Berry Sweeper": "Angriff mit Beere",
+          "Z-Move user": "Z-Attacke", "Dynamax User": "Dynamax", "Thief user": "mit Raub"}
+
+
+def _sd_move_map(D, con):
+    """{Showdown-Kennung: Attacken-ID}; Kraftreserve-Varianten (hiddenpowerfire) zählen als Kraftreserve."""
+    if getattr(D, "sd_moves", None) is None:
+        D.sd_moves = {importer._sd_key(k): i for i, k in con.execute("SELECT id, kennung FROM attacke")}
+    return D.sd_moves
+
+
+def proven_sets(con, D, f, g, gen, rows):
+    """Bewährte Sets aus Showdown (Random Battle) für die Generation des Spiels: Rolle, Attacken (lernbar oder nicht),
+    Vorschlag für vier (Schaden nach Wertung, dann Status), Fähigkeiten. Nur Sets derselben Generation; nicht für die
+    Legenden-Spiele (andere Kämpfe)."""
+    if g and g["kennung"].startswith("legends-"):
+        return [], None
+    names = [showdown.sd_id(f["kennung"])]
+    base = next((x for x in D.forms.values() if x["art"] == f["art"] and x["standard"]), None)
+    if base and base["id"] != f["id"] and base["typen"] == f["typen"]:
+        names.append(showdown.sd_id(base["kennung"]))        # Form ohne eigene Sets, gleiche Typen: die der Standardform
+    try:
+        found = []
+        for name in names:
+            found = con.execute("SELECT gen, rolle, attacken, faehigkeiten, tera, level FROM moveset WHERE pokemon = ? AND gen = ?",
+                                (name, gen)).fetchall()
+            if found:
+                break
+    except Exception:
+        return [], None
+    if not found:
+        return [], None
+    use = found[0]["gen"]
+    mm = _sd_move_map(D, con)
+    score = {r["id"]: r.get("wertung", 0) for r in rows}
+    out = []
+    for r in found:
+        if r["gen"] != use:
+            continue
+        moves = []
+        for k in json.loads(r["attacken"]):
+            mid = mm.get(k) or (mm.get("hiddenpower") if k.startswith("hiddenpower") else None)
+            m = D.moves.get(mid)
+            if m and all(x["id"] != mid for x in moves):
+                moves.append({"id": mid, "name": m["name"], "typ": m["typ"], "lernbar": mid in score})
+        pick = sorted((x for x in moves if x["lernbar"]), key=lambda x: -(score.get(x["id"]) or 0))
+        out.append({"rolle": ROLLEN.get(r["rolle"], r["rolle"]), "attacken": moves, "vorschlag": [x["id"] for x in pick[:4]],
+                    "faehigkeiten": json.loads(r["faehigkeiten"] or "[]"), "level": r["level"]})
+    return out, use
+
+
 def ranked_moves(con, D, f, g, gen, level=None):
     """Bewertete Schadens-Attacken einer Form im Spiel, mit Gründen, dazu Moveset und Status-Attacken."""
     ls, used = learnset(con, D, f, g)
@@ -417,8 +471,9 @@ def ranked_moves(con, D, f, g, gen, level=None):
     elif used and used["kennung"] == LA:
         hint = ("Stärke und Genauigkeit stammen aus den Hauptspielen: die PokéAPI hat für Legenden: Arceus keine eigenen Werte. "
                 "Dort weichen sie teils ab (Kraft- und Tempostil); die echten Werte kommen mit dem PokéWiki-Abruf.")
+    sets, sets_gen = proven_sets(con, D, f, g, gen, out + status)
     return {"spiel": used["kennung"] if used else "", "spiel_name": used["name"] if used else "", "attacken": out,
-            "moveset": moveset, "status": status, "hinweis": hint, "standard": standard}
+            "moveset": moveset, "status": status, "hinweis": hint, "standard": standard, "sets": sets, "sets_gen": sets_gen}
 
 
 def move_list(p):

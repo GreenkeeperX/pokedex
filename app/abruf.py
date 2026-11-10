@@ -402,14 +402,15 @@ def _build(st, log, force, at):
     STATE["step"] = "PokéAPI: Dateiliste"
     names, sha = csv_list(papi, log)
     sd = _Source("showdown", log)
-    sd_texts = {}
+    sd_texts, sets = {}, {}
     if not _resting(st, "showdown", at):
         for k in ("pokedex", "moves"):
             STATE["step"] = f"Showdown: {k}.ts"
             t = sd.get(f"{SD_RAW}{k}.ts")
             if t:
                 sd_texts[k] = t
-        st["sources"]["showdown"] = sd.result(dateien=len(sd_texts))
+        sets = _sets(sd)
+        st["sources"]["showdown"] = sd.result(dateien=len(sd_texts) + len(sets))
         if sd.blocked:
             st["rest"]["showdown"] = _iso(now() + timedelta(hours=REST_H))
     pkhex = _pkhex(st, log, at)
@@ -418,12 +419,14 @@ def _build(st, log, force, at):
     stand = {"csv": sha, "showdown": _hash(*(sd_texts.get(k, "") for k in ("pokedex", "moves"))) if len(sd_texts) == 2 else "",
              "pkhex": _hash(*(v for src in pkhex.values() for v in src.values())) if pkhex else "",
              "spawns": _hash(json.dumps(spawns, sort_keys=True)) if spawns else "",
+             "sets": _hash(json.dumps(sets, sort_keys=True)) if sets else "",
              "extra": _hash(json.dumps(extra, sort_keys=True)), "importer": importer.VERSION}
     old = st.get("stand") or {}
     if (db.has_data() and not force and sha and stand["csv"] == old.get("csv") and stand["extra"] == old.get("extra")
             and stand["importer"] == old.get("importer") and (not stand["showdown"] or stand["showdown"] == old.get("showdown"))
             and (not stand["pkhex"] or stand["pkhex"] == old.get("pkhex"))
-            and (not stand["spawns"] or stand["spawns"] == old.get("spawns"))):
+            and (not stand["spawns"] or stand["spawns"] == old.get("spawns"))
+            and (not stand["sets"] or stand["sets"] == old.get("sets"))):
         log("Keine Änderung bei PokéAPI, Showdown, PKHeX, Spawnpunkten und Ergänzungen, Datenbank bleibt")
         st["sources"]["pokeapi"] = papi.result(geaendert=False)
         return True
@@ -445,7 +448,7 @@ def _build(st, log, force, at):
     STATE.update(step="Datenbank bauen", done=0, total=0)
     tmp = db.pokeapi_path() + ".neu"
     try:
-        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex, spawns=spawns)
+        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex, spawns=spawns, sets=sets)
     except Exception as e:
         log(f"Neue Datenbank verworfen: {e}; die bisherige bleibt")
         if os.path.exists(tmp):
@@ -458,13 +461,38 @@ def _build(st, log, force, at):
         stand["pkhex"] = old.get("pkhex", "")
     if not spawns:
         stand["spawns"] = old.get("spawns", "")
+    if not sets:
+        stand["sets"] = old.get("sets", "")
     st["stand"], st["stats"], st["built"] = stand, stats, _iso(now())
     log(f"Datenbank neu: {stats['species']} Arten, {stats['forms']} Formen, {stats['moves']} Attacken, {stats['games']} Spiele, "
         f"{stats['tables']} Tabellen" + (f"; Showdown {stats['sd_pokemon']} Pokémon, {stats['sd_moves']} Attacken, "
                                          f"{stats['diff']} Abweichungen zu prüfen" if sd_texts else "; ohne Showdown-Abgleich")
         + (f"; {stats['fundorte']} Fundorte aus PKHeX" if pkhex else "; ohne Fundorte aus PKHeX")
-        + (f"; {stats['spawns']} Spawn-Einträge mit Tageszeit und Wetter" if spawns else ""))
+        + (f"; {stats['spawns']} Spawn-Einträge mit Tageszeit und Wetter" if spawns else "")
+        + (f"; {stats['sets']} bewährte Sets" if sets else ""))
     return not papi.stopped and not sd.stopped
+
+
+def sets_url(gen):
+    """Random-Battle-Sets von Showdown je Generation (Generation 1 hat nur data.json mit einem Set je Pokémon)."""
+    return f"{SD_RAW}random-battles/gen{gen}/{'data' if gen == 1 else 'sets'}.json"
+
+
+def _sets(sd):
+    """{Generation: Sets} von Showdown; was fehlt oder sich nicht lesen lässt, bleibt weg."""
+    out = {}
+    for gen in range(1, 10):
+        if sd.stopped:
+            break
+        STATE["step"] = f"Showdown: Sets Generation {gen}"
+        t = sd.get(sets_url(gen))
+        try:
+            data = json.loads(t) if t else None
+        except ValueError:
+            data = None
+        if isinstance(data, dict) and data:
+            out[gen] = data
+    return out
 
 
 def _pkhex(st, log, at):
