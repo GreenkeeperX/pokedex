@@ -144,9 +144,10 @@ function acts(id) {
     + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${got ? `In deiner Sammlung (${esc(gameName())}); Klick: doch nicht` : "Als gefangen markieren"}">${icon("ball", got)}</span>`
     + `${teamFull() ? `<span class="a ph"></span>` : `<span class="a plus" data-act="teamadd" data-id="${id}" data-tip="${inTeam ? "Noch einmal ins Team" : "Ins Team"}">${icon("plus")}</span>`}</span>`;
 }
-function monCard(r) {
-  const inTeam = S.team.ids.includes(r.id);
-  return `<a class="mon${inTeam ? " inteam" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="nr">#${r.nr ?? r.art}</span><span class="sp">${img(r.id)}${acts(r.id)}</span>
+function monCard(r, xmode = false) {
+  const inTeam = S.team.ids.includes(r.id), xs = xmode && XSEL.has(r.id);
+  return `<a class="mon${inTeam ? " inteam" : ""}${xs ? " xon" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="nr">#${r.nr ?? r.art}</span>${xmode
+    ? `<span class="xs${xs ? " on" : ""}" data-act="xsel" data-id="${r.id}" data-tip="${xs ? "Ausgewählt zum Übertragen; Klick: abwählen" : "Zum Übertragen auswählen"}">⇄</span>` : ""}<span class="sp">${img(r.id)}${acts(r.id)}</span>
     <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span></span><span class="ty">${tchips(r.typen)}</span>
     ${r.legendaer ? `<span class="s">legendär</span>` : ""}<span class="s">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b></span></span>
     ${radar(r.werte, 100)}</a>`;
@@ -429,9 +430,11 @@ function ago(iso) {
 }
 /* Spielauswahl nach Generation gruppiert (neueste oben); die Gruppen machen die lange Liste überschaubar */
 function gameOptions() {
-  const gs = S.meta?.spiele || [], groups = [];
-  gs.forEach((g) => { if (!groups.length || groups.at(-1)[0] !== g.gen) groups.push([g.gen, []]); groups.at(-1)[1].push(g); });
-  return `<option value="">Alle Spiele (neueste Werte)</option>` + groups.map(([gen, xs]) => `<optgroup label="Generation ${gen}">`
+  const gs = S.meta?.spiele || [], groups = [], home = gs.filter((g) => g.home);
+  gs.filter((g) => !g.home).forEach((g) => { if (!groups.length || groups.at(-1)[0] !== g.gen) groups.push([g.gen, []]); groups.at(-1)[1].push(g); });
+  return `<option value="">Alle Spiele (neueste Werte)</option>`
+    + (home.length ? `<optgroup label="Sammlung">${home.map((g) => `<option value="${esc(g.kennung)}">${esc(g.name)}</option>`).join("")}</optgroup>` : "")
+    + groups.map(([gen, xs]) => `<optgroup label="Generation ${gen}">`
     + xs.map((g) => `<option value="${esc(g.kennung)}">${esc(g.name)}</option>`).join("") + `</optgroup>`).join("");
 }
 function header() {
@@ -441,7 +444,7 @@ function header() {
   const a = S.meta?.abgleich || {}, last = a.finished || a.started;
   const stale = last && Date.now() - new Date(last) > 2 * (S.meta?.einstellungen?.tage || 7) * 86400000;
   $("#meta").innerHTML = !S.meta?.has_data ? (a.running ? "Erster Abgleich läuft …" : "Noch keine Daten")
-    : `${S.meta.formen} Pokémon und Formen · ${S.meta.attacken} Attacken · ${gs.length} Spiele`
+    : `${S.meta.formen} Pokémon und Formen · ${S.meta.attacken} Attacken · ${gs.filter((g) => !g.home).length} Spiele`
       + (a.running ? ` · <span>Abgleich läuft${a.step ? ": " + esc(a.step) : ""}</span>`
         : last ? ` · <span class="${stale ? "stale" : ""}" title="${esc(new Date(last).toLocaleString("de-DE"))}">Stand ${esc(ago(last))}</span>` : "");
   version();
@@ -705,9 +708,45 @@ function pageSize() {
   const cols = Math.max(1, Math.floor((w + 8) / (270 + 8)));
   return cols * Math.ceil(100 / cols);      // füllt die letzte Reihe
 }
+/* Sammlung übertragen: bei „nur aus deiner Sammlung“ lassen sich Karten mit ⇄ wählen und in ein anderes Spiel
+   oder nach Pokémon HOME übertragen (danach dort gefangen; im bisherigen Spiel nur auf Wunsch behalten) */
+const XSEL = new Set();
+const xmode = () => S.filter.nur === "gef";
+function xferBar() {
+  const box = $("#xfer");
+  if (!box) return;
+  if (!xmode()) { box.innerHTML = ""; XSEL.clear(); return; }
+  const gs = (S.meta?.spiele || []).filter((g) => g.kennung !== S.game);
+  const to = store.get("xferTo", "pokemon-home");
+  box.innerHTML = `<div class="xfer"><b>Sammlung übertragen</b><span class="hint">mit ⇄ an den Karten</span>
+    <button class="small" data-act="xall">Alle angezeigten</button><button class="small" data-act="xnone"${XSEL.size ? "" : " disabled"}>Keine</button>
+    <label>nach <select id="xto">${gs.map((g) => `<option value="${esc(g.kennung)}"${g.kennung === to ? " selected" : ""}>${esc(g.name)}</option>`).join("")}</select></label>
+    <label data-tip="Sonst verschwinden sie hier aus der Sammlung, wie beim Übertragen im Spiel"><input type="checkbox" id="xkeep"${store.get("xferKeep", false) ? " checked" : ""}> hier behalten</label>
+    <button class="primary" data-act="xgo"${XSEL.size ? "" : " disabled"}>${XSEL.size} übertragen</button></div>`;
+  $("#xto").addEventListener("change", (e) => store.set("xferTo", e.target.value));
+  $("#xkeep").addEventListener("change", (e) => store.set("xferKeep", e.target.checked));
+}
+function xsel(id, on = !XSEL.has(id)) {
+  if (on) XSEL.add(id); else XSEL.delete(id);
+  $$(`.mon[data-id="${id}"]`).forEach((el) => { el.classList.toggle("xon", on); $(".xs", el)?.classList.toggle("on", on); });
+  xferBar();
+}
+async function xferGo() {
+  const to = $("#xto").value, keep = $("#xkeep").checked, n = XSEL.size;
+  if (!n || !to) return;
+  if (!await ask(`${n} Pokémon nach ${gameName(to)} übertragen?`, keep ? `Sie bleiben auch in ${gameName()} in deiner Sammlung.`
+    : `Sie gelten danach in ${gameName(to)} als gefangen und verschwinden aus deiner Sammlung in ${gameName()}.`, "Übertragen")) return;
+  await api("/api/uebertragen", {von: S.game, nach: to, ids: [...XSEL], behalten: keep});
+  XSEL.clear();
+  S.caughtGame = null;
+  await loadCaught();
+  xferBar();
+  await loadList(true);
+}
 async function listView() {
-  main.innerHTML = filterBar(S.filter, "lf") + `<div class="list" id="list"></div><div class="more" id="more"></div>`;
-  bindFilter(S.filter, "lf", () => loadList(true), () => store.set("filter2", S.filter));
+  main.innerHTML = filterBar(S.filter, "lf") + `<div id="xfer"></div><div class="list" id="list"></div><div class="more" id="more"></div>`;
+  bindFilter(S.filter, "lf", () => { xferBar(); loadList(true); }, () => store.set("filter2", S.filter));
+  xferBar();
   const key = JSON.stringify([S.filter, S.game]);
   const back = LS.key === key && LS.offset;
   await loadList(true, back ? LS.offset : 0);
@@ -727,7 +766,7 @@ async function loadList(reset, want = 0) {
     const d = await api("/api/pokemon?" + qs({...filterQuery(S.filter), spiel: S.game, limit, offset: LS.offset}));
     if (rid !== RID || !$("#list")) return;
     d.rows.forEach((r) => { ROWS[r.id] = r; });
-    const html = d.rows.map(monCard).join("");
+    const html = d.rows.map((r) => monCard(r, xmode())).join("");
     if (reset) $("#list").innerHTML = html || `<p class="hint">Nichts gefunden.</p>`;
     else $("#list").insertAdjacentHTML("beforeend", html);
     LS.n = d.n;
@@ -997,6 +1036,7 @@ async function detailView(id, slot = null) {
           ${duelHtml(d.name, d.typen)}</div>
         ${evo ? `<div class="box"><h2>Entwicklung</h2><div class="evo">${evo}</div></div>` : ""}
         ${catchHtml(d)}
+        ${heldHtml(d)}
       </div>
     </div>
     <div class="box" style="margin-top:12px"><h2>Fundorte in ${esc(gameName())}</h2>${encHtml(d)}</div>
@@ -1027,6 +1067,14 @@ function wireExtras(d) {
   const rb = $("[data-ruf]");
   if (rb) rb.addEventListener("click", () => { new Audio(`rufe/${d.id}`).play().catch(() => { rb.textContent = "Ruf fehlt"; }); });
 }
+/* Getragene Items wilder Pokémon (PokéWiki), mit Bild und Anteil; „Elite“ nur bei Alpha-Pokémon */
+function heldHtml(d) {
+  const xs = d.getragen || [];
+  if (!xs.length) return "";
+  return `<div class="box"><h2>Getragene Items</h2><table class="rows held"><tbody>${xs.map((x) => `<tr>
+    <td>${x.id ? `<img class="ibild sm" src="itembild/${x.id}" alt="" loading="lazy">` : ""}</td><td><b>${wikiLink(x.item)}</b>${x.elite ? ` <span class="alpha" data-tip="Nur Elite-Pokémon (Alpha)">Elite</span>` : ""}</td>
+    <td class="c num">${esc(x.prozent)}</td></tr>`).join("")}</tbody></table><p class="hint">Beim Fangen oder Besiegen, aus dem PokéWiki.</p></div>`;
+}
 /* Fangchance als eigene Karte unter der Entwicklung: offen, solange das Pokémon nicht als gefangen markiert ist */
 function catchHtml(d) {
   const m = d.mehr || {};
@@ -1055,6 +1103,9 @@ function moreHtml(d) {
 // Farben für Werte: Stärke (bis 150), Genauigkeit (ab 70), Wertung (bis 160), von Rot nach Grün
 const ramp = (x) => `hsl(${Math.max(0, Math.min(1, x)) * 125} 62% 40%)`;
 const powCell = (v) => v ? `<span style="color:${ramp((v - 30) / 100)}">${v}</span>` : "–";
+// Stärke, in Legenden: Arceus darunter Kraftstil / Tempostil (aus dem PokéWiki)
+const powStil = (m) => powCell(m.staerke) + (m.kraft != null || m.tempo != null
+  ? `<span class="stil" data-tip="${esc(`Kraftstil: Stärke ${m.kraft ?? "–"} (langsamer, oft mit Zusatzwirkung)\nTempostil: Stärke ${m.tempo ?? "–"} (schneller, oft öfter am Zug)`)}">${m.kraft ?? "–"} / ${m.tempo ?? "–"}</span>` : "");
 const accCell = (v) => v ? `<span style="color:${ramp((v - 60) / 40)}">${v}</span>` : `<span data-tip="Trifft immer">–</span>`;
 const scoreColor = (v) => ramp((v - 20) / 120);
 // Alle Attacken des Spiels, für „andere Attacke hinzufügen“ (TM, Lehrer, Trainingsgelände)
@@ -1087,7 +1138,7 @@ function renderMoves(A, level) {
   const covered = new Set();
   mine.map(mv).filter((m) => m.klasse !== 1 && m.staerke).forEach((m) => Object.entries(S.chart?.[m.typ] || {}).forEach(([t, f]) => f > 1 && covered.add(t)));
   const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"><span${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</span>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${moveMarks(m)}</td>
-    <td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td><td class="c"><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="c num" data-s="${m.staerke ?? 0}">${powCell(m.staerke)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
+    <td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td><td class="c"><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="c num" data-s="${m.staerke ?? 0}">${powStil(m)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
     <td class="c num" data-s="${status ? 0 : m.wertung}">${status ? "–" : `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>`}</td><td class="c weg" data-s="${esc(m.wege[0] || "")}">${m.wege.map((w) => esc(w).replace(", Beherrschung", "<br>Beherrschung")).join("<br>")}</td><td class="why">${status ? (m.kurz ? `<b>${kurzHtml(m.kurz)}</b>` : esc(m.text || "")) : (m.kurz ? kurzHtml(m.kurz) + (m.gruende.length ? " · " : "") : "") + esc(m.gruende.join(" · "))}</td>
     <td class="c">${mine.includes(m.id) ? `<button class="small on" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✓</button>` : mine.length < 4 ? `<button class="small" data-act="mvadd" data-mid="${m.id}" data-tip="In deine Auswahl (4 Plätze)">+</button>` : ""}</td></tr>`;
   const std = (A.standard || []).map((x) => all[x]?.name).filter(Boolean);
@@ -1098,7 +1149,7 @@ function renderMoves(A, level) {
     const r = all[m.id];
     return `<tr class="mvchip" draggable="true" data-i="${i}"><td class="grip" data-tip="Ziehen zum Umsortieren">⋮⋮</td><td class="c">${tchip(m.typ)}</td>
       <td${m.text ? ` data-tip="${esc(m.text)}"` : ""}><b>${esc(m.name)}</b>${r ? "" : ` <span class="cls" data-tip="Nicht in der Lernliste dieses Spiels (TM, Lehrer, Trainingsgelände)">beigebracht</span>`}</td>
-      <td class="c"><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="c num">${powCell(m.staerke)}</td><td class="c num">${accCell(m.genauigkeit)}</td>
+      <td class="c"><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="c num">${powStil(r || m)}</td><td class="c num">${accCell((r || m).genauigkeit)}</td>
       <td class="c num">${r?.wertung ? `<b style="color:${scoreColor(r.wertung)}">${r.wertung}</b>` : ""}</td>
       <td><button class="link" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✕</button></td></tr>`;
   };
@@ -1506,10 +1557,10 @@ async function movesView() {
       (!q || m.name.toLowerCase().includes(q)) && (!f.min || (m.staerke || 0) >= +f.min) && (!f.prio || m.prio > 0) &&
       (f.kontakt === "" || m.merkmale.includes("contact") === (f.kontakt === "1")));
     $("#mcnt").textContent = `${xs.length} von ${rows.length} Attacken in ${gameName()}`;
-    $("#mv").innerHTML = `<div class="box scroll"><table class="sort fixed lines" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:62px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
+    $("#mv").innerHTML = `<div class="box scroll"><table class="sort fixed lines" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:70px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
       ${thc("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${thc("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${thc("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${thc("Gen", "Generation, seit der es die Attacke gibt")}${th("Wirkung", "Kurz-Info aus den Spieldaten; die ganze Beschreibung beim Hovern über die Zeile", true)}</tr></thead><tbody>
       ${xs.map((m) => `<tr><td data-s="${esc(m.name)}"><b${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</b>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
-        <td class="c"><span class="cls">${CLS[m.klasse]}</span></td><td class="c num" data-s="${m.staerke || 0}">${powCell(m.staerke)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
+        <td class="c"><span class="cls">${CLS[m.klasse]}</span></td><td class="c num" data-s="${m.staerke || 0}">${powStil(m)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
         <td class="c num">${m.ap ?? ""}</td><td class="c num">${m.prio ? `<span data-tip="${m.prio > 0 ? `Vorrang +${m.prio}: kommt vor normalen Attacken` : `Vorrang ${m.prio}: kommt nach normalen Attacken`}">${m.prio > 0 ? "+" : ""}${m.prio}</span>` : ""}</td>
         <td class="c num" data-s="${m.wertung}"${m.gruende.length ? ` data-tip="${esc(m.gruende.join("\n"))}"` : ""}>${m.wertung ? `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>` : ""}</td>
         <td class="c num">${m.lernen || ""}</td><td class="c num">${m.gen || ""}</td><td class="kurz">${kurzHtml(m.kurz || (m.klasse === 1 ? m.text || "" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
@@ -1882,6 +1933,10 @@ document.addEventListener("click", async (e) => {
     else if (act === "fav") await toggleFav(id);
     else if (act === "favadd") { $("#pick").hidden = true; await toggleFav(id, true); }
     else if (act === "caught") await toggleCaught(id);
+    else if (act === "xsel") xsel(id);
+    else if (act === "xall") $$("#list .mon[data-id]").forEach((el) => xsel(+el.dataset.id, true));
+    else if (act === "xnone") [...XSEL].forEach((x) => xsel(x, false));
+    else if (act === "xgo") await xferGo();
     else if (act === "pick") picker(b, +b.dataset.slot);
     else if (act === "pickfav") { $("#pick").hidden = true; addToTeam(id, +b.dataset.slot); }
     else if (act === "tgame") setGame(S.team.spiel);

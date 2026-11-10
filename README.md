@@ -10,13 +10,14 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Fähigkeiten). Filter nach Spiel (Regional-Dex, etwa Hisui für Legenden: Arceus), Typen als Bubbles (und/oder,
   ausschließen) oder „stark gegen Typ“, bis oder nur Generation, Endstufe, Legendäre, Basiswerten, nur Favoriten
   oder Gefangene, Gebiet (Legenden: Arceus); Sortierung nach Werten. Hover-Karte mit Artwork, Netzdiagramm (außen = Höchstwert aller Pokémon),
-  Schwächen und Typ-Duellen; Karten lassen sich in die Team-Leiste ziehen; Favoriten (Stern) und Gefangene (Pokéball)
+  Schwächen und Typ-Duellen; Karten lassen sich in die Team-Leiste ziehen; „Pokémon HOME“ als eigene Sammlung,
+  Übertragen der Sammlung mit ⇄ (nach HOME oder in ein anderes Spiel); Favoriten (Stern) und Gefangene (Pokéball)
   je Spiel.
 - **Detailseite**: Basiswerte, Fähigkeiten, Typwirkung (mit Fähigkeiten wie Schwebe), Entwicklung mit Bedingungen,
   „Im Duell gegen Typen“ (klar im Vorteil, im Vorteil, im Nachteil; ↑ austeilen, ↓ einstecken), Fangchance je Ball
   (offen, solange nicht gefangen), Fundorte im Spiel (Legenden: Arceus aus den Spieldaten mit Stellen, Level und
   Alpha), „Mehr Details“ zum Aufklappen (Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute, je nach Spiel),
-  schillerndes Artwork und animiertes Sprite, Ruf, Links ins PokéWiki.
+  schillerndes Artwork und animiertes Sprite, Ruf, getragene Items, Links ins PokéWiki.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
   Vorschlag für vier Attacken mit Typ-Abdeckung. Eigene Auswahl mit Standard-Attacken wie im Spiel, beigebrachten
@@ -53,7 +54,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus: Gebiet, Stellen, Level, Alpha, feste Begegnungen) | GPL-3.0 |
 | [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
 | [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln, nur im Datenordner auf dem Server) | Bilder von Serebii, Spielgrafik von Nintendo |
-| [PokéWiki](https://www.pokewiki.de) | Links; geplant: Legenden: Arceus (Fundorte, Elite-Pokémon, Edelhorden, Karten) | CC BY-SA 3.0 DE |
+| [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items; geplant: Edelhorden, Kartensymbole | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
 
