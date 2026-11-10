@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.10.1
+
+- Deutsche Namen wie im Spiel: Geisterlichter, Gedichte
+- Verbindungstest: Item-Bilder von Serebii (`itemdex/sprites/…`) und aus dem PokéWiki (`list=allimages`), Serebii-Kartenseite
+  (Probe bis 400 000 Zeichen) und PokéWiki-Suche nach Lager und Schnellreise, damit sich neue Leser bauen lassen
+
 ## 0.10.0 (Kartensymbole, Jubeldorf, Items weiterer Spiele, Rezepte; Entscheidung 10.11.2026)
 
 - `app/altissimo.py` liest Altissimo (GPL-3.0): Bäume, Erzbrocken, Laub- und Heuhaufen, Kisten und Truhen mit Items

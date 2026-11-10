@@ -1,7 +1,7 @@
 """Legenden: Arceus aus den Seiten von Altissimo (altissimo1.github.io, GPL-3.0), ohne Netz gelesen:
 
 - Kartensymbole: Bäume, Erzbrocken, Laub- und Heuhaufen, Kisten (Landmarks/json/<Gebiet>-spawns.json)
-- Sammelobjekte: Irrlichter, Icognito, alte Verse, Grabstellen (Collectibles/json/<Gebiet>.json), auch in Jubeldorf
+- Sammelobjekte: Geisterlichter, Icognito, Gedichte, Grabstellen (Collectibles/json/<Gebiet>.json), auch in Jubeldorf
 - Rezepte zum Herstellen mit Zutaten (recipes.html)
 
 Altissimo gibt die Lage in Prozent seines Kartenbilds an. FIT rechnet sie in Spielkoordinaten um wie die Spawnpunkte
@@ -35,7 +35,7 @@ VILLAGE_FIT = (0.09765625, 0.0, 0.09765625, 0.0)    # 100 % = 1024 Spieleinheite
 ARTEN = {"aprikoko": ("Aprikoko-Baum", "Aprikoko-Bäume"), "beere": ("Beerenbaum", "Beerenbäume"),
          "baum": ("Baum", "Bäume mit Zutaten"), "erz": ("Erzbrocken", "Erzbrocken"), "laub": ("Laubhaufen", "Laubhaufen"),
          "heu": ("Heuhaufen", "Heuhaufen"), "kiste": ("Kiste", "Kisten"), "truhe": ("Truhe", "Truhen"),
-         "irrlicht": ("Irrlicht", "Irrlichter"), "icognito": ("Icognito", "Icognito"), "vers": ("Alter Vers", "Alte Verse"),
+         "irrlicht": ("Geisterlicht", "Geisterlichter"), "icognito": ("Icognito", "Icognito"), "vers": ("Gedicht", "Gedichte"),
          "graben": ("Grabstelle", "Grabstellen")}
 _LANDMARK = {"ore": "erz", "leaf": "laub", "hay": "heu", "box": "kiste", "chest": "truhe"}
 _COLLECT = {"wisp": "irrlicht", "unown": "icognito", "verse": "vers", "dig": "graben"}

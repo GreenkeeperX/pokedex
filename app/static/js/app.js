@@ -1619,8 +1619,8 @@ const mpct = (x) => String(x).replace(".", ",") + " %";
 /* Kartensymbole (Altissimo): Zeichen und Farbe je Art; Ebenen lassen sich einzeln ausblenden */
 const MOBJ = {aprikoko: "A", beere: "B", baum: "Z", erz: "E", laub: "L", heu: "H", kiste: "K", truhe: "T",
   irrlicht: "✦", icognito: "?", vers: "V", graben: "G"};
-const MOBJHINT = {irrlicht: "Irrlicht zum Einsammeln; 107 gibt es in ganz Hisui.", icognito: "Icognito zum Fangen; 28 Formen gibt es in Hisui.",
-  vers: "Alter Vers zum Lesen (Sammelobjekt).", graben: "Grabstelle: hier lässt sich mit Ursaluna nach Items graben."};
+const MOBJHINT = {irrlicht: "Geisterlicht zum Einsammeln; 107 gibt es in ganz Hisui.", icognito: "Icognito zum Fangen; 28 Formen gibt es in Hisui.",
+  vers: "Gedicht zum Lesen (Sammelobjekt).", graben: "Grabstelle: hier lässt sich mit Ursaluna nach Items graben."};
 const mobjTip = (o, arten) => `${arten[o.art]?.[0] || o.art}${o.nr ? " " + o.nr : ""}` + (o.menge ? `\n${o.menge} Stück je Mal` : "")
   + (o.items.length ? "\n" + o.items.map(([n, p]) => `${n}: ${p}`).join("\n") : "");
 async function mapView(karte, fid) {
