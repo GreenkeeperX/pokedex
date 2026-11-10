@@ -24,7 +24,8 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    liest Attackenwerte (Legenden: Arceus mit Kraft- und Tempostil) und getragene Items; das Ergebnis liegt in
    `pokewiki.json` im Datenordner und gilt weiter, wenn das Wiki ruht. Die Namen stammen aus der bisherigen Datenbank.
 4. Hat sich nichts geändert (Commit, Prüfsumme von Showdown, PKHeX, PokéWiki und `extra/`, `importer.VERSION`), bleibt die
-   Datenbank. Sonst alle CSV-Dateien holen (raw.githubusercontent.com), in `pokeapi.db.neu` bauen und nach
+   Datenbank. Sonst alle CSV-Dateien holen (raw.githubusercontent.com; bei unverändertem Commit aus
+   `pokeapi-csv.json.gz` im Datenordner), in `pokeapi.db.neu` bauen und nach
    bestandener Selbstprüfung (Mindestzahl Arten, Attacken, Spiele, 18 Typen) austauschen. Scheitert etwas,
    bleibt die alte Datenbank.
 5. **Bilder**: fehlende Sprites (96 × 96) und danach offizielle Artworks (475 × 475) je Form, je Art höchstens 1500 je Lauf. Gibt es ein Bild nicht (404), fragt der

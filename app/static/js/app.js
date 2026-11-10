@@ -429,10 +429,10 @@ function ago(iso) {
   return `vor ${Math.round(d / 1440)} Tagen`;
 }
 /* Spielauswahl nach Generation gruppiert (neueste oben); die Gruppen machen die lange Liste überschaubar */
-function gameOptions() {
-  const gs = S.meta?.spiele || [], groups = [], home = gs.filter((g) => g.home);
+function gameOptions(skip = null, all = true) {
+  const gs = (S.meta?.spiele || []).filter((g) => g.kennung !== skip), groups = [], home = gs.filter((g) => g.home);
   gs.filter((g) => !g.home).forEach((g) => { if (!groups.length || groups.at(-1)[0] !== g.gen) groups.push([g.gen, []]); groups.at(-1)[1].push(g); });
-  return `<option value="">Alle Spiele (neueste Werte)</option>`
+  return (all ? `<option value="">Alle Spiele (neueste Werte)</option>` : "")
     + (home.length ? `<optgroup label="Sammlung">${home.map((g) => `<option value="${esc(g.kennung)}">${esc(g.name)}</option>`).join("")}</optgroup>` : "")
     + groups.map(([gen, xs]) => `<optgroup label="Generation ${gen}">`
     + xs.map((g) => `<option value="${esc(g.kennung)}">${esc(g.name)}</option>`).join("") + `</optgroup>`).join("");
@@ -539,6 +539,7 @@ async function route() {
   if (location.hash !== HERE) { FROM = HERE; HERE = location.hash; }
   const [tab, arg, arg2] = (location.hash.slice(1) || "pokemon").split("/");
   nav(tab);
+  const rid = RID;
   try {
     if (!S.meta?.has_data && tab !== "einstellungen") return noData();
     await Promise.all([loadChart(), loadFavs(), loadCaught()]);
@@ -552,7 +553,9 @@ async function route() {
     else if (tab === "einstellungen") await settingsView();
     else location.hash = "pokemon";
   } catch (e) {
-    main.innerHTML = `<div class="note stop">Fehler: ${esc(e.message)}</div>`;
+    // eine inzwischen überholte Ansicht schreibt keinen Fehler über die neue
+    if (rid === RID) main.innerHTML = `<div class="note stop">Fehler: ${esc(e.message)}</div>`;
+    else console.warn(e);
   }
   dock();
 }
@@ -715,15 +718,17 @@ const xmode = () => S.filter.nur === "gef";
 function xferBar() {
   const box = $("#xfer");
   if (!box) return;
+  $("#list")?.classList.toggle("xmode", xmode());
   if (!xmode()) { box.innerHTML = ""; XSEL.clear(); return; }
-  const gs = (S.meta?.spiele || []).filter((g) => g.kennung !== S.game);
   const to = store.get("xferTo", "pokemon-home");
   box.innerHTML = `<div class="xfer"><b>Sammlung übertragen</b><span class="hint">mit ⇄ an den Karten</span>
     <button class="small" data-act="xall">Alle angezeigten</button><button class="small" data-act="xnone"${XSEL.size ? "" : " disabled"}>Keine</button>
-    <label>nach <select id="xto">${gs.map((g) => `<option value="${esc(g.kennung)}"${g.kennung === to ? " selected" : ""}>${esc(g.name)}</option>`).join("")}</select></label>
+    <label>nach <select id="xto">${gameOptions(S.game, false)}<optgroup label="Aufräumen"><option value="freilassen">Freilassen (aus der Sammlung nehmen)</option></optgroup></select></label>
     <label data-tip="Sonst verschwinden sie hier aus der Sammlung, wie beim Übertragen im Spiel"><input type="checkbox" id="xkeep"${store.get("xferKeep", false) ? " checked" : ""}> hier behalten</label>
     <button class="primary" data-act="xgo"${XSEL.size ? "" : " disabled"}>${XSEL.size} übertragen</button></div>`;
-  $("#xto").addEventListener("change", (e) => store.set("xferTo", e.target.value));
+  $("#xto").value = [...$("#xto").options].some((o) => o.value === to) ? to : $("#xto").options[0]?.value || "";
+  $("#xto").addEventListener("change", (e) => { store.set("xferTo", e.target.value); $("#xkeep").closest("label").hidden = e.target.value === "freilassen"; });
+  $("#xkeep").closest("label").hidden = $("#xto").value === "freilassen";
   $("#xkeep").addEventListener("change", (e) => store.set("xferKeep", e.target.checked));
 }
 function xsel(id, on = !XSEL.has(id)) {
@@ -734,7 +739,9 @@ function xsel(id, on = !XSEL.has(id)) {
 async function xferGo() {
   const to = $("#xto").value, keep = $("#xkeep").checked, n = XSEL.size;
   if (!n || !to) return;
-  if (!await ask(`${n} Pokémon nach ${gameName(to)} übertragen?`, keep ? `Sie bleiben auch in ${gameName()} in deiner Sammlung.`
+  if (to === "freilassen") {
+    if (!await ask(`${n} Pokémon freilassen?`, `Sie verschwinden aus deiner Sammlung in ${gameName()}.`, "Freilassen", true)) return;
+  } else if (!await ask(`${n} Pokémon nach ${gameName(to)} übertragen?`, keep ? `Sie bleiben auch in ${gameName()} in deiner Sammlung.`
     : `Sie gelten danach in ${gameName(to)} als gefangen und verschwinden aus deiner Sammlung in ${gameName()}.`, "Übertragen")) return;
   await api("/api/uebertragen", {von: S.game, nach: to, ids: [...XSEL], behalten: keep});
   XSEL.clear();
@@ -744,7 +751,7 @@ async function xferGo() {
   await loadList(true);
 }
 async function listView() {
-  main.innerHTML = filterBar(S.filter, "lf") + `<div id="xfer"></div><div class="list" id="list"></div><div class="more" id="more"></div>`;
+  main.innerHTML = filterBar(S.filter, "lf") + `<div id="xfer"></div><div class="list${xmode() ? " xmode" : ""}" id="list"></div><div class="more" id="more"></div>`;
   bindFilter(S.filter, "lf", () => { xferBar(); loadList(true); }, () => store.set("filter2", S.filter));
   xferBar();
   const key = JSON.stringify([S.filter, S.game]);
@@ -861,7 +868,7 @@ function moveSlot(a, b) {
 }
 const slotOf = (id) => S.team.ids.indexOf(id);
 // Passt das Team zum gewählten Spiel? Fragt den Server knapp (ohne Verbesserungen) und merkt sich die Antwort
-let CHECK = {key: "", nicht: []};
+let CHECK = {key: "", nicht: [], fremd: {}};
 function teamCheck() {
   const key = S.game + "|" + S.team.ids.join(",") + "|" + JSON.stringify(S.team.details.map((d) => d.attacken || []));
   if (CHECK.key === key || teamCheck.busy) return;
@@ -869,7 +876,7 @@ function teamCheck() {
   api("/api/team/bewerten", {spiel: S.game, ids: S.team.ids, details: S.team.details, kurz: 1}).then((ev) => {
     (ev.mitglieder || []).forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
     Object.entries(ev.attacken || {}).forEach(([k, m]) => { MOVES[k] = Object.assign(MOVES[k] || {}, m, {id: +k}); });
-    CHECK = {key, nicht: ev.nicht_im_spiel || []};
+    CHECK = {key, nicht: ev.nicht_im_spiel || [], fremd: ev.fremde_attacken || {}};
     teamCheck.busy = false;
     dock();
     if (location.hash.startsWith("#team") && $("#tnote")) teamNote();
@@ -880,6 +887,9 @@ function mismatch() {
   if (t.spiel && t.spiel !== S.game) out.push(`Dieses Team gehört zu ${gameName(t.spiel)}, oben ist ${gameName()} gewählt.`);
   const n = CHECK.nicht.filter((i) => i < t.ids.length);
   if (n.length && S.game) out.push(`Nicht in ${gameName()}: ${n.map((i) => ROWS[t.ids[i]]?.name || "#" + t.ids[i]).join(", ")}.`);
+  const fm = Object.entries(CHECK.fremd || {}).filter(([i]) => +i < t.ids.length);
+  if (fm.length && S.game) out.push(`Attacken, die es so in ${gameName()} nicht gibt: ${fm.map(([i, xs]) => `${xs.map((x) => MOVES[x]?.name || "#" + x).join(", ")} (${ROWS[t.ids[+i]]?.name || "#" + t.ids[+i]})`).join("; ")}.`);
+  return out;
   return out;
 }
 function dock() {
@@ -1166,7 +1176,9 @@ function renderMoves(A, level) {
           : `<p class="hint">Mit + in der Tabelle wählen. ${inTeam ? "Die Auswahl zählt in der Team-Bewertung." : "Gespeichert in diesem Browser; im Team zählt sie für die Bewertung."}</p>`}
         <div class="bar">${mine.length ? `<button class="small" data-act="mvclear" data-tip="Alle vier Plätze leeren">Alle entfernen</button>` : ""}${std.length ? `<button class="small" data-act="mvstd" data-tip="${esc("Wie im Spiel: die letzten vier Level-Attacken bis zum Level (ohne Level die ersten vier): " + std.join(", "))}">Standard-Attacken</button>` : ""}
           <div class="ac"><input id="mvextra" type="search" placeholder="Andere Attacke (TM, Lehrer …)" style="width:240px"></div></div></div>
-      <div><h3>Vorschlag: vier Attacken</h3><div class="sugl">${A.moveset.map((m) => `<div class="${mine.includes(m.id) ? "same" : ""}">${tchip(m.typ)} <b>${esc(m.name)}</b> <span class="why">${esc(m.grund)}</span></div>`).join("") || `<span class="hint">Keine Schadens-Attacke.</span>`}</div>
+      <div><h3>Vorschlag: vier Attacken</h3><table class="mine sug"><thead><tr><th class="c">Typ</th><th>Attacke</th><th>Warum</th></tr></thead><tbody>${[0, 1, 2, 3].map((i) => { const m = A.moveset[i];
+          return m ? `<tr class="sgrow${mine.includes(m.id) ? " same" : ""}"><td class="c">${tchip(m.typ)}</td><td><b>${esc(m.name)}</b></td><td class="why">${esc(m.grund)}</td></tr>`
+            : `<tr class="sgrow empty"><td colspan="3" class="hint">${i ? "" : "Keine Schadens-Attacke."}</td></tr>`; }).join("")}</tbody></table>
         ${A.moveset.length ? `<button class="small" data-act="mvtake" style="margin-top:6px">Als eigene Auswahl übernehmen</button>` : ""}
         ${setsHtml(A, mine)}</div>
     </div>
@@ -1417,7 +1429,7 @@ async function teamRefresh() {
   if (rid !== RID || !$("#slots")) return;
   (ev.mitglieder || []).forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
   Object.entries(ev.attacken || {}).forEach(([k, m]) => { MOVES[k] = Object.assign(MOVES[k] || {}, m, {id: +k}); });
-  CHECK = {key: "", nicht: ev.nicht_im_spiel || []};
+  CHECK = {key: "", nicht: ev.nicht_im_spiel || [], fremd: ev.fremde_attacken || {}};
   teamNote();
   teamBar();
   const bad = new Set(CHECK.nicht);
@@ -1433,7 +1445,9 @@ async function teamRefresh() {
       <a href="#pokemon/${id}/${i}" draggable="false">${img(id, "mid", true)}<br><b>${esc(m.name)}</b></a>
       ${bad.has(i) ? `<div class="note warn small">Nicht in ${esc(gameName())}</div>` : ""}
       <div>${tchips(m.typen)}</div><div class="hint">${det.level ? "Level " + det.level + " · " : ""}Basiswerte <b style="color:${sumColor(m.summe)}">${m.summe}</b></div>
-      <div class="mvs">${(det.attacken || []).map((x) => MOVES[x] ? `<span class="mv">${tchip(MOVES[x].typ)} ${esc(MOVES[x].name)}</span>` : "").join("") || `<a class="hint" href="#pokemon/${id}/${i}">Attacken wählen</a>`}</div></div>`;
+      <div class="mvs">${(det.attacken || []).map((x) => MOVES[x] ? (CHECK.fremd?.[i] || []).includes(x)
+        ? `<span class="mv off" data-tip="${esc(`Nicht in der Lernliste von ${gameName()}`)}">${tchip(MOVES[x].typ)} ${esc(MOVES[x].name)} <b class="wbadge">!</b></span>`
+        : `<span class="mv">${tchip(MOVES[x].typ)} ${esc(MOVES[x].name)}</span>` : "").join("") || `<a class="hint" href="#pokemon/${id}/${i}">Attacken wählen</a>`}</div></div>`;
   }).join("");
   dock();
   t.ids.forEach((x, i) => fillStandard(i));
@@ -1536,7 +1550,7 @@ const VERDICT = {schicken: ["Vorteil", "im Vorteil, gut einzusetzen"], geht: ["a
 
 /* ------------------------------------------------------------------ Attacken */
 async function movesView() {
-  const f = Object.assign({q: "", typen: [], klasse: "", lernbar: true, min: "", prio: false, kontakt: ""}, store.get("mfilter2", {}));
+  const f = Object.assign({q: "", typen: [], klasse: "", lernbar: true, min: "", prio: false, kontakt: "", gen: "", genmodus: "bis"}, store.get("mfilter2", {}));
   const rid = RID;
   main.innerHTML = `<div class="bar"><span class="hint">Spiel</span><select class="gamesel"></select>
     <input id="mq" class="grow" type="search" placeholder="Attacke suchen" value="${esc(f.q)}"></div>
@@ -1545,6 +1559,8 @@ async function movesView() {
       <label data-tip="Nur Attacken, die im gewählten Spiel mindestens ein Pokémon lernen kann"><input type="checkbox" id="mlern"${f.lernbar ? " checked" : ""}> im Spiel erlernbar</label>
       <label data-tip="Vorrang (Priorität): die Attacke kommt vor normalen Attacken dran, egal wie schnell der Gegner ist (etwa Ruckzuckhieb). Höhere Zahl = noch früher"><input type="checkbox" id="mprio"${f.prio ? " checked" : ""}> nur mit Vorrang</label>
       <label data-tip="Kontakt: der Angreifer berührt das Ziel. Das löst Fähigkeiten wie Rauhaut, Statik oder Flammkörper aus; Attacken ohne Kontakt umgehen sie">Kontakt <select id="mkon"><option value="">egal</option><option value="1"${f.kontakt === "1" ? " selected" : ""}>mit</option><option value="0"${f.kontakt === "0" ? " selected" : ""}>ohne</option></select></label>
+      <label data-tip="„bis“: Attacken bis zu dieser Generation; „nur“: Attacken, die in dieser Generation neu kamen"><select id="mgm"><option value="bis">bis</option><option value="nur"${f.genmodus === "nur" ? " selected" : ""}>nur</option></select>
+        Gen <select id="mgen"><option value="">alle</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => `<option${+f.gen === g ? " selected" : ""}>${g}</option>`).join("")}</select></label>
       <label>Stärke ab <input id="mmin" type="number" min="0" max="250" step="10" style="width:70px" value="${esc(f.min)}"></label>
       <button data-act="mreset">Zurücksetzen</button><span class="hint grow" id="mcnt"></span></div>
     <div id="mv"><p class="hint">Lädt …</p></div>`;
@@ -1555,15 +1571,19 @@ async function movesView() {
     const q = f.q.trim().toLowerCase();
     const xs = rows.filter((m) => (!f.typen.length || f.typen.includes(String(m.typ))) && (!f.klasse || String(m.klasse) === f.klasse) &&
       (!q || m.name.toLowerCase().includes(q)) && (!f.min || (m.staerke || 0) >= +f.min) && (!f.prio || m.prio > 0) &&
-      (f.kontakt === "" || m.merkmale.includes("contact") === (f.kontakt === "1")));
+      (f.kontakt === "" || m.merkmale.includes("contact") === (f.kontakt === "1")) &&
+      (!f.gen || (f.genmodus === "nur" ? m.gen === +f.gen : m.gen <= +f.gen)));
     $("#mcnt").textContent = `${xs.length} von ${rows.length} Attacken in ${gameName()}`;
     $("#mv").innerHTML = `<div class="box scroll"><table class="sort fixed lines" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:70px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
       ${thc("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${thc("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${thc("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${thc("Gen", "Generation, seit der es die Attacke gibt")}${th("Wirkung", "Kurz-Info aus den Spieldaten; die ganze Beschreibung beim Hovern über die Zeile", true)}</tr></thead><tbody>
-      ${xs.map((m) => `<tr><td data-s="${esc(m.name)}"><b${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</b>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
+      ${xs.map((m) => `<tr data-r="${m.id}"><td data-s="${esc(m.name)}"><b${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</b>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
         <td class="c"><span class="cls">${CLS[m.klasse]}</span></td><td class="c num" data-s="${m.staerke || 0}">${powStil(m)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
         <td class="c num">${m.ap ?? ""}</td><td class="c num">${m.prio ? `<span data-tip="${m.prio > 0 ? `Vorrang +${m.prio}: kommt vor normalen Attacken` : `Vorrang ${m.prio}: kommt nach normalen Attacken`}">${m.prio > 0 ? "+" : ""}${m.prio}</span>` : ""}</td>
         <td class="c num" data-s="${m.wertung}"${m.gruende.length ? ` data-tip="${esc(m.gruende.join("\n"))}"` : ""}>${m.wertung ? `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>` : ""}</td>
         <td class="c num">${m.lernen || ""}</td><td class="c num">${m.gen || ""}</td><td class="kurz">${kurzHtml(m.kurz || (m.klasse === 1 ? m.text || "" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
+    const tb = $("#mv table");
+    $$("tbody tr", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.c = i; }));
+    crossTable(tb, APIN);
   };
   const load = async () => {
     const d = await api("/api/attacken?" + qs({spiel: S.game, lernbar: f.lernbar ? 1 : 0}));
@@ -1583,11 +1603,13 @@ async function movesView() {
   $("#mprio").addEventListener("change", (e) => { f.prio = e.target.checked; draw(); });
   $("#mkon").addEventListener("change", (e) => { f.kontakt = e.target.value; draw(); });
   $("#mmin").addEventListener("input", (e) => { f.min = e.target.value; draw(); });
+  $("#mgen").addEventListener("change", (e) => { f.gen = e.target.value; draw(); });
+  $("#mgm").addEventListener("change", (e) => { f.genmodus = e.target.value; draw(); });
   await load();
 }
 
 /* ------------------------------------------------------------------ Typtabelle */
-const PIN = {r: null, c: null}, MPIN = {r: null, c: null}, VPIN = {r: null, c: null};
+const PIN = {r: null, c: null}, MPIN = {r: null, c: null}, VPIN = {r: null, c: null}, APIN = {r: null, c: null};
 let MSORT = {k: "", dir: ""};
 /* ------------------------------------------------------------------ Karte (Legenden: Arceus)
    Spielkoordinaten 0–1024; Welt in Pixeln = Koordinate × 2 (2048 px bei Zoom 2). Kacheln 256 px von Serebii, auf dem Server
@@ -1734,8 +1756,8 @@ async function itemsView() {
       <input id="itemq" type="search" placeholder="Name oder Beschreibung" style="width:220px">
       <select id="itemart" aria-label="Art"></select>
       ${nOdd ? `<label data-tip="Einträge, deren Text in den Spieldaten noch Platzhalter wie [VAR] enthält"><input type="checkbox" id="itemodd"> unfertige Einträge (${nOdd})</label>` : ""}
-      <span class="hint grow" id="itemn"></span></div>
-    <div class="bar"><span class="seg" id="itemseg"><button data-t="">alle</button>${(d.taschen || []).map((t) => `<button data-t="${esc(t)}">${esc(t)}</button>`).join("")}</span></div>
+</div>
+    <div class="bar"><span class="seg" id="itemseg"><button data-t="">alle</button>${(d.taschen || []).map((t) => `<button data-t="${esc(t)}">${esc(t)}</button>`).join("")}</span><span class="hint grow" id="itemn"></span></div>
     ${d.hinweis ? `<div class="note info">${esc(d.hinweis)}</div>` : ""}
     <div class="scroll" id="itembox"></div>
     <p class="hint">Quelle: PokéAPI. Englisch, wo es keinen deutschen Text gibt. Bilder lädt der Abgleich.</p></div>`;

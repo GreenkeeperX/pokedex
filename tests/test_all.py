@@ -474,6 +474,13 @@ class Abgleich(TempData):
         self.assertTrue(any("es fehlen" in x for x in st["log"]))
 
 
+    def test_csv_zwischenspeicher(self):
+        self.assertEqual(abruf.cached_csvs("abc"), {})
+        abruf.save_csv_cache("abc", {"types": "id\n1\n"})
+        self.assertEqual(abruf.cached_csvs("abc"), {"types": "id\n1\n"})
+        self.assertEqual(abruf.cached_csvs("neu"), {})
+
+
 class Server(TempData):
     def test_host(self):
         for h in ("127.0.0.1:8789", "server", "server:8789", "pokedex.home.arpa", "localhost", "[::1]:8789"):
@@ -555,6 +562,8 @@ class Server(TempData):
         self.assertEqual(sorted(server.marked("gefangen", "pokemon-home")), [403, 404])
         server.transfer({"von": "legends-arceus", "nach": "pokemon-home", "ids": [25], "behalten": True})
         self.assertEqual(server.marked("gefangen", "legends-arceus"), [25])
+        server.transfer({"von": "pokemon-home", "nach": "freilassen", "ids": [403], "behalten": True})
+        self.assertEqual(sorted(server.marked("gefangen", "pokemon-home")), [25, 404])
         with self.assertRaises(ValueError):
             server.transfer({"von": "pokemon-home", "nach": "pokemon-home", "ids": [25]})
 

@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.9.1 (Rückmeldung zu 0.9.0, Entscheidung 10.11.2026)
+
+- Liste: Kartenbreite wieder 300 px (vier Spalten), Symbole mittig, Pokéball aktiv nur umgefärbt; ⇄ auf der unteren
+  Kartenlinie; Übertragen-Ziel aus `gameOptions`, dazu `freilassen` (`server.FREE`, nur löschen)
+- Detail: Vorschlag als Tabelle wie „Deine Auswahl“; Team: `abfragen.foreign_moves` → `fremde_attacken`
+- Attacken: `crossTable` (Zeilen und Spalten), Filter Generation bis/nur
+- Abgleich: `pokeapi-csv.json.gz` im Datenordner nach Commit der PokéAPI (`abruf.cached_csvs`), damit Läufe ohne
+  neuen Stand (neue Quelle, Lücken füllen) die 187 Dateien nicht erneut holen
+- Ansichten, die inzwischen überholt sind, schreiben keine Fehlermeldung mehr über die neue
+
 ## 0.9.0 (PokéWiki-Leser und Pokémon HOME, Entscheidung 10.11.2026)
 
 - `app/pokewiki.py`: Antworten der MediaWiki-API (`action=query`, bis zu 50 Seiten je Anfrage) und Vorlagen lesen;
@@ -92,6 +102,9 @@
   getragene Items weiterer Spiele (Kürzel der Vorlage `sk` prüfen)
 - Items: Bilder, genaue Listen für Karmesin/Purpur und die Legenden-Spiele (PKHeX), Fundorte der Items
 - Karte für Karmesin/Purpur und Legenden: Z-A, danach Regionskarten der älteren Spiele
+- Karte Legenden: Arceus: Jubeldorf, Schnellreise-Punkte und weitere Symbole neben Pokémon
+- Items: Bilder in besserer Auflösung (PokéAPI hat nur 30 px), Items weiterer Spiele
+- Abgleich: Quellen auf verschiedenen Servern (PokéWiki, GitHub) parallel holen
 - Karten: Links auf die Gebietsseiten im PokéWiki statt eigener Bilder (Bildrechte)
 
 ## 0.4.2
