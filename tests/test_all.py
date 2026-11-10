@@ -343,6 +343,50 @@ class Leser(unittest.TestCase):
         self.assertNotIn("kraft", abfragen.move_view(D, m, {"kennung": "scarlet-violet", "reihenfolge": 21}))
         con.close()
 
+    def test_pokewiki_karte(self):
+        from app import pokewiki
+        mons = json.dumps({"Fukano": {"10.5,20.25": {"t": "default", "LvlMin": "3", "LvlMax": "5", "ALvlMin": "18", "ALvlMax": "20",
+                                                     "0": [{"d": 12.5, "a": 1}], "1": [{"d": 40, "a": 2}]}},
+                           "Hisui-Fukano": {"100,200": {"t": "alpha", "ALvlMin": "30", "ALvlMax": "30"}},
+                           "Kaputt": {"x,y": {"t": "crystal"}}, "Liste": []})
+        got = pokewiki.map_pokemon(mons)
+        self.assertEqual(got, [{"name": "Fukano", "x": 10.5, "z": 20.25, "typ": "default", "lv": (3, 5), "alv": (18, 20), "max": 40},
+                               {"name": "Hisui-Fukano", "x": 100.0, "z": 200.0, "typ": "alpha", "lv": None, "alv": (30, 30), "max": None}])
+        items = pokewiki.map_items(json.dumps({"Apri-ko-ko": [{"p": "1,2", "c": "30", "u": 1}, {"p": "kaputt"}], "Nichts": "x"}))
+        self.assertEqual(items, [{"name": "Apri-ko-ko", "x": 1.0, "z": 2.0, "anteil": "30"}])
+        self.assertEqual(pokewiki.item_key("Apri-ko-ko"), pokewiki.item_key("Aprikoko"))
+        self.assertTrue(pokewiki.map_url("pokemon", "ha_area01").endswith("/pokemon/ha_area01.json"))
+
+    def test_pokewiki_karte_in_der_datenbank(self):
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        importer.import_csv(con, "pokemon_species_names", "pokemon_species_id,local_language_id,name\n58,6,Fukano\n41,6,Zubat\n")
+        con.execute("CREATE TABLE pokemon (id INTEGER, identifier TEXT, species_id INTEGER, is_default INTEGER)")
+        con.executemany("INSERT INTO pokemon VALUES (?, ?, ?, ?)", [(58, "growlithe", 58, 1), (10229, "growlithe-hisui", 58, 0), (41, "zubat", 41, 1)])
+        con.execute("CREATE TABLE spawnpunkt (spiel TEXT, karte TEXT, gebiet TEXT, nr INTEGER, name TEXT, x REAL, z REAL, alpha INTEGER)")
+        con.executemany("INSERT INTO spawnpunkt VALUES ('legends-arceus', 'obsidianfieldlands', 'Obsidian-Grasland', ?, '', ?, ?, 0)",
+                        [(i, 10.0 * i, 20.0 * i) for i in range(6)])
+        con.execute("CREATE TABLE kartenobjekt (spiel TEXT, karte TEXT, gebiet TEXT, art TEXT, nr INTEGER, x REAL, z REAL, menge TEXT, items TEXT)")
+        con.execute("INSERT INTO kartenobjekt VALUES ('legends-arceus', 'obsidianfieldlands', 'Obsidian-Grasland', 'baum', NULL, 300, 300, '', '[]')")
+        con.execute("INSERT INTO kartenobjekt VALUES ('legends-arceus', 'obsidianfieldlands', 'Obsidian-Grasland', 'graben', NULL, 500, 500, '', '[]')")
+        con.execute("CREATE TABLE item (id INTEGER, name TEXT)")
+        con.execute("INSERT INTO item VALUES (1, 'Aprikoko')")
+        mons = {"Zubat": {f"{10 * i},{20 * i}": {"t": "default", "LvlMin": "1", "LvlMax": "2", "0": [{"d": 100}]} for i in range(6)}}
+        mons["Hisui-Fukano"] = {"400,400": {"t": "alpha", "ALvlMin": "30", "ALvlMax": "31"}}
+        mons["Zubat"]["700,700"] = {"t": "crystal", "LvlMin": "5", "LvlMax": "5", "0": [{"d": 25.5}]}
+        dig = {f"Erfunden {k}": [{"p": "505,505", "c": "10"}] for k in range(5)}
+        items = {"Apri-ko-ko": [{"p": "300.5,300.5", "c": "50"}, {"p": "800,800", "c": "20"}], **dig}
+        wiki = {"karte": {"legends-arceus": {"ha_area01": {"pokemon": json.dumps(mons), "items": json.dumps(items)},
+                                             "ha_area09": {"pokemon": json.dumps({"Zubat": {"1,1": {"t": "default"}}}), "items": "{}"}}}}
+        self.assertEqual(importer._derive_wiki_karte(con, wiki), 3)
+        rows = {r[0]: (r[1], r[2], json.loads(r[3])) for r in con.execute(
+            "SELECT art, x, z, items FROM kartenobjekt WHERE art NOT IN ('baum') ORDER BY art")}
+        self.assertEqual(rows["alpha"][2], [["Hisui-Fukano", "Alpha, Lv 30–31", 10229]])
+        self.assertEqual(rows["kristall"][2], [["Zubat", "Lv 5, 25,5 %", 41]])
+        self.assertEqual(rows["boden"], (800.0, 800.0, [["Aprikoko", "20 %"]]))       # die Stelle am Baum fällt weg
+        self.assertEqual(len(rows["graben"][2]), 5)                                    # an die Grabstelle von Altissimo gelegt
+        con.close()
+
     def test_altissimo(self):
         import json as js
         from app import altissimo
@@ -656,6 +700,36 @@ class Server(TempData):
         self.assertTrue(any(f.startswith("vor-einlesen-") for f in os.listdir(os.path.join(self.dir, "sicherung"))))
         with self.assertRaises(ValueError):
             server.restore({"teams": []})
+
+    def test_schillernd(self):
+        db.migrate()
+        server.set_mark("schillernd", {"spiel": "legends-arceus", "id": 25})
+        self.assertEqual(server.marked("gefangen", "legends-arceus"), [25])          # schillernd heißt auch gefangen
+        self.assertEqual(server.marked("schillernd", "legends-arceus"), [25])
+        server.set_mark("gefangen", {"spiel": "legends-arceus", "id": 403})
+        server.transfer({"von": "legends-arceus", "nach": "pokemon-home", "ids": [25, 403]})
+        self.assertEqual(server.marked("schillernd", "pokemon-home"), [25])
+        self.assertEqual(server.marked("schillernd", "legends-arceus"), [])
+        dump = json.loads(json.dumps(server.export()))
+        self.assertEqual([r["form"] for r in dump["schillernd"]], [25])
+        server.set_mark("gefangen", {"spiel": "pokemon-home", "id": 25, "an": False})
+        self.assertEqual(server.marked("schillernd", "pokemon-home"), [])            # nicht mehr gefangen: auch nicht schillernd
+        server.restore(dump)
+        self.assertEqual(server.marked("schillernd", "pokemon-home"), [25])
+
+    def test_grosse_itembilder(self):
+        import sqlite3
+        con = sqlite3.connect(os.path.join(self.dir, "pokeapi.db"))
+        con.execute("CREATE TABLE spiel (id INTEGER, kennung TEXT)")
+        con.executemany("INSERT INTO spiel VALUES (?, ?)", [(24, "legends-arceus"), (25, "scarlet-violet"), (1, "red-blue")])
+        con.execute("CREATE TABLE item (id INTEGER, en TEXT, spiele TEXT, tasche TEXT, unfertig INTEGER, kennung TEXT)")
+        con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, 0, ?)", [
+            (1, "Poké Ball", "[1, 24, 25]", "Bälle", "poke-ball"), (2, "Gigaton Ball", "[24]", "Bälle", "pkhex-1"),
+            (3, "Potion", "[1]", "Medizin", "potion"), (4, "TM01", "[25]", "Maschinen", "tm01"), (5, "", "[25]", "Medizin", "x")])
+        con.commit()
+        con.close()
+        self.assertEqual(abruf.media_ids("itemhq"), {1: "sv/pokeball", 2: "legends/gigatonball"})
+        self.assertEqual(sorted(abruf.media_ids("itembild")), [1, 3, 5])           # PKHeX-Items haben kein Bild bei der PokéAPI
 
     def test_uebertragen(self):
         db.migrate()

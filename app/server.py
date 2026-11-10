@@ -146,7 +146,7 @@ def save_team(body):
     return {"id": int(tid)}
 
 
-MARKS = ("favorit", "gefangen")      # Tabellen gleicher Form: (spiel, form, seit)
+MARKS = ("favorit", "gefangen", "schillernd")      # Tabellen gleicher Form: (spiel, form, seit)
 
 
 def marked(table, spiel):
@@ -164,7 +164,8 @@ def favorites(spiel):
 
 
 def set_mark(table, body):
-    """Marke an- oder abwählen: {spiel, id, an}; id darf auch eine Liste sein (mehrere auf einmal)."""
+    """Marke an- oder abwählen: {spiel, id, an}; id darf auch eine Liste sein (mehrere auf einmal).
+    Schillernd setzt auch gefangen; nicht mehr gefangen nimmt auch schillernd weg."""
     assert table in MARKS
     spiel = str(body.get("spiel") or "")[:60]
     raw = body.get("id")
@@ -176,9 +177,11 @@ def set_mark(table, body):
     try:
         for fid in ids:
             if body.get("an", True):
-                con.execute(f"INSERT OR IGNORE INTO {table} (spiel, form, seit) VALUES (?, ?, ?)", (spiel, fid, _now()))
+                for t in (table, "gefangen") if table == "schillernd" else (table,):
+                    con.execute(f"INSERT OR IGNORE INTO {t} (spiel, form, seit) VALUES (?, ?, ?)", (spiel, fid, _now()))
             else:
-                con.execute(f"DELETE FROM {table} WHERE spiel = ? AND form = ?", (spiel, fid))
+                for t in (table, "schillernd") if table == "gefangen" else (table,):
+                    con.execute(f"DELETE FROM {t} WHERE spiel = ? AND form = ?", (spiel, fid))
         con.commit()
     finally:
         con.close()
@@ -202,10 +205,12 @@ def transfer(body):
     con = db.user()
     try:
         for fid in ids:
-            if not free:
-                con.execute("INSERT OR IGNORE INTO gefangen (spiel, form, seit) VALUES (?, ?, ?)", (nach, fid, _now()))
-            if free or not body.get("behalten"):
-                con.execute("DELETE FROM gefangen WHERE spiel = ? AND form = ?", (von, fid))
+            shiny = con.execute("SELECT 1 FROM schillernd WHERE spiel = ? AND form = ?", (von, fid)).fetchone()
+            for t in ("gefangen", "schillernd") if shiny else ("gefangen",):
+                if not free:
+                    con.execute(f"INSERT OR IGNORE INTO {t} (spiel, form, seit) VALUES (?, ?, ?)", (nach, fid, _now()))
+                if free or not body.get("behalten"):
+                    con.execute(f"DELETE FROM {t} WHERE spiel = ? AND form = ?", (von, fid))
         con.commit()
     finally:
         con.close()
@@ -225,7 +230,7 @@ def export():
     finally:
         con.close()
     return {"app": "pokedex", "version": sources.VERSION, "exportiert": _now(), "teams": teams(), "favoriten": out["favorit"],
-            "gefangen": out["gefangen"], "entscheidungen": dec}
+            "gefangen": out["gefangen"], "schillernd": out["schillernd"], "entscheidungen": dec}
 
 
 def restore(body):
@@ -233,7 +238,7 @@ def restore(body):
     Vorher legt db.backup() eine Kopie von user.db an."""
     if body.get("app") != "pokedex" or not isinstance(body.get("teams"), list):
         raise ValueError("Keine Sicherung des Pokédex (es fehlen app und teams)")
-    rows = {"team": [], "favorit": [], "gefangen": [], "entscheidung": []}
+    rows = {"team": [], "favorit": [], "gefangen": [], "schillernd": [], "entscheidung": []}
     for t in body["teams"][:500]:
         name = " ".join(str(t.get("name") or "").split())[:80] or "Team"
         members = _ids(t.get("mitglieder"))
@@ -241,7 +246,7 @@ def restore(body):
         weights = {k: float(v) for k, v in (t.get("gewichte") or {}).items() if k in abfragen.team.CRITERIA}
         rows["team"].append((name, str(t.get("spiel") or "")[:60], json.dumps(members), json.dumps(fixed), json.dumps(weights),
                              json.dumps(_details(t.get("details"), members)), str(t.get("geaendert") or _now())[:40]))
-    for table, key in (("favorit", "favoriten"), ("gefangen", "gefangen")):
+    for table, key in (("favorit", "favoriten"), ("gefangen", "gefangen"), ("schillernd", "schillernd")):
         for r in (body.get(key) or [])[:20000]:
             try:
                 rows[table].append((str(r.get("spiel") or "")[:60], int(r["form"]), str(r.get("seit") or _now())[:40]))
@@ -422,9 +427,10 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self._send(404, {"error": "kein Bild"})
             elif m := re.fullmatch(r"/(shiny|shinyart|anim|rufe|itembild)/(\d{1,6})", path):
-                folder = os.path.join(db.data_dir(), m.group(1))
-                f = next((os.path.join(folder, m.group(2) + e) for e in (".png", ".gif", ".mp3", ".ogg")
-                          if os.path.isfile(os.path.join(folder, m.group(2) + e))), None)
+                # Item-Bilder: das große von Serebii, wenn es da ist
+                kinds = ("itemhq", "itembild") if m.group(1) == "itembild" else (m.group(1),)
+                f = next((os.path.join(db.data_dir(), k, m.group(2) + e) for k in kinds for e in (".png", ".gif", ".mp3", ".ogg")
+                          if os.path.isfile(os.path.join(db.data_dir(), k, m.group(2) + e))), None)
                 if f:
                     self._file(f, "max-age=604800")
                 else:
@@ -468,6 +474,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, favorites(q.get("spiel")))
             elif path == "/api/gefangen":
                 self._send(200, marked("gefangen", q.get("spiel")))
+            elif path == "/api/schillernd":
+                self._send(200, marked("schillernd", q.get("spiel")))
             elif path == "/api/export":
                 day = _now()[:10]
                 self._send(200, export(), extra={"Content-Disposition": f'attachment; filename="pokedex-daten-{day}.json"'})
@@ -501,6 +509,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/teams/loeschen": delete_team,
         "/api/favoriten": set_favorite,
         "/api/gefangen": lambda b: set_mark("gefangen", b),
+        "/api/schillernd": lambda b: set_mark("schillernd", b),
         "/api/team/gefangen": abfragen.team_caught,
         "/api/uebertragen": transfer,
         "/api/restore": restore,

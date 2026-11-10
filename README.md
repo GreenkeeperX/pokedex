@@ -11,8 +11,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   ausschließen) oder „stark gegen Typ“, bis oder nur Generation, Endstufe, Legendäre, Basiswerten, nur Favoriten
   oder Gefangene, Gebiet (Legenden: Arceus); Sortierung nach Werten. Hover-Karte mit Artwork, Netzdiagramm (außen = Höchstwert aller Pokémon),
   Schwächen und Typ-Duellen; Karten lassen sich in die Team-Leiste ziehen; „Pokémon HOME“ als eigene Sammlung,
-  Übertragen der Sammlung mit ⇄ (nach HOME, in ein anderes Spiel oder freilassen); Favoriten (Stern) und Gefangene (Pokéball)
-  je Spiel.
+  Übertragen der Sammlung mit ⇄ (nach HOME, in ein anderes Spiel oder freilassen); Favoriten (Stern) und Gefangene (Pokéball,
+  ein weiterer Klick: schillernd gefangen) je Spiel.
 - **Detailseite**: Basiswerte, Fähigkeiten, Typwirkung (mit Fähigkeiten wie Schwebe), Entwicklung mit Bedingungen,
   „Im Duell gegen Typen“ (klar im Vorteil, im Vorteil, im Nachteil; ↑ austeilen, ↓ einstecken), Fangchance je Ball
   (offen, solange nicht gefangen), Fundorte im Spiel (Legenden: Arceus, Karmesin/Purpur samt Erweiterungen, Legenden: Z-A und
@@ -23,7 +23,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Vorschlag für vier Attacken mit Typ-Abdeckung. Eigene Auswahl mit Standard-Attacken wie im Spiel, beigebrachten
   Attacken (TM, Lehrer) und Reihenfolge per Ziehen. TM-Nummern des Spiels, Marken für Lehrer-Attacken und
   Beherrschung, bewährte Sets aus Pokémon Showdown (Random Battle) zum Übernehmen.
-- **Attacken**: alle Attacken des gewählten Spiels mit Filtern und sortierbaren Spalten.
+- **Attacken**: alle Attacken des gewählten Spiels mit Filtern (auch „Team-Attacken“) und sortierbaren Spalten;
+  Zeilen und Spalten lassen sich markieren.
 - **Team-Leiste** unten in jedem Reiter (Drag & Drop, „+“, Favoriten). Dasselbe Pokémon darf mehrfach ins Team;
   Level und vier Attacken je Platz. Gespeicherte Teams ändern sich erst mit „Speichern“ („Verwerfen“ geht zurück).
   Ein Hinweis zeigt, wenn Mitglieder nicht zum gewählten Spiel passen.
@@ -33,15 +34,19 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Gegner-Modus auch gegen ein ganzes Gegner-Team (Vorteil, Nachteil), Empfehlungen aus den Gefangenen (bessere
   Alternative, langfristig mehr Potential) und Teamsuche nur aus Gefangenen.
 - **Items** des Spiels mit Bild, Tasche, Art, Beschreibung (deutsch, wo vorhanden) und Preis; je Tasche passende
-  Spalten (Wirkung bei Medizin und Bällen, die Attacke bei Maschinen), Suche und Filter nach Art. Spiele ohne Liste in
+  Spalten (KP, AP, EP und Statusprobleme bei Medizin und Beeren, Fangfaktor bei Bällen, die Attacke bei Maschinen), Suche und Filter nach Art. Spiele ohne Liste in
   der PokéAPI (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, SDLP) nach PKHeX; in Legenden: Arceus „Herstellen“
   mit Rezepten und Zutaten.
-- **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten.
+- **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten. „Mein Team“ zeigt nur die Typen
+  des Teams und dazu Verteidigung und Angriff je Mitglied.
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
 - **Karte** (Legenden: Arceus): Jubeldorf und die fünf Gebiete zum Ziehen und Zoomen; Spawnpunkte (Alpha hervorgehoben,
-  wer dort wann erscheint), Bäume, Erzbrocken, Haufen, Kisten, Geisterlichter, Icognito, Gedichte und Grabstellen als
-  Ebenen zum Ein- und Ausblenden; von der Detailseite aus mit den Spawnpunkten des Pokémon.
-- **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
+  wer dort wann erscheint), Bäume, Erzbrocken, Haufen, Kisten, Geisterlichter, Icognito, Gedichte und Grabstellen,
+  Kristallbrocken, Raum-Zeit-Verzerrungen, Massenauftreten, Pokémon in Bäumen, feste Alphas und Items am Boden als
+  Ebenen zum Ein- und Ausblenden; von der Detailseite aus mit den Spawnpunkten des Pokémon. Die „Übersicht mit Bildern“
+  zeigt je Kartenfeld die häufigsten Pokémon (je größer, desto wahrscheinlicher), die häufigsten im Gebiet und für ein
+  gewähltes Pokémon den Vergleich aller Gebiete.
+- **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen): Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
   zum Herunterladen), Lesezeichen „Seite untersuchen“ für Seiten, deren Karten erst im Browser laden (liest geladene
   Daten-Dateien, Variablen und Kartenmarker in eine Datei; nichts geht an einen Server), „Zu erledigen“ (Abweichungen zwischen
   PokéAPI und Showdown zum Entscheiden), Kopieren und Herunterladen von Protokoll und Test, Sicherung der eigenen
@@ -58,8 +63,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Mega-Dimension: Gebiet, Level, Alpha, feste Begegnungen); Item-Listen und Itemnamen je Spiel | GPL-3.0 |
 | [Altissimo](https://github.com/Altissimo1/altissimo1.github.io) | Legenden: Arceus: Kartensymbole, Geisterlichter, Icognito, Gedichte, Grabstellen, Kartenbild Jubeldorf, Rezepte | GPL-3.0 (Kartenbild nur im Datenordner) |
 | [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
-| [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln, nur im Datenordner auf dem Server) | Bilder von Serebii, Spielgrafik von Nintendo |
-| [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items; geplant: Edelhorden | CC BY-SA 3.0 DE |
+| [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln) und große Item-Bilder, nur im Datenordner auf dem Server | Bilder von Serebii, Spielgrafik von Nintendo |
+| [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items, Karte (Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas, Items am Boden und in Grabstellen); geplant: Edelhorden | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
 

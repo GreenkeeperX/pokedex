@@ -26,7 +26,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Ringe bei 25, 50 (gestrichelt) und 75 %, an den Ecken der Karten eine Skala von 0 bis 10.
 - Kopfzeile (`#stick`) und Team-Leiste: nach gut 300 px abwärts gleiten sie weg (`.hid`, die Leiste klappt mit `.fold`
   auf ihre Kopfzeile zu), 40 px aufwärts holt sie zurück. Ziehen klappt die Leiste auf.
-- Marken hinter dem Namen (SVG, `icon()`): im Team, gefangen (`/api/gefangen`), Favorit. Knöpfe zum Setzen beim
+- Marken hinter dem Namen (SVG, `icon()`): im Team, gefangen (`/api/gefangen`), Favorit. Der Pokéball wechselt bei
+  jedem Klick: nicht gefangen, gefangen, schillernd (`/api/schillernd`, goldener Ball mit Glanz, `ball()`), wieder nicht gefangen. Knöpfe zum Setzen beim
   Hovern unten auf dem Bild (`.acts`); `redrawMarks()` zeichnet sie überall neu, ohne die Seite aufzubauen.
 - Typ-Duell (`duel()` in JS und `abfragen.duel`): austeilen = bester eigener Typ gegen den Zieltyp, einstecken =
   Zieltyp gegen beide eigenen Typen. Klar stark: ×2 und höchstens ×½; stark: ×2 und ×1; schwer: ×2 einstecken und
@@ -41,14 +42,23 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   (Zoom 0–2, Stufe nach Maßstab), Punkte behalten ihre Größe (`--inv`). Ziehen mit Pointer-Events, Mausrad und +/−
   zoomen; mit Form werden ihre Punkte gelb hervorgehoben und die Ansicht passt sich ihnen an. Daten: `/api/karte/<Karte>`.
   Symbole (`.mobj`, Zeichen in `MOBJ`) liegen wie die Spawnpunkte in Spielkoordinaten; jede Art ist eine Ebene zum
-  Ein- und Ausblenden (gemerkt in `mapHide`). Jubeldorf (`jubilifevillage`) hat statt Kacheln ein Bild (`bild.png`).
+  Ein- und Ausblenden (gemerkt in `mapHide`, „alle“ und „keine“). Jubeldorf (`jubilifevillage`) hat statt Kacheln ein Bild (`bild.png`).
+  Die Daten je Karte bleiben im Browser (`MAPCACHE`), die Wahl eines Pokémon lädt nichts neu.
+- Kartenübersicht (`mapHeat`, Schalter „Übersicht mit Bildern“, gemerkt in `mapHeat`): Felder zu 64 Spieleinheiten; je Feld
+  bis zu drei Pokémon als Bild im Schwerpunkt ihrer Punkte, Größe nach der Summe der Anteile (Spawnpunkt: höchster Anteil,
+  PokéWiki-Stelle: ihr Anteil oder 1). Daneben die häufigsten Pokémon des Gebiets; mit gewähltem Pokémon nur dieses und
+  ein Vergleich aller Gebiete (lädt die übrigen Karten einmal).
 - Fangchance (`catchHtml`): eigene Karte unter der Entwicklung, offen, solange das Pokémon nicht als gefangen markiert
   ist; ohne kritischen Fang und Boni, in Generation 1 und 2 und den Legenden-Spielen nur als Richtung (`fang_grob`).
 - Mehr Details (`moreHtml`, `detail.mehr`): eingeklappt; keine Eier und EVs in Legenden: Arceus.
 - Typwirkung und Duell (`defHtml`, `duelHtml`): eine Zeile je Multiplikator (`.er`), Faktor vorn, Typen dahinter. Im
   Duell steht ↑ für austeilen und ↓ für einstecken.
 - Fadenkreuz (`crossTable`): Tabellen mit `data-r` an Zeilen, `data-c` an Zellen und `data-pr`/`data-pc` an den Köpfen;
-  Hover `.hl`, festgehalten `.fix`. Genutzt von Typtabelle, Typwirkung je Mitglied und „Gegen Gegner“.
+  Hover `.hl`, festgehalten `.fix`. Genutzt von Typtabelle, Typwirkung je Mitglied und „Gegen Gegner“. Sortierbare
+  Köpfe bekommen ein kleines ▯ (`.pinc`), das die Spalte festhält, ohne zu sortieren; Zellen mit `data-pr` (etwa der Name
+  in der Attacken-Liste) markieren nur die Zeile.
+- Typtabelle „Mein Team“ (`chartTeam`): nur die Typen des Teams als Zeilen, dazu `teamTypeHtml` (Verteidigung und Angriff
+  je Mitglied, einklappbar, gemerkt in `ttOpen`).
 - Karten der Liste: unter dem Bild eine Zeile (`acts`) mit Team-Häkchen, Stern und Pokéball; gesetzte Marken sind immer
   zu sehen, die übrigen Knöpfe und „+“ beim Hovern, alles an derselben Stelle. Anderswo stehen Marken (`marks`) hinter dem Namen.
 - Hover-Karte (`glanceHtml`): Angriff (bester eigener Typ je Ziel), Verteidigung (beide Typen), „gut einzusetzen gegen“
@@ -62,9 +72,13 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Sets (`sets`, `sets_gen` aus `/api/pokemon/<id>/attacken`), grau, was nicht in der Lernliste steht. „Übernehmen“
   nimmt `vorschlag` (die vier lernbaren mit der höchsten Wertung, Status zuletzt).
 - Items (`itemsView`, `#items`): Daten aus `/api/items?spiel=…`; Suche, Tasche und Art filtern im Browser, höchstens 400
-  Zeilen auf einmal. Spalten je Tasche (`COLS`): Wirkung bei Medizin und Bällen, die Attacke des Spiels bei Maschinen.
+  Zeilen auf einmal. Spalten je Tasche (`COLS`): KP, AP, EP und Statusprobleme bei Medizin und Beeren (`itemFx`, aus Kurztext
+  und Beschreibung des Spiels), Fangfaktor und Bedingung bei Bällen (`BALL`, in Legenden: Arceus `BALL_HISUI` als
+  Richtwerte), die Attacke des Spiels bei Maschinen. Preise farbig (`priceColor`).
   Bilder unter `itembild/<Nummer>`; unfertige Einträge (`unfertig`) nur mit dem Schalter.
 - Auswahl mit Bildern (`.pick`, Karte): Knopf, darunter Suche und Liste aus echten Links; Enter nimmt den ersten Treffer.
+- Einstellungen: `foldBoxes` macht aus jedem Kasten ein `details.fold` mit Leiste oben (`.jump`, „alle auf“, „alle zu“);
+  zugeklappte merkt sich `setShut`. Zeiten mit `deTime` (deutsch, Zeit des Browsers), Protokollzeilen mit `logLocal`.
 - „Zu erledigen“: „Auftrag kopieren“ (`/api/aufgabe`), „Antwort einlesen“ mit Vorschau (`/api/antwort`, erst mit `dry`),
   „herunterladen“ als CSV. Spieldaten als ZIP unter `/api/spieldaten`.
 - Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
