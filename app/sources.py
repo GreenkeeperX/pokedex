@@ -10,11 +10,20 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.7.1"
+VERSION = "0.8.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.8.0", "10.11.2026", [
+        "Items: Bilder (nach dem nächsten Abgleich), Spalte „Art“ mit Filter, sortierbare Spalten, gemerkte Tasche",
+        "Items je Tasche: Medizin und Bälle mit Wirkung (etwa „KP +20“, „Fangfaktor ×1,5“), Maschinen mit Attacke, Typ, Stärke und AP",
+        "Unfertige Einträge mit Platzhaltern wie [VAR] sind ausgeblendet und nur auf Wunsch zu sehen",
+        "Attacken: Kurz-Info jetzt für alle Status-Attacken (147 gepflegte Texte, etwa für Schutzschild, Tarnsteine, Delegator)",
+        "Einstellungen: Spieldaten als ZIP herunterladen (Datenbank, Protokoll, Übersicht fehlender Bilder)",
+        "„Zu erledigen“: Auftrag für einen KI-Chat kopieren, Antwort einlesen mit Vorschau, Liste als CSV",
+        "Karte: Pokémon-Auswahl mit Bildern und Suche",
+    ]),
     ("0.7.1", "10.11.2026", [
         "Fehler behoben: Ovale an den Pin-Nadeln und in der Typtabelle, verschobene Spalte beim Festhalten",
         "Liste: Marken auf der Bildecke statt hinter dem Namen, richtiger Pokéball, Knöpfe unter dem Bild",

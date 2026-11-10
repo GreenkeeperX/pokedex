@@ -52,8 +52,12 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Attacken: `moveMarks` setzt Marken für Lehrer und Beherrschung nach den Wegen; `setsHtml` zeigt die bewährten
   Sets (`sets`, `sets_gen` aus `/api/pokemon/<id>/attacken`), grau, was nicht in der Lernliste steht. „Übernehmen“
   nimmt `vorschlag` (die vier lernbaren mit der höchsten Wertung, Status zuletzt).
-- Items (`itemsView`, `#items`): Daten aus `/api/items?spiel=…`, Suche und Taschen filtern im Browser, höchstens 600
-  Zeilen auf einmal.
+- Items (`itemsView`, `#items`): Daten aus `/api/items?spiel=…`; Suche, Tasche und Art filtern im Browser, höchstens 400
+  Zeilen auf einmal. Spalten je Tasche (`COLS`): Wirkung bei Medizin und Bällen, die Attacke des Spiels bei Maschinen.
+  Bilder unter `itembild/<Nummer>`; unfertige Einträge (`unfertig`) nur mit dem Schalter.
+- Auswahl mit Bildern (`.pick`, Karte): Knopf, darunter Suche und Liste aus echten Links; Enter nimmt den ersten Treffer.
+- „Zu erledigen“: „Auftrag kopieren“ (`/api/aufgabe`), „Antwort einlesen“ mit Vorschau (`/api/antwort`, erst mit `dry`),
+  „herunterladen“ als CSV. Spieldaten als ZIP unter `/api/spieldaten`.
 - Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
   Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
   (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.

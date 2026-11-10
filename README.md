@@ -31,7 +31,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   festgesetzten Plätzen und denselben Filtern wie die Liste, Verbesserungsvorschläge zu den gewählten Attacken,
   Gegner-Modus auch gegen ein ganzes Gegner-Team (Vorteil, Nachteil), Empfehlungen aus den Gefangenen (bessere
   Alternative, langfristig mehr Potential) und Teamsuche nur aus Gefangenen.
-- **Items** des Spiels mit Tasche, Beschreibung (deutsch, wo vorhanden) und Preis, mit Suche.
+- **Items** des Spiels mit Bild, Tasche, Art, Beschreibung (deutsch, wo vorhanden) und Preis; je Tasche passende
+  Spalten (Wirkung bei Medizin und Bällen, die Attacke bei Maschinen), Suche und Filter nach Art.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten.
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
 - **Karte** (Legenden: Arceus): Spawnpunkte je Gebiet zum Ziehen und Zoomen, Alpha hervorgehoben, wer dort wann
@@ -39,7 +40,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
   zum Herunterladen), „Zu erledigen“ (Abweichungen zwischen
   PokéAPI und Showdown zum Entscheiden), Kopieren und Herunterladen von Protokoll und Test, Sicherung der eigenen
-  Daten zum Herunterladen und Einlesen.
+  Daten zum Herunterladen und Einlesen. „Zu erledigen“ lässt sich als Auftrag für einen KI-Chat kopieren, die Antwort
+  mit Vorschau einlesen. Die Spieldaten (Datenbank, Protokoll, Übersicht fehlender Bilder) gibt es als ZIP.
 
 ## Quellen
 
