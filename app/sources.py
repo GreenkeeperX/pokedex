@@ -10,11 +10,20 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.9.1", "10.11.2026", [
+        "Pokémon-Liste: wieder vier Spalten, Symbole mittig, Pokéball beim Aktivieren gleich groß",
+        "Sammlung übertragen: ⇄ auf der unteren Kartenlinie, Ziel wie die Spielauswahl, neu „Freilassen“ zum Aufräumen",
+        "Detailseite: „Deine Auswahl“ und „Vorschlag“ gleich aufgebaut und auf gleicher Höhe",
+        "Team: Hinweis bei gewählten Attacken, die es im Spiel für dieses Pokémon nicht gibt",
+        "Attacken: Zeilen und Spalten markieren wie in den anderen Tabellen, Filter „bis/nur Gen …“",
+        "Items: Anzahl steht in der Leiste, nichts springt mehr",
+        "Abgleich: PokéAPI-Dateien werden zwischengespeichert, Nachläufe ohne neuen Stand sind deutlich schneller",
+    ]),
     ("0.9.0", "10.11.2026", [
         "PokéWiki-Leser: Stärke, Genauigkeit und AP der Attacken in Legenden: Arceus mit Kraft- und Tempostil (unter der Stärke)",
         "Detailseite: getragene Items wilder Pokémon in Legenden: Arceus, mit Anteil und „Elite“",

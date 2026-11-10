@@ -1085,6 +1085,29 @@ def improvements(D, ms, details, g, gen):
     return out
 
 
+def foreign_moves(D, ms, details, g):
+    """{Platz: [Attacken-IDs]}: gewählte Attacken, die das Pokémon im Spiel nicht lernen kann (nur mit eigener Lernliste)."""
+    if not g:
+        return {}
+    out = {}
+    con = db.game()
+    try:
+        for m in ms:
+            chosen = _ints((details[m["slot"]] if m["slot"] < len(details) else {}).get("attacken"))
+            if not chosen:
+                continue
+            ls, used = learnset(con, D, D.forms[m["id"]], g)
+            if not used or used["id"] != g["id"]:
+                continue
+            known = {x[0] for x in ls}
+            bad = [i for i in chosen if i not in known]
+            if bad:
+                out[str(m["slot"])] = bad
+    finally:
+        con.close()
+    return out
+
+
 def team_view(body):
     """Bewertung eines Teams: Kriterien, offene Schwächen, Matrix."""
     D = data()
@@ -1105,6 +1128,7 @@ def team_view(body):
                 v = move_view(D, D.moves[mid], g)
                 names[str(mid)] = {"name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"]}
     ev["attacken"] = names
+    ev["fremde_attacken"] = foreign_moves(D, ms, details, g)
     ev["matrix"] = {str(m["id"]): {str(a): f for a, f in ctx.dvec(m).items()} for m in ms}
     ev["mitglieder"] = [row(D, D.forms[m["id"]], g, gen) for m in ms]
     return ev

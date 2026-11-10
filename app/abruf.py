@@ -10,6 +10,7 @@ Ablauf: Hat sich bei keiner Quelle etwas geändert, wird nichts neu gebaut. Sons
 in einer eigenen Datei und ersetzt die alte erst nach bestandener Selbstprüfung. Scheitert etwas, bleibt die
 alte Datenbank. Nach einer Sperre (HTTP 403, 429) oder Prüfseite ruht eine Quelle REST_H Stunden.
 """
+import gzip
 import hashlib
 import json
 import os
@@ -473,8 +474,12 @@ def _build(st, log, force, at):
         log("Keine Änderung bei PokéAPI, Showdown, PKHeX, Spawnpunkten, PokéWiki und Ergänzungen, Datenbank bleibt")
         st["sources"]["pokeapi"] = papi.result(geaendert=False)
         return True
-    csvs = {}
+    csvs = cached_csvs(sha) if sha else {}
+    if csvs:
+        log(f"PokéAPI: Stand {sha[:7]} unverändert, {len(csvs)} Dateien aus dem Zwischenspeicher")
     for i, n in enumerate(names):
+        if n in csvs:
+            continue
         STATE.update(step=f"PokéAPI: {n}.csv", done=i, total=len(names))
         t = papi.get(f"{CSV_RAW}{n}.csv", absent=(404,))
         if t:
@@ -485,6 +490,8 @@ def _build(st, log, force, at):
     if papi.blocked:
         st["rest"]["pokeapi"] = _iso(now() + timedelta(hours=REST_H))
     missing = [n for n in importer.REQUIRED if n not in csvs]
+    if sha and not missing and not papi.stopped:
+        save_csv_cache(sha, csvs)
     if missing:
         log("PokéAPI: es fehlen " + ", ".join(missing) + "; die bisherige Datenbank bleibt")
         return False
@@ -517,6 +524,30 @@ def _build(st, log, force, at):
         + (f"; {stats['sets']} bewährte Sets" if sets else "")
         + (f"; PokéWiki: {stats['wiki_attacken']} Attackenwerte, {stats['wiki_items']} getragene Items" if wiki else ""))
     return not papi.stopped and not sd.stopped
+
+
+CSV_CACHE = "pokeapi-csv.json.gz"      # die CSV-Texte des letzten Stands: ein Nachlauf (neue Quelle, Lücken) lädt sie nicht neu
+
+
+def cached_csvs(sha):
+    """{Name: Text} aus dem Zwischenspeicher, wenn er zum Stand sha gehört, sonst {}."""
+    path = os.path.join(store.DATA_DIR, CSV_CACHE)
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError, EOFError):
+        return {}
+    return data.get("csv") or {} if data.get("stand") == sha else {}
+
+
+def save_csv_cache(sha, csvs):
+    path = os.path.join(store.DATA_DIR, CSV_CACHE)
+    try:
+        with gzip.open(path + ".neu", "wt", encoding="utf-8", compresslevel=6) as f:
+            json.dump({"stand": sha, "csv": csvs}, f)
+        os.replace(path + ".neu", path)
+    except OSError:
+        pass
 
 
 def sets_url(gen):

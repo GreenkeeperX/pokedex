@@ -103,7 +103,8 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 .t10{--tc:#e62829}.t11{--tc:#2980ef}.t12{--tc:#3fa129}.t13{--tc:#e0ac00}.t14{--tc:#ef4179}.t15{--tc:#3dc7ef}.t16{--tc:#5060e1}.t17{--tc:#624d4e}.t18{--tc:#ef70ef}
 
 /* Liste */
-.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
+.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.list.xmode{row-gap:20px}
 .mon{position:relative;display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 8px;
   text-decoration:none;color:var(--ink);cursor:pointer}
 .mon:hover{background:var(--hov);border-color:var(--accent)}
@@ -141,7 +142,8 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 .mon .sp{position:relative;flex:none;width:84px;display:flex;flex-direction:column;align-items:center}
 .mon .sp>.spr{width:84px;height:84px}
 /* Zeile unter dem Bild: links das Häkchen fürs Team, dann Stern und Pokéball (gesetzt immer sichtbar), + nur beim Hovern */
-.mon .acts{display:flex;justify-content:center;gap:4px;height:24px;margin-top:-4px}
+.mon .acts{display:flex;justify-content:center;gap:2px;height:24px;margin-top:-4px}
+.mon .acts .a.plus,.mon .acts .a.ph:last-child{position:absolute;right:-8px;top:2px}
 .acts .a.team{border-color:transparent;background:none;color:var(--go);cursor:default}
 .acts .a:not(.on),.acts .a.plus{opacity:0;transition:opacity .15s}
 .acts .a.on{border-color:transparent;background:none}
@@ -150,6 +152,7 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 .acts .a{width:24px;height:24px;display:inline-grid;place-items:center;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--muted);cursor:pointer}
 .acts .a .ic{width:17px;height:17px}
 .acts .a .ic-ball{width:21px;height:21px}
+.acts .a .ic-ball.on{transform:scale(1.13)}
 .acts .a:hover{color:var(--ink-hi)}
 .acts .a.on .ic-fav{color:#e0a800}
 .acts .a.plus{background:var(--accent);border-color:var(--accent);color:var(--bg)}
@@ -486,11 +489,17 @@ table.held td:first-child{width:48px}
 /* Sammlung übertragen */
 .xfer{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 8px}
 #xto{max-width:240px}
-.mon .xs{position:absolute;right:6px;top:4px;z-index:2;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);
+.mon .xs{position:absolute;left:50%;bottom:-13px;transform:translateX(-50%);z-index:2;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);
   color:var(--muted);font-size:13px;cursor:pointer;background:var(--card)}
 .mon .xs:hover{color:var(--ink-hi)}
+.mon .xs:not(.on){background:var(--bg)}
 .mon .xs.on{background:var(--info);border-color:var(--info);color:var(--bg)}
 .mon.xon{border-color:var(--info);box-shadow:inset 0 0 0 1px var(--info)}
+/* Vorschlag wie „Deine Auswahl“; Team: fremde Attacken */
+table.sug td.why{font-size:12.5px}
+table.sug tr.same td{background:var(--sel)}
+.mvs .mv.off{opacity:.75}
+.mvs .mv .wbadge{margin-left:2px}
 /* eigene Rückfrage */
 dialog.ask{background:var(--hcbg);color:var(--ink);border:1px solid var(--tipline);border-radius:12px;padding:16px 18px;min-width:320px;max-width:min(460px,92vw);box-shadow:0 16px 40px rgba(0,0,0,.55)}
 dialog.ask::backdrop{background:rgba(0,0,0,.45)}

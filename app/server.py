@@ -185,11 +185,15 @@ def set_mark(table, body):
     return {"ok": True}
 
 
+FREE = "freilassen"         # Ziel „Freilassen“: nur aus der Sammlung nehmen
+
+
 def transfer(body):
     """Sammlung übertragen (etwa nach Pokémon HOME): {von, nach, ids, behalten}. Die Pokémon gelten danach im Zielspiel
     als gefangen; ohne behalten verschwinden sie aus der Sammlung im bisherigen Spiel (wie beim Übertragen im Spiel)."""
     von, nach = str(body.get("von") or "")[:60], str(body.get("nach") or "")[:60]
-    if not nach or nach == von or nach not in {abfragen.HOME} | {g["kennung"] for g in abfragen.games()}:
+    free = nach == FREE
+    if not nach or nach == von or not (free or nach in {abfragen.HOME} | {g["kennung"] for g in abfragen.games()}):
         raise ValueError("nach: ein anderes Spiel")
     try:
         ids = [int(x) for x in body.get("ids") or []][:2000]
@@ -198,8 +202,9 @@ def transfer(body):
     con = db.user()
     try:
         for fid in ids:
-            con.execute("INSERT OR IGNORE INTO gefangen (spiel, form, seit) VALUES (?, ?, ?)", (nach, fid, _now()))
-            if not body.get("behalten"):
+            if not free:
+                con.execute("INSERT OR IGNORE INTO gefangen (spiel, form, seit) VALUES (?, ?, ?)", (nach, fid, _now()))
+            if free or not body.get("behalten"):
                 con.execute("DELETE FROM gefangen WHERE spiel = ? AND form = ?", (von, fid))
         con.commit()
     finally:

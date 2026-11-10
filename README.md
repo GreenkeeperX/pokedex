@@ -11,7 +11,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   ausschließen) oder „stark gegen Typ“, bis oder nur Generation, Endstufe, Legendäre, Basiswerten, nur Favoriten
   oder Gefangene, Gebiet (Legenden: Arceus); Sortierung nach Werten. Hover-Karte mit Artwork, Netzdiagramm (außen = Höchstwert aller Pokémon),
   Schwächen und Typ-Duellen; Karten lassen sich in die Team-Leiste ziehen; „Pokémon HOME“ als eigene Sammlung,
-  Übertragen der Sammlung mit ⇄ (nach HOME oder in ein anderes Spiel); Favoriten (Stern) und Gefangene (Pokéball)
+  Übertragen der Sammlung mit ⇄ (nach HOME, in ein anderes Spiel oder freilassen); Favoriten (Stern) und Gefangene (Pokéball)
   je Spiel.
 - **Detailseite**: Basiswerte, Fähigkeiten, Typwirkung (mit Fähigkeiten wie Schwebe), Entwicklung mit Bedingungen,
   „Im Duell gegen Typen“ (klar im Vorteil, im Vorteil, im Nachteil; ↑ austeilen, ↓ einstecken), Fangchance je Ball
