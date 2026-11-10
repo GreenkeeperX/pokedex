@@ -1616,6 +1616,13 @@ let MSORT = {k: "", dir: ""};
    gespeichert; Zoom 0 hat 2 × 2, Zoom 1 hat 4 × 4, Zoom 2 hat 8 × 8 Kacheln. Ziehen verschiebt, Mausrad zoomt. */
 const WORLD = 2048;
 const mpct = (x) => String(x).replace(".", ",") + " %";
+/* Kartensymbole (Altissimo): Zeichen und Farbe je Art; Ebenen lassen sich einzeln ausblenden */
+const MOBJ = {aprikoko: "A", beere: "B", baum: "Z", erz: "E", laub: "L", heu: "H", kiste: "K", truhe: "T",
+  irrlicht: "✦", icognito: "?", vers: "V", graben: "G"};
+const MOBJHINT = {irrlicht: "Irrlicht zum Einsammeln; 107 gibt es in ganz Hisui.", icognito: "Icognito zum Fangen; 28 Formen gibt es in Hisui.",
+  vers: "Alter Vers zum Lesen (Sammelobjekt).", graben: "Grabstelle: hier lässt sich mit Ursaluna nach Items graben."};
+const mobjTip = (o, arten) => `${arten[o.art]?.[0] || o.art}${o.nr ? " " + o.nr : ""}` + (o.menge ? `\n${o.menge} Stück je Mal` : "")
+  + (o.items.length ? "\n" + o.items.map(([n, p]) => `${n}: ${p}`).join("\n") : "");
 async function mapView(karte, fid) {
   const rid = RID;
   const d = await api("/api/karte/" + encodeURIComponent(karte || "obsidianfieldlands"));
@@ -1626,25 +1633,30 @@ async function mapView(karte, fid) {
   pts.forEach((p) => p.mons.forEach((m) => { (species[m.id] ||= {id: m.id, name: m.name, n: 0}).n++; }));
   const list = Object.values(species).sort((a, b) => a.name.localeCompare(b.name, "de"));
   const hits = pts.filter((p) => p.hit).length;
+  const objs = d.objekte || [], arten = d.arten || {};
+  const hide = new Set(store.get("mapHide", []));
+  const layerBtn = (k, label, n) => `<button class="mlay${hide.has(k) ? "" : " on"}" data-lay="${k}" data-tip="${hide.has(k) ? "einblenden" : "ausblenden"}">${k === "pokemon"
+    ? `<span class="mpin-l"></span>` : `<span class="mobj o-${k}">${MOBJ[k] || "•"}</span>`}${esc(label)} <span class="hint">${n}</span></button>`;
   main.innerHTML = `<div class="box mapbox">
     <div class="bar"><h2 style="margin:0">Karte</h2>
       <span class="seg">${d.karten.map((k) => `<a class="btn${k.karte === d.karte ? " on" : ""}" href="#karte/${k.karte}${fid != null ? "/" + fid : ""}">${esc(k.gebiet)}</a>`).join("")}</span>
-      <div class="pick" id="mapmon"><button class="pickbtn" aria-haspopup="true" aria-expanded="false">${fid != null && species[fid] ? img(fid) + `<b>${esc(species[fid].name)}</b>` : "Pokémon wählen"} <span class="hint">▾</span></button>
+      ${pts.length ? `<div class="pick" id="mapmon"><button class="pickbtn" aria-haspopup="true" aria-expanded="false">${fid != null && species[fid] ? img(fid) + `<b>${esc(species[fid].name)}</b>` : "Pokémon wählen"} <span class="hint">▾</span></button>
         <div class="pickm" hidden><input type="search" placeholder="Pokémon suchen" aria-label="Pokémon suchen">
           <div class="pickl"><a href="#karte/${d.karte}" class="${fid == null ? "on" : ""}"><span class="spr none"></span><span>alle Spawnpunkte</span><span class="hint">${pts.length}</span></a>${list.map((s) => `<a href="#karte/${d.karte}/${s.id}" class="${s.id === fid ? "on" : ""}" data-n="${esc(s.name.toLowerCase())}">${img(s.id)}<span>${esc(s.name)}</span><span class="hint" data-tip="Spawnpunkte in diesem Gebiet">${s.n}</span></a>`).join("")}</div></div></div>
-      <span class="hint grow">${fid != null ? (hits ? `${hits} Spawnpunkte hervorgehoben` : "hier an keinem Spawnpunkt") : `${pts.length} Spawnpunkte, davon ${pts.filter((p) => p.alpha).length} Alpha`}</span>
+      <span class="hint grow">${fid != null ? (hits ? `${hits} Spawnpunkte hervorgehoben` : "hier an keinem Spawnpunkt") : `${pts.length} Spawnpunkte, davon ${pts.filter((p) => p.alpha).length} Alpha`}</span>` : ""}
 </div>
+    ${objs.length ? `<div class="bar mlays">${pts.length ? layerBtn("pokemon", "Spawnpunkte", pts.length) : ""}${Object.entries(arten).map(([k, v]) => layerBtn(k, v[1], objs.filter((o) => o.art === k).length)).join("")}</div>` : ""}
     ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus.</div>` : ""}
-    ${d.kacheln ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
+    ${d.kacheln || d.bild ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
     <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
-      <aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha.</p></aside></div>
-    <p class="hint">Kartenbild: Serebii; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten.</p></div>`;
-  const pick = $("#mapmon"), pickM = $(".pickm", pick);
+      <aside id="mapside" class="mapside"><p class="hint">${pts.length ? "Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha." : "Fahre über ein Symbol für Einzelheiten, klicke für die Liste."}</p></aside></div>
+    <p class="hint">Kartenbild: ${d.bild ? "Altissimo" : "Serebii"}${pts.length ? "; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten" : ""}${objs.length ? "; Symbole und Sammelobjekte: Altissimo (GPL-3.0)" : ""}.</p></div>`;
+  const pick = $("#mapmon") || document.createElement("div"), pickM = $(".pickm", pick) || document.createElement("div");
   const pickOpen = (on) => { pickM.hidden = !on; $(".pickbtn", pick).setAttribute("aria-expanded", on); if (on) { const f = $("input", pickM); f.value = ""; pickFilter(""); f.focus(); $("a.on", pickM)?.scrollIntoView({block: "center"}); } };
   const pickFilter = (v) => $$(".pickl a[data-n]", pick).forEach((a) => { a.hidden = !!v && !a.dataset.n.includes(v); });
-  $(".pickbtn", pick).addEventListener("click", () => pickOpen(pickM.hidden));
-  $("input", pickM).addEventListener("input", (e) => pickFilter(e.target.value.trim().toLowerCase()));
+  $(".pickbtn", pick)?.addEventListener("click", () => pickOpen(pickM.hidden));
+  $("input", pickM)?.addEventListener("input", (e) => pickFilter(e.target.value.trim().toLowerCase()));
   pick.addEventListener("keydown", (e) => {
     if (e.key === "Escape") pickOpen(false);
     else if (e.key === "Enter" && e.target.tagName === "INPUT") { const a = $$(".pickl a[data-n]", pick).find((x) => !x.hidden); if (a) location.hash = a.getAttribute("href"); }
@@ -1654,7 +1666,22 @@ async function mapView(karte, fid) {
   const tipOf = (p) => (p.alpha ? "Alpha-Spawnpunkt\n" : "") + (p.mons.length ? p.mons.map((m) => `${m.alpha ? "Alpha-" : ""}${m.name}: bis ${mpct(m.max)}`
     + (m.zeit !== "immer" ? ` (${m.zeit})` : "")).join("\n") : "keine Angaben");
   pins.innerHTML = pts.map((p, i) => `<button class="mpin${p.alpha ? " alpha" : ""}${p.hit ? " hit" : ""}${fid != null && !p.hit ? " dim" : ""}" data-i="${i}"
-    style="left:${p.x * 2}px;top:${p.z * 2}px" data-tip="${esc(tipOf(p))}" aria-label="Spawnpunkt"></button>`).join("");
+    style="left:${p.x * 2}px;top:${p.z * 2}px" data-tip="${esc(tipOf(p))}" aria-label="Spawnpunkt"></button>`).join("")
+    + objs.map((o, i) => `<button class="mobj o-${o.art}" data-o="${i}" style="left:${o.x * 2}px;top:${o.z * 2}px" data-tip="${esc(mobjTip(o, arten))}"
+      aria-label="${esc(arten[o.art]?.[0] || o.art)}">${MOBJ[o.art] || "•"}</button>`).join("");
+  const showLayers = () => {
+    $$(".mpin", pins).forEach((b) => { b.hidden = hide.has("pokemon"); });
+    $$(".mobj[data-o]", pins).forEach((b) => { b.hidden = hide.has(objs[+b.dataset.o].art); });
+  };
+  showLayers();
+  $$(".mlay").forEach((b) => b.addEventListener("click", () => {
+    const k = b.dataset.lay;
+    if (hide.has(k)) hide.delete(k); else hide.add(k);
+    store.set("mapHide", [...hide]);
+    b.classList.toggle("on", !hide.has(k));
+    b.dataset.tip = hide.has(k) ? "einblenden" : "ausblenden";
+    showLayers();
+  }));
   let scale = 1, ox = 0, oy = 0, level = -1;
   const fit = () => {
     const r = box.getBoundingClientRect(), on = pts.filter((p) => p.hit);
@@ -1672,12 +1699,19 @@ async function mapView(karte, fid) {
   /* Kacheln: je Zoomstufe eine Ebene, gröbere bleiben darunter liegen (nichts wird leer, während feinere laden);
      geladen wird nur, was im Ausschnitt liegt */
   const layers = [0, 1, 2].map((z) => { const el = document.createElement("div"); el.dataset.z = z; tiles.appendChild(el); return {el, have: new Set()}; });
+  if (d.bild) {          // Jubeldorf: ein Bild für die ganze Karte statt Kacheln
+    const im = new Image();
+    im.alt = ""; im.draggable = false; im.decoding = "async";
+    im.style.cssText = `left:0;top:0;width:${WORLD}px;height:${WORLD}px`;
+    im.src = `karten/${d.karte}/bild.png`;
+    tiles.appendChild(im);
+  }
   const draw = () => {
     const z = scale < 0.3 ? 0 : scale < 0.6 ? 1 : 2;
     level = z;
     const r = box.getBoundingClientRect();
     for (let k = 0; k <= z; k++) {
-      if (k !== 0 && k !== z) continue;          // die gröbste als Unterlage, dazu die passende
+      if (d.bild || (k !== 0 && k !== z)) continue;          // die gröbste als Unterlage, dazu die passende
       const n = 2 ** (k + 1), size = WORLD / n, L = layers[k];
       const x0 = Math.max(0, Math.floor(-ox / scale / size)), x1 = Math.min(n - 1, Math.floor((r.width - ox) / scale / size));
       const y0 = Math.max(0, Math.floor(-oy / scale / size)), y1 = Math.min(n - 1, Math.floor((r.height - oy) / scale / size));
@@ -1714,7 +1748,7 @@ async function mapView(karte, fid) {
   }));
   let drag = null;
   box.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".mpin")) return;
+    if (e.target.closest(".mpin,.mobj")) return;
     drag = {x: e.clientX, y: e.clientY, ox, oy};
     box.setPointerCapture(e.pointerId);
     box.classList.add("grab");
@@ -1727,9 +1761,19 @@ async function mapView(karte, fid) {
   box.addEventListener("pointerup", stop);
   box.addEventListener("pointercancel", stop);
   pins.addEventListener("click", (e) => {
+    const ob = e.target.closest(".mobj[data-o]");
+    if (ob) {
+      $$(".sel", pins).forEach((x) => x.classList.remove("sel"));
+      ob.classList.add("sel");
+      const o = objs[+ob.dataset.o];
+      $("#mapside").innerHTML = `<h3><span class="mobj o-${o.art}">${MOBJ[o.art] || "•"}</span> ${esc(arten[o.art]?.[0] || o.art)}${o.nr ? " " + o.nr : ""}</h3>`
+        + (o.items.length ? `<table class="rows"><tr><th>Item</th><th class="c">Anteil</th></tr>${o.items.map(([n, p]) => `<tr><td>${wikiLink(n)}</td><td class="c num">${esc(p)}</td></tr>`).join("")}</table>`
+          + (o.menge ? `<p class="hint">${esc(o.menge)} Stück je Mal; Anteil: so oft ist es dieses Item.</p>` : "") : `<p class="hint">${esc(MOBJHINT[o.art] || "")}</p>`);
+      return;
+    }
     const b = e.target.closest(".mpin");
     if (!b) return;
-    $$(".mpin.sel", pins).forEach((x) => x.classList.remove("sel"));
+    $$(".sel", pins).forEach((x) => x.classList.remove("sel"));
     b.classList.add("sel");
     const p = pts[+b.dataset.i];
     $("#mapside").innerHTML = `<h3>${p.alpha ? "Alpha-Spawnpunkt" : "Spawnpunkt"}</h3>` + (p.mons.length ? `<table class="rows"><tr><th></th><th>Pokémon</th><th>Anteil</th><th>Tageszeit</th><th>Wetter</th></tr>
@@ -1742,6 +1786,7 @@ async function mapView(karte, fid) {
 // Items des Spiels: Suche, Tasche und Art. Je Tasche passende Spalten (Wirkung bei Medizin und Bällen, die Attacke bei
 // Maschinen); unfertige Einträge (Platzhalter im Text) nur auf Wunsch.
 const MKLASSE = {1: "Status", 2: "physisch", 3: "speziell"};
+const HERSTELLEN = "herstellen";      // Ansicht der Items mit Rezept (Legenden: Arceus)
 const itemImg = (x) => x.bild ? `<img class="ibild" src="itembild/${x.id}" alt="" loading="lazy">`
   : `<span class="ibild none">${x.attacke ? "TM" : ""}</span>`;
 async function itemsView() {
@@ -1751,20 +1796,24 @@ async function itemsView() {
   const items = d.items || [];
   const nOdd = items.filter((x) => x.unfertig).length;
   let pocket = store.get("itemPocket", ""), q = "", art = "", odd = false;
-  if (!(d.taschen || []).includes(pocket)) pocket = "";
+  if (!(d.taschen || []).includes(pocket) && !(pocket === HERSTELLEN && d.rezepte)) pocket = "";
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Items</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <input id="itemq" type="search" placeholder="Name oder Beschreibung" style="width:220px">
       <select id="itemart" aria-label="Art"></select>
       ${nOdd ? `<label data-tip="Einträge, deren Text in den Spieldaten noch Platzhalter wie [VAR] enthält"><input type="checkbox" id="itemodd"> unfertige Einträge (${nOdd})</label>` : ""}
 </div>
-    <div class="bar"><span class="seg" id="itemseg"><button data-t="">alle</button>${(d.taschen || []).map((t) => `<button data-t="${esc(t)}">${esc(t)}</button>`).join("")}</span><span class="hint grow" id="itemn"></span></div>
+    <div class="bar"><span class="seg" id="itemseg"><button data-t="">alle</button>${(d.taschen || []).map((t) => `<button data-t="${esc(t)}">${esc(t)}</button>`).join("")}${d.rezepte
+      ? `<button data-t="${HERSTELLEN}" data-tip="Items mit Rezept: was es zum Herstellen braucht">Herstellen</button>` : ""}</span><span class="hint grow" id="itemn"></span></div>
     ${d.hinweis ? `<div class="note info">${esc(d.hinweis)}</div>` : ""}
     <div class="scroll" id="itembox"></div>
-    <p class="hint">Quelle: PokéAPI. Englisch, wo es keinen deutschen Text gibt. Bilder lädt der Abgleich.</p></div>`;
+    <p class="hint">Quelle: PokéAPI; Items ohne Eintrag dort und deutsche Namen: PKHeX${d.rezepte ? "; Rezepte und Fundorte der Zutaten: Altissimo (englisch)" : ""}. Englisch, wo es keinen deutschen Text gibt. Bilder lädt der Abgleich.</p></div>`;
   header();
   const num = (v) => `<td class="c num" data-s="${v ?? -1}">${v || "–"}</td>`;
   const name = (x) => `<td><span class="iname">${itemImg(x)}<b>${esc(x.name)}</b></span></td>`;
-  const text = (x) => `<td class="why"${x.englisch ? ` lang="en"` : ""}>${esc(x.text)}</td>`;
+  const text = (x) => x.text ? `<td class="why"${x.englisch ? ` lang="en"` : ""}>${esc(x.text)}</td>`
+    : x.fundorte ? `<td class="why" lang="en"><span class="hint">Zu finden:</span> ${esc(x.fundorte.join("; "))}</td>`
+    : x.rezept ? `<td class="why" lang="en">${esc(x.rezept.hinweis)}</td>` : `<td class="why hint">–</td>`;
+  const recipe = (x) => x.rezept ? `<td>${x.rezept.zutaten.map((z) => `<span class="zut">${z.n}× ${esc(z.name)}</span>`).join(" ")}</td>` : "<td></td>";
   // Spalten je Tasche: [Kopf, Breite, Zelle]
   const COLS = {
     "": [[th("Name"), "24%", name], [thc("Preis"), "8%", (x) => num(x.preis)], [th("Tasche"), "11%", (x) => `<td>${esc(x.tasche)}</td>`], [th("Art"), "15%", (x) => `<td>${esc(x.art)}</td>`],
@@ -1777,16 +1826,18 @@ async function itemsView() {
                 [thc("Klasse"), "8%", (x) => `<td class="c">${esc(MKLASSE[x.attacke?.klasse] || "")}</td>`],
                 [thc("Stärke"), "6%", (x) => num(x.attacke?.staerke)], [thc("Gen."), "6%", (x) => num(x.attacke?.genauigkeit)], [thc("AP"), "5%", (x) => num(x.attacke?.ap)],
                 [th("Wirkung", "", true), "", (x) => `<td class="why">${x.attacke?.kurz ? kurzHtml(x.attacke.kurz) : esc(x.text)}</td>`]],
+    [HERSTELLEN]: [[th("Name"), "22%", name], [th("Zutaten"), "30%", recipe], [th("Wo", "Wo das Rezept zu haben ist"), "14%", (x) => `<td>${esc(x.rezept?.ort || "")}</td>`],
+                   [th("Rezept bekommen", "", true), "", (x) => `<td class="why" lang="en">${esc(x.rezept?.hinweis && x.rezept.hinweis !== "N/A" ? x.rezept.hinweis : "–")}</td>`]],
   };
   const draw = () => {
     const ql = q.toLowerCase();
-    const inPocket = items.filter((x) => (!pocket || x.tasche === pocket) && (odd || !x.unfertig));
+    const inPocket = items.filter((x) => (!pocket || x.tasche === pocket || (pocket === HERSTELLEN && x.rezept)) && (odd || !x.unfertig));
     const arts = [...new Set(inPocket.map((x) => x.art).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
     if (art && !arts.includes(art)) art = "";
     $("#itemart").innerHTML = `<option value="">jede Art</option>` + arts.map((a) => `<option${a === art ? " selected" : ""}>${esc(a)}</option>`).join("");
     const xs = inPocket.filter((x) => (!art || x.art === art) && (!ql || x.name.toLowerCase().includes(ql) || x.text.toLowerCase().includes(ql)
       || (x.attacke?.name || "").toLowerCase().includes(ql)));
-    const kind = pocket === "Maschinen" ? "Maschinen" : pocket === "Medizin" || pocket === "Bälle" ? "wirkung" : "";
+    const kind = pocket === HERSTELLEN ? HERSTELLEN : pocket === "Maschinen" ? "Maschinen" : pocket === "Medizin" || pocket === "Bälle" ? "wirkung" : "";
     const cols = COLS[kind].filter((c, i) => !(pocket && !kind && i === 2));      // in einer Tasche braucht es die Spalte Tasche nicht
     $("#itemn").textContent = `${xs.length} Items`;
     $("#itembox").innerHTML = `<table class="rows sort fixed items"><colgroup>${cols.map((c) => `<col${c[1] ? ` style="width:${c[1]}"` : ""}>`).join("")}</colgroup>
@@ -1874,9 +1925,10 @@ async function settingsView() {
     <details class="box"><summary><h2>Quellen und Lizenzen</h2><span class="hint">7 Quellen · Pokédex ${esc(S.meta?.version || "")}</span></summary>
       <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
         <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
-        <a href="https://github.com/kwsch/PKHeX" target="_blank" rel="noopener noreferrer">PKHeX</a> (Fundorte aus den Spieldaten, GPL-3.0) ·
+        <a href="https://github.com/kwsch/PKHeX" target="_blank" rel="noopener noreferrer">PKHeX</a> (Fundorte aus den Spieldaten, Item-Listen, GPL-3.0) ·
         <a href="https://github.com/Lincoln-LM/PLA-Live-Map" target="_blank" rel="noopener noreferrer">PLA-Live-Map</a> und
         <a href="https://github.com/Lincoln-LM/JS-Finder" target="_blank" rel="noopener noreferrer">JS-Finder</a> (Spawnpunkte, GPL-3.0) ·
+        <a href="https://github.com/Altissimo1/altissimo1.github.io" target="_blank" rel="noopener noreferrer">Altissimo</a> (Kartensymbole, Jubeldorf, Rezepte, GPL-3.0) ·
         <a href="https://www.serebii.net" target="_blank" rel="noopener noreferrer">Serebii</a> (Kartenbilder) ·
         <a href="https://www.pokewiki.de" target="_blank" rel="noopener noreferrer">PokéWiki</a> (Links; Abruf für Legenden: Arceus folgt, CC BY-SA 3.0 DE).
         Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK; dies ist ein privates Nachschlage-Tool.</p></details>`;

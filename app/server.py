@@ -13,7 +13,7 @@ import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, aufgaben, db, sources, store
+from . import abfragen, abruf, altissimo, aufgaben, db, sources, store
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -435,6 +435,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._file(f, "max-age=604800")
                 else:
                     self._send(404, {"error": "keine Kachel"})
+            elif path == f"/karten/{altissimo.VILLAGE}/bild.png":
+                f = os.path.join(db.data_dir(), "karten", altissimo.VILLAGE, "bild.png")
+                if os.path.isfile(f):
+                    self._file(f, "max-age=604800")
+                else:
+                    self._send(404, {"error": "kein Kartenbild"})
             elif m := re.fullmatch(r"/api/karte/([a-z]{4,30})", path):
                 d = abfragen.map_data(m.group(1), q)
                 self._send(200 if d else 404, d or {"error": "keine Karte"})

@@ -424,6 +424,23 @@ details summary{cursor:pointer;font-weight:600}
 .mpin.hit{background:#f5c400;width:16px;height:16px;margin:-8px 0 0 -8px;z-index:2}
 .mpin.hit.alpha{background:#ff6a00}
 .mpin.sel{outline:3px solid var(--accent);z-index:3}
+/* Zutaten eines Rezepts */
+.zut{display:inline-block;white-space:nowrap;margin:1px 6px 1px 0}
+/* Kartensymbole: feste Größe beim Zoomen wie die Spawnpunkte */
+.mobj{display:inline-grid;place-items:center;width:18px;height:18px;padding:0;border-radius:50%;border:1.5px solid rgba(255,255,255,.85);
+  font:700 10px/1 system-ui,sans-serif;color:#10171a;background:#9aa;box-shadow:0 1px 3px rgba(0,0,0,.5);vertical-align:middle}
+.pins .mobj{position:absolute;margin:-9px 0 0 -9px;cursor:pointer;transform:scale(var(--inv,1))}
+.pins .mobj.sel{outline:3px solid var(--accent);z-index:3}
+.mobj[hidden],.mpin[hidden]{display:none}
+.o-aprikoko{background:#7fd36a}.o-beere{background:#f08bb5}.o-baum{background:#4caf7a}.o-erz{background:#b8c0c8;border-radius:4px}
+.o-laub{background:#c9a26b}.o-heu{background:#e8d36a}.o-kiste{background:#b07a45;border-radius:3px}.o-truhe{background:#f2b632;border-radius:3px}
+.o-irrlicht{background:#8c6cf0;color:#fff;box-shadow:0 0 8px #a58cff}.o-icognito{background:#30363a;color:#e6e6e6}
+.o-vers{background:#48c1c4}.o-graben{background:#8d6e4f;color:#fff}
+.mlays{flex-wrap:wrap;gap:6px}
+.mlay{display:inline-flex;align-items:center;gap:6px;opacity:.5}
+.mlay.on{opacity:1}
+.mpin-l{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid #fff;background:#3a7bd5}
+.mapside h3 .mobj{margin-right:4px}
 .mapside{border:1px solid var(--line);border-radius:10px;padding:10px;max-height:70vh;overflow:auto}
 .mapside h3{margin:0 0 8px}
 .mapside .spr.sm{width:32px;height:32px}

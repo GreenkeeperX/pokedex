@@ -33,11 +33,14 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Gegner-Modus auch gegen ein ganzes Gegner-Team (Vorteil, Nachteil), Empfehlungen aus den Gefangenen (bessere
   Alternative, langfristig mehr Potential) und Teamsuche nur aus Gefangenen.
 - **Items** des Spiels mit Bild, Tasche, Art, Beschreibung (deutsch, wo vorhanden) und Preis; je Tasche passende
-  Spalten (Wirkung bei Medizin und Bällen, die Attacke bei Maschinen), Suche und Filter nach Art.
+  Spalten (Wirkung bei Medizin und Bällen, die Attacke bei Maschinen), Suche und Filter nach Art. Spiele ohne Liste in
+  der PokéAPI (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, SDLP) nach PKHeX; in Legenden: Arceus „Herstellen“
+  mit Rezepten und Zutaten.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten.
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
-- **Karte** (Legenden: Arceus): Spawnpunkte je Gebiet zum Ziehen und Zoomen, Alpha hervorgehoben, wer dort wann
-  erscheint; von der Detailseite aus mit den Spawnpunkten des Pokémon.
+- **Karte** (Legenden: Arceus): Jubeldorf und die fünf Gebiete zum Ziehen und Zoomen; Spawnpunkte (Alpha hervorgehoben,
+  wer dort wann erscheint), Bäume, Erzbrocken, Haufen, Kisten, Irrlichter, Icognito, alte Verse und Grabstellen als
+  Ebenen zum Ein- und Ausblenden; von der Detailseite aus mit den Spawnpunkten des Pokémon.
 - **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
   zum Herunterladen), „Zu erledigen“ (Abweichungen zwischen
   PokéAPI und Showdown zum Entscheiden), Kopieren und Herunterladen von Protokoll und Test, Sicherung der eigenen
@@ -51,10 +54,11 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (CSV) | Primärquelle: alle Grunddaten, alle Spiele, deutsche Namen | BSD-3 |
 | [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) | Gegenprüfung von Werten und Attacken, Merkmale wie „Aufladen“ | MIT |
 | [PokéAPI-Sprites](https://github.com/PokeAPI/sprites) | Bilder (Sprites und offizielle Artworks) | siehe dort |
-| [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus: Gebiet, Stellen, Level, Alpha, feste Begegnungen) | GPL-3.0 |
+| [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus: Gebiet, Stellen, Level, Alpha, feste Begegnungen); Item-Listen und Itemnamen je Spiel | GPL-3.0 |
+| [Altissimo](https://github.com/Altissimo1/altissimo1.github.io) | Legenden: Arceus: Kartensymbole, Irrlichter, Icognito, alte Verse, Grabstellen, Kartenbild Jubeldorf, Rezepte | GPL-3.0 (Kartenbild nur im Datenordner) |
 | [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
 | [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln, nur im Datenordner auf dem Server) | Bilder von Serebii, Spielgrafik von Nintendo |
-| [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items; geplant: Edelhorden, Kartensymbole | CC BY-SA 3.0 DE |
+| [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items; geplant: Edelhorden | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
 

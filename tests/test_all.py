@@ -312,6 +312,78 @@ class Leser(unittest.TestCase):
         self.assertNotIn("kraft", abfragen.move_view(D, m, {"kennung": "scarlet-violet", "reihenfolge": 21}))
         con.close()
 
+    def test_altissimo(self):
+        import json as js
+        from app import altissimo
+        lm = js.dumps([
+            {"tag": "0", "full": [{"itemName": ["Apricorn"], "spawn": ["100%"]}],
+             "groups": [{"conditions": ["apricorn", "tree"], "display": ["Items: 5", "Apricorn: 100%"], "iconLeft": "10%", "iconTop": "20%"}]},
+            {"tag": "1", "full": [{"itemName": ["Oran Berry", "Sitrus Berry"], "spawn": ["70%", "30%"]}],
+             "groups": [{"conditions": ["oran-berry", "sitrus-berry", "tree"], "display": ["Items: 2-4"], "iconLeft": "50%", "iconTop": "50%"}]},
+            {"tag": "2", "full": [{"itemName": ["Iron Chunk"], "spawn": ["100%"]}],
+             "groups": [{"conditions": ["iron-chunk", "ore"], "display": [], "iconLeft": "x", "iconTop": "1%"}]},
+            {"tag": "3", "full": [{"itemName": ["Nugget"], "spawn": ["1%"]}],
+             "groups": [{"conditions": ["nugget", "chest"], "display": ["Items: 3"], "iconLeft": "90%", "iconTop": "5%"}]}])
+        objs = altissimo.landmarks(lm, (0.1, 0.0, 0.1, 0.0))
+        self.assertEqual([(o["art"], o["x"], o["z"], o["menge"]) for o in objs],
+                         [("aprikoko", 100.0, 200.0, "5"), ("beere", 500.0, 500.0, "2-4"), ("truhe", 900.0, 50.0, "3")])
+        self.assertEqual(objs[1]["items"], [["Oran Berry", "70%"], ["Sitrus Berry", "30%"]])
+        col = js.dumps([{"type": "wisp", "iconLeft": "50%", "iconTop": "25%"}, {"type": "wisp", "iconLeft": "1%", "iconTop": "1%"},
+                        {"type": "unown", "iconLeft": "2%", "iconTop": "2%"}, {"type": "unbekannt", "iconLeft": "3%", "iconTop": "3%"}])
+        got = altissimo.collectibles(col, altissimo.VILLAGE_FIT)
+        self.assertEqual([(o["art"], o["nr"]) for o in got], [("irrlicht", 1), ("irrlicht", 2), ("icognito", 1)])
+        self.assertEqual((got[0]["x"], got[0]["z"]), (512.0, 256.0))
+        page = """<table><thead><tr><th>Item</th><th>Materials</th><th>Location</th><th>Notes</th></tr></thead><tbody>
+          <tr><td>Poké Ball</td><td>1x Apricorn<br>2x Tumblestone</td><td><a href="#">Jubilife Village</a></td><td>Rank 1</td></tr>
+          <tr><td>Leer</td><td></td><td></td><td></td></tr></tbody></table>
+          <table><thead><tr><th>Material</th><th>Used in</th><th>Locations</th></tr></thead><tbody>
+          <tr><td>Apricorn</td><td>Poké Ball recipe</td><td>On trees<br>Sold at the shop</td></tr></tbody></table>"""
+        recs, mats = altissimo.recipes(page)
+        self.assertEqual(recs, [{"item": "Poké Ball", "zutaten": [[1, "Apricorn"], [2, "Tumblestone"]], "ort": "Jubilife Village", "hinweis": "Rank 1"}])
+        self.assertEqual(mats, {"Apricorn": ["On trees", "Sold at the shop"]})
+        self.assertEqual(altissimo.place("Jubilife Village"), "Jubeldorf")
+
+    def test_itemlisten_und_rezepte(self):
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE spiel (id INTEGER, kennung TEXT, gen INTEGER, reihenfolge INTEGER)")
+        con.execute("INSERT INTO spiel VALUES (24, 'legends-arceus', 8, 24)")
+        importer.import_csv(con, "items", "id,identifier,category_id,cost,fling_power,fling_effect_id\n"
+                                          "17,potion,27,200,30,\n1,fake,23,0,,\n")
+        importer.import_csv(con, "item_names", "item_id,local_language_id,name\n17,6,Trank\n17,9,Potion\n")
+        importer.import_csv(con, "item_game_indices", "item_id,generation_id,game_index\n17,8,17\n")
+        con.execute("CREATE TABLE item_categories (id INTEGER, pocket_id INTEGER)")
+        con.execute("INSERT INTO item_categories VALUES (27, 2)")
+        de = "\n".join(["???"] * 17 + ["Trank"] + ["???"] * 82 + ["Aprikoko", "Glanzstein", "Pokéball", "Trank"])
+        en = "\n".join(["???"] * 17 + ["Potion"] + ["???"] * 82 + ["Apricorn", "Tumblestone", "Poké Ball", "Potion"])
+        storage = """public static ReadOnlySpan<ushort> General =>
+        [
+            017, 100, 101, // Zutaten
+        ];
+        public static ReadOnlySpan<ushort> Recipe => [ 102, 103 ];
+        private static ReadOnlySpan<ushort> Unreleased => [ 999 ];"""
+        self.assertEqual(importer.pkhex_spans(storage), {"General": [17, 100, 101], "Recipe": [102, 103]})
+        pkx = {"de": "\ufeff" + de, "en": en, "8LA": storage}
+        self.assertEqual(importer._derive_item(con, pkx), 4)       # Trank aus der PokéAPI, dazu drei neue (Trank doppelt fällt weg)
+        rows = {r[0]: r for r in con.execute("SELECT id, name, tasche, spiele FROM item")}
+        self.assertEqual(rows[17][3], "[24]")
+        self.assertEqual(rows[importer.PKHEX_ITEM + 100][1:], ("Aprikoko", "Items", "[24]"))
+        self.assertNotIn(importer.PKHEX_ITEM + 103, rows)
+        page = """<table><tr><th>Item</th><th>Materials</th><th>Location</th><th>Notes</th></tr>
+          <tr><td>Poké Ball</td><td>1x Apricorn<br>1x Tumblestone</td><td>Jubilife Village - Craftworks</td><td>Rank 1</td></tr></table>"""
+        alt = {"legends-arceus": {"rezepte": page, "symbole": {"obsidianfieldlands": "[]"},
+                                  "sammeln": {"jubilifevillage": '[{"type": "wisp", "iconLeft": "10%", "iconTop": "10%"}]'}}}
+        en_de = importer.item_en_de(pkx)
+        self.assertEqual(importer._derive_rezept(con, alt, en_de), 1)
+        r = con.execute("SELECT item_id, item, zutaten, ort FROM rezept").fetchone()
+        self.assertEqual(r, (importer.PKHEX_ITEM + 102, "Pokéball",
+                             '[[1, "Aprikoko", %d], [1, "Glanzstein", %d]]' % (importer.PKHEX_ITEM + 100, importer.PKHEX_ITEM + 101),
+                             "Jubeldorf – Craftworks"))
+        self.assertEqual(importer._derive_karte(con, alt, en_de), 1)
+        self.assertEqual(con.execute("SELECT karte, gebiet, art, nr FROM kartenobjekt").fetchone(),
+                         ("jubilifevillage", "Jubeldorf", "irrlicht", 1))
+        con.close()
+
     def test_bewaehrte_sets(self):
         import sqlite3
         con = sqlite3.connect(":memory:")

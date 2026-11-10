@@ -20,7 +20,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import db, importer, pokewiki, sources, store
+from . import altissimo, db, importer, pokewiki, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -40,7 +40,8 @@ EXTRA_DIR = os.path.join(os.path.dirname(__file__), "..", "extra")
 
 SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
-         "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki"}
+         "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
+         "altissimo": "Altissimo (Kartensymbole, Rezepte)"}
 WIKI_PAUSE = 2.0            # Sekunden zwischen zwei Anfragen an das PokéWiki (je Anfrage bis zu 50 Seiten)
 WIKI_GAMES = ("legends-arceus",)    # Spiele, deren Attacken und Pokémon im PokéWiki gelesen werden
 
@@ -457,12 +458,14 @@ def _build(st, log, force, at):
     pkhex = _pkhex(st, log, at)
     spawns = _spawns(st, log, at)
     wiki = _pokewiki(st, log, at)
+    alt = _altissimo(st, log, at)
     extra = importer.load_extra(EXTRA_DIR)
     stand = {"csv": sha, "showdown": _hash(*(sd_texts.get(k, "") for k in ("pokedex", "moves"))) if len(sd_texts) == 2 else "",
              "pkhex": _hash(*(v for src in pkhex.values() for v in src.values())) if pkhex else "",
              "spawns": _hash(json.dumps(spawns, sort_keys=True)) if spawns else "",
              "sets": _hash(json.dumps(sets, sort_keys=True)) if sets else "",
              "wiki": _hash(json.dumps(wiki, sort_keys=True)) if wiki else "",
+             "alt": _hash(json.dumps(alt, sort_keys=True)) if alt else "",
              "extra": _hash(json.dumps(extra, sort_keys=True)), "importer": importer.VERSION}
     old = st.get("stand") or {}
     if (db.has_data() and not force and sha and stand["csv"] == old.get("csv") and stand["extra"] == old.get("extra")
@@ -470,7 +473,8 @@ def _build(st, log, force, at):
             and (not stand["pkhex"] or stand["pkhex"] == old.get("pkhex"))
             and (not stand["spawns"] or stand["spawns"] == old.get("spawns"))
             and (not stand["sets"] or stand["sets"] == old.get("sets"))
-            and (not stand["wiki"] or stand["wiki"] == old.get("wiki"))):
+            and (not stand["wiki"] or stand["wiki"] == old.get("wiki"))
+            and (not stand["alt"] or stand["alt"] == old.get("alt"))):
         log("Keine Änderung bei PokéAPI, Showdown, PKHeX, Spawnpunkten, PokéWiki und Ergänzungen, Datenbank bleibt")
         st["sources"]["pokeapi"] = papi.result(geaendert=False)
         return True
@@ -498,7 +502,7 @@ def _build(st, log, force, at):
     STATE.update(step="Datenbank bauen", done=0, total=0)
     tmp = db.pokeapi_path() + ".neu"
     try:
-        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex, spawns=spawns, sets=sets, wiki=wiki)
+        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex, spawns=spawns, sets=sets, wiki=wiki, alt=alt)
     except Exception as e:
         log(f"Neue Datenbank verworfen: {e}; die bisherige bleibt")
         if os.path.exists(tmp):
@@ -515,6 +519,8 @@ def _build(st, log, force, at):
         stand["sets"] = old.get("sets", "")
     if not wiki:
         stand["wiki"] = old.get("wiki", "")
+    if not alt:
+        stand["alt"] = old.get("alt", "")
     st["stand"], st["stats"], st["built"] = stand, stats, _iso(now())
     log(f"Datenbank neu: {stats['species']} Arten, {stats['forms']} Formen, {stats['moves']} Attacken, {stats['games']} Spiele, "
         f"{stats['tables']} Tabellen" + (f"; Showdown {stats['sd_pokemon']} Pokémon, {stats['sd_moves']} Attacken, "
@@ -522,7 +528,9 @@ def _build(st, log, force, at):
         + (f"; {stats['fundorte']} Fundorte aus PKHeX" if pkhex else "; ohne Fundorte aus PKHeX")
         + (f"; {stats['spawns']} Spawn-Einträge mit Tageszeit und Wetter" if spawns else "")
         + (f"; {stats['sets']} bewährte Sets" if sets else "")
-        + (f"; PokéWiki: {stats['wiki_attacken']} Attackenwerte, {stats['wiki_items']} getragene Items" if wiki else ""))
+        + (f"; PokéWiki: {stats['wiki_attacken']} Attackenwerte, {stats['wiki_items']} getragene Items" if wiki else "")
+        + (f"; Altissimo: {stats['kartenobjekte']} Kartensymbole, {stats['rezepte']} Rezepte" if alt else "")
+        + (f"; {stats['items']} Items" if stats.get("items") else ""))
     return not papi.stopped and not sd.stopped
 
 
@@ -585,6 +593,15 @@ def _pkhex(st, log, at):
         t = src.get(PKHEX_RAW + names) if b else None
         if b and t:
             out[spiel] = {"begegnungen": b, "orte": t, "fest": src.get(PKHEX_SRC + fixed) or ""}
+    # Itemlisten je Spiel und die Itemnamen (deutsch, englisch) für Spiele ohne Liste in der PokéAPI
+    STATE["step"] = "PKHeX: Items"
+    items = {lang: src.get(PKHEX_RAW + f"text/items/text_Items_{lang}.txt") for lang in ("de", "en")}
+    if items["de"] and items["en"]:
+        for key in importer.ITEM_LISTS:
+            t = src.get(PKHEX_ITEMS + f"ItemStorage{key}.cs")
+            if t:
+                items[key] = t
+        out["_items"] = items
     st["sources"]["pkhex"] = src.result(dateien=sum(len(v) for v in out.values()))
     if src.blocked:
         st["rest"]["pkhex"] = _iso(now() + timedelta(hours=REST_H))
@@ -609,6 +626,45 @@ def _spawns(st, log, at):
     if src.blocked:
         st["rest"]["spawns"] = _iso(now() + timedelta(hours=REST_H))
     return {"legends-arceus": maps} if maps else {}
+
+
+def _altissimo(st, log, at):
+    """Kartensymbole, Sammelobjekte und Rezepte für Legenden: Arceus von Altissimo (GPL-3.0):
+    {"legends-arceus": {"symbole": {Karte: Text}, "sammeln": {Karte: Text}, "rezepte": HTML}}. Dazu einmal das Kartenbild
+    von Jubeldorf in den Datenordner (karten/jubilifevillage/bild.png)."""
+    if _resting(st, "altissimo", at):
+        log(f"Altissimo ruht bis {st['rest']['altissimo'][:16].replace('T', ' ')} UTC")
+        return {}
+    src = _Source("altissimo", log)
+    sym, col = {}, {}
+    for karte, area in altissimo.AREAS.items():
+        STATE["step"] = f"Altissimo: {altissimo.GEBIETE[karte]}"
+        t = src.get(altissimo.landmarks_url(area))
+        if t:
+            sym[karte] = t
+        t = src.get(altissimo.collectibles_url(area))
+        if t:
+            col[karte] = t
+    t = src.get(altissimo.collectibles_url("jubilife"))
+    if t:
+        col[altissimo.VILLAGE] = t
+    STATE["step"] = "Altissimo: Rezepte"
+    rec = src.get(altissimo.RECIPES_URL) or ""
+    image = os.path.join(db.data_dir(), "karten", altissimo.VILLAGE, "bild.png")
+    if not os.path.isfile(image) and not src.stopped:
+        STATE["step"] = "Altissimo: Karte von Jubeldorf"
+        b = src.get(altissimo.VILLAGE_IMAGE, raw=True)
+        if b and b[:8] == b"\x89PNG\r\n\x1a\n":
+            os.makedirs(os.path.dirname(image), exist_ok=True)
+            with open(image + ".neu", "wb") as f:
+                f.write(b)
+            os.replace(image + ".neu", image)
+    st["sources"]["altissimo"] = src.result(dateien=len(sym) + len(col) + bool(rec))
+    if src.blocked:
+        st["rest"]["altissimo"] = _iso(now() + timedelta(hours=REST_H))
+    if not sym and not col and not rec:
+        return {}
+    return {"legends-arceus": {"symbole": sym, "sammeln": col, "rezepte": rec}}
 
 
 def wiki_titles(con, spiel):
@@ -696,6 +752,7 @@ def scheduler():
 
 
 PKHEX_RAW = "https://raw.githubusercontent.com/kwsch/PKHeX/master/PKHeX.Core/Resources/"
+PKHEX_ITEMS = "https://raw.githubusercontent.com/kwsch/PKHeX/master/PKHeX.Core/Items/"
 PKHEX_SRC = "https://raw.githubusercontent.com/kwsch/PKHeX/master/PKHeX.Core/Legality/Encounters/Data/"
 POKEAPI_RAW = "https://raw.githubusercontent.com/PokeAPI/"
 PROBE_MAX = 60_000          # so viele Zeichen je Probe-Seite behält der Verbindungstest
@@ -769,6 +826,17 @@ def diagnose(proben=None):
     probe("Showdown, items.ts", SD_RAW + "items.ts", lambda t: f"{t.count('num:')} Items mit Nummer")
     probe("PKHeX, Itemnamen deutsch", PKHEX_RAW + "text/items/text_Items_de.txt",
           lambda t: f"{sum(1 for x in t.splitlines() if x.strip())} Namen (alle Spiele bis Legenden: Z-A)")
+    probe("PKHeX, Itemliste Legenden: Arceus", PKHEX_ITEMS + "ItemStorage8LA.cs",
+          lambda t: ", ".join(f"{k} {len(v)}" for k, v in importer.pkhex_spans(t).items()) or "keine Listen erkannt")
+    probe("Altissimo, Rezepte Legenden: Arceus", altissimo.RECIPES_URL,
+          lambda t: "{} Rezepte, {} Zutaten mit Fundorten".format(*map(len, altissimo.recipes(t))))
+
+    section("Kartensymbole und Sammelobjekte (Altissimo, GPL-3.0)")
+    probe("Altissimo, Symbole Obsidian-Grasland", altissimo.landmarks_url("fieldlands"),
+          lambda t: f"{len(altissimo.landmarks(t, altissimo.FIT['obsidianfieldlands']))} Bäume, Erzbrocken und Haufen")
+    probe("Altissimo, Sammelobjekte Jubeldorf", altissimo.collectibles_url("jubilife"),
+          lambda t: f"{len(altissimo.collectibles(t, altissimo.VILLAGE_FIT))} Irrlichter und Icognito")
+    probe("Altissimo, Karte Jubeldorf", altissimo.VILLAGE_IMAGE, lambda b: "PNG" if b[:4] == b"\x89PNG" else "kein PNG", raw=True)
 
     section("Fundorte aus den Spieldaten (PKHeX, GPL-3.0)")
 
