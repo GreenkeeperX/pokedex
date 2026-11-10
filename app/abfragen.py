@@ -450,7 +450,7 @@ def ranked_moves(con, D, f, g, gen, level=None):
         now = level is None or any(w[0] != "level-up" or (w[1] or 0) <= level for w in wege)
         base = {"id": mid, "name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"],
                 "genauigkeit": v["genauigkeit"], "ap": v["ap"], "prio": v["prio"], "wege": [w[3] for w in wege],
-                "jetzt": now, "geaendert": bool(v.get("geaendert")), "text": v.get("text")}
+                "jetzt": now, "geaendert": bool(v.get("geaendert")), "text": v.get("text"), "kurz": v.get("kurz") or ""}
         if v["klasse"] == attacken.STATUS or not v["staerke"]:
             status.append(base)
             continue
@@ -512,7 +512,7 @@ def move_list(p):
             sc, why = 0, []
         rows.append({"id": v["id"], "name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"],
                      "genauigkeit": v["genauigkeit"], "ap": v["ap"], "prio": v["prio"], "wertung": sc, "gruende": why,
-                     "geaendert": bool(v.get("geaendert")), "text": v.get("text"), "gen": m["gen"], "lernen": learners.get(m["id"], 0),
+                     "geaendert": bool(v.get("geaendert")), "text": v.get("text"), "kurz": v.get("kurz") or "", "gen": m["gen"], "lernen": learners.get(m["id"], 0),
                      "merkmale": [x for x in (v.get("merkmale") or []) if x in ("contact", "punch", "bite", "sound", "pulse", "slicing")],
                      "effekt": v.get("effekt")})
     rows.sort(key=lambda x: (-x["wertung"], x["name"]))
@@ -866,7 +866,7 @@ def _more(con, f, g, gen):
 def _extras(fid):
     """Welche Extras (schillernd, animiert, Ruf) für eine Form schon geladen sind."""
     out = {}
-    for kind in ("shiny", "anim", "rufe"):
+    for kind in ("shiny", "shinyart", "anim", "rufe"):
         folder = os.path.join(db.data_dir(), kind)
         out[kind] = any(os.path.isfile(os.path.join(folder, f"{fid}{e}")) for e in (".png", ".gif", ".mp3", ".ogg"))
     return out

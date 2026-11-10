@@ -13,9 +13,10 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Schwächen und Typ-Duellen; Karten lassen sich in die Team-Leiste ziehen; Favoriten (Stern) und Gefangene (Pokéball)
   je Spiel.
 - **Detailseite**: Basiswerte, Fähigkeiten, Typwirkung (mit Fähigkeiten wie Schwebe), Entwicklung mit Bedingungen,
-  „Im Duell gegen Typen“ (klar stark, stark, schwer), Fundorte im Spiel (Legenden: Arceus aus den Spieldaten mit
-  Stellen, Level und Alpha), „Mehr Details“ zum Aufklappen (Fangchance je Ball, Geschlecht, Wachstum, Ei-Gruppen,
-  EV-Ausbeute, je nach Spiel), schillerndes und animiertes Sprite, Ruf, Links ins PokéWiki.
+  „Im Duell gegen Typen“ (klar im Vorteil, im Vorteil, im Nachteil; ↑ austeilen, ↓ einstecken), Fangchance je Ball
+  (offen, solange nicht gefangen), Fundorte im Spiel (Legenden: Arceus aus den Spieldaten mit Stellen, Level und
+  Alpha), „Mehr Details“ zum Aufklappen (Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute, je nach Spiel),
+  schillerndes Artwork und animiertes Sprite, Ruf, Links ins PokéWiki.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
   Vorschlag für vier Attacken mit Typ-Abdeckung. Eigene Auswahl mit Standard-Attacken wie im Spiel, beigebrachten
@@ -32,6 +33,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Alternative, langfristig mehr Potential) und Teamsuche nur aus Gefangenen.
 - **Items** des Spiels mit Tasche, Beschreibung (deutsch, wo vorhanden) und Preis, mit Suche.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten.
+- **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
 - **Karte** (Legenden: Arceus): Spawnpunkte je Gebiet zum Ziehen und Zoomen, Alpha hervorgehoben, wer dort wann
   erscheint; von der Detailseite aus mit den Spawnpunkten des Pokémon.
 - **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten

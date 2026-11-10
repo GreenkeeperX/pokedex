@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.7.1 (Rückmeldung zu 0.7.0, Entscheidung 10.11.2026)
+
+- Kartenpunkte heißen `.mpin`, festgehaltene Zellen `.fix`: die Klasse `.pin` der Karte traf auch Pin-Nadel und Typtabelle
+- Farben der dunklen Ansicht: `--sel` (Auswahl), `--tipbg` (Hinweise), `--hcbg` (Hover-Karte) dunkler als die Karten
+- `crossTable` (Fadenkreuz, Festhalten) für Typtabelle, Typwirkung je Mitglied und „Gegen Gegner“
+- Kurz-Info je Attacke aus `move_meta` und `move_meta_stat_changes` (`importer.move_short`, Spalte `kurz`, `importer.VERSION` 6)
+- Abgleich ist fällig, sobald `importer.VERSION` nicht mehr zum gebauten Stand passt
+- Schillernde Artworks (`shinyart/`)
+
 ## 0.7.0
 
 - Bewährte Sets: Random-Battle-Sets von Showdown je Generation im Abgleich (Tabelle `moveset`, `importer.VERSION` 5),
@@ -34,6 +43,8 @@
 
 ## Als Nächstes
 
+- 0.8.0: Items mit Bildern, Art und passenden Spalten je Tasche; Spieldaten zum Herunterladen; „Zu erledigen“ als
+  KI-Prompt; Karte mit Pokémon-Auswahl mit Bildern und weiteren Ebenen; Kurz-Infos für die übrigen Status-Attacken
 - Smogon-Sets (Wettkampf, mit Items und Wesen), sobald vom Server aus erreichbar
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
 - PokéWiki-Leser (vom Heimserver aus erreichbar, Proben aus dem Verbindungstest) für das, was PKHeX nicht hat:

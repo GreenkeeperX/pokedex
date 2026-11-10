@@ -349,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
                         break
                 else:
                     self._send(404, {"error": "kein Bild"})
-            elif m := re.fullmatch(r"/(shiny|anim|rufe)/(\d{1,6})", path):
+            elif m := re.fullmatch(r"/(shiny|shinyart|anim|rufe)/(\d{1,6})", path):
                 folder = os.path.join(db.data_dir(), m.group(1))
                 f = next((os.path.join(folder, m.group(2) + e) for e in (".png", ".gif", ".mp3", ".ogg")
                           if os.path.isfile(os.path.join(folder, m.group(2) + e))), None)

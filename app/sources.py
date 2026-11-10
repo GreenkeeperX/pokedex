@@ -10,11 +10,25 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.7.1", "10.11.2026", [
+        "Fehler behoben: Ovale an den Pin-Nadeln und in der Typtabelle, verschobene Spalte beim Festhalten",
+        "Liste: Marken auf der Bildecke statt hinter dem Namen, richtiger Pokéball, Knöpfe unter dem Bild",
+        "Hover-Karte breiter und dunkler; Schwächen und Duelle als Zeilen je Multiplikator; „im Vorteil“ und „im Nachteil“ "
+        "statt „stark“ und „schwer“, mit ↑ austeilen und ↓ einstecken",
+        "Dunkle Ansicht: Auswahl, Verbesserungen und Hinweise dunkler abgesetzt statt heller",
+        "Detailseite: Verteidigung, Duell, Entwicklung und Fangchance als eigene Karten; Fangchance offen, solange nicht gefangen; "
+        "eigene Attacken-Auswahl nach Spalten sortierbar; schillernd als Artwork (nach dem nächsten Abgleich)",
+        "Team: Typwirkung je Mitglied und „Gegen Gegner“ mit Linien, Fadenkreuz und Festhalten; Gegner per Ziehen umsortieren",
+        "Attacken: Kurz-Info zur Wirkung (etwa „Angriff −1 (Gegner)“), Beschreibung beim Hovern, feste Spaltenbreiten; "
+        "keine Texte „kann nicht eingesetzt werden“ mehr, wenn es einen älteren Text gibt",
+        "Typtabelle größer; Karte lädt nur den sichtbaren Ausschnitt, Zoom-Knöpfe auf der Karte",
+        "Nach einem Update mit neuen Tabellen startet der Abgleich von selbst",
+    ]),
     ("0.7.0", "10.11.2026", [
         "Attacken: bewährte Sets aus Pokémon Showdown (Random Battle) für die Generation des Spiels, mit Rolle und "
         "Fähigkeit; „Übernehmen“ setzt die vier stärksten lernbaren als eigene Auswahl",
