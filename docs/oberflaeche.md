@@ -47,7 +47,11 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Duell steht ↑ für austeilen und ↓ für einstecken.
 - Fadenkreuz (`crossTable`): Tabellen mit `data-r` an Zeilen, `data-c` an Zellen und `data-pr`/`data-pc` an den Köpfen;
   Hover `.hl`, festgehalten `.fix`. Genutzt von Typtabelle, Typwirkung je Mitglied und „Gegen Gegner“.
-- Marken (`marks`) sitzen in Karten auf der Bildecke (`.sp > .mk`), die Knöpfe (`acts`) unter dem Bild.
+- Karten der Liste: unter dem Bild eine Zeile (`acts`) mit Team-Häkchen, Stern und Pokéball; gesetzte Marken sind immer
+  zu sehen, die übrigen Knöpfe und „+“ beim Hovern, alles an derselben Stelle. Anderswo stehen Marken (`marks`) hinter dem Namen.
+- Hover-Karte (`glanceHtml`): Angriff (bester eigener Typ je Ziel), Verteidigung (beide Typen), „gut einzusetzen gegen“
+  (trifft ×2 oder mehr, steckt höchstens ×½ ein). Das ausführliche Duell steht auf der Detailseite.
+- Sortierbare Tabellen (`table.sort`): Text erst aufsteigend, Zahlen erst absteigend, dann umgekehrt, dritter Klick neutral.
 - Extras (`extrasHtml`, `detail.extras`): Knöpfe nur für schon geladene Dateien; `/shiny/<id>`, `/anim/<id>`, `/rufe/<id>`.
 - Attacken: `moveMarks` setzt Marken für Lehrer und Beherrschung nach den Wegen; `setsHtml` zeigt die bewährten
   Sets (`sets`, `sets_gen` aus `/api/pokemon/<id>/attacken`), grau, was nicht in der Lernliste steht. „Übernehmen“
@@ -70,7 +74,8 @@ Wie im VR-Navigator: Farbtokens in `:root`, dunkle Ansicht über `prefers-color-
 - Typwirkung: rot = schwach (dunkel bei ×4), grün = resistent (dunkel bei ×¼), dunkel = immun
 - Hinweise: blau = Info, gelb = Achtung, rot = Problem, grün = in Ordnung
 - Basiswerte-Summe: Rot (um 200) bis Grün (um 680)
-- Hover-Karte: getönter Hintergrund (`--hcbg`) und Rahmen in Akzentfarbe
+- Hover-Karte und Hinweise: `--hcbg`/`--tipbg`, in der dunklen Ansicht etwas heller als die Karten. Auswahl (`--sel`)
+  und Hover (`--hov`) nie dunkler als der Seitenhintergrund (Team-Plätze).
 - Gegner: Karten mit rotem Rahmen
 - Akzent: Nintendo-Rot (`--brand`); Typ-Bubbles: gewählt = heller Rahmen mit Schein, ausgeschlossen = roter Rahmen und
   durchgestrichen (ohne Zeichen, gleiche Größe); im Team: grüner Rahmen; festgesetzt (📌): grün; passt nicht zum

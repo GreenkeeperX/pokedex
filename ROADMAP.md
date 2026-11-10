@@ -1,5 +1,13 @@
 # Roadmap
 
+## 0.8.1 (Rückmeldung zu 0.7.1, Entscheidung 10.11.2026)
+
+- Dunkle Farben: `--hcbg` und `--tipbg` #253033, `--sel` gleich dem Seitenhintergrund; nichts dunkler als die Team-Plätze
+- Liste: Marken und Knöpfe in einer Zeile unter dem Bild (`acts`), Bild 84 px, Netz 92 px
+- Hover-Karte: `glanceHtml` (Angriff, Verteidigung, gut einzusetzen gegen)
+- Sortieren: Text erst aufsteigend, Zahlen erst absteigend, dritter Klick neutral (auch eigene Attacken-Auswahl)
+- Artworks mit neuer Adresse (`?v=2`), weil das Ersatz-Sprite sieben Tage im Browser lag
+
 ## 0.8.0 (Rückmeldung zu 0.7.0, zweiter Teil)
 
 - Tabelle `item` mit `art` (Kategorie der PokéAPI auf Deutsch, `importer.ITEM_ART`), `wirkung` und `wert` (aus dem Kurztext
@@ -53,8 +61,9 @@
 
 ## Als Nächstes
 
-- Karte: weitere Ebenen (etwa Irrlichter, Icognito, Ausgrabungen), sobald es eine verlässliche Quelle für die
-  Koordinaten gibt; Karten für weitere Spiele
+- Karte wie im PokéWiki: Symbole für gewöhnliche Fundorte, Alpha, Aprikoko- und Beerenbäume, Kisten, Kristallsteine,
+  Massenauftreten, Raum-Zeit-Verzerrungen, Items mit Bild und Irrlichter. Quelle klären: die PokéWiki-Karte lädt ihre
+  Daten per JavaScript; der Abruf kommt mit dem PokéWiki-Leser. Karten für weitere Spiele
 - Items: Wirkung auch für Beeren und getragene Items; Fundorte der Items
 - Smogon-Sets (Wettkampf, mit Items und Wesen), sobald vom Server aus erreichbar
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)

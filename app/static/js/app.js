@@ -77,7 +77,7 @@ const icon = (k, on = true) => `<svg class="ic ic-${k}${on ? " on" : ""}" viewBo
 const SVG = (d) => `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">${d}</svg>`;
 const tchip = (t) => `<span class="t t${t}" data-tip-type="${t}">${esc(tname(t))}</span>`;
 const tchips = (ts) => (ts || []).map(tchip).join("");
-const img = (id, cls = "", art = false) => `<img class="spr ${cls}" src="${art ? "artwork" : "sprites"}/${id}.png" alt="" loading="lazy" draggable="false" onerror="this.onerror=null;this.src='icon.svg';this.classList.add('none')">`;
+const img = (id, cls = "", art = false) => `<img class="spr ${cls}" src="${art ? "artwork" : "sprites"}/${id}.png${art ? "?v=2" : ""}" alt="" loading="lazy" draggable="false" onerror="this.onerror=null;this.src='icon.svg';this.classList.add('none')">`;
 
 function defense(types) {
   const ch = S.chart, out = {};
@@ -130,21 +130,22 @@ const isCaught = (id) => S.caught.has(id);
 function marks(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
   return `<span class="mk">${inTeam ? `<span class="m m-team" data-tip="Im Team">${icon("team")}</span>` : ""}`
-    + `${got ? `<span class="m m-ball" data-tip="Gefangen in ${esc(gameName())}">${icon("ball")}</span>` : ""}`
+    + `${got ? `<span class="m m-ball" data-tip="In deiner Sammlung (${esc(gameName())})">${icon("ball")}</span>` : ""}`
     + `${fav ? `<span class="m m-fav" data-tip="Favorit">${icon("fav")}</span>` : ""}</span>`;
 }
 function acts(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
-  return `<span class="acts"><span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${got ? "Gefangen; Klick: doch nicht" : "Als gefangen markieren"}">${icon("ball", got)}</span>`
+  return `<span class="acts">${inTeam ? `<span class="a team on" data-tip="Im Team">${icon("team")}</span>` : ""}`
     + `<span class="a${fav ? " on" : ""}" data-act="fav" data-id="${id}" data-tip="${fav ? "Favorit; Klick: aus den Favoriten" : "Zu den Favoriten (Kader zum schnellen Tauschen)"}">${icon("fav", fav)}</span>`
+    + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${got ? `In deiner Sammlung (${esc(gameName())}); Klick: doch nicht` : "Als gefangen markieren"}">${icon("ball", got)}</span>`
     + `${teamFull() ? "" : `<span class="a plus" data-act="teamadd" data-id="${id}" data-tip="${inTeam ? "Noch einmal ins Team" : "Ins Team"}">${icon("plus")}</span>`}</span>`;
 }
 function monCard(r) {
   const inTeam = S.team.ids.includes(r.id);
-  return `<a class="mon${inTeam ? " inteam" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="sp">${marks(r.id)}${img(r.id)}${acts(r.id)}</span>
+  return `<a class="mon${inTeam ? " inteam" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="sp">${img(r.id)}${acts(r.id)}</span>
     <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span></span><span class="ty">${tchips(r.typen)}</span>
-    <span class="s">#${r.nr ?? r.art} · Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b>${r.legendaer ? " · legendär" : ""}</span></span>
-    ${radar(r.werte)}</a>`;
+    <span class="s">#${r.nr ?? r.art}${r.legendaer ? " · legendär" : ""}</span><span class="s">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b></span></span>
+    ${radar(r.werte, 92)}</a>`;
 }
 // Marken überall neu zeichnen, ohne die Seite neu aufzubauen
 function redrawMarks() {
@@ -154,7 +155,7 @@ function redrawMarks() {
     b.classList.toggle("on", on); b.innerHTML = markLabel(k, on); });
   $$(".mon[data-id]").forEach((el) => el.classList.toggle("inteam", S.team.ids.includes(+el.dataset.id)));
 }
-const markLabel = (k, on) => k === "fav" ? `${icon("fav", on)} ${on ? "Favorit" : "Zu den Favoriten"}` : `${icon("ball", on)} ${on ? "Gefangen" : "Als gefangen markieren"}`;
+const markLabel = (k, on) => k === "fav" ? `${icon("fav", on)} ${on ? "Favorit" : "Zu den Favoriten"}` : `${icon("ball", on)} ${on ? "In deiner Sammlung" : "Als gefangen markieren"}`;
 
 /* Typ-Duell (wie stark gegen einen Typ): austeilen = bester eigener Typ, einstecken = Attacken des Typs gegen beide
    eigenen Typen. Stufe 2 klar stark (trifft ×2, steckt höchstens ×½ ein), 1 stark (trifft ×2, steckt ×1 ein),
@@ -178,6 +179,23 @@ function defHtml(d, short = false) {
   const sec = (title, factors) => { const body = defRows(d, factors); return body ? (short ? `<div class="et">${title}</div>` : `<h3>${title}</h3>`) + body : ""; };
   return sec("Schwach gegen", [4, 2]) + sec("Resistent gegen", [0.5, 0.25]) + sec("Immun gegen (keine Wirkung)", [0])
     || `<p class="hint">Keine Schwäche, keine Resistenz.</p>`;
+}
+/* Hover-Karte: auf einen Blick, was die eigenen Typen austeilen (bester eigener Typ je Ziel), was sie einstecken
+   (beide Typen zusammen) und gegen wen beides passt (trifft ×2 oder mehr und steckt höchstens ×½ ein) */
+function glanceHtml(own, d) {
+  const ch = S.chart || {}, all = Object.keys(ch);
+  const best = (t) => Math.max(...own.map((a) => ch[a]?.[t] ?? 1));
+  const acls = (f) => f >= 4 ? "fd4" : f > 1 ? "fd" : f === 0 ? "fa0" : f < 1 ? "fa05" : "f1";
+  const rows = (pairs, factors, cls) => factors.map((f) => { const ts = pairs.filter(([, x]) => x === f).map(([t]) => t);
+    return ts.length ? erow(`<span class="f ${cls(f)}">×${fl(f)}</span>`, ts.map(tchip).join("")) : ""; }).join("");
+  const off = all.map((t) => [t, best(t)]), def = all.map((t) => [t, d[t] ?? 1]);
+  const offBody = rows(off, [4, 2, 0.5, 0.25, 0], acls);
+  const weak = rows(def, [4, 2], fcls), tough = rows(def, [0.5, 0.25, 0], fcls);
+  const ideal = all.filter((t) => best(t) > 1 && (ch[t] ? own.reduce((f, x) => f * (ch[t][x] ?? 1), 1) : 1) <= 0.5);
+  const blk = (cls, title, sub, body) => `<div class="hc-blk ${cls}"><h4>${title} <span class="muted">${sub}</span></h4>${body}</div>`;
+  return blk("off", "Angriff", "mit Attacken der eigenen Typen", offBody || `<div class="muted">überall normal</div>`)
+    + blk("def", "Verteidigung", "wird getroffen", (weak ? `<div class="et">verwundbar</div>${weak}` : "") + (tough ? `<div class="et">hält aus</div>${tough}` : "") || `<div class="muted">überall normal</div>`)
+    + (ideal.length ? blk("best", "Gut einzusetzen gegen", "trifft stark, steckt wenig ein", `<div class="ets">${ideal.map(tchip).join("")}</div>`) : "");
 }
 const DUEL_LEGEND = "↑ teilt aus (bester eigener Typ) · ↓ steckt ein (beide eigenen Typen)";
 function duelTip(name, own, t, x) {
@@ -294,8 +312,7 @@ function showCard(el) {
   card.innerHTML = `<div class="hc-head">${img(r.id, "art", true)}<div><b>${esc(r.name)}</b> <span class="muted">#${r.nr ?? r.art}</span><div>${tchips(r.typen)}</div>
       <div class="muted">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b>${r.legendaer ? " · legendär" : ""}${r.endstufe ? " · Endstufe" : ""}</div>
       ${det ? `<div class="muted">${det.level ? "Level " + det.level : "ohne Level"}</div><div class="hc-mv">${mv.map((m) => `${tchip(m.typ)} ${esc(m.name)}`).join("<br>")}</div>` : ""}</div></div>
-    <div class="hc-body">${radar(r.werte, 190, true)}<div class="hc-eff">${defHtml(d, true)}
-      ${duelHtml(r.name, r.typen, true)}</div></div>`;
+    <div class="hc-body">${radar(r.werte, 190, true)}<div class="hc-eff">${glanceHtml(r.typen, d)}</div></div>`;
   card.hidden = false;
   place(card, el);
 }
@@ -347,10 +364,12 @@ document.addEventListener("click", (e) => {
   const table = th.closest("table"), i = [...th.parentNode.children].indexOf(th);
   const tb = table.tBodies[0], rows = [...tb.rows];
   rows.forEach((r, k) => { if (r.dataset.o === undefined) r.dataset.o = k; });
-  const dir = !th.dataset.dir ? "desc" : th.dataset.dir === "desc" ? "asc" : "";
+  const key = (tr) => { const c = tr.cells[i]; const v = c?.dataset.s ?? c?.textContent.trim() ?? ""; const n = parseFloat(v); return isNaN(n) || v === "" ? v.toLowerCase() : n; };
+  const isNum = rows.some((r) => typeof key(r) === "number");
+  const first = isNum ? "desc" : "asc", second = isNum ? "asc" : "desc";
+  const dir = !th.dataset.dir ? first : th.dataset.dir === first ? second : "";
   $$("th", table).forEach((x) => delete x.dataset.dir);
   if (dir) th.dataset.dir = dir;
-  const key = (tr) => { const c = tr.cells[i]; const v = c?.dataset.s ?? c?.textContent.trim() ?? ""; const n = parseFloat(v); return isNaN(n) || v === "" ? v.toLowerCase() : n; };
   rows.sort((a, b) => {
     if (!dir) return a.dataset.o - b.dataset.o;
     const x = key(a), y = key(b); const r = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "de");
@@ -601,7 +620,7 @@ function filterBar(f, id, opts = {}) {
       <label data-tip="Mega-Entwicklungen und Gigadynamax-Formen gibt es nur im Kampf"><input type="checkbox" data-f="kampf"${f.kampf ? " checked" : ""}> mit Mega und Gigadynamax</label>
       <label data-tip="„bis“: Pokémon bis zu dieser Generation; „nur“: nur Pokémon, die in dieser Generation neu kamen"><select data-f="genmodus"><option value="bis">bis</option><option value="nur"${f.genmodus === "nur" ? " selected" : ""}>nur</option></select>
         Gen <select data-f="gen"><option value="">alle</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => `<option${+f.gen === g ? " selected" : ""}>${g}</option>`).join("")}</select></label>
-      <label data-tip="Nur deine Favoriten (Stern) oder Gefangenen (Pokéball) im gewählten Spiel"><select data-f="nur"><option value="">alle Pokémon</option><option value="fav"${f.nur === "fav" ? " selected" : ""}>nur Favoriten</option><option value="gef"${f.nur === "gef" ? " selected" : ""}>nur Gefangene</option></select></label>
+      <label data-tip="Nur deine Favoriten (Stern) oder deine Sammlung (als gefangen markiert, Pokéball) im gewählten Spiel"><select data-f="nur"><option value="">alle Pokémon</option><option value="fav"${f.nur === "fav" ? " selected" : ""}>nur Favoriten</option><option value="gef"${f.nur === "gef" ? " selected" : ""}>nur aus deiner Sammlung</option></select></label>
       ${areaSelect(f)}
       <label>Basiswerte ab <input data-f="min" type="number" min="0" max="800" step="10" style="width:80px" value="${esc(f.min)}"></label>
       <span class="hint grow" data-cnt="${id}"></span></div></div>`;
@@ -977,9 +996,9 @@ function catchHtml(d) {
   const pc = (v) => String(v).replace(".", ",") + " %";
   const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
   return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
-    <table class="rows"><tr><th>Ball</th><th>volle KP</th><th>1 KP</th><th>1 KP, schlafend</th></tr>
-    ${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td>${pc(f.voll)}</td><td>${pc(f.rot)}</td><td>${pc(f.schlaf)}</td></tr>`).join("")}</table>
-    <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
+    <table class="rows sort"><thead><tr>${th("Ball")}${th("volle KP")}${th("1 KP")}${th("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${th("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
+    <tbody>${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td data-s="${f.voll}">${pc(f.voll)}</td><td data-s="${f.rot}">${pc(f.rot)}</td><td data-s="${f.status ?? ""}">${f.status != null ? pc(f.status) : "–"}</td><td data-s="${f.schlaf}">${pc(f.schlaf)}</td></tr>`).join("")}</tbody></table>
+    <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
       : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p></details>`;
 }
 // Mehr Details, eingeklappt: Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute
@@ -1056,7 +1075,7 @@ function renderMoves(A, level) {
           <tbody>${[0, 1, 2, 3].map(mineRow).join("")}</tbody></table>
         ${mine.length ? `<p class="hint">Trifft sehr effektiv: ${covered.size ? [...covered].map(tchip).join(" ") : "nichts"} (${covered.size} von ${Object.keys(S.chart || {}).length} Typen)</p>`
           : `<p class="hint">Mit + in der Tabelle wählen. ${inTeam ? "Die Auswahl zählt in der Team-Bewertung." : "Gespeichert in diesem Browser; im Team zählt sie für die Bewertung."}</p>`}
-        <div class="bar">${std.length ? `<button class="small" data-act="mvstd" data-tip="${esc("Wie im Spiel: die letzten vier Level-Attacken bis zum Level (ohne Level die ersten vier): " + std.join(", "))}">Standard-Attacken</button>` : ""}
+        <div class="bar">${mine.length ? `<button class="small" data-act="mvclear" data-tip="Alle vier Plätze leeren">Alle entfernen</button>` : ""}${std.length ? `<button class="small" data-act="mvstd" data-tip="${esc("Wie im Spiel: die letzten vier Level-Attacken bis zum Level (ohne Level die ersten vier): " + std.join(", "))}">Standard-Attacken</button>` : ""}
           <div class="ac"><input id="mvextra" type="search" placeholder="Andere Attacke (TM, Lehrer …)" style="width:240px"></div></div></div>
       <div><h3>Vorschlag: vier Attacken</h3><div class="sugl">${A.moveset.map((m) => `<div class="${mine.includes(m.id) ? "same" : ""}">${tchip(m.typ)} <b>${esc(m.name)}</b> <span class="why">${esc(m.grund)}</span></div>`).join("") || `<span class="hint">Keine Schadens-Attacke.</span>`}</div>
         ${A.moveset.length ? `<button class="small" data-act="mvtake" style="margin-top:6px">Als eigene Auswahl übernehmen</button>` : ""}
@@ -1076,11 +1095,15 @@ function renderMoves(A, level) {
     renderMoves(A2, v);
   });
   $$("table.mine th[data-ms]").forEach((h) => h.addEventListener("click", () => {
-    const k = h.dataset.ms, dir = MSORT.k === k && MSORT.dir === "desc" ? "asc" : "desc";
+    const k = h.dataset.ms, num = !["typ", "name", "klasse"].includes(k);
+    const first = num ? "desc" : "asc", second = num ? "asc" : "desc";
+    const dir = MSORT.k !== k ? first : MSORT.dir === first ? second : "";
+    if (!dir) { if (MSORT.orig) setOwnSet(id, MSORT.orig.filter((x) => mine.includes(x)).concat(mine.filter((x) => !MSORT.orig.includes(x))));
+      MSORT = {k: "", dir: ""}; renderMoves(DETAIL.attacken, $("#lvl")?.value); return; }
     const val = (x) => { const m = mv(x); return k === "wertung" ? all[x]?.wertung ?? 0 : k === "typ" ? tname(m.typ) : k === "genauigkeit" ? m.genauigkeit ?? 101 : m[k] ?? 0; };
     const sorted = [...mine].sort((a, b) => { const x = val(a), y = val(b); const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "de");
       return dir === "asc" ? c : -c; });
-    MSORT = {k, dir};
+    MSORT = {k, dir, orig: MSORT.orig && MSORT.k ? MSORT.orig : [...mine]};
     setOwnSet(id, sorted);
     renderMoves(DETAIL.attacken, $("#lvl")?.value);
   }));
@@ -1210,12 +1233,12 @@ async function caughtBox() {
     <button class="small" data-act="${x.slot === null || x.slot === undefined ? "teamadd" : "pickfav"}" data-id="${x.id}" data-slot="${x.slot ?? ""}">${x.slot === null || x.slot === undefined ? "Ins Team" : "Tauschen"}</button></div>`;
   el.innerHTML = `<p class="hint">${S.caught.size} gefangen in ${esc(gameName())}.</p>
     <h3 data-tip="Ein Tausch mit einem Mitglied (oder ein freier Platz) hebt die Teamwertung jetzt">Bessere Alternative</h3>
-    ${r.alternativen.map((x) => line(x)).join("") || `<p class="hint">Keiner deiner Gefangenen hebt das Team im Moment.</p>`}
+    ${r.alternativen.map((x) => line(x)).join("") || `<p class="hint">Nichts aus deiner Sammlung hebt das Team im Moment.</p>`}
     <h3 data-tip="Noch nicht voll entwickelt: die Endstufe würde das Team deutlich mehr heben als das Pokémon heute">Langfristig mehr Potential</h3>
     ${r.potential.map((x) => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><span class="arrow">→</span><a href="#pokemon/${x.wird.id}" data-hc="${x.wird.id}">${img(x.wird.id)}</a>
       <div class="grow"><b>${esc(x.name)}</b> → <b>${esc(x.wird.name)}</b> ${tchips(x.wird.typen)}<div class="why">als ${esc(x.wird.name)}: <b class="plus">+${x.plus}</b> Teamwertung ${where(x)}</div></div></div>`).join("")
-      || `<p class="hint">Keine Gefangenen, die entwickelt deutlich mehr bringen.</p>`}
-    <p class="hint">„Bestes Team suchen“ mit „nur Gefangene“ im Filter baut ein Team nur aus deinen Gefangenen.</p>`;
+      || `<p class="hint">Nichts aus deiner Sammlung, das entwickelt deutlich mehr bringt.</p>`}
+    <p class="hint">„Bestes Team suchen“ mit „nur aus deiner Sammlung“ im Filter baut ein Team nur aus Pokémon, die du als gefangen markiert hast.</p>`;
 }
 async function teamView() {
   const rid = RID;
@@ -1232,7 +1255,7 @@ async function teamView() {
     <div class="cols">
       <div class="box"><h2>Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
       <div class="box"><h2>Verbesserungen</h2><div id="imp"></div></div>
-      <div class="box dropmark" data-drop="gef"><h2>${icon("ball")} Aus deinen Gefangenen</h2><div id="gef"><p class="hint">Lädt …</p></div></div>
+      <div class="box dropmark" data-drop="gef"><h2>${icon("ball")} Aus deiner Sammlung</h2><div id="gef"><p class="hint">Lädt …</p></div></div>
     </div>
     <div class="box" style="margin-top:12px"><h2>Passende Pokémon finden</h2>
       <div class="cols"><div><h3>Ziel</h3>
@@ -1241,7 +1264,7 @@ async function teamView() {
           <label><input type="checkbox" id="tleg"${S.tleg ? " checked" : ""}> ohne Legendäre und Mysteriöse</label></div>
         <div class="weights">${Object.entries(CRIT).map(([k, n]) => `<span data-tip="${esc(CRIT_TIP[k])}">${n}</span><input type="range" min="0" max="10" step="1" data-w="${k}" value="${w[k]}"><span class="num">${w[k]}</span>`).join("")}</div>
         <div class="bar" style="margin-top:8px"><button class="primary" data-act="opt">Bestes Team suchen</button>
-          <label data-tip="Wie „nur Gefangene“ im Filter rechts"><input type="checkbox" id="tgef"${S.tfilter.nur === "gef" ? " checked" : ""}> nur aus Gefangenen</label>
+          <label data-tip="Wie „nur aus deiner Sammlung“ im Filter rechts"><input type="checkbox" id="tgef"${S.tfilter.nur === "gef" ? " checked" : ""}> nur aus deiner Sammlung</label>
           <span class="hint">Festgesetzte (📌) bleiben, der Rest wird aus den gefilterten Pokémon gefüllt.</span></div>
         <div id="opt"></div></div>
         <div><h3>Filter für Vorschläge und Suche</h3>${filterBar(S.tfilter, "tf", {sort: false})}</div></div>
@@ -1345,7 +1368,7 @@ async function teamRefresh() {
     const cur = (t.details[v.slot]?.attacken || []).map((x) => MOVES[x]).filter(Boolean);
     return `<div class="imp${diff ? " diff" : " same"}" data-hc="${v.id}" data-slot="${v.slot}"><a href="#pokemon/${v.id}/${v.slot}">${img(v.id)}</a><div><b>${esc(v.name)}</b> <span class="muted">Platz ${v.slot + 1}</span>
       ${v.hinweise.map((h) => `<div class="why">${esc(h)}</div>`).join("")}
-      ${v.besser.length ? `<div class="why">Statt ${esc(v.schwaechste)}: ${v.besser.map((b) => `<span class="new">${tchip(b.typ)} <b>${esc(b.name)}</b> (${b.wertung})</span>`).join(" ")}</div>
+      ${v.besser.length ? `<div class="why">Statt <b class="old">${esc(v.schwaechste)}</b> besser:</div><div class="alts">${v.besser.map((b) => `<span class="new">${tchip(b.typ)} <b>${esc(b.name)}</b> <span class="muted">Wertung ${b.wertung}</span></span>`).join("")}</div>
         <div class="why">Jetzt: ${cur.map((m) => `${esc(m.name)}`).join(", ")}</div>` : ""}
       ${!diff ? `<div class="why">Passt so.</div>` : ""}</div></div>`; }).join("")
     : `<p class="hint">Lege Level und Attacken in der Detailansicht eines Mitglieds fest (Klick auf das Bild), dann zeigt sich hier, was besser ginge.</p>`;
@@ -1364,7 +1387,7 @@ async function optimize() {
   r.teams.forEach((t) => t.mitglieder.forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); }));
   // Mitglieder, die nicht im aktuellen Team sind, dezent markiert
   const now = new Set(S.team.ids);
-  $("#opt").innerHTML = `<p class="hint">Aus ${r.pool} Pokémon (Filter rechts${S.tfilter.nur === "gef" ? ", nur Gefangene" : ""}) in ${esc(gameName())}. Hinterlegt: nicht in deinem Team.</p>` + r.teams.map((t, i) => `<div class="optt">
+  $("#opt").innerHTML = `<p class="hint">Aus ${r.pool} Pokémon (Filter rechts${S.tfilter.nur === "gef" ? ", nur aus deiner Sammlung" : ""}) in ${esc(gameName())}. Hinterlegt: nicht in deinem Team.</p>` + r.teams.map((t, i) => `<div class="optt">
     <div class="bar"><b class="score-s">${t.wertung}</b><span class="grow">${t.mitglieder.map((m) => `<a href="#pokemon/${m.id}" data-hc="${m.id}" class="${now.has(m.id) ? "" : "new"}">${img(m.id)}</a>`).join("")}</span>
     <button class="small" data-act="take" data-i="${i}">Übernehmen</button></div>
     <div class="why">${t.mitglieder.map((m) => now.has(m.id) ? esc(m.name) : `<b>${esc(m.name)}</b>`).join(", ")}${t.offen.length ? " · offen: " + t.offen.map(tname).join(", ") : ""}</div></div>`).join("");
@@ -1399,7 +1422,14 @@ function foeDrag(box) {
   if (box.dataset.dnd) return;
   box.dataset.dnd = "1";
   box.addEventListener("dragstart", (e) => { const f = e.target.closest(".foe"); if (!f) return; e.dataTransfer.setData("text/x-foe", f.dataset.foe); e.dataTransfer.effectAllowed = "move"; card.hidden = true; });
-  box.addEventListener("dragover", (e) => { if (e.target.closest(".foe") && e.dataTransfer.types.includes("text/x-foe")) e.preventDefault(); });
+  box.addEventListener("dragover", (e) => {
+    const f = e.target.closest(".foe");
+    if (!f || !e.dataTransfer.types.includes("text/x-foe")) return;
+    e.preventDefault();
+    $$(".foe.over", box).forEach((x) => x !== f && x.classList.remove("over"));
+    f.classList.add("over");
+  });
+  box.addEventListener("dragleave", (e) => { const f = e.target.closest(".foe"); if (f && !f.contains(e.relatedTarget)) f.classList.remove("over"); });
   box.addEventListener("drop", (e) => {
     const f = e.target.closest(".foe"), from = +e.dataTransfer.getData("text/x-foe");
     if (!f || !from) return;
@@ -1440,7 +1470,7 @@ async function movesView() {
     $("#mcnt").textContent = `${xs.length} von ${rows.length} Attacken in ${gameName()}`;
     $("#mv").innerHTML = `<div class="box scroll"><table class="sort fixed" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:62px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${th("Typ")}${th("Klasse")}${th("Stärke")}${th("Gen.", "Genauigkeit in Prozent; – trifft immer")}${th("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
       ${th("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${th("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${th("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${th("Gen", "Generation, seit der es die Attacke gibt")}${th("Wirkung", "Kurz-Info aus den Spieldaten; die ganze Beschreibung beim Hovern über die Zeile", true)}</tr></thead><tbody>
-      ${xs.map((m) => `<tr${m.text ? ` data-tip="${esc(m.text)}"` : ""}><td data-s="${esc(m.name)}"><b>${esc(m.name)}</b> ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
+      ${xs.map((m) => `<tr><td data-s="${esc(m.name)}"><b${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${esc(m.name)}</b> ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
         <td><span class="cls">${CLS[m.klasse]}</span></td><td class="num" data-s="${m.staerke || 0}">${powCell(m.staerke)}</td><td class="num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
         <td class="num">${m.ap ?? ""}</td><td class="num">${m.prio ? `<span data-tip="${m.prio > 0 ? `Vorrang +${m.prio}: kommt vor normalen Attacken` : `Vorrang ${m.prio}: kommt nach normalen Attacken`}">${m.prio > 0 ? "+" : ""}${m.prio}</span>` : ""}</td>
         <td class="num" data-s="${m.wertung}"${m.gruende.length ? ` data-tip="${esc(m.gruende.join("\n"))}"` : ""}>${m.wertung ? `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>` : ""}</td>
@@ -1725,7 +1755,7 @@ async function settingsView() {
       <div id="diag"></div></div>
     <h2 class="sect">Deine Daten</h2>
     <div class="box"><h2>Sicherung</h2>
-      <p class="hint">Alles Eigene in einer Datei: Teams, Favoriten, Gefangene und Entscheidungen. Die Spieldaten gehören nicht dazu; die holt der Abgleich jederzeit neu.
+      <p class="hint">Alles Eigene in einer Datei: Teams, Favoriten, deine Sammlung (als gefangen markiert) und Entscheidungen. Die Spieldaten gehören nicht dazu; die holt der Abgleich jederzeit neu.
         Der Server sichert user.db außerdem täglich selbst (die letzten 14 Tage).</p>
       <div class="bar"><a class="btn" href="/api/export" download>Sicherung herunterladen</a>
         <label class="btn filebtn">Sicherung einlesen <input type="file" id="restore" accept="application/json,.json" hidden></label>
@@ -1751,10 +1781,10 @@ async function settingsView() {
     let body;
     try { body = JSON.parse(await file.text()); } catch (x) { $("#restmsg").innerHTML = `<div class="note stop">Keine lesbare JSON-Datei.</div>`; return; }
     const n = (k) => (body[k] || []).length;
-    if (!confirm(`Sicherung vom ${String(body.exportiert || "?").slice(0, 10)} einlesen?\n${n("teams")} Teams, ${n("favoriten")} Favoriten, ${n("gefangen")} Gefangene, ${n("entscheidungen")} Entscheidungen.\n\nDas ersetzt alle eigenen Daten.`)) return;
+    if (!confirm(`Sicherung vom ${String(body.exportiert || "?").slice(0, 10)} einlesen?\n${n("teams")} Teams, ${n("favoriten")} Favoriten, ${n("gefangen")} in der Sammlung, ${n("entscheidungen")} Entscheidungen.\n\nDas ersetzt alle eigenen Daten.`)) return;
     try {
       const r = await api("/api/restore", body);
-      $("#restmsg").innerHTML = `<div class="note go">Eingelesen: ${r.teams} Teams, ${r.favoriten} Favoriten, ${r.gefangen} Gefangene, ${r.entscheidungen} Entscheidungen.</div>`;
+      $("#restmsg").innerHTML = `<div class="note go">Eingelesen: ${r.teams} Teams, ${r.favoriten} Favoriten, ${r.gefangen} in der Sammlung, ${r.entscheidungen} Entscheidungen.</div>`;
       S.favGame = null; S.caughtGame = null;
       if (S.team.tid) { S.team.tid = null; S.team.dirty = false; store.set("team", S.team); }
       await Promise.all([loadFavs(true), loadCaught(true)]);
@@ -1892,6 +1922,7 @@ document.addEventListener("click", async (e) => {
           + (res.uebernehmen.length ? `<div class="bar slim"><button class="primary" data-act="todotake">${res.uebernehmen.length} übernehmen</button></div>` : `<div class="note warn">Nichts zu übernehmen.</div>`);
       } catch (x) { out.innerHTML = `<div class="note stop">${esc(x.message)}</div>`; }
     }
+    else if (act === "mvclear") { const id = DETAIL?.id; if (id != null) { setOwnSet(id, []); renderMoves(DETAIL.attacken, $("#lvl")?.value); } }
     else if (act === "dec") {
       await api("/api/entscheidung", {art: "pruefung", schluessel: b.dataset.k, wert: b.dataset.v});
       settingsView();
