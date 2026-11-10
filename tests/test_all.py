@@ -153,6 +153,37 @@ class Leser(unittest.TestCase):
         data = b"la" + struct.pack("<H", 1) + struct.pack("<II", 12, 12 + len(area)) + area
         self.assertEqual(abruf.pkhex_areas(data), [([4], 0, [(399, 0, 2, 4, 0), (399, 0, 17, 19, 1)])])
 
+    def test_pkhex_begegnungen_sv_za(self):
+        import sqlite3
+        import struct
+        # Karmesin/Purpur: Ort 5 mit Pamo Lv 2–8; Ort 6 mit Herkunft 5 (Doppel aus dem Nachbargebiet) fällt weg
+        own = bytes([5, 0, 0, 0]) + struct.pack("<HBBBBBB", 921, 0, 0, 2, 8, 0xF, 0xF)
+        cross = bytes([6, 0, 5, 0]) + struct.pack("<HBBBBBB", 921, 0, 0, 2, 8, 0xF, 0xF)
+        sv = b"sv" + struct.pack("<H", 2) + struct.pack("<III", 16, 16 + len(own), 16 + len(own) + len(cross)) + own + cross
+        self.assertEqual(importer.pkhex_areas(sv), [([5], 0, [(921, 0, 2, 8, 0)])])
+        # Legenden: Z-A (BinLinker16): Ort 300 mit Flabébé Lv 5–8 und Alpha Lv 15–16
+        area = struct.pack("<HH", 300, 0) + struct.pack("<HBBBBBB", 669, 0, 0, 5, 8, 0, 0) + struct.pack("<HBBBBBB", 669, 0, 0, 15, 16, 1, 0)
+        za = b"za" + struct.pack("<H", 1) + struct.pack("<HH", 8, 8 + len(area)) + area
+        self.assertEqual(importer.pkhex_areas(za), [([300], 0, [(669, 0, 5, 8, 0), (669, 0, 15, 16, 2)])])
+        self.assertEqual(importer.pkhex_areas(b""), [])
+        # Erweiterungen bekommen die Fundorte des Hauptspiels; Orte ab 30000 aus der zweiten Namensliste
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE pokemon (id INTEGER, species_id INTEGER, is_default INTEGER)")
+        con.executemany("INSERT INTO pokemon VALUES (?, ?, 1)", [(921, 921), (669, 669)])
+        orte = "\n".join(["Ort"] * 5 + ["Zone A"])
+        n = importer._derive_fundort(con, {"scarlet-violet": {"begegnungen": sv, "orte": orte,
+                                                              "fest": "new(SV) { Species = 0921, Level = 05, Location = 30002 },"},
+                                           "legends-za": {"begegnungen": za, "orte": "", "orte3": "\n\nStadt B",
+                                                          "fest": "new(0669,0,05,128) { Location = 30002 },"}})
+        self.assertEqual(n, 2 * 3 + 3 * 2)
+        rows = con.execute("SELECT spiel, gebiet, art FROM fundort WHERE form = 921 ORDER BY spiel, art").fetchall()
+        self.assertEqual(rows, [("scarlet-violet", "Zone A", 0), ("scarlet-violet", "Ort 30002", importer.FEST),
+                                ("the-indigo-disk", "Zone A", 0), ("the-indigo-disk", "Ort 30002", importer.FEST),
+                                ("the-teal-mask", "Zone A", 0), ("the-teal-mask", "Ort 30002", importer.FEST)])
+        self.assertEqual(con.execute("SELECT DISTINCT gebiet, spiel FROM fundort WHERE form = 669 ORDER BY spiel, art").fetchall(),
+                         [("Ort 300", "legends-za"), ("Stadt B", "legends-za"), ("Ort 300", "mega-dimension"), ("Stadt B", "mega-dimension")])
+        con.close()
+
     def test_pkhex_feste_begegnungen(self):
         src = """
         new(722,000,05,M,M) { Location = 006, FixedBall = Ball.LAPoke }, // erfunden

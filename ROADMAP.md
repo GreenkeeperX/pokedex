@@ -1,5 +1,13 @@
 # Roadmap
 
+## 0.11.0 (Fundorte weiterer Spiele, Lesezeichen; Entscheidung 10.11.2026)
+
+- `importer.pkhex_areas` liest auch Karmesin/Purpur („sv“) und Legenden: Z-A („za“, BinLinker16), dazu Mega-Dimension
+  (Hyperspace) und Orte ab 30000; Erweiterungen teilen die Fundorte des Hauptspiels (`importer.PKHEX_SHARE`).
+  `importer.VERSION` 10
+- Lesezeichen „Seite untersuchen“ nach Vorbild VR-Navigator: liest Seiten, deren Karten erst im Browser laden, als Datei
+- Verbindungstest: GamerGuides (Lager, Schnellreise) und Pokébip zum Vergleich
+
 ## 0.10.1
 
 - Deutsche Namen wie im Spiel: Geisterlichter, Gedichte
@@ -111,10 +119,14 @@
 - Items: Wirkung auch für Beeren und getragene Items; Fundorte der Items
 - Fähigkeiten, die im Kampf zählen (etwa Typ-Verstärker, Immunitäten, Kontakt-Fähigkeiten), knapp in der Teambewertung
 - Smogon-Sets (Wettkampf, mit Items und Wesen), sobald vom Server aus erreichbar
-- Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
+- Fundorte Karmesin/Purpur: Tageszeit und Wetter (stehen in PKHeX je Platz), Massenauftreten und feste Pokémon
+  (`fixed_paldea.pkl`, `outbreak_paldea.pkl`), Tera-Raids
+- Karte Legenden: Arceus: Ebenen von Serebii (Bäume, Erz, Verzerrungen, Massenauftreten, Items am Boden), sobald die
+  Proben des Verbindungstests vorliegen; PokéWiki-Karten über das Lesezeichen
+- Lernlisten für Legenden: Z-A und Mega-Dimension (fehlen in der PokéAPI; PKHeX prüfen)
 - PokéWiki-Leser erweitern: Edelhorden, getragene Items weiterer Spiele (Kürzel der Vorlage `sk` prüfen)
 - Karte für Karmesin/Purpur und Legenden: Z-A, danach Regionskarten der älteren Spiele
-- Karte Legenden: Arceus: Lager und Schnellreise-Punkte (Quelle fehlt noch: weder Altissimo noch JS-Finder haben sie)
+- Karte Legenden: Arceus: Lager und Schnellreise-Punkte (Kandidaten: GamerGuides, PokéWiki per Lesezeichen)
 - Items: Bilder in besserer Auflösung (PokéAPI hat nur 30 px, PKHeX ähnlich klein), Beschreibungen für Items, die es
   nur in PKHeX gibt
 - Abgleich: Quellen auf verschiedenen Servern (PokéWiki, GitHub) parallel holen

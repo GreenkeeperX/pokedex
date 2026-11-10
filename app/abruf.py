@@ -14,6 +14,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -314,6 +315,8 @@ def _images(kind, log, limit=SPRITES_MAX):
 
 
 SEREBII = "https://www.serebii.net/"
+GAMERGUIDES = "https://www.gamerguides.com/"
+POKEBIP = "https://www.pokebip.com/"
 MAP_TILES = SEREBII + "pokearth/hisui/"
 MAP_ZOOM = 2                # Kacheln 256 px, Zoom z hat 2^(z+1) × 2^(z+1) Kacheln je Karte
 
@@ -582,18 +585,24 @@ def _sets(sd):
 
 
 def _pkhex(st, log, at):
-    """Begegnungsdateien aus PKHeX (Spieldaten, GPL-3.0): {Spielkennung: {"begegnungen": Bytes, "orte": Text}}."""
+    """Begegnungsdateien aus PKHeX (Spieldaten, GPL-3.0): {Spielkennung: {"begegnungen": Bytes, "orte": Text,
+    "orte3": Text (Orte ab 30000: Geschenke), "fest": Quelltext}}."""
     if _resting(st, "pkhex", at):
         log(f"PKHeX ruht bis {st['rest']['pkhex'][:16].replace('T', ' ')} UTC")
         return {}
     src = _Source("pkhex", log)
     out = {}
+    texts = {}
     for spiel, (enc, names, fixed) in PKHEX_GAMES.items():
         STATE["step"] = f"PKHeX: {spiel}"
         b = src.get(PKHEX_RAW + enc, raw=True)
-        t = src.get(PKHEX_RAW + names) if b else None
+        for f in (names, names.replace("_00000_", "_30000_")) if b else ():
+            if f not in texts:
+                texts[f] = src.get(PKHEX_RAW + f) or ""
+        t = texts.get(names)
         if b and t:
-            out[spiel] = {"begegnungen": b, "orte": t, "fest": src.get(PKHEX_SRC + fixed) or ""}
+            out[spiel] = {"begegnungen": b, "orte": t, "orte3": texts.get(names.replace("_00000_", "_30000_"), ""),
+                          "fest": (src.get(PKHEX_SRC + fixed) or "") if fixed else ""}
     # Itemlisten je Spiel und die Itemnamen (deutsch, englisch) für Spiele ohne Liste in der PokéAPI
     STATE["step"] = "PKHeX: Items"
     items = {lang: src.get(PKHEX_RAW + f"text/items/text_Items_{lang}.txt") for lang in ("de", "en")}
@@ -767,8 +776,14 @@ PLA_MAPS = {"obsidianfieldlands": "Obsidian-Grasland", "crimsonmirelands": "Rote
             "alabastericelands": "Weißes Frostland"}
 SPAWN_POINTS = "https://raw.githubusercontent.com/Lincoln-LM/JS-Finder/main/Resources/pla_spawners/jsons/"
 SPAWN_SLOTS = "https://raw.githubusercontent.com/Lincoln-LM/PLA-Live-Map/main/static/resources/"
+# Erweiterungen bekommen die Fundorte ihres Hauptspiels dazu (importer.PKHEX_SHARE); Mega-Dimension hat eigene
 PKHEX_GAMES = {"legends-arceus": ("legality/wild/Gen8/encounter_la.pkl", "text/locations/gen8a/text_la_00000_de.txt",
-                                   "Gen8/Encounters8a.cs")}
+                                   "Gen8/Encounters8a.cs"),
+               "scarlet-violet": ("legality/wild/Gen9/encounter_wild_paldea.pkl", "text/locations/gen9/text_sv_00000_de.txt",
+                                  "Gen9/Encounters9.cs"),
+               "legends-za": ("legality/wild/Gen9/encounter_za.pkl", "text/locations/gen9a/text_za_00000_de.txt",
+                              "Gen9/Encounters9a.cs"),
+               "mega-dimension": ("legality/wild/Gen9/encounter_hyperspace_za.pkl", "text/locations/gen9a/text_za_00000_de.txt", "")}
 
 
 def diagnose(proben=None):
@@ -851,9 +866,10 @@ def diagnose(proben=None):
     probe("PKHeX, Orte Legenden: Arceus deutsch", PKHEX_RAW + "text/locations/gen8a/text_la_00000_de.txt", names)
     pkl = lambda b: (f"Datei {b[:2].decode('ascii')!r}, {int.from_bytes(b[2:4], 'little')} Einträge"
                      if b[:2].isalpha() else f"Binärdaten, {len(b)} Bytes (Format noch zu lesen)")
-    probe("PKHeX, Begegnungen Karmesin/Purpur", PKHEX_RAW + "legality/wild/Gen9/encounter_wild_paldea.pkl", pkl, raw=True)
+    probe("PKHeX, Begegnungen Karmesin/Purpur", PKHEX_RAW + "legality/wild/Gen9/encounter_wild_paldea.pkl", la_info, raw=True)
     probe("PKHeX, Orte Karmesin/Purpur deutsch", PKHEX_RAW + "text/locations/gen9/text_sv_00000_de.txt", names)
-    probe("PKHeX, Begegnungen Legenden: Z-A", PKHEX_RAW + "legality/wild/Gen9/encounter_za.pkl", pkl, raw=True)
+    probe("PKHeX, Begegnungen Legenden: Z-A", PKHEX_RAW + "legality/wild/Gen9/encounter_za.pkl", la_info, raw=True)
+    probe("PKHeX, Begegnungen Mega-Dimension", PKHEX_RAW + "legality/wild/Gen9/encounter_hyperspace_za.pkl", la_info, raw=True)
     probe("PKHeX, Orte Legenden: Z-A deutsch", PKHEX_RAW + "text/locations/gen9a/text_za_00000_de.txt", names)
     probe("PKHeX, Beherrschung Legenden: Arceus", PKHEX_RAW + "legality/misc/mastery_la.pkl", pkl, raw=True)
     probe("PKHeX, Level-Attacken Legenden: Arceus", PKHEX_RAW + "byte/levelup/lvlmove_la.pkl", pkl, raw=True)
@@ -897,6 +913,21 @@ def diagnose(proben=None):
         keys = ("camp", "fast travel", "distortion", "outbreak", "marker", ".json", "oldverse", "crystal")
         return ", ".join(f"{k} {low.count(k)}×" for k in keys)
     probe("Serebii, Karte Obsidian-Grasland (Seite)", SEREBII + "pokearth/hisui/obsidianfieldlands.shtml", markers, keep=400_000, headers=html)
+
+    # Weitere Karten zum Vergleich: GamerGuides (Lager, Schnellreise, Sammelobjekte) und Pokébip (französisch)
+    def scan(t):
+        low = t.lower()
+        keys = ("camp", "fast travel", "marker", "markers", "lat", "leaflet", "mapbox", "__next_data__", "api/", ".json",
+                "wisp", "unown", "distortion", "outbreak", "marqueur", "campement", "voyage rapide")
+        hits = ", ".join(f"{k} {low.count(k)}×" for k in keys if low.count(k))
+        js = sorted(set(re.findall(r'src="([^"]+\.js[^"]*)"', t)))[:6]
+        return (hits or "keine Stichwörter") + (f"; Skripte: {', '.join(js)}" if js else "")
+    probe("GamerGuides, Karte Obsidian-Grasland", GAMERGUIDES + "pokemon-legends-arceus/maps/obsidian-fieldlands", scan,
+          keep=400_000, headers=html)
+    probe("GamerGuides, Karte Jubeldorf", GAMERGUIDES + "pokemon-legends-arceus/maps/jubilife-village", scan, keep=400_000, headers=html)
+    probe("Pokébip, Karte Obsidian-Grasland", POKEBIP + "page/jeuxvideo/legendes-pokemon-arceus/cartes-interactives/plaines-obsidiennes",
+          scan, keep=400_000, headers=html)
+    probe("Pokébip, Massenauftreten", POKEBIP + "page/jeuxvideo/legendes-pokemon-arceus/megapparitions", scan, keep=200_000, headers=html)
 
     def wiki_list(t):
         q = json.loads(t).get("query") or {}

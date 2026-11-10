@@ -12,8 +12,12 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Ratenlimit) die feste Liste `importer.NEEDED`.
 3. **Showdown**: `data/pokedex.ts` und `data/moves.ts`, dazu die Random-Battle-Sets je Generation
    (`abruf.sets_url`, Generation 1 nur `data.json`) für die bewährten Sets (Tabelle `moveset`).
-   **PKHeX**: Begegnungsdatei und deutsche Ortsnamen je Spiel in `abruf.PKHEX_GAMES` (bisher Legenden: Arceus).
-   `importer.pkhex_areas` liest sie: je Gebiet die Ortsnummern (die erste ist das Gebiet, die übrigen die Stellen),
+   **PKHeX**: Begegnungsdatei, deutsche Ortsnamen (dazu die Liste ab 30000 für Geschenke) und feste Begegnungen je
+   Spiel in `abruf.PKHEX_GAMES`: Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A und Mega-Dimension (Hyperspace).
+   `importer.pkhex_areas` erkennt das Format an der Kennung („la“, „sv“, „za“; bei „za“ BinLinker16 mit 16-Bit-Offsets).
+   Karmesin/Purpur: Gebiete mit Herkunft (Pokémon aus dem Nachbargebiet) sind Doppel und fallen weg. Erweiterungen
+   bekommen die Fundorte ihres Hauptspiels dazu (`importer.PKHEX_SHARE`). In Legenden: Arceus liest es je Gebiet die
+   Ortsnummern (die erste ist das Gebiet, die übrigen die Stellen),
    die Art (frei, Raum-Zeit-Verzerrung, Baum oder Erzbrocken, Massenauftreten) und Plätze mit Art, Form, Level und
    Alpha. Die Formnummer im Spiel wird über `pokemon_forms.form_order` zur Form der PokéAPI (Tabelle `fundort`).
    Dazu die festen Begegnungen aus der Quelldatei (`Encounters8a.cs`, `importer.pkhex_static`).
@@ -62,6 +66,8 @@ Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen:
   von–bis, `abruf.pkhex_areas` liest sie), Karmesin/Purpur und Legenden: Z-A, dazu deutsche Ortsnamen, Beherrschung
   und Level-Attacken für Legenden: Arceus,
 - Wikis und Datenbanken: PokéWiki (API und Beispielseiten), Bulbapedia, Serebii, Pokémon Database, Map Genie,
+- mögliche Quellen zum Testen: Item-Bilder (Serebii, PokéWiki), Kartenseiten von Serebii, GamerGuides (Lager,
+  Schnellreise) und Pokébip (Stichwörter und Skripte, als Probe bis 400 000 Zeichen),
 - weitere Spieldaten: feste Begegnungen aus den Quelldateien von PKHeX (`importer.pkhex_static`), Raids in
   Karmesin/Purpur, Werte je Form in Legenden: Arceus,
 - Bilder und Rufe: schillernde und animierte Sprites, Rufe (PokéAPI-Repos),
@@ -71,6 +77,12 @@ Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen:
 
 Speichert nichts. Wiki- und Datenbankseiten bleiben gekürzt (60 000 Zeichen) als Proben im Speicher;
 `/api/diag/proben` lädt sie als JSON herunter, damit sich Leser für neue Quellen bauen lassen.
+
+Seiten, die ihre Daten erst im Browser per Skript laden (Karten im PokéWiki), sieht der Server nur als Hülle. Dafür
+gibt es in den Einstellungen das Lesezeichen „Seite untersuchen“ (`probeHelper` in `app.js`, wie im VR-Navigator):
+es läuft auf der fremden Seite, holt die nachgeladenen Daten-Dateien (`performance`-Einträge vom Typ fetch/xhr und
+`.json`, höchstens 40 und 6 MB) samt Inhalt, Daten in globalen Variablen, Kartenmarker, Skripte und das HTML und
+speichert alles als `pokedex-probe-<Seite>.json`. Benutzername und Schlüssel der Seite werden entfernt.
 
 ## Gegenprüfung
 

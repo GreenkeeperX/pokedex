@@ -424,6 +424,10 @@ details summary{cursor:pointer;font-weight:600}
 .mpin.hit{background:#f5c400;width:16px;height:16px;margin:-8px 0 0 -8px;z-index:2}
 .mpin.hit.alpha{background:#ff6a00}
 .mpin.sel{outline:3px solid var(--accent);z-index:3}
+/* Lesezeichen zum Ziehen */
+a.bm{display:inline-block;border:1px solid var(--accent);border-radius:8px;padding:4px 10px;color:var(--ink);text-decoration:none;cursor:grab;background:var(--card)}
+a.bm:active{cursor:grabbing}
+.bm-w{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 6px}
 /* Zutaten eines Rezepts */
 .zut{display:inline-block;white-space:nowrap;margin:1px 6px 1px 0}
 /* Kartensymbole: feste Größe beim Zoomen wie die Spawnpunkte */

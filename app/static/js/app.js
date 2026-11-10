@@ -621,17 +621,24 @@ function encHtml(d) {
     const one = (p) => (p.name || "im ganzen Gebiet") + (p.level ? ` (${p.level})` : p.alpha ? ` (Alpha ${p.alpha})` : "");
     const places = (xs) => xs.length <= 6 ? esc(xs.map(one).join(", "))
       : `${esc(xs.slice(0, 4).map(one).join(", "))} <span class="weitere" data-tip="${esc(xs.map(one).join(", "))}">und ${xs.length - 4} weitere</span>`;
-    return `<div class="scroll"><table class="sort"><thead><tr>${th("Gebiet")}${th("Stellen")}${th("Art")}${th("Tageszeit")}${th("Wetter")}${th("Level")}${th("Alpha")}</tr></thead><tbody>
-      ${f.map((e) => `<tr><td>${wikiLink(e.ort)}${e.karte ? ` <a class="maplink" href="#karte/${e.karte}/${d.id}" data-tip="Spawnpunkte auf der Karte">Karte</a>` : ""}</td><td>${places(e.stellen)}</td><td>${artCell(e.methode)}</td>
-        <td>${e.zeit ? `<span data-tip="${esc(`An ${e.punkte} Spawnpunkt${e.punkte === 1 ? "" : "en"}, Anteil bis ${String(e.chance).replace(".", ",")} %`)}">${esc(e.zeit)}</span>` : ""}</td>
-        <td>${esc(e.wetter)}</td>
-        <td data-s="${parseInt(e.level || e.alpha) || 0}">${esc(e.level || "–")}</td>
-        <td data-s="${parseInt(e.alpha) || 0}">${e.alpha ? `<span class="alpha">${esc(e.alpha)}</span>${e.nur_alpha ? " (immer Alpha)" : ""}` : ""}</td></tr>`).join("")}</tbody></table></div>
-      <p class="hint">Aus den Spieldaten (PKHeX). Stellen: wo das Pokémon im Gebiet erscheinen kann, mit Level; Alpha-Pokémon sind höher. Tageszeit und Wetter: aus den Spawn-Tabellen (PLA-Live-Map), nur für frei auftauchende Pokémon.</p>`;
+    // Spalten nur, wo es Daten gibt: Stellen und Alpha nur in den Legenden-Spielen, Tageszeit und Wetter nur mit Spawn-Tabellen
+    const has = (k) => f.some((e) => Array.isArray(e[k]) ? e[k].some((x) => x.name) : e[k]);
+    const cols = [[th("Gebiet"), (e) => `<td>${wikiLink(e.ort)}${e.karte ? ` <a class="maplink" href="#karte/${e.karte}/${d.id}" data-tip="Spawnpunkte auf der Karte">Karte</a>` : ""}</td>`],
+      has("stellen") && [th("Stellen"), (e) => `<td>${places(e.stellen)}</td>`],
+      [th("Art"), (e) => `<td>${artCell(e.methode)}</td>`],
+      has("zeit") && [th("Tageszeit"), (e) => `<td>${e.zeit ? `<span data-tip="${esc(`An ${e.punkte} Spawnpunkt${e.punkte === 1 ? "" : "en"}, Anteil bis ${String(e.chance).replace(".", ",")} %`)}">${esc(e.zeit)}</span>` : ""}</td>`],
+      has("wetter") && [th("Wetter"), (e) => `<td>${esc(e.wetter)}</td>`],
+      [th("Level"), (e) => `<td data-s="${parseInt(e.level || e.alpha) || 0}">${esc(e.level || "–")}</td>`],
+      has("alpha") && [th("Alpha"), (e) => `<td data-s="${parseInt(e.alpha) || 0}">${e.alpha ? `<span class="alpha">${esc(e.alpha)}</span>${e.nur_alpha ? " (immer Alpha)" : ""}` : ""}</td>`]].filter(Boolean);
+    return `<div class="scroll"><table class="sort"><thead><tr>${cols.map((c) => c[0]).join("")}</tr></thead><tbody>
+      ${f.map((e) => `<tr>${cols.map((c) => c[1](e)).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="hint">Aus den Spieldaten (PKHeX)${has("stellen") ? ". Stellen: wo das Pokémon im Gebiet erscheinen kann, mit Level" : ""}${has("alpha") ? "; Alpha-Pokémon sind höher" : ""}${has("zeit")
+        ? ". Tageszeit und Wetter: aus den Spawn-Tabellen (PLA-Live-Map), nur für frei auftauchende Pokémon" : ""}.${S.game === "scarlet-violet" || S.game === "the-teal-mask" || S.game === "the-indigo-disk"
+        ? " Level: von–bis über alle Stellen des Gebiets; Tera-Raids, Massenauftreten und feste Pokémon auf der Karte fehlen noch." : ""}</p>`;
   }
   if (f.length) return `<div class="scroll"><table class="sort"><thead><tr>${th("Ort")}${th("Methode")}${th("Level")}${th("Bedingungen")}${th("Edition")}</tr></thead><tbody>
     ${f.map((e) => `<tr><td>${wikiLink(e.ort)}</td><td>${esc(e.methode)}</td><td data-s="${parseInt(e.level) || 0}">${esc(e.level)}</td><td>${esc(e.bedingungen.join(", "))}</td><td>${esc(e.editionen.join(", "))}</td></tr>`).join("")}</tbody></table></div>`;
-  return `<p class="hint">${S.game ? "Die PokéAPI kennt hier keine Fundorte" + (["scarlet-violet", "legends-za"].includes(S.game) ? " (für dieses Spiel liefert sie keine; kommt mit PKHeX und dem PokéWiki-Abruf)" : "") + `. Bis dahin: <a class="wl" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Fundorte im PokéWiki</a>` : "Wähle oben ein Spiel."}</p>`;
+  return `<p class="hint">${S.game ? "Die PokéAPI kennt hier keine Fundorte" + `. Bis dahin: <a class="wl" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Fundorte im PokéWiki</a>` : "Wähle oben ein Spiel."}</p>`;
 }
 
 const gameAreas = () => (S.meta?.spiele || []).find((g) => g.kennung === S.game)?.gebiete || [];
@@ -1914,6 +1921,14 @@ async function settingsView() {
     <div class="box"><h2>Verbindungstest</h2><p class="hint">Fragt jede Quelle einmal an, auch mögliche neue (Items, Fundorte aus den Spieldaten, Wikis, Kampfdaten), und beschreibt die Antwort. Speichert nichts; Probe-Seiten lassen sich herunterladen. Dauert etwa eine Minute.</p>
       <div class="bar"><button data-act="diag">Test starten</button><span class="grow"></span><span id="dlinks"></span></div>
       <div id="diag"></div></div>
+    <div class="box"><h2>Seite untersuchen (Lesezeichen)</h2><p class="hint">Manche Seiten laden ihre Karten erst im Browser (etwa das PokéWiki),
+      der Abgleich sieht dann nur eine leere Hülle. Dieses Lesezeichen liest die fertig geladene Seite in deinem Browser: welche Daten-Dateien sie nachlädt
+      (mit Inhalt), Daten in Variablen, Kartenmarker und das HTML. Ergebnis ist eine Datei für den Testdaten-Ordner, aus der sich ein Leser bauen lässt.
+      Es geht nichts an einen Server; Benutzername und Schlüssel der Seite werden entfernt.</p>
+      <span class="bm-w"><a class="bm" href="${esc(probeBm())}" data-act="nobm" data-tip="In die Lesezeichenleiste ziehen">⠿ <b>Seite untersuchen</b></a>
+        <button data-act="bmcopy" data-tip="Für ein von Hand angelegtes Lesezeichen">Code kopieren</button></span>
+      <ul class="hint"><li>Lesezeichenleiste einblenden (Strg+Umschalt+B) und den Knopf hineinziehen, oder „Code kopieren“ und als Adresse eines neuen Lesezeichens einfügen.</li>
+        <li>Dann die Seite öffnen (etwa eine Karte im PokéWiki, bei Serebii, GamerGuides oder Pokébip), warten, bis die Karte steht, und das Lesezeichen anklicken.</li></ul></div>
     <h2 class="sect">Deine Daten</h2>
     <div class="box"><h2>Sicherung</h2>
       <p class="hint">Alles Eigene in einer Datei: Teams, Favoriten, deine Sammlung (als gefangen markiert) und Entscheidungen. Die Spieldaten gehören nicht dazu; die holt der Abgleich jederzeit neu.
@@ -1955,6 +1970,73 @@ async function settingsView() {
   });
   if (st.running) setTimeout(() => location.hash.startsWith("#einstellungen") && refreshMeta(), 4000);
 }
+/* Lesezeichen „Seite untersuchen“ (wie im VR-Navigator): läuft im Browser auf einer fremden Seite (PokéWiki, Serebii,
+   GamerGuides, Pokébip …), wo die Karte erst per Skript lädt. Sammelt, was der Server beim Abruf nicht sieht: geladene
+   Daten-Dateien samt Inhalt, Daten in globalen Variablen, Kartenmarker, Skripte und das fertige HTML. Ergebnis als Datei;
+   nichts geht an einen Server. Muss für sich allein laufen (kein Zugriff auf diese Datei). */
+async function probeHelper() {
+  const box = document.createElement("div");
+  box.style.cssText = "position:fixed;z-index:2147483647;top:12px;right:12px;width:min(420px,90vw);background:#253033;color:#e8eeee;"
+    + "border:1px solid #5b7a80;border-radius:8px;padding:12px;font:14px system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.5)";
+  box.textContent = "Pokédex: warte, bis die Seite fertig geladen hat …";
+  document.body.appendChild(box);
+  const wait = (t) => new Promise((r) => setTimeout(r, t));
+  // Anmeldedaten der Seite (etwa der Benutzername im Wiki) gehören nicht in die Probe; auch in Text mit \"…\"
+  const KEYS = "wgUserName|wgUserId|wgUserEmail|wgUserGroups|wgUserRights|wgUserEditCount|wgUserRegistration|csrfToken|editToken|token|userId|username|email";
+  const scrub = (t) => String(t).replace(new RegExp(`(\\\\?["']?)\\b(${KEYS})\\1\\s*[:=]\\s*(?:(\\\\?["'])(?:(?!\\3).)*?\\3|-?\\d+|null|\\[[^\\]]*\\])`, "gi"),
+    (m, q, k, v) => `${q}${k}${q}:${v || q || '"'}–${v || q || '"'}`);
+  await wait(1500);
+  const skip = /\.(png|jpe?g|gif|webp|avif|svg|ico|css|woff2?|ttf|mp3|ogg|mp4|webm)(\?|#|$)/i;
+  const res = performance.getEntriesByType("resource").map((e) => ({url: e.name, typ: e.initiatorType, bytes: e.transferSize || e.encodedBodySize || 0}));
+  const wanted = res.filter((r) => !skip.test(r.url) && (r.typ === "fetch" || r.typ === "xmlhttprequest" || /\.(json|geojson|csv|txt)(\?|$)|api\.php|\/api\//i.test(r.url)));
+  const bodies = {};
+  let total = 0, i = 0;
+  for (const r of wanted.slice(0, 40)) {
+    if (total > 6e6) break;
+    box.textContent = `Pokédex: lese Daten-Datei ${++i} von ${Math.min(40, wanted.length)} …`;
+    try { const t = await (await fetch(r.url, {credentials: "same-origin"})).text(); bodies[r.url] = scrub(t.slice(0, 2e6)); total += bodies[r.url].length; }
+    catch (e) { bodies[r.url] = "nicht lesbar: " + e.message; }
+  }
+  box.textContent = "Pokédex: sammle Variablen und Marker …";
+  const fr = document.createElement("iframe");
+  fr.style.display = "none"; document.body.appendChild(fr);
+  const base = new Set(Object.getOwnPropertyNames(fr.contentWindow)); fr.remove();
+  const globals = {};
+  for (const k of Object.getOwnPropertyNames(window)) {
+    if (base.has(k) || /^(on|webkit)/.test(k)) continue;
+    let v; try { v = window[k]; } catch (e) { continue; }
+    if (!v || typeof v !== "object" || v instanceof Node) continue;
+    try { const j = JSON.stringify(v); if (j && j.length > 100) globals[k] = scrub(j.slice(0, 5e5)); }
+    catch (e) { try { globals[k] = "Objekt mit " + Object.keys(v).slice(0, 40).join(", "); } catch (x) { /* fremd */ } }
+  }
+  const cls = (e) => String(typeof e.className === "string" ? e.className : e.className?.baseVal || "").slice(0, 120);
+  const marks = [...document.querySelectorAll(".leaflet-marker-icon,[class*=marker],[class*=Marker],[class*=pin],[data-lat],[data-x],[data-id] > img")].slice(0, 8000)
+    .map((e) => ({cls: cls(e), title: e.getAttribute("title") || e.getAttribute("alt") || e.getAttribute("aria-label") || "", style: (e.getAttribute("style") || "").slice(0, 200),
+      data: Object.assign({}, e.dataset), src: (e.getAttribute("src") || "").slice(0, 200), text: (e.innerText || "").trim().slice(0, 80)}));
+  const scripts = [...document.scripts].map((x) => scrub(x.src || `inline, ${x.textContent.length} Zeichen: ${x.textContent.slice(0, 400)}`));
+  box.remove();
+  const html = scrub(document.documentElement.outerHTML.slice(0, 3e6));
+  document.body.appendChild(box);
+  const txt = JSON.stringify({art: "pokedex-probe", fassung: 1, am: new Date().toISOString(), url: location.href, titel: document.title,
+    ressourcen: res, inhalte: bodies, variablen: globals, marker: marks, skripte: scripts, html});
+  const host = location.hostname.replace(/^www\./, "").replace(/[^a-z0-9.-]/gi, "");
+  const name = `pokedex-probe-${host}-${(location.pathname.split("/").filter(Boolean).pop() || "start").replace(/[^\w.-]/g, "_").slice(0, 60)}.json`;
+  box.textContent = "";
+  const p = document.createElement("p");
+  p.style.margin = "0 0 8px";
+  p.textContent = `Gelesen: ${wanted.length} Daten-Dateien, ${Object.keys(globals).length} Variablen, ${marks.length} Marker, ${Math.round(txt.length / 1024)} KB. `
+    + "Datei sichern und in den Testdaten-Ordner legen; sie enthält nur, was diese Seite zeigt.";
+  const btn = (t, main) => { const b = document.createElement("button"); b.textContent = t;
+    b.style.cssText = "margin:0 8px 0 0;padding:6px 12px;border-radius:6px;font:600 13px system-ui,sans-serif;cursor:pointer;border:1px solid #5b7a80;"
+      + (main ? "background:#3f8f86;color:#fff" : "background:#1c2426;color:#e8eeee"); return b; };
+  const f = btn("Als Datei sichern", true);
+  f.onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], {type: "application/json"})); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); };
+  const c = btn("Schließen");
+  c.onclick = () => box.remove();
+  box.append(p, f, c);
+}
+const probeBm = () => "javascript:" + encodeURIComponent(`(${probeHelper})()`);
 async function copyText(txt, btn) {
   try { await navigator.clipboard.writeText(txt); }
   catch (e) {     // ohne HTTPS gibt es die Zwischenablage-Schnittstelle nicht; dann der alte Weg
@@ -2068,6 +2150,8 @@ document.addEventListener("click", async (e) => {
       await api("/api/abgleich", {neu: act === "rebuild"});
       setTimeout(refreshMeta, 800);
     } else if (act === "diag") await diag();
+    else if (act === "nobm") { b.dataset.tip = "Nicht hier klicken: in die Lesezeichenleiste ziehen und auf der fremden Seite anklicken"; }
+    else if (act === "bmcopy") await copyText(probeBm(), b);
     else if (act === "todotask") {
       const t = await api("/api/aufgabe");
       if (t.text) await copyText(t.text, b);

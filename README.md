@@ -15,8 +15,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   je Spiel.
 - **Detailseite**: Basiswerte, Fähigkeiten, Typwirkung (mit Fähigkeiten wie Schwebe), Entwicklung mit Bedingungen,
   „Im Duell gegen Typen“ (klar im Vorteil, im Vorteil, im Nachteil; ↑ austeilen, ↓ einstecken), Fangchance je Ball
-  (offen, solange nicht gefangen), Fundorte im Spiel (Legenden: Arceus aus den Spieldaten mit Stellen, Level und
-  Alpha), „Mehr Details“ zum Aufklappen (Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute, je nach Spiel),
+  (offen, solange nicht gefangen), Fundorte im Spiel (Legenden: Arceus, Karmesin/Purpur samt Erweiterungen, Legenden: Z-A und
+  Mega-Dimension aus den Spieldaten mit Level, in den Legenden-Spielen mit Alpha, in Legenden: Arceus mit Stellen), „Mehr Details“ zum Aufklappen (Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute, je nach Spiel),
   schillerndes Artwork und animiertes Sprite, Ruf, getragene Items, Links ins PokéWiki.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
@@ -42,7 +42,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   wer dort wann erscheint), Bäume, Erzbrocken, Haufen, Kisten, Geisterlichter, Icognito, Gedichte und Grabstellen als
   Ebenen zum Ein- und Ausblenden; von der Detailseite aus mit den Spawnpunkten des Pokémon.
 - **Einstellungen**: Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
-  zum Herunterladen), „Zu erledigen“ (Abweichungen zwischen
+  zum Herunterladen), Lesezeichen „Seite untersuchen“ für Seiten, deren Karten erst im Browser laden (liest geladene
+  Daten-Dateien, Variablen und Kartenmarker in eine Datei; nichts geht an einen Server), „Zu erledigen“ (Abweichungen zwischen
   PokéAPI und Showdown zum Entscheiden), Kopieren und Herunterladen von Protokoll und Test, Sicherung der eigenen
   Daten zum Herunterladen und Einlesen. „Zu erledigen“ lässt sich als Auftrag für einen KI-Chat kopieren, die Antwort
   mit Vorschau einlesen. Die Spieldaten (Datenbank, Protokoll, Übersicht fehlender Bilder) gibt es als ZIP.
@@ -54,7 +55,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (CSV) | Primärquelle: alle Grunddaten, alle Spiele, deutsche Namen | BSD-3 |
 | [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) | Gegenprüfung von Werten und Attacken, Merkmale wie „Aufladen“ | MIT |
 | [PokéAPI-Sprites](https://github.com/PokeAPI/sprites) | Bilder (Sprites und offizielle Artworks) | siehe dort |
-| [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus: Gebiet, Stellen, Level, Alpha, feste Begegnungen); Item-Listen und Itemnamen je Spiel | GPL-3.0 |
+| [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Mega-Dimension: Gebiet, Level, Alpha, feste Begegnungen); Item-Listen und Itemnamen je Spiel | GPL-3.0 |
 | [Altissimo](https://github.com/Altissimo1/altissimo1.github.io) | Legenden: Arceus: Kartensymbole, Geisterlichter, Icognito, Gedichte, Grabstellen, Kartenbild Jubeldorf, Rezepte | GPL-3.0 (Kartenbild nur im Datenordner) |
 | [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
 | [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln, nur im Datenordner auf dem Server) | Bilder von Serebii, Spielgrafik von Nintendo |
