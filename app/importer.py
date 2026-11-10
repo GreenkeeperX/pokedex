@@ -18,7 +18,7 @@ import sqlite3
 
 from . import showdown
 
-VERSION = "5"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "6"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -27,7 +27,7 @@ NEEDED = (
     "abilities", "ability_names", "ability_flavor_text", "encounter_condition_value_map", "encounter_condition_value_prose",
     "encounter_method_prose", "encounter_methods", "encounter_slots", "encounters", "evolution_chains", "evolution_trigger_prose",
     "generations", "item_names", "items", "location_area_prose", "location_areas", "location_names", "locations", "move_changelog",
-    "move_damage_class_prose", "move_flavor_text", "move_meta", "move_names", "moves", "pokedex_prose", "pokedex_version_groups",
+    "move_damage_class_prose", "move_flavor_text", "move_meta", "move_meta_stat_changes", "move_names", "moves", "pokedex_prose", "pokedex_version_groups",
     "pokedexes", "pokemon", "pokemon_abilities", "pokemon_dex_numbers", "pokemon_evolution", "pokemon_form_names", "pokemon_forms",
     "pokemon_move_method_prose", "pokemon_move_methods", "pokemon_moves", "pokemon_species", "pokemon_species_flavor_text",
     "pokemon_species_names", "pokemon_stats", "pokemon_types", "pokemon_types_past", "regions", "stat_names", "stats",
@@ -202,32 +202,83 @@ def _derive_form(con):
 SD_FLAGS = ("recharge", "charge", "contact", "punch", "bite", "sound", "pulse", "slicing")
 
 
+# Kurz-Info einer Attacke aus den Metadaten der PokéAPI (Statuswirkung, Wertänderung, Heilung)
+AILMENT = {1: "paralysiert", 2: "schläfert ein", 3: "friert ein", 4: "verbrennt", 5: "vergiftet", 6: "verwirrt", 7: "macht verliebt",
+           8: "hält fest", 9: "Albtraum", 12: "verhindert Wiederholung", 13: "blockiert eine Attacke", 14: "macht müde (schläft nächste Runde ein)",
+           15: "verhindert Heilung", 18: "Egelsamen: saugt jede Runde KP ab", 19: "verhindert Items", 20: "alle gehen in 3 Runden k. o.",
+           21: "Verwurzler: heilt jede Runde"}
+STAT_KURZ = {1: "KP", 2: "Angriff", 3: "Verteidigung", 4: "Sp.-Angriff", 5: "Sp.-Verteidigung", 6: "Initiative", 7: "Genauigkeit",
+             8: "Fluchtwert"}
+SELF_TARGETS = (3, 4, 5, 7, 13, 15)        # Ziel der Attacke: Anwender oder eigene Seite
+UNUSABLE = "kann nicht eingesetzt werden"  # Beschreibung gestrichener Attacken in neueren Spielen
+
+
+def move_short(cat, ailment, ail_chance, stat_chance, changes, healing, drain, target, status):
+    """Kurz-Info wie „Verteidigung −1 (Gegner)“ oder „paralysiert (30 %)“; leer, wenn die Metadaten nichts hergeben.
+    cat: Kategorie der PokéAPI (2 Werte ändern, 6 Schaden und Gegner senken, 7 Schaden und selbst erhöhen); changes: [(Wert, Stufen)]."""
+    parts = []
+    if ailment in AILMENT:
+        parts.append(AILMENT[ailment] + (f" ({ail_chance} %)" if ail_chance and ail_chance < 100 else ""))
+    if changes:
+        self_side = cat == 7 or (cat not in (5, 6) and target in SELF_TARGETS)
+        for up in (True, False):
+            xs = [(STAT_KURZ.get(s, "?"), c) for s, c in changes if (c > 0) == up]
+            if not xs:
+                continue
+            who = "Gegner" if cat == 5 or not self_side else "selbst"       # Angeberei, Schmeichler erhöhen den Gegner
+            sign = "+" if up else "−"
+            steps = {abs(c) for _, c in xs}
+            txt = f"{', '.join(n for n, _ in xs)} {sign}{min(steps)}" if len(steps) == 1 \
+                else ", ".join(f"{n} {sign}{abs(c)}" for n, c in xs)
+            parts.append(f"{txt} ({who}{f', {stat_chance} %' if stat_chance and stat_chance < 100 else ''})")
+    if healing and healing > 0:
+        parts.append(f"heilt {healing} % der KP")
+    if drain and drain > 0:
+        parts.append(f"saugt {drain} % des Schadens als KP ab")
+    if cat == 9:
+        parts.append("K.-o.-Attacke")
+    if cat == 12 and status:
+        parts.append("erzwingt einen Wechsel")
+    return " · ".join(parts)
+
+
 def _derive_attacke(con, sd_moves):
     names = _names(con, "move_names", "move_id")
     meta = {}
     if _has(con, "move_meta"):
-        for r in con.execute("SELECT move_id, min_hits, max_hits, drain, healing, crit_rate, flinch_chance FROM move_meta"):
+        for r in con.execute("SELECT move_id, min_hits, max_hits, drain, healing, crit_rate, flinch_chance, meta_category_id, "
+                             "meta_ailment_id, ailment_chance, stat_chance FROM move_meta"):
             meta[r[0]] = r[1:]
+    changes = {}
+    if _has(con, "move_meta_stat_changes"):
+        for mid, stat, change in con.execute("SELECT move_id, stat_id, change FROM move_meta_stat_changes"):
+            changes.setdefault(mid, []).append((stat, change))
+    targets = dict(con.execute("SELECT id, target_id FROM moves"))
     text = {}
     if _has(con, "move_flavor_text"):
+        # Neuester deutscher Text; „kann nicht eingesetzt werden“ (gestrichene Attacke) nur, wenn es keinen anderen gibt
         for mid, txt in con.execute("SELECT move_id, flavor_text FROM move_flavor_text WHERE language_id = ? ORDER BY version_group_id", (DE,)):
-            text[mid] = " ".join(str(txt).split())
+            txt = " ".join(str(txt).split())
+            if UNUSABLE not in txt or mid not in text:
+                text[mid] = txt
     rows = []
     for mid, ident, gen, typ, power, pp, acc, prio, cls, eff in con.execute(
             "SELECT id, identifier, generation_id, type_id, power, pp, accuracy, priority, damage_class_id, effect_id FROM moves"):
         if mid >= 10000:            # Z- und Dyna-Attacken der Spieldaten-Sonderfälle
             continue
-        m = meta.get(mid, (None,) * 6)
+        m = meta.get(mid, (None,) * 10)
+        kurz = move_short(m[6], m[7], m[8], m[9], changes.get(mid), m[3], m[2], targets.get(mid), cls == 1) if m[6] is not None else ""
         sd = sd_moves.get(showdown.sd_id(ident), {})
         flags = sorted(f for f in (sd.get("flags") or {}) if f in SD_FLAGS)
         hits = sd.get("multihit")
         rows.append((mid, ident, names.get(mid) or ident, gen, typ, power, acc, pp, prio, cls, eff,
                      m[0], m[1], m[2], m[3], m[4], m[5], json.dumps(flags), json.dumps(sd.get("selfBoosts") or {}),
-                     json.dumps(hits) if hits else None, text.get(mid)))
+                     json.dumps(hits) if hits else None, text.get(mid), kurz))
     con.execute("""CREATE TABLE attacke (id INTEGER PRIMARY KEY, kennung TEXT, name TEXT, gen INTEGER, typ INTEGER, staerke INTEGER,
         genauigkeit INTEGER, ap INTEGER, prio INTEGER, klasse INTEGER, effekt INTEGER, min_treffer INTEGER, max_treffer INTEGER,
-        entzug INTEGER, heilung INTEGER, krit INTEGER, zurueckschrecken INTEGER, merkmale TEXT, selbst TEXT, mehrfach TEXT, text TEXT)""")
-    con.executemany(f"INSERT INTO attacke VALUES ({', '.join('?' * 21)})", rows)
+        entzug INTEGER, heilung INTEGER, krit INTEGER, zurueckschrecken INTEGER, merkmale TEXT, selbst TEXT, mehrfach TEXT, text TEXT,
+        kurz TEXT)""")
+    con.executemany(f"INSERT INTO attacke VALUES ({', '.join('?' * 22)})", rows)
 
 
 def _sd_tables(con, sd_dex, sd_moves):

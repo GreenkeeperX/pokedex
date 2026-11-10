@@ -106,6 +106,9 @@ def due(settings=None, at=None, boot=False):
         return True
     if last.get("ok") is False:
         return since >= timedelta(hours=1)
+    # Nach einem Update mit neuen Tabellen sofort neu bauen, sonst fehlt Neues bis zum nächsten Termin
+    if (last.get("stand") or {}).get("importer") not in (None, importer.VERSION) and since >= timedelta(hours=1):
+        return True
     return since >= timedelta(days=s["tage"])
 
 
@@ -209,7 +212,8 @@ def csv_list(src, log):
 # Bilder: kleine Pixel-Sprites (96 × 96) für Listen, offizielle Artworks (475 × 475) für Karten und Detailseite
 IMAGES = {"sprites": SPRITE_RAW, "artwork": SPRITE_RAW + "other/official-artwork/"}
 # Extras: schillernde und animierte Sprites (Showdown-Stil), Rufe (PokéAPI-Repos); Endung und Kennung der Datei
-EXTRAS = {"shiny": (SPRITE_RAW + "shiny/", ".png"), "anim": (SPRITE_RAW + "other/showdown/", ".gif"),
+EXTRAS = {"shiny": (SPRITE_RAW + "shiny/", ".png"), "shinyart": (SPRITE_RAW + "other/official-artwork/shiny/", ".png"),
+          "anim": (SPRITE_RAW + "other/showdown/", ".gif"),
           "rufe": ("https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/", ".ogg")}
 
 
@@ -243,7 +247,7 @@ def _images(kind, log, limit=SPRITES_MAX):
     have = {os.path.splitext(x)[0] for x in os.listdir(folder)}
     todo = [i for i in ids if str(i) not in have and (miss.get(str(i)) or "") < cutoff]
     got = absent = 0
-    label = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernde Sprites", "anim": "Animierte Sprites",
+    label = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernde Sprites", "shinyart": "Schillernde Artworks", "anim": "Animierte Sprites",
              "rufe": "Rufe"}[kind]
     for n, i in enumerate(todo[:limit]):
         STATE.update(step=label, done=n, total=min(len(todo), limit))

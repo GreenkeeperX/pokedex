@@ -278,6 +278,26 @@ class Leser(unittest.TestCase):
         self.assertTrue(abruf.sets_url(1).endswith("random-battles/gen1/data.json"))
         self.assertTrue(abruf.sets_url(9).endswith("random-battles/gen9/sets.json"))
 
+    def test_attacken_kurz_und_text(self):
+        import sqlite3
+        f = importer.move_short
+        self.assertEqual(f(2, 0, 0, 0, [(2, 2)], 0, 0, 7, True), "Angriff +2 (selbst)")                 # Schwerttanz
+        self.assertEqual(f(2, 0, 0, 0, [(2, -1)], 0, 0, 11, True), "Angriff −1 (Gegner)")              # Heuler
+        self.assertEqual(f(6, 0, 0, 10, [(5, -1)], 0, 0, 10, False), "Sp.-Verteidigung −1 (Gegner, 10 %)")
+        self.assertEqual(f(4, 4, 10, 0, None, 0, 0, 10, False), "verbrennt (10 %)")
+        self.assertEqual(f(5, 6, 0, 0, [(2, 2)], 0, 0, 10, True), "verwirrt · Angriff +2 (Gegner)")     # Angeberei
+        self.assertEqual(f(3, 0, 0, 0, None, 50, 0, 7, True), "heilt 50 % der KP")
+        self.assertEqual(f(0, 0, 0, 0, None, 0, 0, 10, False), "")
+        # Beschreibung: der neueste Text, aber nicht „kann nicht eingesetzt werden“, wenn es einen älteren gibt
+        con = sqlite3.connect(":memory:")
+        importer.import_csv(con, "moves", "id,identifier,generation_id,type_id,power,pp,accuracy,priority,target_id,damage_class_id,effect_id\n"
+                                          "1,pound,1,1,40,35,100,0,10,2,1\n2,cut-move,1,1,50,30,100,0,10,2,1\n")
+        importer.import_csv(con, "move_names", "move_id,local_language_id,name\n1,6,Klaps\n2,6,Alt\n")
+        importer.import_csv(con, "move_flavor_text", "move_id,version_group_id,language_id,flavor_text\n1,18,6,Alter Text\n1,20,6,Neuer Text\n"
+                                                     "2,18,6,Ein Hieb\n2,20,6,Diese Attacke kann nicht eingesetzt werden.\n")
+        importer._derive_attacke(con, {})
+        self.assertEqual(dict(con.execute("SELECT id, text FROM attacke")), {1: "Neuer Text", 2: "Ein Hieb"})
+
     def test_showdown(self):
         text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"
                 "\t\tname: \"Hyper Beam\",\n\t\tpp: 5,\n\t\tpriority: 0,\n\t\tflags: {recharge: 1, protect: 1},\n\t\ttype: \"Normal\",\n\t},\n"

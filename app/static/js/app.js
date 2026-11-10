@@ -71,7 +71,7 @@ const sumColor = (v) => `hsl(${Math.max(0, Math.min(1, (v - 200) / 480)) * 125} 
 /* Marken als SVG (wie „Mein Stand“ im VR-Navigator): gleich kräftig, gleich groß, ändern beim Umschalten nichts am
    Layout. Favorit = Stern, gefangen = Pokéball, im Team = Haken */
 const ICON = {fav: '<path d="M8 1.4 9.76 6.17 14.85 6.38 10.85 9.53 12.23 14.42 8 11.6 3.77 14.42 5.15 9.53 1.15 6.38 6.24 6.17Z"/>',
-  ball: '<path class="top" d="M1.9 8a6.1 6.1 0 0 1 12.2 0h-3.9a2.2 2.2 0 0 0-4.4 0Z"/><circle cx="8" cy="8" r="6.1"/><path d="M1.9 8h3.9M10.2 8h3.9"/><circle cx="8" cy="8" r="2.2"/>',
+  ball: '<path class="bot" d="M1.9 8a6.1 6.1 0 0 0 12.2 0Z"/><path class="top" d="M1.9 8a6.1 6.1 0 0 1 12.2 0Z"/><circle cx="8" cy="8" r="6.1"/><path d="M1.9 8h12.2"/><circle class="knob" cx="8" cy="8" r="2.1"/>',
   team: '<path d="M3.1 8.5 6.6 11.9 12.9 4.3"/>', plus: '<path d="M8 3v10M3 8h10"/>'};
 const icon = (k, on = true) => `<svg class="ic ic-${k}${on ? " on" : ""}" viewBox="0 0 16 16" aria-hidden="true">${ICON[k]}</svg>`;
 const SVG = (d) => `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">${d}</svg>`;
@@ -125,8 +125,8 @@ const radarTip = (werte) => "Netzdiagramm: außen = Höchstwert aller Pokémon, 
 const teamFull = () => S.team.ids.length >= 6;
 const isFav = (id) => S.favs.some((f) => f.id === id);
 const isCaught = (id) => S.caught.has(id);
-/* Marken direkt hinter dem Namen, nur die gesetzten (im Team, gefangen, Favorit). Zum Setzen erscheinen beim Hovern
-   kleine Knöpfe unten auf dem Bild; so verdeckt nichts das Netzdiagramm und nichts verschiebt sich */
+/* Marken (im Team, gefangen, Favorit) links oben auf der Bildecke, nur die gesetzten: so bleibt dem Namen die ganze
+   Zeile. Zum Setzen erscheinen beim Hovern kleine Knöpfe unter dem Bild; nichts verschiebt sich */
 function marks(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
   return `<span class="mk">${inTeam ? `<span class="m m-team" data-tip="Im Team">${icon("team")}</span>` : ""}`
@@ -141,8 +141,8 @@ function acts(id) {
 }
 function monCard(r) {
   const inTeam = S.team.ids.includes(r.id);
-  return `<a class="mon${inTeam ? " inteam" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="sp">${img(r.id)}${acts(r.id)}</span>
-    <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span>${marks(r.id)}</span><span class="ty">${tchips(r.typen)}</span>
+  return `<a class="mon${inTeam ? " inteam" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="sp">${marks(r.id)}${img(r.id)}${acts(r.id)}</span>
+    <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span></span><span class="ty">${tchips(r.typen)}</span>
     <span class="s">#${r.nr ?? r.art} · Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b>${r.legendaer ? " · legendär" : ""}</span></span>
     ${radar(r.werte)}</a>`;
 }
@@ -167,7 +167,19 @@ function duel(own, t) {
   const level = dealt > 1 && taken <= 0.5 ? 2 : dealt > 1 && taken <= 1 ? 1 : taken > 1 && dealt <= 1 ? -1 : 0;
   return {dealt, taken, level, best};
 }
-const DUEL = {2: "klar stark", 1: "stark", 0: "ausgeglichen", "-1": "schwer"};
+const DUEL = {2: "klar im Vorteil", 1: "im Vorteil", 0: "ausgeglichen", "-1": "im Nachteil"};
+/* Zeilen je Multiplikator: Faktor vorn, dahinter alle Typen (wie in den Typ-Hinweisen) */
+const erow = (key, chips) => `<div class="er"><span class="ek">${key}</span><span class="ets">${chips}</span></div>`;
+function defRows(d, factors) {
+  return factors.map((f) => { const ts = Object.keys(d).filter((t) => d[t] === f);
+    return ts.length ? erow(`<span class="f ${fcls(f)}">×${fl(f)}</span>`, ts.map(tchip).join("")) : ""; }).join("");
+}
+function defHtml(d, short = false) {
+  const sec = (title, factors) => { const body = defRows(d, factors); return body ? (short ? `<div class="et">${title}</div>` : `<h3>${title}</h3>`) + body : ""; };
+  return sec("Schwach gegen", [4, 2]) + sec("Resistent gegen", [0.5, 0.25]) + sec("Immun gegen (keine Wirkung)", [0])
+    || `<p class="hint">Keine Schwäche, keine Resistenz.</p>`;
+}
+const DUEL_LEGEND = "↑ teilt aus (bester eigener Typ) · ↓ steckt ein (beide eigenen Typen)";
 function duelTip(name, own, t, x) {
   const parts = own.map((d) => `${tname(t)} gegen ${tname(d)} ×${fl(S.chart?.[t]?.[d] ?? 1)}`);
   return `${name} gegen ${tname(t)}: ${DUEL[x.level]}\nAusteilen: ${tname(x.best)} trifft ${tname(t)} ×${fl(x.dealt)}\n`
@@ -175,11 +187,18 @@ function duelTip(name, own, t, x) {
 }
 function duelHtml(name, own, short = false) {
   const xs = Object.keys(S.chart || {}).map((t) => [t, duel(own, t)]);
-  const pick = (lv) => xs.filter(([, x]) => x.level === lv);
-  const row = (lv) => pick(lv).map(([t, x]) => `<span class="fx" data-tip="${esc(duelTip(name, own, t, x))}">${tchip(t)}</span>`).join("");
-  const out = [[2, "Klar stark gegen", "trifft sehr effektiv und steckt höchstens ½ ein"], [1, "Stark gegen", "trifft sehr effektiv, steckt normal ein"],
-    [-1, "Schwer gegen", "steckt sehr effektiv ein und trifft selbst höchstens normal"]].filter(([lv]) => pick(lv).length)
-    .map(([lv, title, why]) => short ? `<div class="muted" data-tip="${esc(why)}">${title}</div>${row(lv)}` : `<h3 data-tip="${esc(why)}">${title}</h3><div class="eff">${row(lv)}</div>`);
+  const dcls = (f) => f >= 4 ? "fd4" : f > 1 ? "fd" : f < 1 ? "f2" : "f1";
+  // je Stufe eine Zeile je Paar (austeilen, einstecken), stärkste zuerst
+  const rows = (lv) => {
+    const groups = {};
+    xs.filter(([, x]) => x.level === lv).forEach(([t, x]) => { (groups[`${x.dealt}:${x.taken}`] ||= {x, ts: []}).ts.push([t, x]); });
+    return Object.values(groups).sort((a, b) => (b.x.dealt - a.x.dealt) || (a.x.taken - b.x.taken)).map((g) =>
+      erow(`<span class="f ${dcls(g.x.dealt)}" data-tip="teilt ×${fl(g.x.dealt)} aus">↑${fl(g.x.dealt)}</span><span class="f ${fcls(g.x.taken)}" data-tip="steckt ×${fl(g.x.taken)} ein">↓${fl(g.x.taken)}</span>`,
+        g.ts.map(([t, x]) => `<span class="fx" data-tip="${esc(duelTip(name, own, t, x))}">${tchip(t)}</span>`).join(""))).join("");
+  };
+  const out = [[2, "Klar im Vorteil gegen", "trifft sehr effektiv und steckt höchstens ½ ein"], [1, "Im Vorteil gegen", "trifft sehr effektiv, steckt normal ein"],
+    [-1, "Im Nachteil gegen", "steckt sehr effektiv ein und trifft selbst höchstens normal"]].map(([lv, title, why]) => { const body = rows(lv);
+    return body ? (short ? `<div class="et" data-tip="${esc(why)}">${title}</div>` : `<h3 data-tip="${esc(why)}">${title}</h3>`) + body : ""; });
   return out.join("") || (short ? "" : `<p class="hint">Gegen keinen einzelnen Typ klar im Vor- oder Nachteil.</p>`);
 }
 
@@ -270,18 +289,53 @@ function showCard(el) {
   const r = ROWS[el.dataset.hc || el.dataset.id];
   if (!r || !r.werte) return;
   const d = defense(r.typen);
-  const by = (pred) => Object.entries(d).filter(([, f]) => pred(f)).sort((a, b) => b[1] - a[1]);
-  const fx = (xs) => xs.map(([t, f]) => `<span class="fx">${tchip(t)}<span class="f ${fcls(f)}">×${fl(f)}</span></span>`).join("") || `<span class="muted">keine</span>`;
   const det = slot !== null ? S.team.details[slot] || {} : null;
   const mv = det ? (det.attacken || []).map((x) => MOVES[x]).filter(Boolean) : [];
   card.innerHTML = `<div class="hc-head">${img(r.id, "art", true)}<div><b>${esc(r.name)}</b> <span class="muted">#${r.nr ?? r.art}</span><div>${tchips(r.typen)}</div>
       <div class="muted">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b>${r.legendaer ? " · legendär" : ""}${r.endstufe ? " · Endstufe" : ""}</div>
       ${det ? `<div class="muted">${det.level ? "Level " + det.level : "ohne Level"}</div><div class="hc-mv">${mv.map((m) => `${tchip(m.typ)} ${esc(m.name)}`).join("<br>")}</div>` : ""}</div></div>
-    <div class="hc-body">${radar(r.werte, 190, true)}<div class="hc-eff"><div class="muted">Schwach gegen</div>${fx(by((f) => f > 1))}
-      <div class="muted">Resistent / immun</div>${fx(by((f) => f < 1))}
+    <div class="hc-body">${radar(r.werte, 190, true)}<div class="hc-eff">${defHtml(d, true)}
       ${duelHtml(r.name, r.typen, true)}</div></div>`;
   card.hidden = false;
   place(card, el);
+}
+
+/* ------------------------------------------------------------------ Fadenkreuz in Tabellen
+   Zeilen tragen data-r, Zellen data-c; Kopfzellen data-pc (Spalte) oder data-pr (Zeile). Hovern hebt Zeile und Spalte
+   hervor, Klick auf einen Kopf hält Zeile oder Spalte fest, Klick auf eine Zelle beides (nochmal: löst). pin = {r, c}
+   gehört dem Aufrufer und bleibt über Neuzeichnen erhalten. */
+function crossTable(table, pin, onChange) {
+  table.classList.add("cross");
+  const paint = (hr, hc) => {
+    $$(".hl,.fix", table).forEach((x) => x.classList.remove("hl", "fix"));
+    const mark = (r, c, cls) => {
+      if (r != null) $$(`tr[data-r="${r}"] > *`, table).forEach((x) => x.classList.add(cls));
+      if (c != null) $$(`[data-c="${c}"]`, table).forEach((x) => x.classList.add(cls));
+    };
+    mark(pin.r, pin.c, "fix");
+    mark(hr, hc, "hl");
+    if (onChange) onChange();
+  };
+  const cellOf = (e) => e.target.closest("td[data-c],th[data-pc],th[data-pr]");
+  table.addEventListener("mouseover", (e) => {
+    const cell = cellOf(e);
+    if (!cell) return paint(null, null);
+    const row = cell.closest("tr")?.dataset.r ?? null;
+    paint(cell.dataset.pc ? null : row, cell.dataset.pr ? null : cell.dataset.c ?? null);
+  });
+  table.addEventListener("mouseleave", () => paint(null, null));
+  table.addEventListener("click", (e) => {
+    const cell = cellOf(e);
+    if (!cell || e.target.closest("a,button")) return;
+    if (cell.dataset.pr) pin.r = pin.r === cell.dataset.pr ? null : cell.dataset.pr;
+    else if (cell.dataset.pc) pin.c = pin.c === cell.dataset.pc ? null : cell.dataset.pc;
+    else {
+      const row = cell.closest("tr").dataset.r, c = cell.dataset.c;
+      if (pin.r === row && pin.c === c) { pin.r = null; pin.c = null; } else { pin.r = row; pin.c = c; }
+    }
+    paint(null, null);
+  });
+  paint(null, null);
 }
 
 /* ------------------------------------------------------------------ Sortierbare Tabellen */
@@ -856,11 +910,6 @@ async function detailView(id, slot = null) {
   ROWS[d.id] = Object.assign(ROWS[d.id] || {}, d);
   [...d.attacken.attacken, ...d.attacken.status].forEach((m) => { MOVES[m.id] = m; });
   const stats = d.werte.map((v, i) => `<span>${STAT[i]}</span><span class="num">${v}</span><span class="sbar" data-tip="${esc(statTip(i, v))}"><i style="width:${Math.min(100, v / statMax(i) * 100)}%;background:${statColor(v)}"></i></span>`).join("");
-  const eff = Object.entries(d.wirkung).sort((a, b) => b[1] - a[1] || a[0] - b[0]);
-  const effHtml = (pred, title) => {
-    const xs = eff.filter(([, f]) => pred(f));
-    return xs.length ? `<h3>${title}</h3><div class="eff">${xs.map(([t, f]) => `<div data-tip="${esc(`${tname(t)}-Attacken treffen ${d.name} mit ×${fl(f)}`)}">${tchip(t)}<span class="f ${fcls(f)}">×${fl(f)}</span></div>`).join("")}</div>` : "";
-  };
   const evo = d.entwicklung.length > 1 ? d.entwicklung.map((e, i) => (i && e.von ? `<span class="ar">→ ${esc(e.bedingungen.join(" oder ") || "")}</span>` : "") +
     `<a class="st" href="#pokemon/${e.id}">${img(e.id)}${esc(e.name)}</a>`).join("") : "";
   main.innerHTML = `
@@ -882,12 +931,15 @@ async function detailView(id, slot = null) {
         ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${esc(a.name)}</b> ${wikiLink(a.name)}${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
           : S.game === "legends-arceus" ? `<p class="hint">In Legenden: Arceus gibt es keine Fähigkeiten.</p>` : ""}
       </div>
-      <div class="box"><h2>Typwirkung gegen ${esc(d.name)}</h2>
-        ${d.faehigkeit_wirkt ? `<p class="hint">Mit Fähigkeit eingerechnet.</p>` : ""}
-        ${effHtml((f) => f > 1, "Schwach gegen")}${effHtml((f) => f > 0 && f < 1, "Resistent gegen")}${effHtml((f) => f === 0, "Immun gegen (keine Wirkung)")}
-        <h2 style="margin-top:14px" data-tip="Typ-Duell: wie gut ${esc(d.name)} gegen Pokémon eines Typs steht. Austeilen = bester eigener Typ, einstecken = beide eigenen Typen zusammengerechnet. Hovern zeigt die Rechnung.">Im Duell gegen Typen</h2>
-        ${duelHtml(d.name, d.typen)}
-        ${evo ? `<h3>Entwicklung</h3><div class="evo">${evo}</div>` : ""}
+      <div class="stack">
+        <div class="box"><h2 data-tip="Verteidigung: so stark treffen Attacken eines Typs ${esc(d.name)}">Verteidigung: Typwirkung gegen ${esc(d.name)}</h2>
+          ${d.faehigkeit_wirkt ? `<p class="hint">Mit Fähigkeit eingerechnet.</p>` : ""}
+          ${defHtml(Object.fromEntries(Object.entries(d.wirkung).map(([t, f]) => [t, f])))}</div>
+        <div class="box"><h2 data-tip="Typ-Duell: wie gut ${esc(d.name)} gegen Pokémon eines Typs steht. Austeilen = bester eigener Typ, einstecken = beide eigenen Typen zusammengerechnet. Hovern zeigt die Rechnung.">Im Duell gegen Typen</h2>
+          <p class="hint">${DUEL_LEGEND}</p>
+          ${duelHtml(d.name, d.typen)}</div>
+        ${evo ? `<div class="box"><h2>Entwicklung</h2><div class="evo">${evo}</div></div>` : ""}
+        ${catchHtml(d)}
       </div>
     </div>
     <div class="box" style="margin-top:12px"><h2>Fundorte in ${esc(gameName())}</h2>${encHtml(d)}</div>
@@ -900,9 +952,9 @@ async function detailView(id, slot = null) {
 // Sprite-Umschalter (Artwork, schillernd, animiert) und Ruf, nur für schon geladene Extras
 function extrasHtml(d) {
   const x = d.extras || {}, b = [];
-  if (x.shiny || x.anim) {
+  if (x.shiny || x.shinyart || x.anim) {
     b.push(`<button class="small on" data-pic="art">Artwork</button>`);
-    if (x.shiny) b.push(`<button class="small" data-pic="shiny" data-tip="Schillernde Form (Sprite)">Schillernd</button>`);
+    if (x.shiny || x.shinyart) b.push(`<button class="small" data-pic="${x.shinyart ? "shinyart" : "shiny"}" data-tip="Schillernde Form${x.shinyart ? "" : " (Sprite; das Artwork lädt der nächste Abgleich)"}">Schillernd</button>`);
     if (x.anim) b.push(`<button class="small" data-pic="anim" data-tip="Animiertes Sprite">Animiert</button>`);
   }
   if (x.rufe) b.push(`<button class="small" data-ruf="${d.id}" data-tip="Ruf abspielen">▶ Ruf</button>`);
@@ -913,30 +965,35 @@ function wireExtras(d) {
   $$("[data-pic]").forEach((b) => b.addEventListener("click", () => {
     $$("[data-pic]").forEach((x) => x.classList.toggle("on", x === b));
     pic.src = b.dataset.pic === "art" ? `artwork/${d.id}.png` : `${b.dataset.pic}/${d.id}`;
-    pic.classList.toggle("px", b.dataset.pic !== "art");
+    pic.classList.toggle("px", b.dataset.pic === "shiny" || b.dataset.pic === "anim");
   }));
   const rb = $("[data-ruf]");
   if (rb) rb.addEventListener("click", () => { new Audio(`rufe/${d.id}`).play().catch(() => { rb.textContent = "Ruf fehlt"; }); });
 }
-// Mehr Details, eingeklappt: Fangchance, Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute
+/* Fangchance als eigene Karte unter der Entwicklung: offen, solange das Pokémon nicht als gefangen markiert ist */
+function catchHtml(d) {
+  const m = d.mehr || {};
+  if (!m.fangen) return "";
+  const pc = (v) => String(v).replace(".", ",") + " %";
+  const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
+  return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
+    <table class="rows"><tr><th>Ball</th><th>volle KP</th><th>1 KP</th><th>1 KP, schlafend</th></tr>
+    ${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td>${pc(f.voll)}</td><td>${pc(f.rot)}</td><td>${pc(f.schlaf)}</td></tr>`).join("")}</table>
+    <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
+      : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p></details>`;
+}
+// Mehr Details, eingeklappt: Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute
 const EVK = ["kp", "ang", "vert", "spang", "spvert", "init"];
 function moreHtml(d) {
   const m = d.mehr || {};
   if (!Object.keys(m).length) return "";
-  const pc = (v) => String(v).replace(".", ",") + " %";
   const rows = [];
   if (m.geschlecht) rows.push(["Geschlecht", esc(m.geschlecht)]);
   if (m.wachstum) rows.push(["Wachstum", esc(m.wachstum)]);
   if (m.eigruppen) rows.push(["Ei-Gruppen", esc(m.eigruppen.join(", ")) + (m.eizyklen != null ? ` · ${m.eizyklen} Ei-Zyklen` : "")]);
   if (m.ev && m.ev.length) rows.push(["EV-Ausbeute", m.ev.map((e) => `${e.punkte} ${STAT[EVK.indexOf(e.wert)]}`).join(", ")]);
-  const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
-  const fang = m.fangen ? `<h3>Fangchance <span class="hint">(Fangrate ${m.fangrate})</span></h3>
-    <table class="rows"><tr><th>Ball</th><th>volle KP</th><th>1 KP</th><th>1 KP, schlafend</th></tr>
-    ${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td>${pc(f.voll)}</td><td>${pc(f.rot)}</td><td>${pc(f.schlaf)}</td></tr>`).join("")}</table>
-    <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
-      : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p>` : "";
-  return `<details class="mehr"><summary>Mehr Details</summary>
-    ${rows.length ? `<div class="kv">${rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join("")}</div>` : ""}${fang}</details>`;
+  return rows.length ? `<details class="mehr"><summary>Mehr Details</summary>
+    <div class="kv">${rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join("")}</div></details>` : "";
 }
 // Farben für Werte: Stärke (bis 150), Genauigkeit (ab 70), Wertung (bis 160), von Rot nach Grün
 const ramp = (x) => `hsl(${Math.max(0, Math.min(1, x)) * 125} 62% 40%)`;
@@ -951,12 +1008,10 @@ async function allMoves() {
   ALLMOVES[k].forEach((m) => { MOVES[m.id] = Object.assign(MOVES[m.id] || {}, m); });
   return ALLMOVES[k];
 }
-// Marken: nur per Lehrer lernbar, Beherrschung (Legenden: Arceus)
+// Marke: beim Attacken-Lehrer lernbar (die Beherrschung steht schon in der Spalte „Weg“)
 function moveMarks(m) {
   const w = m.wege || [], out = [];
   if (w.includes("Lehrer")) out.push(`<span class="cls mk-lehrer" data-tip="${esc(w.length > 1 ? "Auch beim Attacken-Lehrer" : "Nur beim Attacken-Lehrer")}">Lehrer</span>`);
-  const mast = w.find((x) => x.includes("Beherrschung"));
-  if (mast) out.push(`<span class="cls mk-meister" data-tip="${esc(mast)}">Beherrschung</span>`);
   return out.length ? " " + out.join(" ") : "";
 }
 // Bewährte Sets (Showdown, Random Battle): Rolle, Attacken, Übernehmen
@@ -976,7 +1031,7 @@ function renderMoves(A, level) {
   mine.map(mv).filter((m) => m.klasse !== 1 && m.staerke).forEach((m) => Object.entries(S.chart?.[m.typ] || {}).forEach(([t, f]) => f > 1 && covered.add(t)));
   const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${esc(m.name)} ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${moveMarks(m)}</td>
     <td data-s="${tname(m.typ)}">${tchip(m.typ)}</td><td><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="num" data-s="${m.staerke ?? 0}">${powCell(m.staerke)}</td><td class="num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
-    ${status ? "" : `<td class="num" data-s="${m.wertung}"><b style="color:${scoreColor(m.wertung)}">${m.wertung}</b></td>`}<td data-s="${esc(m.wege[0] || "")}">${esc(m.wege.join(", "))}</td><td class="why">${esc(status ? m.text || "" : m.gruende.join(" · "))}</td>
+    ${status ? "" : `<td class="num" data-s="${m.wertung}"><b style="color:${scoreColor(m.wertung)}">${m.wertung}</b></td>`}<td data-s="${esc(m.wege[0] || "")}">${esc(m.wege.join(", "))}</td><td class="why">${status ? (m.kurz ? `<b>${esc(m.kurz)}</b>` : esc(m.text || "")) : esc((m.kurz ? [m.kurz] : []).concat(m.gruende).join(" · "))}</td>
     <td>${mine.includes(m.id) ? `<button class="small on" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✓</button>` : mine.length < 4 ? `<button class="small" data-act="mvadd" data-mid="${m.id}" data-tip="In deine Auswahl (4 Plätze)">+</button>` : ""}</td></tr>`;
   const std = (A.standard || []).map((x) => all[x]?.name).filter(Boolean);
   // Deine Auswahl als feste Tabelle mit vier Zeilen: springt nicht, wenn Attacken dazukommen oder gehen
@@ -996,7 +1051,9 @@ function renderMoves(A, level) {
       <span class="hint">${inTeam ? "Gilt für diesen Platz im Team und filtert die Attacken." : "Leer: alle erlernbaren. Mit Level zählen nur Attacken, die bis dahin gehen."}</span></div>
     <div class="cols">
       <div><h3>Deine Auswahl${inTeam ? ` (Team, Platz ${DSLOT + 1})` : ""}</h3>
-        <table class="mine"><tbody>${[0, 1, 2, 3].map(mineRow).join("")}</tbody></table>
+        <table class="mine"><thead><tr><th></th>${[["typ", "Typ"], ["name", "Attacke"], ["klasse", "Klasse"], ["staerke", "Stärke"], ["genauigkeit", "Gen."], ["wertung", "Wertung"]]
+          .map(([k, n]) => `<th data-ms="${k}"${MSORT.k === k ? ` data-dir="${MSORT.dir}"` : ""} data-tip="Auswahl danach sortieren (ändert die Reihenfolge)">${n}</th>`).join("")}<th></th></tr></thead>
+          <tbody>${[0, 1, 2, 3].map(mineRow).join("")}</tbody></table>
         ${mine.length ? `<p class="hint">Trifft sehr effektiv: ${covered.size ? [...covered].map(tchip).join(" ") : "nichts"} (${covered.size} von ${Object.keys(S.chart || {}).length} Typen)</p>`
           : `<p class="hint">Mit + in der Tabelle wählen. ${inTeam ? "Die Auswahl zählt in der Team-Bewertung." : "Gespeichert in diesem Browser; im Team zählt sie für die Bewertung."}</p>`}
         <div class="bar">${std.length ? `<button class="small" data-act="mvstd" data-tip="${esc("Wie im Spiel: die letzten vier Level-Attacken bis zum Level (ohne Level die ersten vier): " + std.join(", "))}">Standard-Attacken</button>` : ""}
@@ -1018,6 +1075,15 @@ function renderMoves(A, level) {
     d.attacken = A2;
     renderMoves(A2, v);
   });
+  $$("table.mine th[data-ms]").forEach((h) => h.addEventListener("click", () => {
+    const k = h.dataset.ms, dir = MSORT.k === k && MSORT.dir === "desc" ? "asc" : "desc";
+    const val = (x) => { const m = mv(x); return k === "wertung" ? all[x]?.wertung ?? 0 : k === "typ" ? tname(m.typ) : k === "genauigkeit" ? m.genauigkeit ?? 101 : m[k] ?? 0; };
+    const sorted = [...mine].sort((a, b) => { const x = val(a), y = val(b); const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "de");
+      return dir === "asc" ? c : -c; });
+    MSORT = {k, dir};
+    setOwnSet(id, sorted);
+    renderMoves(DETAIL.attacken, $("#lvl")?.value);
+  }));
   $$("[data-act=settake]").forEach((b) => b.addEventListener("click", () => {
     const x = A.sets[+b.dataset.i];
     x.attacken.forEach((m) => { if (!MOVES[m.id]) MOVES[m.id] = all[m.id] || m; });
@@ -1249,7 +1315,7 @@ async function teamRefresh() {
     const fixed = t.fest.includes(id), det = t.details[i] || {};
     return `<div class="tslot${fixed ? " fixed" : ""}${bad.has(i) ? " warn" : ""}" data-slot="${i}" draggable="true" data-id="${id}" data-hc="${id}">
       <span class="grip" data-tip="Ziehen zum Umsortieren">⋮⋮</span>
-      <button class="small pin${fixed ? " on" : ""}" data-act="pin" data-id="${id}" data-tip="Für die Teamsuche festsetzen">📌</button>
+      <button class="small fixbtn${fixed ? " on" : ""}" data-act="pin" data-id="${id}" data-tip="Für die Teamsuche festsetzen">📌</button>
       <button class="small swap" data-act="pick" data-slot="${i}" data-tip="Gegen einen Favoriten tauschen">⇄</button>
       <button class="small x" data-act="teamdel" data-slot="${i}" data-tip="Entfernen">✕</button>
       <a href="#pokemon/${id}/${i}" draggable="false">${img(id, "mid", true)}<br><b>${esc(m.name)}</b></a>
@@ -1268,8 +1334,12 @@ async function teamRefresh() {
     ${ev.vierfach.length ? `<div class="note warn">4-fach-Schwächen: ${ev.vierfach.map(([a, n]) => `${esc(n)} gegen ${tchip(a)}`).join(", ")}</div>` : ""}
     ${ev.nicht_abgedeckt.length ? `<p class="hint">Nicht sehr effektiv getroffen (mit den gewählten Attacken, sonst Eigentypen): ${tchips(ev.nicht_abgedeckt)}</p>` : ""}
     <p class="hint">${ev.physisch} physisch, ${ev.speziell} speziell · schnell: ${esc(ev.schnell.join(", ") || "keiner")}</p>
-    <details><summary>Typwirkung je Mitglied</summary><div class="scroll"><table class="matrix"><tr><th></th>${ms.map((m) => `<th data-hc="${m.id}">${img(m.id)}</th>`).join("")}</tr>
-      ${Object.keys(S.types).filter((a) => ev.matrix[ms[0].id]?.[a] !== undefined).map((a) => `<tr><th class="r">${tchip(a)}</th>${ms.map((m) => { const f = ev.matrix[m.id][a]; return `<td data-tip="${esc(`${tname(a)} gegen ${m.name}: ×${fl(f)}`)}"><span class="f ${fcls(f)}">${f === 1 ? "" : fl(f)}</span></td>`; }).join("")}</tr>`).join("")}</table></div></details>`;
+    <details><summary>Typwirkung je Mitglied</summary><div class="scroll"><table class="matrix" id="matrix"><tr><th></th>${ms.map((m, i) => `<th data-hc="${m.id}" data-c="${i}" data-pc="${i}">${img(m.id)}</th>`).join("")}</tr>
+      ${Object.keys(S.types).filter((a) => ev.matrix[ms[0].id]?.[a] !== undefined).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ms.map((m, i) => { const f = ev.matrix[m.id][a]; return `<td data-c="${i}" data-tip="${esc(`${tname(a)} gegen ${m.name}: ×${fl(f)}`)}"><span class="f ${fcls(f)}">${f === 1 ? "" : fl(f)}</span></td>`; }).join("")}</tr>`).join("")}</table></div>
+      <p class="hint">Zeile: angreifender Typ, Spalte: Mitglied. Klick hält Zeile oder Spalte fest.</p></details>`;
+  crossTable($("#matrix"), MPIN);
+  $("#ev details").open = store.get("matrixOpen", false);
+  $("#ev details").addEventListener("toggle", (e) => store.set("matrixOpen", e.target.open));
   // Wo ein Vorschlag vom Team abweicht, ist die Zeile dezent hinterlegt; „passt so“ bleibt blass
   $("#imp").innerHTML = (ev.verbesserungen || []).length ? ev.verbesserungen.map((v) => { const diff = v.hinweise.length || v.besser.length;
     const cur = (t.details[v.slot]?.attacken || []).map((x) => MOVES[x]).filter(Boolean);
@@ -1304,7 +1374,7 @@ async function matchup() {
   const box = $("#mu");
   if (!box) return;
   if (!S.foes.length) { box.innerHTML = `<p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p>`; return; }
-  const foeCard = (id, r) => `<div class="foe" data-hc="${id}">${img(id, "", true)}<b>${esc(r?.name || "#" + id)}</b><div>${tchips(r?.typen || [])}</div>
+  const foeCard = (id, r) => `<div class="foe" draggable="true" data-foe="${id}" data-hc="${id}">${img(id, "", true)}<b>${esc(r?.name || "#" + id)}</b><div>${tchips(r?.typen || [])}</div>
     <button class="small x" data-act="foedel" data-id="${id}" data-tip="Gegner entfernen">✕</button></div>`;
   if (!S.team.ids.length) { box.innerHTML = `<div class="foes">${S.foes.map((id) => foeCard(id, ROWS[id])).join("")}</div><p class="hint">Erst ein Team zusammenstellen.</p>`; return; }
   const miss = S.foes.filter((id) => !ROWS[id]?.werte);
@@ -1317,10 +1387,29 @@ async function matchup() {
   const seen = new Set();
   box.innerHTML = `<div class="foes">${r.einzeln.map((x) => foeCard(x.gegner.id, ROWS[x.gegner.id])).join("")}</div>
     ${r.ohne_antwort.length ? `<div class="note warn">Niemand im Team ist klar im Vorteil gegen: ${esc(r.ohne_antwort.join(", "))}</div>` : `<div class="note go">Gegen jeden Gegner hast du mindestens einen guten Kandidaten.</div>`}
-    <div class="scroll"><table class="vs"><thead><tr><th></th>${r.einzeln.map((x) => `<th class="foeh" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
-      ${r.uebersicht.filter((m) => !seen.has(m.id) && seen.add(m.id)).map((m) => `<tr><th class="r" data-hc="${m.id}">${img(m.id)} ${esc(m.name)}</th>${r.einzeln.map((x) => { const v = verdict[`${m.id}:${x.gegner.id}`], u = VERDICT[v.urteil];
-        return `<td class="v-${v.urteil}" data-tip="${esc(`${m.name} gegen ${x.gegner.name}: ${u[1]}\n${v.gruende.map((g) => "· " + g).join("\n")}`)}">${u[0]}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
-    <p class="hint">Vorteil: teilt mehr aus, als es einsteckt (Typen und Initiative). Nachteil: steckt mehr ein, als es austeilt. Die Attacken des Gegners zählen über seine Typen, deine über die gewählten Attacken. Zelle hovern für die Rechnung.</p>`;
+    <div class="scroll"><table class="vs" id="vs"><thead><tr><th></th>${r.einzeln.map((x, i) => `<th class="foeh" data-c="${i}" data-pc="${i}" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
+      ${r.uebersicht.filter((m) => !seen.has(m.id) && seen.add(m.id)).map((m, k) => `<tr data-r="${k}"><th class="r" data-pr="${k}" data-hc="${m.id}">${img(m.id)} ${esc(m.name)}</th>${r.einzeln.map((x, i) => { const v = verdict[`${m.id}:${x.gegner.id}`], u = VERDICT[v.urteil];
+        return `<td data-c="${i}" class="v-${v.urteil}" data-tip="${esc(`${m.name} gegen ${x.gegner.name}: ${u[1]}\n${v.gruende.map((g) => "· " + g).join("\n")}`)}">${u[0]}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
+    <p class="hint">Vorteil: teilt mehr aus, als es einsteckt (Typen und Initiative). Nachteil: steckt mehr ein, als es austeilt. Die Attacken des Gegners zählen über seine Typen, deine über die gewählten Attacken. Zelle hovern für die Rechnung; Klick hält Zeile oder Spalte fest. Gegner lassen sich oben per Ziehen umsortieren.</p>`;
+  crossTable($("#vs"), VPIN);
+  foeDrag(box);
+}
+// Gegner per Ziehen umsortieren (einmal je Kasten anmelden; der Inhalt wird neu gezeichnet)
+function foeDrag(box) {
+  if (box.dataset.dnd) return;
+  box.dataset.dnd = "1";
+  box.addEventListener("dragstart", (e) => { const f = e.target.closest(".foe"); if (!f) return; e.dataTransfer.setData("text/x-foe", f.dataset.foe); e.dataTransfer.effectAllowed = "move"; card.hidden = true; });
+  box.addEventListener("dragover", (e) => { if (e.target.closest(".foe") && e.dataTransfer.types.includes("text/x-foe")) e.preventDefault(); });
+  box.addEventListener("drop", (e) => {
+    const f = e.target.closest(".foe"), from = +e.dataTransfer.getData("text/x-foe");
+    if (!f || !from) return;
+    e.preventDefault();
+    const to = +f.dataset.foe, a = S.foes.indexOf(from), b = S.foes.indexOf(to);
+    if (a < 0 || b < 0 || a === b) return;
+    S.foes.splice(a, 1); S.foes.splice(b, 0, from);
+    store.set("foes", S.foes); VPIN.c = null;
+    matchup();
+  });
 }
 
 const VERDICT = {schicken: ["Vorteil", "im Vorteil, gut einzusetzen"], geht: ["ausgeglichen", "ausgeglichen, weder klar besser noch schlechter"],
@@ -1349,13 +1438,13 @@ async function movesView() {
       (!q || m.name.toLowerCase().includes(q)) && (!f.min || (m.staerke || 0) >= +f.min) && (!f.prio || m.prio > 0) &&
       (f.kontakt === "" || m.merkmale.includes("contact") === (f.kontakt === "1")));
     $("#mcnt").textContent = `${xs.length} von ${rows.length} Attacken in ${gameName()}`;
-    $("#mv").innerHTML = `<div class="box scroll"><table class="sort"><thead><tr>${th("Attacke")}${th("Typ")}${th("Klasse")}${th("Stärke")}${th("Gen.", "Genauigkeit in Prozent; – trifft immer")}${th("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
-      ${th("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${th("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${th("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${th("Gen", "Generation, seit der es die Attacke gibt")}${th("Beschreibung", "", true)}</tr></thead><tbody>
-      ${xs.map((m) => `<tr><td data-s="${esc(m.name)}"><b>${esc(m.name)}</b> ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
+    $("#mv").innerHTML = `<div class="box scroll"><table class="sort fixed" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:62px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${th("Typ")}${th("Klasse")}${th("Stärke")}${th("Gen.", "Genauigkeit in Prozent; – trifft immer")}${th("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
+      ${th("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${th("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${th("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${th("Gen", "Generation, seit der es die Attacke gibt")}${th("Wirkung", "Kurz-Info aus den Spieldaten; die ganze Beschreibung beim Hovern über die Zeile", true)}</tr></thead><tbody>
+      ${xs.map((m) => `<tr${m.text ? ` data-tip="${esc(m.text)}"` : ""}><td data-s="${esc(m.name)}"><b>${esc(m.name)}</b> ${wikiLink(m.name)}${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}</td><td data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
         <td><span class="cls">${CLS[m.klasse]}</span></td><td class="num" data-s="${m.staerke || 0}">${powCell(m.staerke)}</td><td class="num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
         <td class="num">${m.ap ?? ""}</td><td class="num">${m.prio ? `<span data-tip="${m.prio > 0 ? `Vorrang +${m.prio}: kommt vor normalen Attacken` : `Vorrang ${m.prio}: kommt nach normalen Attacken`}">${m.prio > 0 ? "+" : ""}${m.prio}</span>` : ""}</td>
         <td class="num" data-s="${m.wertung}"${m.gruende.length ? ` data-tip="${esc(m.gruende.join("\n"))}"` : ""}>${m.wertung ? `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>` : ""}</td>
-        <td class="num">${m.lernen || ""}</td><td class="num">${m.gen || ""}</td><td class="why">${esc(m.text || "")}</td></tr>`).join("")}</tbody></table></div>`;
+        <td class="num">${m.lernen || ""}</td><td class="num">${m.gen || ""}</td><td class="kurz">${esc(m.kurz || (m.klasse === 1 ? m.text || "" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
   };
   const load = async () => {
     const d = await api("/api/attacken?" + qs({spiel: S.game, lernbar: f.lernbar ? 1 : 0}));
@@ -1379,7 +1468,8 @@ async function movesView() {
 }
 
 /* ------------------------------------------------------------------ Typtabelle */
-let PIN = {r: null, c: null};
+const PIN = {r: null, c: null}, MPIN = {r: null, c: null}, VPIN = {r: null, c: null};
+let MSORT = {k: "", dir: ""};
 /* ------------------------------------------------------------------ Karte (Legenden: Arceus)
    Spielkoordinaten 0–1024; Welt in Pixeln = Koordinate × 2 (2048 px bei Zoom 2). Kacheln 256 px von Serebii, auf dem Server
    gespeichert; Zoom 0 hat 2 × 2, Zoom 1 hat 4 × 4, Zoom 2 hat 8 × 8 Kacheln. Ziehen verschiebt, Mausrad zoomt. */
@@ -1400,16 +1490,18 @@ async function mapView(karte, fid) {
       <span class="seg">${d.karten.map((k) => `<a class="btn${k.karte === d.karte ? " on" : ""}" href="#karte/${k.karte}${fid != null ? "/" + fid : ""}">${esc(k.gebiet)}</a>`).join("")}</span>
       <label>Pokémon <select id="mapmon"><option value="">alle Spawnpunkte</option>${list.map((s) => `<option value="${s.id}"${s.id === fid ? " selected" : ""}>${esc(s.name)} (${s.n})</option>`).join("")}</select></label>
       <span class="hint grow">${fid != null ? (hits ? `${hits} Spawnpunkte hervorgehoben` : "hier an keinem Spawnpunkt") : `${pts.length} Spawnpunkte, davon ${pts.filter((p) => p.alpha).length} Alpha`}</span>
-      <button data-mz="1" title="näher">+</button><button data-mz="-1" title="weiter weg">−</button></div>
+</div>
+    ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus.</div>` : ""}
     ${d.kacheln ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
-    <div class="mapwrap"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
+    <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
+      <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
       <aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha.</p></aside></div>
     <p class="hint">Kartenbild: Serebii; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten.</p></div>`;
   $("#mapmon").addEventListener("change", (e) => { location.hash = `karte/${d.karte}` + (e.target.value ? "/" + e.target.value : ""); });
   const box = $("#map"), inner = $(".mapin", box), tiles = $(".tiles", box), pins = $(".pins", box);
   const tipOf = (p) => (p.alpha ? "Alpha-Spawnpunkt\n" : "") + (p.mons.length ? p.mons.map((m) => `${m.alpha ? "Alpha-" : ""}${m.name}: bis ${mpct(m.max)}`
     + (m.zeit !== "immer" ? ` (${m.zeit})` : "")).join("\n") : "keine Angaben");
-  pins.innerHTML = pts.map((p, i) => `<button class="pin${p.alpha ? " alpha" : ""}${p.hit ? " hit" : ""}${fid != null && !p.hit ? " dim" : ""}" data-i="${i}"
+  pins.innerHTML = pts.map((p, i) => `<button class="mpin${p.alpha ? " alpha" : ""}${p.hit ? " hit" : ""}${fid != null && !p.hit ? " dim" : ""}" data-i="${i}"
     style="left:${p.x * 2}px;top:${p.z * 2}px" data-tip="${esc(tipOf(p))}" aria-label="Spawnpunkt"></button>`).join("");
   let scale = 1, ox = 0, oy = 0, level = -1;
   const fit = () => {
@@ -1425,15 +1517,31 @@ async function mapView(karte, fid) {
       ox = (r.width - WORLD * scale) / 2; oy = (r.height - WORLD * scale) / 2;
     }
   };
+  /* Kacheln: je Zoomstufe eine Ebene, gröbere bleiben darunter liegen (nichts wird leer, während feinere laden);
+     geladen wird nur, was im Ausschnitt liegt */
+  const layers = [0, 1, 2].map((z) => { const el = document.createElement("div"); el.dataset.z = z; tiles.appendChild(el); return {el, have: new Set()}; });
   const draw = () => {
     const z = scale < 0.3 ? 0 : scale < 0.6 ? 1 : 2;
-    if (z !== level) {
-      level = z;
-      const n = 2 ** (z + 1), size = WORLD / n, out = [];
-      for (let x = 0; x < n; x++) for (let y = 0; y < n; y++)
-        out.push(`<img src="karten/${d.karte}/${z}-${x}-${y}.png" alt="" draggable="false" style="left:${x * size}px;top:${y * size}px;width:${size}px;height:${size}px" onerror="this.style.visibility='hidden'">`);
-      tiles.innerHTML = out.join("");
+    level = z;
+    const r = box.getBoundingClientRect();
+    for (let k = 0; k <= z; k++) {
+      if (k !== 0 && k !== z) continue;          // die gröbste als Unterlage, dazu die passende
+      const n = 2 ** (k + 1), size = WORLD / n, L = layers[k];
+      const x0 = Math.max(0, Math.floor(-ox / scale / size)), x1 = Math.min(n - 1, Math.floor((r.width - ox) / scale / size));
+      const y0 = Math.max(0, Math.floor(-oy / scale / size)), y1 = Math.min(n - 1, Math.floor((r.height - oy) / scale / size));
+      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+        const key = `${x}-${y}`;
+        if (L.have.has(key)) continue;
+        L.have.add(key);
+        const im = new Image();
+        im.alt = ""; im.draggable = false; im.decoding = "async";
+        im.style.cssText = `left:${x * size}px;top:${y * size}px;width:${size}px;height:${size}px`;
+        im.onerror = () => { im.style.visibility = "hidden"; };
+        im.src = `karten/${d.karte}/${k}-${x}-${y}.png`;
+        L.el.appendChild(im);
+      }
     }
+    layers.forEach((L, k) => { L.el.hidden = k > z; });
     inner.style.transform = `translate(${ox}px,${oy}px) scale(${scale})`;
     inner.style.setProperty("--inv", 1 / scale);
   };
@@ -1449,11 +1557,12 @@ async function mapView(karte, fid) {
   }, {passive: false});
   $$("[data-mz]").forEach((b) => b.addEventListener("click", () => {
     const r = box.getBoundingClientRect();
+    if (b.dataset.mz === "0") { fit(); draw(); return; }
     zoomAt(b.dataset.mz === "1" ? 1.4 : 1 / 1.4, r.width / 2, r.height / 2);
   }));
   let drag = null;
   box.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".pin")) return;
+    if (e.target.closest(".mpin")) return;
     drag = {x: e.clientX, y: e.clientY, ox, oy};
     box.setPointerCapture(e.pointerId);
     box.classList.add("grab");
@@ -1466,9 +1575,9 @@ async function mapView(karte, fid) {
   box.addEventListener("pointerup", stop);
   box.addEventListener("pointercancel", stop);
   pins.addEventListener("click", (e) => {
-    const b = e.target.closest(".pin");
+    const b = e.target.closest(".mpin");
     if (!b) return;
-    $$(".pin.sel", pins).forEach((x) => x.classList.remove("sel"));
+    $$(".mpin.sel", pins).forEach((x) => x.classList.remove("sel"));
     b.classList.add("sel");
     const p = pts[+b.dataset.i];
     $("#mapside").innerHTML = `<h3>${p.alpha ? "Alpha-Spawnpunkt" : "Spawnpunkt"}</h3>` + (p.mons.length ? `<table class="rows"><tr><th></th><th>Pokémon</th><th>Anteil</th><th>Tageszeit</th><th>Wetter</th></tr>
@@ -1517,36 +1626,7 @@ async function chartView() {
       return `<td data-c="${v}" data-tip-cell="${a}:${v}">${f === 1 ? "" : `<span class="f ${fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}</tr>`).join("")}</tbody>
     </table></div></div>`;
   header();
-  const table = $(".chart");
-  const paint = (hr, hc) => {
-    $$(".hl,.pin", table).forEach((x) => x.classList.remove("hl", "pin"));
-    const mark = (r, c, cls) => {
-      if (r !== null) $$(`tr[data-r="${r}"] > *`, table).forEach((x) => x.classList.add(cls));
-      if (c !== null) $$(`[data-c="${c}"]`, table).forEach((x) => x.classList.add(cls));
-    };
-    mark(PIN.r, PIN.c, "pin");
-    mark(hr, hc, "hl");
-    $("#unpin").hidden = PIN.r === null && PIN.c === null;
-  };
-  table.addEventListener("mouseover", (e) => {
-    const cell = e.target.closest("td[data-c],th[data-pc],th[data-pr]");
-    if (!cell) return paint(null, null);
-    const r = cell.closest("tr")?.dataset.r ?? null;
-    paint(cell.dataset.pc ? null : r, cell.dataset.pr ? null : cell.dataset.c ?? null);
-  });
-  table.addEventListener("mouseleave", () => paint(null, null));
-  table.addEventListener("click", (e) => {
-    const cell = e.target.closest("td[data-c],th[data-pc],th[data-pr]");
-    if (!cell) return;
-    if (cell.dataset.pr) PIN = {r: PIN.r === cell.dataset.pr ? null : cell.dataset.pr, c: PIN.c};
-    else if (cell.dataset.pc) PIN = {r: PIN.r, c: PIN.c === cell.dataset.pc ? null : cell.dataset.pc};
-    else {
-      const r = cell.closest("tr").dataset.r, c = cell.dataset.c;
-      PIN = PIN.r === r && PIN.c === c ? {r: null, c: null} : {r, c};
-    }
-    paint(null, null);
-  });
-  paint(null, null);
+  crossTable($(".chart"), PIN, () => { $("#unpin").hidden = PIN.r === null && PIN.c === null; });
 }
 
 /* ------------------------------------------------------------------ Einstellungen */
@@ -1597,7 +1677,7 @@ async function settingsView() {
         <label class="btn filebtn">Sicherung einlesen <input type="file" id="restore" accept="application/json,.json" hidden></label>
         <span class="hint">Einlesen ersetzt alle eigenen Daten durch die Datei (vorher legt der Server eine Kopie an).</span></div>
       <div id="restmsg"></div></div>
-    <div class="box"><h2>Quellen und Lizenzen</h2>
+    <details class="box"><summary><h2>Quellen und Lizenzen</h2><span class="hint">7 Quellen · Pokédex ${esc(S.meta?.version || "")}</span></summary>
       <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
         <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
         <a href="https://github.com/kwsch/PKHeX" target="_blank" rel="noopener noreferrer">PKHeX</a> (Fundorte aus den Spieldaten, GPL-3.0) ·
@@ -1605,8 +1685,7 @@ async function settingsView() {
         <a href="https://github.com/Lincoln-LM/JS-Finder" target="_blank" rel="noopener noreferrer">JS-Finder</a> (Spawnpunkte, GPL-3.0) ·
         <a href="https://www.serebii.net" target="_blank" rel="noopener noreferrer">Serebii</a> (Kartenbilder) ·
         <a href="https://www.pokewiki.de" target="_blank" rel="noopener noreferrer">PokéWiki</a> (Links; Abruf für Legenden: Arceus folgt, CC BY-SA 3.0 DE).
-        Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK; dies ist ein privates Nachschlage-Tool.</p>
-      <p class="hint">Pokédex ${esc(S.meta?.version || "")}</p></div>`;
+        Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK; dies ist ein privates Nachschlage-Tool.</p></details>`;
   const saveSet = async () => {
     S.meta.einstellungen = await api("/api/einstellungen", {auto: $("#auto").checked, tage: +$("#tage").value, sprites: $("#sprites").checked});
   };
@@ -1685,7 +1764,7 @@ document.addEventListener("click", async (e) => {
     else if (act === "pick") picker(b, +b.dataset.slot);
     else if (act === "pickfav") { $("#pick").hidden = true; addToTeam(id, +b.dataset.slot); }
     else if (act === "tgame") setGame(S.team.spiel);
-    else if (act === "unpin") { PIN = {r: null, c: null}; chartView(); }
+    else if (act === "unpin") { PIN.r = null; PIN.c = null; chartView(); }
     else if (act === "copy") await copyText($(b.dataset.src)?.textContent || "", b);
     else if (act === "dl") download(`${b.dataset.name}-${new Date().toISOString().slice(0, 10)}.txt`, $(b.dataset.src)?.textContent || "");
     else if (act === "pin") {

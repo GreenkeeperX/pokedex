@@ -32,7 +32,8 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 
 ## Zeitplan
 
-Prüfung jede Minute, erster Blick fünf Minuten nach dem Start (ohne Datenbank sofort). Fällig nach dem
+Prüfung jede Minute, erster Blick fünf Minuten nach dem Start (ohne Datenbank sofort). Passt `importer.VERSION`
+nicht mehr zum gebauten Stand (nach einem Update mit neuen Tabellen), ist der Abgleich sofort fällig. Fällig nach dem
 eingestellten Abstand (1 bis 30 Tage, Standard 7); nach einem Fehlschlag frühestens nach einer Stunde.
 
 ## Verbindungstest
