@@ -31,7 +31,12 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    je Spiel (`ItemStorage<Kürzel>.cs`, `importer.ITEM_LISTS`) für Spiele ohne Liste in der PokéAPI.
    **PokéWiki**: je Spiel in `abruf.WIKI_GAMES` die Seiten der Attacken, die dort jemand lernt (nur die Infobox,
    `rvsection=0`), und der Arten im Spiel, gebündelt zu 50 Seiten je Anfrage mit 2 Sekunden Pause. `app/pokewiki.py`
-   liest Attackenwerte (Legenden: Arceus mit Kraft- und Tempostil) und getragene Items; das Ergebnis liegt in
+   liest Attackenwerte (Legenden: Arceus mit Kraft- und Tempostil) und getragene Items, dazu je Gebiet die Kartendateien
+   `extensions/PwMapHisui/data/{pokemon,items}/ha_area01…05.json` (`pokewiki.map_pokemon`, `pokewiki.map_items`; gleiche
+   Spielkoordinaten wie JS-Finder). `importer._derive_wiki_karte` ordnet jede Datei der Karte zu, deren Spawnpunkte sie am
+   häufigsten genau trifft, und legt Kristallbrocken, Verzerrungen, Massenauftreten, Bäume, feste Alphas und Items am Boden
+   in `kartenobjekt` (ohne Stellen, die Altissimo schon führt; viele Items an einer Stelle gehen an die nächste Grabstelle).
+   Das Ergebnis liegt in
    `pokewiki.json` im Datenordner und gilt weiter, wenn das Wiki ruht. Die Namen stammen aus der bisherigen Datenbank.
 4. Hat sich nichts geändert (Commit, Prüfsumme von Showdown, PKHeX, PokéWiki, Altissimo und `extra/`, `importer.VERSION`), bleibt die
    Datenbank. Sonst alle CSV-Dateien holen (raw.githubusercontent.com; bei unverändertem Commit aus
@@ -49,6 +54,12 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 
 Extra `itembild`: `sprites/items/<Kennung>.png` aus dem Sprite-Repository der PokéAPI, gespeichert als
 `itembild/<Nummer>.png`. Ohne Maschinen und unfertige Einträge; was es nicht gibt (404), wird 30 Tage nicht erneut gefragt.
+Items, die nur PKHeX kennt, haben dort kein Bild.
+
+Extra `itemhq`: größere Bilder von Serebii (`itemdex/sprites/legends/<name>.png` für Legenden: Arceus, sonst
+`itemdex/sprites/sv/<name>.png` für Karmesin/Purpur, Legenden: Z-A und Mega-Dimension; Name = englischer Name klein ohne
+Zeichen, `importer.en_key`), gespeichert als `itemhq/<Nummer>.png`, eine Sekunde Pause, höchstens 400 je Lauf. `/itembild/<Nummer>`
+liefert zuerst das große Bild.
 
 ## Zeitplan
 

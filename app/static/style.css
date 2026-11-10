@@ -111,8 +111,14 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 .mon .nr{position:absolute;left:8px;top:4px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;z-index:1}
 .mon .mi{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .mon .nl{display:flex;align-items:center;gap:6px;min-width:0}
-.mon .n{font-weight:600;color:var(--ink-hi);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+/* lange Namen dürfen in die Grafik ragen (ohne „…“), etwas höher, damit sie die Zahl oben links nicht berühren */
+.mon .n{font-weight:600;color:var(--ink-hi);white-space:nowrap;min-width:0;flex:1;position:relative;z-index:1;text-shadow:0 0 3px var(--card),0 0 2px var(--card)}
+.mon .nl{margin-top:-5px;margin-bottom:3px}
+.mon:hover .n{text-shadow:0 0 3px var(--hov),0 0 2px var(--hov)}
 .mon .s{font-size:12px;color:var(--muted)}
+td.nw{white-space:nowrap}
+.area a,.area{color:var(--ac)}
+.area::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--ac);margin-right:5px;vertical-align:1px}
 .mon .radar{flex:none}
 .mon.inteam{border-color:var(--go);box-shadow:inset 0 0 0 1px var(--go)}
 /* Marken hinter dem Namen (SVG): feste Plätze, nicht gesetzte erst beim Hovern sichtbar, nichts verschiebt sich */
@@ -127,6 +133,9 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 .ic-ball.on .top{fill:#ee1c25}
 .ic-ball.on .bot{fill:#f6f6f4}
 .ic-ball.on .knob{fill:#f6f6f4}
+/* schillernd gefangen: goldene Hälfte und ein Glanz drumherum */
+.ic-ball.on.shiny .top{fill:#f2c230}
+.ic-ball.on.shiny{filter:drop-shadow(0 0 2px #ffe27a) drop-shadow(0 0 1px #fff3b0)}
 .ic-team{stroke-width:2.8}
 .mk{display:inline-flex;gap:3px;align-items:center;flex:none}
 /* in Karten: Marken links oben auf der Bildecke, der Name behält die ganze Zeile */
@@ -299,6 +308,15 @@ table.mine th[data-dir=desc]::after{content:" ▼";font-size:10px}
 .sugl{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
 .sugl>div{padding:3px 6px;border-radius:6px;border-bottom:1px solid var(--line)}
 .sugl>div.same{background:var(--sel)}
+.jump{position:sticky;top:0;z-index:4;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;background:var(--bg);padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--line);font-size:13px}
+.jump a{color:var(--ink);text-decoration:none}
+.jump a:hover{text-decoration:underline}
+.jump .foldall{margin-left:auto;color:var(--muted);white-space:nowrap}
+details.fold>summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+details.fold>summary h2{margin:0}
+details.fold:not([open]){padding-bottom:10px}
+details.fold[open]>summary{margin-bottom:8px}
+.okc{color:var(--go)}.errc{color:var(--stop)}
 h2.sect{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 0 8px;font-weight:600}
 label.filebtn{cursor:pointer}
 table.sort th[data-sort]{cursor:pointer;user-select:none}
@@ -400,6 +418,20 @@ table.vs th.r .spr{width:36px;height:36px;vertical-align:middle}
 .cross .fix{background:var(--sel)}
 .cross th.fix{color:var(--ink-hi)}
 .cross .fix.hl{background:var(--hov)}
+.pinc{display:inline-block;margin-left:4px;padding:0 3px;border-radius:4px;color:var(--muted);opacity:.35;font-size:11px;cursor:pointer}
+th:hover>.pinc,.pinc:hover{opacity:1}
+.pinc:hover{background:var(--line);color:var(--ink-hi)}
+.cls.tm{color:var(--go);border-color:var(--go)}
+.items td.ifx{font-size:13px;padding-left:2px;padding-right:2px;white-space:nowrap}
+.items td.ifx.on{color:var(--go);font-weight:600}
+.tteam summary h2{display:inline;margin-right:8px}
+.chart th.r.tm{text-align:left}
+.tmh{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.tmh .spr{width:32px;height:32px}
+.tmh .t{font-size:12px!important;line-height:20px!important;padding:0 6px!important}
+.chart tfoot td{font-size:12px;font-weight:600}
+.chart tfoot .go{color:var(--go)}.chart tfoot .stop{color:var(--stop)}
+th.fix>.pinc{opacity:1;color:var(--ink-hi)}
 
 /* Einstellungen */
 .log{font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:360px;overflow:auto}
@@ -433,6 +465,15 @@ a.bm:active{cursor:grabbing}
 /* Kartensymbole: feste Größe beim Zoomen wie die Spawnpunkte */
 .mobj{display:inline-grid;place-items:center;width:18px;height:18px;padding:0;border-radius:50%;border:1.5px solid rgba(255,255,255,.85);
   font:700 10px/1 system-ui,sans-serif;color:#10171a;background:#9aa;box-shadow:0 1px 3px rgba(0,0,0,.5);vertical-align:middle}
+.heat{position:absolute;left:0;top:0}
+.hspr{position:absolute;display:block;border-radius:50%;background:radial-gradient(circle,rgba(37,48,51,.75) 0,rgba(37,48,51,.45) 55%,transparent 72%);z-index:1}
+.hspr .spr{width:100%;height:100%;image-rendering:auto;filter:drop-shadow(0 1px 2px rgba(0,0,0,.7))}
+.hspr:hover{z-index:3;background:radial-gradient(circle,rgba(91,140,255,.45) 0,transparent 70%)}
+.mlay.heatbtn.on{border-color:var(--accent)}
+.heatl td{padding:3px 6px}
+.heatl .hbar{display:block;height:5px;margin-top:3px;border-radius:3px;background:var(--line);overflow:hidden}
+.heatl .hbar i{display:block;height:100%;background:#5aa2f0}
+.heatl tr.on td{background:var(--sel)}
 .pins .mobj{position:absolute;margin:-9px 0 0 -9px;cursor:pointer;transform:scale(var(--inv,1))}
 .pins .mobj.sel{outline:3px solid var(--accent);z-index:3}
 .mobj[hidden],.mpin[hidden]{display:none}
@@ -441,6 +482,11 @@ a.bm:active{cursor:grabbing}
 .o-irrlicht{background:#8c6cf0;color:#fff;box-shadow:0 0 8px #a58cff}.o-icognito{background:#30363a;color:#e6e6e6}
 .o-vers{background:#48c1c4}.o-graben{background:#8d6e4f;color:#fff}
 .mlays{flex-wrap:wrap;gap:6px}
+.o-kristall{background:#7fd8ff}.o-verzerrung{background:#5b3fa8;color:#fff;box-shadow:0 0 8px #8a6bff}.o-massen{background:#ff8a3d}
+.o-baumpkmn{background:#9ccc65}.o-alpha{background:#e53935;color:#fff}.o-boden{background:#d7ccc8;width:12px;height:12px;font-size:8px}
+.pins .mobj.o-boden{margin:-6px 0 0 -6px}
+.pins .mobj.hit{outline:3px solid #fff;z-index:4}
+.mlay-all{margin-left:auto;white-space:nowrap}
 .mlay{display:inline-flex;align-items:center;gap:6px;opacity:.5}
 .mlay.on{opacity:1}
 .mpin-l{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid #fff;background:#3a7bd5}

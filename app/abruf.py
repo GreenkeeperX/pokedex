@@ -221,9 +221,14 @@ EXTRAS = {"shiny": (SPRITE_RAW + "shiny/", ".png"), "shinyart": (SPRITE_RAW + "o
           "anim": (SPRITE_RAW + "other/showdown/", ".gif"),
           "rufe": ("https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/", ".ogg"),
           # Item-Bilder: Datei heißt wie die Kennung des Items, gespeichert unter der Nummer
-          "itembild": (SPRITE_RAW.replace("/pokemon/", "/items/"), ".png")}
+          "itembild": (SPRITE_RAW.replace("/pokemon/", "/items/"), ".png"),
+          # größere Item-Bilder von Serebii (Legenden: Arceus 128 px, Karmesin/Purpur und Z-A 160 px) nach dem englischen Namen
+          "itemhq": ("https://www.serebii.net/itemdex/sprites/", ".png")}
+# Spiele, für die Serebii eigene Item-Bilder hat: Unterordner → Spielkennungen
+ITEM_HQ = {"legends": ("legends-arceus",), "sv": ("scarlet-violet", "the-teal-mask", "the-indigo-disk", "legends-za", "mega-dimension")}
+ITEM_HQ_MAX = 400           # so viele große Item-Bilder je Lauf (Serebii schonen)
 MEDIA_LABEL = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernde Sprites", "shinyart": "Schillernde Artworks",
-               "anim": "Animierte Sprites", "rufe": "Rufe", "itembild": "Item-Bilder"}
+               "anim": "Animierte Sprites", "rufe": "Rufe", "itembild": "Item-Bilder", "itemhq": "Große Item-Bilder"}
 
 
 def media_ids(kind):
@@ -233,9 +238,25 @@ def media_ids(kind):
     try:
         if kind == "itembild":
             try:
-                return {r[0]: r[1] for r in con.execute("SELECT id, kennung FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 ORDER BY id")}
+                return {r[0]: r[1] for r in con.execute("SELECT id, kennung FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 "
+                                                        "AND kennung NOT LIKE 'pkhex-%' ORDER BY id")}
             except Exception:           # Datenbank noch ohne die Spalten von 0.8.0
                 return {}
+        if kind == "itemhq":            # Ordner bei Serebii nach dem neuesten Spiel mit dem Item
+            try:
+                vgs = {k: i for i, k in con.execute("SELECT id, kennung FROM spiel")}
+                rows = con.execute("SELECT id, en, spiele FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 AND en != '' "
+                                   "ORDER BY id").fetchall()
+            except Exception:           # Datenbank vor 0.12.0 (ohne englische Namen)
+                return {}
+            out = {}
+            for iid, en, spiele in rows:
+                games = set(json.loads(spiele or "[]"))
+                for sub in ("sv", "legends"):
+                    if games & {vgs.get(k) for k in ITEM_HQ[sub]}:
+                        out[iid] = f"{sub}/{importer.en_key(en)}"
+                        break
+            return out
         return {r[0]: str(r[0]) for r in con.execute("SELECT id FROM form ORDER BY id")}
     finally:
         con.close()
@@ -275,7 +296,9 @@ def file_kind(body):
 
 def _images(kind, log, limit=SPRITES_MAX):
     """Fehlende Bilder nach data/<kind>/<id>.png (Extras auch .gif, .mp3, .ogg). Gibt das Ergebnis der Quelle zurück."""
-    src = _Source("extras" if kind in EXTRAS else "sprites", log, pause=0.2)
+    src = _Source("extras" if kind in EXTRAS else "sprites", log, pause=1.0 if kind == "itemhq" else 0.2)
+    if kind == "itemhq":
+        limit = min(limit, ITEM_HQ_MAX)
     prefix, ext = EXTRAS.get(kind, (IMAGES.get(kind), ".png"))
     folder = os.path.join(db.data_dir(), kind)
     os.makedirs(folder, exist_ok=True)
@@ -728,7 +751,18 @@ def _pokewiki(st, log, at):
             out[kind][sp] = got
         if src.stopped:
             break
-    st["sources"]["pokewiki"] = src.result(seiten=sum(len(v) for k in out.values() for v in k.values()))
+    # Karte von Legenden: Arceus (Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas, Items am Boden)
+    karte = {}
+    for i, area in enumerate(pokewiki.MAP_AREAS if not src.stopped else ()):
+        STATE.update(step="PokéWiki: Karte", done=i, total=len(pokewiki.MAP_AREAS))
+        got = {kind: src.get(pokewiki.map_url(kind, area)) for kind in pokewiki.MAP_KINDS}
+        if src.stopped:
+            break
+        if got.get("pokemon"):
+            karte[area] = {k: v for k, v in got.items() if v}
+    out["karte"] = {"legends-arceus": karte} if karte else old.get("karte", {})
+    st["sources"]["pokewiki"] = src.result(seiten=sum(len(v) for k in ("attacken", "items") for v in out[k].values()),
+                                           karten=len(karte))
     if src.blocked:
         st["rest"]["pokewiki"] = _iso(now() + timedelta(hours=REST_H))
     if src.stopped or not any(out["attacken"].values()):

@@ -131,3 +131,63 @@ def held_items(wt):
             for g in games:
                 out.append({"spiel": g, "item": name, "prozent": share, "elite": elite})
     return out
+
+
+# Karte der Gebiete in Legenden: Arceus (Erweiterung PwMapHisui): je Gebiet drei JSON-Dateien. Die Lage steht in
+# Spielkoordinaten wie bei den Spawnpunkten (JS-Finder). ha_area01 … 05 sind die fünf Gebiete; welche Datei zu welcher
+# Karte gehört, klärt importer._derive_wiki_karte über die gemeinsamen Spawnpunkte.
+MAP_DATA = "https://www.pokewiki.de/extensions/PwMapHisui/data/"
+MAP_AREAS = ("ha_area01", "ha_area02", "ha_area03", "ha_area04", "ha_area05")
+MAP_KINDS = ("pokemon", "items")
+# Art eines Pokémon-Punkts → Art des Kartensymbols (Spawnpunkte „default“ kommen schon von JS-Finder)
+MAP_TYPES = {"crystal": "kristall", "wormhole": "verzerrung", "mass": "massen", "berry": "baumpkmn", "apricorn": "baumpkmn",
+             "alpha": "alpha"}
+
+
+def map_url(kind, area):
+    return f"{MAP_DATA}{kind}/{area}.json"
+
+
+def _xz(pos):
+    x, _, z = str(pos).partition(",")
+    return round(float(x), 2), round(float(z), 2)
+
+
+def map_pokemon(text):
+    """Pokémon-Datei eines Gebiets: {Name: {"x,z": {"t": Art, "LvlMin", "LvlMax", "ALvlMin", "ALvlMax", "0"…"3":
+    [{"d": Anteil %, "a": Alpha-Anteil %}] je Tageszeit und Wetter}}}. Gibt [{name, x, z, typ, lv, alv, max}] zurück;
+    lv und alv als (von, bis) oder None, max: höchster Anteil in % (None bei festen Alphas)."""
+    out = []
+    for name, pts in (json.loads(text or "{}") or {}).items():
+        if not isinstance(pts, dict):
+            continue
+        for pos, v in pts.items():
+            try:
+                x, z = _xz(pos)
+            except ValueError:
+                continue
+            lv = (int(v["LvlMin"]), int(v["LvlMax"])) if v.get("LvlMin") not in (None, "") else None
+            alv = (int(v["ALvlMin"]), int(v["ALvlMax"])) if v.get("ALvlMin") not in (None, "") else None
+            ds = [c.get("d") for k in ("0", "1", "2", "3") for c in (v.get(k) or []) if isinstance(c, dict) and c.get("d") is not None]
+            out.append({"name": name, "x": x, "z": z, "typ": v.get("t") or "default", "lv": lv, "alv": alv,
+                        "max": max(ds) if ds else None})
+    return out
+
+
+def map_items(text):
+    """Item-Datei eines Gebiets: {Name mit Trennstrichen: [{"p": "x,z", "c": Anteil %, "u": 1}]}. Die Trennstriche
+    („Apri-ko-ko“) sind Silbentrennung und fallen weg. Gibt [{name, x, z, anteil}] zurück."""
+    out = []
+    for name, xs in (json.loads(text or "{}") or {}).items():
+        for e in xs if isinstance(xs, list) else []:
+            try:
+                x, z = _xz(e.get("p"))
+            except (ValueError, AttributeError):
+                continue
+            out.append({"name": name, "x": x, "z": z, "anteil": str(e.get("c") or "")})
+    return out
+
+
+def item_key(name):
+    """Vergleichsschlüssel für Itemnamen ohne Silbentrennung: klein, ohne Striche und Leerzeichen."""
+    return re.sub(r"[\s\-­]", "", str(name or "")).lower()

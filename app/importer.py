@@ -18,9 +18,9 @@ import os
 import re
 import sqlite3
 
-from . import altissimo, showdown
+from . import altissimo, pokewiki, showdown
 
-VERSION = "10"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "11"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -721,9 +721,9 @@ def _pkhex_items(con, pkx, rows):
         r = by_id[iid]
         con.execute("UPDATE item SET spiele = ?, gens = ? WHERE id = ?",
                     (json.dumps(sorted(set(json.loads(r[8])) | vgs)), json.dumps(sorted(set(json.loads(r[7])) | gens)), iid))
-    con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [(PKHEX_ITEM + idx, f"pkhex-{idx}", e["name"], e["tasche"], "", "de", 0, json.dumps(sorted(e["gens"])),
-                      json.dumps(sorted(e["vgs"])), "", "", None, 0) for idx, e in sorted(new.items())])
+                      json.dumps(sorted(e["vgs"])), "", "", None, 0, en[idx] if idx < len(en) else "") for idx, e in sorted(new.items())])
     return len(new)
 
 
@@ -733,10 +733,11 @@ def _derive_item(con, pkx=None):
     pkx: Itemlisten und -namen von PKHeX ({"de", "en", Dateikürzel aus ITEM_LISTS: Text}) für Spiele ohne eigene Liste.
     Ohne items.csv bleibt die Tabelle leer."""
     con.execute("CREATE TABLE item (id INTEGER PRIMARY KEY, kennung TEXT, name TEXT, tasche TEXT, text TEXT, sprache TEXT, "
-                "preis INTEGER, gens TEXT, spiele TEXT, art TEXT, wirkung TEXT, wert REAL, unfertig INTEGER)")
+                "preis INTEGER, gens TEXT, spiele TEXT, art TEXT, wirkung TEXT, wert REAL, unfertig INTEGER, en TEXT)")
     if not _has(con, "items"):
         return 0
     names = _names(con, "item_names", "item_id")
+    en_names = dict(con.execute("SELECT item_id, name FROM item_names WHERE local_language_id = ?", (EN,))) if _has(con, "item_names") else {}
     pockets = {}
     if _has(con, "item_categories"):
         pockets = {c: TASCHEN.get(p, "") for c, p in con.execute("SELECT id, pocket_id FROM item_categories")}
@@ -767,8 +768,8 @@ def _derive_item(con, pkx=None):
         eff = effects.get(iid, ("", None))
         rows.append((iid, ident, item_name(ident, names[iid]), pockets.get(cat, ""), t[1] if t else "", t[2] if t else "", cost or 0,
                      json.dumps(sorted(gens.get(iid, ()))), json.dumps(sorted(games.get(iid, ()))), ITEM_ART.get(cat, ""),
-                     eff[0], eff[1], int(ODD_TEXT in (t[1] if t else ""))))
-    con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+                     eff[0], eff[1], int(ODD_TEXT in (t[1] if t else "")), en_names.get(iid, "")))
+    con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     return len(rows) + (_pkhex_items(con, pkx, rows) if pkx else 0)
 
 
@@ -794,6 +795,115 @@ def _derive_karte(con, alt, en_de):
                                   json.dumps([[en_de.get(en_key(i), i), p] for i, p in o["items"]], ensure_ascii=False)) for o in objs])
                 n += len(objs)
     return n
+
+
+# Arten der Kartensymbole: Altissimo und dazu die Ebenen aus der Karte des PokéWiki (Schlüssel → Name, Mehrzahl)
+KARTE_ARTEN = {**altissimo.ARTEN, "kristall": ("Kristallbrocken", "Kristallbrocken"),
+               "verzerrung": ("Raum-Zeit-Verzerrung", "Raum-Zeit-Verzerrungen"), "massen": ("Massenauftreten", "Massenauftreten"),
+               "baumpkmn": ("Pokémon im Baum", "Pokémon in Bäumen"), "alpha": ("festes Alpha-Pokémon", "feste Alphas"),
+               "boden": ("Fundstelle", "Items am Boden")}
+NEAR = 2.0                  # so nah (Spieleinheiten) gilt ein Item als dasselbe Symbol wie bei Altissimo
+DIG_ITEMS, DIG_NEAR = 5, 16.0   # Stelle mit so vielen Items = Grabstelle; so weit darf die Grabstelle bei Altissimo weg sein
+
+
+def _wiki_forms(con, spiel):
+    """Name im PokéWiki („Fukano“, „Hisui-Baldorfish“, „Burmy (Pflanzenumhang)“, „Icognito E“) → Form. Ohne Zusatz gilt
+    die Form, die laut PKHeX im Spiel vorkommt (in Legenden: Arceus oft die Hisui-Form), sonst die Standardform."""
+    species = {n: k for k, n in _names(con, "pokemon_species_names", "pokemon_species_id").items()}
+    by_art, hisui = {}, {}
+    for pid, ident, art, default in con.execute('SELECT id, identifier, species_id, is_default FROM pokemon'):
+        if default:
+            by_art[art] = pid
+        if str(ident).endswith("-hisui"):
+            hisui[art] = pid
+    in_game = {}
+    if _has(con, "fundort"):
+        for art, pid in con.execute("SELECT DISTINCT p.species_id, f.form FROM fundort f JOIN pokemon p ON p.id = f.form "
+                                    "WHERE f.spiel = ?", (spiel,)):
+            in_game.setdefault(art, set()).add(pid)
+
+    def form(name):
+        base = re.sub(r"\s*\(.*\)\s*$", "", str(name)).strip()
+        base = re.sub(r"^(Icognito) \S$", r"\1", base)
+        h = base.startswith("Hisui-")
+        art = species.get(base[6:] if h else base)
+        if not art:
+            return None
+        if h and art in hisui:
+            return hisui[art]
+        seen = in_game.get(art, set())
+        return next(iter(seen)) if len(seen) == 1 else by_art.get(art)
+    return form
+
+
+def _derive_wiki_karte(con, wiki):
+    """Karte des PokéWiki (pokewiki.map_*): Kristallbrocken, Raum-Zeit-Verzerrungen, Massenauftreten, Pokémon in Bäumen
+    und feste Alphas mit Pokémon und Level, dazu Items am Boden mit Anteil (ohne die Stellen, die Altissimo schon als
+    Baum, Erzbrocken, Kiste oder Sammelobjekt führt). Welche Datei zu welcher Karte gehört: die Karte, deren Spawnpunkte
+    (JS-Finder) die meisten Punkte der Datei genau treffen. Gibt die Zahl der Symbole zurück."""
+    maps = ((wiki or {}).get("karte") or {})
+    if not maps or not _has(con, "spawnpunkt"):
+        return 0
+    n = 0
+    names = {pokewiki.item_key(x): x for (x,) in con.execute("SELECT name FROM item")} if _has(con, "item") else {}
+    for spiel, areas in maps.items():
+        pts = {}
+        for karte, x, z in con.execute("SELECT karte, x, z FROM spawnpunkt WHERE spiel = ?", (spiel,)):
+            pts.setdefault(karte, set()).add((round(x, 1), round(z, 1)))
+        if not pts:
+            continue
+        form = _wiki_forms(con, spiel)
+        for area, src in sorted(areas.items()):
+            try:
+                mons = pokewiki.map_pokemon(src.get("pokemon"))
+                items = pokewiki.map_items(src.get("items"))
+            except (ValueError, TypeError, AttributeError):
+                continue
+            own = {(round(m["x"], 1), round(m["z"], 1)) for m in mons if m["typ"] == "default"}
+            karte, hit = max(((k, len(own & v)) for k, v in pts.items()), key=lambda kv: kv[1], default=(None, 0))
+            if not karte or hit < 5:
+                continue
+            gebiet = altissimo.GEBIETE.get(karte, karte)
+            groups = {}
+            for m in mons:
+                art = pokewiki.MAP_TYPES.get(m["typ"])
+                if not art:
+                    continue
+                if art == "alpha":
+                    text = f"Alpha, Lv {_lv(m['alv'])}" if m["alv"] else "Alpha"
+                else:
+                    text = (f"Lv {_lv(m['lv'])}" if m["lv"] else "") + (f", {m['max']:g} %".replace(".", ",") if m["max"] and m["max"] < 99 else "")
+                fid = form(m["name"])
+                groups.setdefault((art, m["x"], m["z"]), []).append([m["name"], text, fid])
+            old = con.execute("SELECT rowid, art, x, z FROM kartenobjekt WHERE spiel = ? AND karte = ?", (spiel, karte)).fetchall()
+            verse = any(r[1] == "vers" for r in old)
+            for it in items:
+                if any(abs(it["x"] - x) <= NEAR and abs(it["z"] - z) <= NEAR for _, _, x, z in old):
+                    continue
+                name = names.get(pokewiki.item_key(it["name"]), it["name"].replace("-", ""))
+                if verse and name.startswith("Altes Gedicht"):        # Gedichte führt Altissimo schon (etwas andere Lage)
+                    continue
+                groups.setdefault(("boden", round(it["x"], 1), round(it["z"], 1)), []).append(
+                    [name, f"{it['anteil']} %" if it["anteil"] else ""])
+            # Stellen mit vielen Items sind Grabstellen (Ursaluna): Items zur nächsten Grabstelle von Altissimo legen
+            digs = [r for r in old if r[1] == "graben"]
+            for key in [k for k, v in groups.items() if k[0] == "boden" and len(v) >= DIG_ITEMS]:
+                near = min(digs, key=lambda r: (r[2] - key[1]) ** 2 + (r[3] - key[2]) ** 2, default=None)
+                v = sorted(groups.pop(key), key=lambda e: e[0])
+                if near and (near[2] - key[1]) ** 2 + (near[3] - key[2]) ** 2 <= DIG_NEAR ** 2:
+                    con.execute("UPDATE kartenobjekt SET items = ? WHERE rowid = ?", (json.dumps(v, ensure_ascii=False), near[0]))
+                    digs.remove(near)
+                else:
+                    groups[("graben", key[1], key[2])] = v
+            rows = [(spiel, karte, gebiet, art, None, x, z, "", json.dumps(sorted(v, key=lambda e: e[0]), ensure_ascii=False))
+                    for (art, x, z), v in groups.items()]
+            con.executemany("INSERT INTO kartenobjekt VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+            n += len(rows)
+    return n
+
+
+def _lv(r):
+    return f"{r[0]}" if r[0] == r[1] else f"{r[0]}–{r[1]}"
 
 
 def _derive_rezept(con, alt, en_de):
@@ -948,6 +1058,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_rez = _derive_rezept(con, alt, en_de)
         n_sets = _derive_moveset(con, sets)
         n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
+        n_obj += _derive_wiki_karte(con, wiki)
         con.execute("CREATE TABLE extra (name TEXT PRIMARY KEY, inhalt TEXT)")
         con.executemany("INSERT INTO extra VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in (extra or {}).items()])
         for sql in ("CREATE INDEX pm_pokemon ON pokemon_moves(pokemon_id, version_group_id)",

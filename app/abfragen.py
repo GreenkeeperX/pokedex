@@ -744,7 +744,7 @@ def map_data(karte, p):
                        for r in pts],
             "objekte": [{"art": r["art"], "nr": r["nr"], "x": r["x"], "z": r["z"], "menge": r["menge"], "items": json.loads(r["items"] or "[]")}
                         for r in objs],
-            "arten": {k: v for k, v in altissimo.ARTEN.items() if any(r["art"] == k for r in objs)}}
+            "arten": {k: v for k, v in importer.KARTE_ARTEN.items() if any(r["art"] == k for r in objs)}}
 
 
 def _enc_pkhex(con, g, pid):
@@ -1008,8 +1008,10 @@ def item_list(p):
                 tms = {}
     finally:
         con.close()
-    folder = os.path.join(db.data_dir(), "itembild")
-    have = {os.path.splitext(x)[0] for x in os.listdir(folder)} if os.path.isdir(folder) else set()
+    have = set()
+    for kind in ("itembild", "itemhq"):
+        folder = os.path.join(db.data_dir(), kind)
+        have |= {os.path.splitext(x)[0] for x in os.listdir(folder)} if os.path.isdir(folder) else set()
     exact = bool(vg) and sum(1 for r in rows if vg in json.loads(r["spiele"] or "[]")) >= 50
     out = []
     for r in rows:

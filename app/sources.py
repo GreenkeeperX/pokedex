@@ -10,11 +10,21 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.11.0"
+VERSION = "0.12.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.12.0", "10.11.2026", [
+        "Karte: Übersicht mit Pokémon-Bildern (je größer, desto wahrscheinlicher) und Vergleich der Gebiete je Pokémon",
+        "Karte: Kristallbrocken, Raum-Zeit-Verzerrungen, Massenauftreten, Pokémon in Bäumen, feste Alphas, Items am Boden "
+        "und die Items der Grabstellen (PokéWiki); Ebenen „alle“ und „keine“; die Wahl eines Pokémon geht schneller",
+        "Pokéball: dritter Klick markiert das Pokémon als schillernd gefangen",
+        "Typen: Filter „Mein Team“ mit Verteidigung und Angriff je Mitglied; Attacken: Filter „Team-Attacken“, "
+        "Spalten lassen sich markieren, der Name markiert nur die Zeile",
+        "Items: große Bilder, Spalten für KP, AP, EP und Statusprobleme, Fangfaktor der Bälle, Preise farbig",
+        "Detailseite: Gebiete farbig, Fangchance von Rot über Gelb nach Grün; Einstellungen kompakter, Zeiten deutsch",
+    ]),
     ("0.11.0", "10.11.2026", [
         "Fundorte aus den Spieldaten auch für Karmesin/Purpur (mit beiden Erweiterungen), Legenden: Z-A (mit Alpha) "
         "und Mega-Dimension, dazu Filter „Gebiet“ für diese Spiele",

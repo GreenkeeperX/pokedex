@@ -1,5 +1,20 @@
 # Roadmap
 
+## 0.12.0 (Rückmeldung zu 0.11.0, Kartenübersicht; Entscheidung 10.11.2026)
+
+- PokéWiki-Karte (`pokewiki.map_pokemon`, `pokewiki.map_items`, Dateien `PwMapHisui/data/{pokemon,items}/ha_area0N.json`,
+  gleiche Spielkoordinaten wie JS-Finder): `importer._derive_wiki_karte` legt Kristallbrocken, Raum-Zeit-Verzerrungen,
+  Massenauftreten, Pokémon in Bäumen, feste Alphas und Items am Boden in `kartenobjekt`; Stellen mit vielen Items gehen
+  an die nächste Grabstelle von Altissimo. Die Datei gehört zur Karte mit den meisten genau getroffenen Spawnpunkten.
+  `importer.VERSION` 11, Item-Tabelle mit englischem Namen (`en`)
+- Große Item-Bilder von Serebii (`itemhq`, nach dem englischen Namen, höchstens 400 je Lauf); `/itembild/<id>` nimmt sie zuerst
+- Karte: Übersicht mit Pokémon-Bildern je Feld (`mapHeat`, 64 Spieleinheiten), Liste der häufigsten Pokémon im Gebiet,
+  mit gewähltem Pokémon der Vergleich aller Gebiete; Kartendaten bleiben im Browser (`MAPCACHE`)
+- Schillernd gefangen: Tabelle `schillernd` in user.db (neu, nichts gelöscht), `/api/schillernd`, Sicherung und Übertragen
+- Typen „Mein Team“, Team-Attacken, Spalten markieren (`.pinc` in `crossTable`), Items mit Wirkungsspalten und Fangfaktor,
+  Einstellungen mit Abschnittsleiste und einklappbaren Kästen (wie im VR-Navigator), Zeiten deutsch (`deTime`)
+- Offen: Lager und Schnellreise (nur MapGenie und PLA Companion haben sie; MapGenie verbietet das Auslesen)
+
 ## 0.11.0 (Fundorte weiterer Spiele, Lesezeichen; Entscheidung 10.11.2026)
 
 - `importer.pkhex_areas` liest auch Karmesin/Purpur („sv“) und Legenden: Z-A („za“, BinLinker16), dazu Mega-Dimension
