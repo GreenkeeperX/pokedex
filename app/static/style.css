@@ -379,3 +379,12 @@ details summary{cursor:pointer;font-weight:600}
 .mapbox .bar{flex-wrap:wrap}
 @media (max-width:820px){.mapwrap{grid-template-columns:1fr}.map{height:60vh}}
 .maplink{font-size:12px;margin-left:4px}
+
+/* Detailseite: Sprite-Umschalter, Mehr Details */
+.head .pic { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.picbar { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+img.spr.px { image-rendering: pixelated; object-fit: contain; }
+details.mehr { margin: 10px 0; }
+details.mehr summary { cursor: pointer; font-weight: 600; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 8px 0; }
+.kv > span:nth-child(odd) { color: var(--muted, #777); }

@@ -23,7 +23,9 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    bestandener Selbstprüfung (Mindestzahl Arten, Attacken, Spiele, 18 Typen) austauschen. Scheitert etwas,
    bleibt die alte Datenbank.
 5. **Bilder**: fehlende Sprites (96 × 96) und danach offizielle Artworks (475 × 475) je Form, je Art höchstens 1500 je Lauf. Gibt es ein Bild nicht (404), fragt der
-   Abgleich 30 Tage nicht erneut.
+   Abgleich 30 Tage nicht erneut. Danach die Extras (`abruf.EXTRAS`, Quelle „extras“): schillernde Sprites nach
+   `shiny/`, animierte (Showdown-Stil, GIF) nach `anim/`, Rufe nach `rufe/`. Die Endung richtet sich nach dem Inhalt
+   (`abruf.file_kind`): Die Rufe der PokéAPI heißen `.ogg`, sind aber MP3.
 6. **Kartenkacheln** (Legenden: Arceus): fehlende Kacheln von Serebii (`abruf.MAP_TILES`, 5 Karten × 84 Kacheln) nach
    `karten/<Karte>/<z>-<x>-<y>.png`, eine Sekunde Pause je Kachel; fehlende (404) 30 Tage nicht erneut.
 

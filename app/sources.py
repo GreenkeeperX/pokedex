@@ -10,11 +10,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.6.1", "10.11.2026", [
+        "Neuer Reiter „Items“: alle Items des Spiels mit Tasche, Beschreibung und Preis, mit Suche",
+        "Detailseite: „Mehr Details“ zum Aufklappen mit Fangchance je Ball (volle KP, 1 KP, schlafend), Geschlecht, "
+        "Wachstum, Ei-Gruppen und EV-Ausbeute, je nach Spiel",
+        "Detailseite: schillerndes und animiertes Sprite zum Umschalten, Ruf zum Anhören (lädt der Abgleich mit den Bildern)",
+        "Attacken: TM-Nummer des Spiels statt nur „TM“",
+    ]),
     ("0.6.0", "09.11.2026", [
         "Neuer Reiter „Karte“ für Legenden: Arceus: alle Spawnpunkte je Gebiet zum Ziehen und Zoomen, Alpha rot, "
         "beim Hovern wer dort erscheint, beim Klick mit Anteil, Tageszeit und Wetter",

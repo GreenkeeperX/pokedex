@@ -214,7 +214,56 @@ class Leser(unittest.TestCase):
         self.assertEqual(abfragen._enc_pkhex(con, g, 25), [])                 # Spiel mit Daten, Pokémon ohne Fundort
         self.assertIsNone(abfragen._enc_pkhex(con, {"kennung": "x"}, 399))    # Spiel ohne Daten: PokéAPI
 
-    def test_showdown(self):
+    def test_fangchance(self):
+        from app import abfragen
+        self.assertLess(abfragen.catch_chance(255, gen=9), 100.0)             # volle KP: a = 85, kein sicherer Fang
+        self.assertEqual(abfragen.catch_chance(255, hp_share=0, gen=9), 100.0)  # 1 KP: a = 255
+        self.assertEqual(abfragen.catch_chance(3, gen=4), round(100 * 1 / 255, 1))
+        low = abfragen.catch_chance(3, gen=9)
+        self.assertTrue(1 < low < 2)                                          # Rüttelproben: gut 1,5 %, nicht 0,4 %
+        self.assertGreater(abfragen.catch_chance(45, 2, gen=9), abfragen.catch_chance(45, 1, gen=9))
+        self.assertGreater(abfragen.catch_chance(45, gen=5), abfragen.catch_chance(45, gen=6))   # drei statt vier Proben
+        t = abfragen.catch_table(45, 9)
+        self.assertEqual([x["ball"] for x in t], ["Pokéball", "Superball", "Hyperball"])
+        self.assertTrue(all(x["voll"] <= x["rot"] <= x["schlaf"] for x in t))
+
+    def test_tm_und_extras(self):
+        from app import abfragen
+        self.assertEqual(abfragen.machine_label("tm12"), "TM12")
+        self.assertEqual(abfragen.machine_label("tm68", 3), "TM068")
+        self.assertEqual(abfragen.machine_label("hm03"), "VM03")
+        self.assertEqual(abfragen.machine_label("tr05"), "TP05")
+        self.assertEqual(abfragen.machine_label("potion"), "")
+        self.assertEqual(abruf.file_kind(b"\x89PNG\r\n\x1a\nxx"), ".png")
+        self.assertEqual(abruf.file_kind(b"GIF89a"), ".gif")
+        self.assertEqual(abruf.file_kind(b"\xff\xfb\x90"), ".mp3")     # die Rufe der PokéAPI heißen .ogg, sind aber MP3
+        self.assertEqual(abruf.file_kind(b"OggS\x00"), ".ogg")
+        self.assertIsNone(abruf.file_kind(b"<html>"))
+
+    def test_items(self):
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        csvs = {
+            "items": "id,identifier,category_id,cost,fling_power,fling_effect_id\n1,master-ball,34,0,,\n4,poke-ball,34,200,,\n"
+                     "2220,lapoke-ball,34,0,,\n9,old-thing,23,0,,\n",
+            "item_names": "item_id,local_language_id,name\n1,6,Meisterball\n4,6,Pokéball\n4,9,Poké Ball\n2220,6,Pokéball\n9,9,Old\n",
+            "item_categories": "id,pocket_id,identifier\n34,3,standard-balls\n23,8,unused\n",
+            "item_flavor_text": "item_id,version_group_id,language_id,flavor_text\n1,1,9,The best\n1,2,6,Der beste\n1,3,9,Best ever\n",
+            "item_prose": "item_id,local_language_id,short_effect,effect\n4,9,Catches.,Catches a lot.\n",
+            "item_game_indices": "item_id,generation_id,game_index\n1,1,1\n1,9,1\n4,1,4\n2220,8,1\n",
+            "version_groups": "id,identifier,generation_id,order\n1,a,1,1\n2,b,1,2\n3,c,2,3\n",
+        }
+        for n, t in csvs.items():
+            importer.import_csv(con, n, t)
+        con.execute("CREATE TABLE spiel (id INTEGER, kennung TEXT, name TEXT, gen INTEGER, reihenfolge INTEGER)")
+        con.executemany("INSERT INTO spiel VALUES (?, ?, ?, ?, ?)", [(1, "a", "A", 1, 1), (2, "b", "B", 1, 2), (3, "c", "C", 2, 3)])
+        self.assertEqual(importer._derive_item(con), 3)                       # ohne das ungenutzte Item
+        rows = {r[0]: r for r in con.execute("SELECT kennung, name, tasche, text, sprache, gens, spiele FROM item")}
+        self.assertEqual(rows["master-ball"][1:5], ("Meisterball", "Bälle", "Der beste", "de"))   # Deutsch vor neuerem Englisch
+        self.assertEqual(json.loads(rows["master-ball"][6]), [1, 2, 3])
+        self.assertEqual(rows["poke-ball"][3:5], ("Catches.", "en"))
+        self.assertEqual(rows["lapoke-ball"][1], "Pokéball (Hisui)")
+
         text = ("export const Moves = {\n\thyperbeam: {\n\t\tnum: 63,\n\t\taccuracy: 90,\n\t\tbasePower: 150,\n\t\tcategory: \"Special\",\n"
                 "\t\tname: \"Hyper Beam\",\n\t\tpp: 5,\n\t\tpriority: 0,\n\t\tflags: {recharge: 1, protect: 1},\n\t\ttype: \"Normal\",\n\t},\n"
                 "\tswift: {\n\t\tnum: 129,\n\t\taccuracy: true,\n\t\tbasePower: 60,\n\t\tcategory: \"Special\",\n\t\tname: \"Swift\",\n"

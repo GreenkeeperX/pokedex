@@ -16,7 +16,7 @@ from . import abfragen, abruf, db, sources
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
 TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml",
-         ".png": "image/png", ".html": "text/html; charset=utf-8"}
+         ".png": "image/png", ".html": "text/html; charset=utf-8", ".gif": "image/gif", ".mp3": "audio/mpeg", ".ogg": "audio/ogg"}
 
 
 def host_allowed(host, extra=None):
@@ -349,6 +349,14 @@ class Handler(BaseHTTPRequestHandler):
                         break
                 else:
                     self._send(404, {"error": "kein Bild"})
+            elif m := re.fullmatch(r"/(shiny|anim|rufe)/(\d{1,6})", path):
+                folder = os.path.join(db.data_dir(), m.group(1))
+                f = next((os.path.join(folder, m.group(2) + e) for e in (".png", ".gif", ".mp3", ".ogg")
+                          if os.path.isfile(os.path.join(folder, m.group(2) + e))), None)
+                if f:
+                    self._file(f, "max-age=604800")
+                else:
+                    self._send(404, {"error": "nicht geladen"})
             elif m := re.fullmatch(r"/karten/([a-z]{4,30})/(\d)-(\d{1,2})-(\d{1,2})\.png", path):
                 f = os.path.join(db.data_dir(), "karten", m.group(1), f"{m.group(2)}-{m.group(3)}-{m.group(4)}.png")
                 if m.group(1) in abruf.PLA_MAPS and os.path.isfile(f):
@@ -372,6 +380,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200 if d else 404, d or {"error": "Pokémon nicht gefunden"})
             elif path == "/api/attacken":
                 self._send(200, abfragen.move_list(q))
+            elif path == "/api/items":
+                self._send(200, abfragen.item_list(q))
             elif path == "/api/typen":
                 self._send(200, abfragen.type_chart(q))
             elif path == "/api/teams":

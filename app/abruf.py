@@ -38,7 +38,8 @@ POKEWIKI_API = "https://www.pokewiki.de/api.php"
 EXTRA_DIR = os.path.join(os.path.dirname(__file__), "..", "extra")
 
 SETTINGS = {"auto": True, "tage": 7, "sprites": True}
-NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites"}
+NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
+         "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)"}
 
 sleep = time.sleep          # Tests setzen hier eine Attrappe ein
 _running = threading.Lock()
@@ -207,11 +208,28 @@ def csv_list(src, log):
 
 # Bilder: kleine Pixel-Sprites (96 × 96) für Listen, offizielle Artworks (475 × 475) für Karten und Detailseite
 IMAGES = {"sprites": SPRITE_RAW, "artwork": SPRITE_RAW + "other/official-artwork/"}
+# Extras: schillernde und animierte Sprites (Showdown-Stil), Rufe (PokéAPI-Repos); Endung und Kennung der Datei
+EXTRAS = {"shiny": (SPRITE_RAW + "shiny/", ".png"), "anim": (SPRITE_RAW + "other/showdown/", ".gif"),
+          "rufe": ("https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/", ".ogg")}
+
+
+def file_kind(body):
+    """Endung nach Inhalt: .png, .gif, .mp3, .ogg oder None."""
+    if body[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if body[:4] == b"GIF8":
+        return ".gif"
+    if body[:4] == b"OggS":
+        return ".ogg"
+    if body[:3] == b"ID3" or body[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return ".mp3"
+    return None
 
 
 def _images(kind, log, limit=SPRITES_MAX):
-    """Fehlende Bilder nach data/<kind>/<id>.png. Gibt das Ergebnis der Quelle zurück."""
-    src = _Source("sprites", log, pause=0.2)
+    """Fehlende Bilder nach data/<kind>/<id>.png (Extras auch .gif, .mp3, .ogg). Gibt das Ergebnis der Quelle zurück."""
+    src = _Source("extras" if kind in EXTRAS else "sprites", log, pause=0.2)
+    prefix, ext = EXTRAS.get(kind, (IMAGES.get(kind), ".png"))
     folder = os.path.join(db.data_dir(), kind)
     os.makedirs(folder, exist_ok=True)
     con = db.game()
@@ -222,13 +240,14 @@ def _images(kind, log, limit=SPRITES_MAX):
     miss_file = f"{kind}_fehlen.json"
     miss = store.load_json(miss_file, {})
     cutoff = _iso(now() - timedelta(days=SPRITE_MISS_DAYS))
-    have = set(os.listdir(folder))
-    todo = [i for i in ids if f"{i}.png" not in have and (miss.get(str(i)) or "") < cutoff]
+    have = {os.path.splitext(x)[0] for x in os.listdir(folder)}
+    todo = [i for i in ids if str(i) not in have and (miss.get(str(i)) or "") < cutoff]
     got = absent = 0
-    label = "Sprites" if kind == "sprites" else "Artworks"
+    label = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernde Sprites", "anim": "Animierte Sprites",
+             "rufe": "Rufe"}[kind]
     for n, i in enumerate(todo[:limit]):
         STATE.update(step=label, done=n, total=min(len(todo), limit))
-        body = src.get(f"{IMAGES[kind]}{i}.png", raw=True, absent=(404,))
+        body = src.get(f"{prefix}{i}{ext}", raw=True, absent=(404,))
         if body is None:
             if src.stopped:
                 break
@@ -237,12 +256,13 @@ def _images(kind, log, limit=SPRITES_MAX):
             miss[str(i)] = _iso(now())
             absent += 1
             continue
-        if body[:8] != b"\x89PNG\r\n\x1a\n":
+        real = file_kind(body)
+        if not real:
             continue
         tmp = os.path.join(folder, f".{i}.tmp")
         with open(tmp, "wb") as f:
             f.write(body)
-        os.replace(tmp, os.path.join(folder, f"{i}.png"))
+        os.replace(tmp, os.path.join(folder, f"{i}{real}"))
         got += 1
     store.save_json(miss_file, miss)
     left = max(0, len(todo) - limit)
@@ -351,6 +371,17 @@ def _run(by_hand, force):
             st["sources"]["karten"] = res
             if res["blocked"]:
                 st["rest"]["karten"] = _iso(now() + timedelta(hours=REST_H))
+        if db.has_data() and settings["sprites"] and not _resting(st, "extras", at):
+            total = None
+            for kind in EXTRAS:
+                STATE["step"] = kind
+                res = _images(kind, log)
+                total = res if total is None else dict(res, **{k: total[k] + res[k] for k in ("requests", "errors", "neu", "fehlen", "offen")})
+                if res["blocked"]:
+                    break
+            st["sources"]["extras"] = total
+            if total["blocked"]:
+                st["rest"]["extras"] = _iso(now() + timedelta(hours=REST_H))
         st["ok"] = ok
     except Exception as e:          # ein Fehler im Code soll den Dienst nicht beenden
         log(f"Abgebrochen: {type(e).__name__}: {e}")

@@ -5,6 +5,7 @@ Abgleich eine neue pokeapi.db gebaut hat. Lernlisten, Fundorte und Entwicklungen
 """
 import json
 import os
+import re
 import threading
 
 from . import attacken, db, importer, team, typen
@@ -91,6 +92,15 @@ class Data:
             pass
         self.methods = _names(con, "pokemon_move_method_prose", "pokemon_move_method_id")
         self.method_key = dict(con.execute("SELECT id, identifier FROM pokemon_move_methods"))
+        # TM-Nummern je Spiel und Attacke: tm012 → TM012, hm03 → VM03, tr05 → TP05
+        self.machines = {}
+        try:
+            rows = con.execute("SELECT m.version_group_id, m.move_id, i.identifier FROM machines m JOIN items i ON i.id = m.item_id").fetchall()
+            wide = {vg for vg, _, ident in rows if re.fullmatch(r"tm\d{3,}", ident or "")}
+            for vg, mid, ident in rows:
+                self.machines[(vg, mid)] = machine_label(ident, 3 if vg in wide else 2)
+        except Exception:
+            pass
         self.charts = {}
         self.max_gen = max((g["gen"] for g in self.games), default=9)
 
@@ -342,8 +352,16 @@ def learnset(con, D, f, g):
     return list(best.values()), used
 
 
-def how(D, meth, lv, mastery):
+def machine_label(ident, width=2):
+    """tm12 → TM12, hm03 → VM03, tr05 → TP05; width: Stellen (Karmesin/Purpur zählt dreistellig)."""
+    m = re.match(r"(tm|hm|tr)(\d+)$", ident or "")
+    return {"tm": "TM", "hm": "VM", "tr": "TP"}[m.group(1)] + m.group(2).zfill(width) if m else ""
+
+
+def how(D, meth, lv, mastery, mid=None, vg=None):
     key = D.method_key.get(meth, "")
+    if key == "machine" and (vg, mid) in D.machines:
+        return D.machines[(vg, mid)]
     if key == "level-up":
         txt = f"Level {lv}" if lv and lv > 1 else "Level 1" if lv == 1 else "Start"
         return txt + (f", Beherrschung ab {mastery}" if mastery else "")
@@ -361,7 +379,7 @@ def ranked_moves(con, D, f, g, gen, level=None):
         if not m:
             continue
         entry = by_move.setdefault(mid, {"m": m, "wege": []})
-        entry["wege"].append((D.method_key.get(meth, ""), lv, mastery, how(D, meth, lv, mastery)))
+        entry["wege"].append((D.method_key.get(meth, ""), lv, mastery, how(D, meth, lv, mastery, mid, used["id"] if used else None)))
     out, status = [], []
     # Wie im Spiel: ein Pokémon kennt die letzten vier Level-Attacken bis zu seinem Level; ohne Level die ersten vier
     lvl_moves = sorted(((lv or 0, mid) for mid, meth, lv, _ in ls if D.method_key.get(meth) == "level-up" and mid in D.moves),
@@ -716,6 +734,89 @@ def _enc(con, g, pid):
     return out
 
 
+BALLS = (("Pokéball", 1), ("Superball", 1.5), ("Hyperball", 2))
+GROWTH_DE = {"slow": "langsam", "medium": "mittel", "fast": "schnell", "medium-slow": "mittel-langsam",
+             "slow-then-very-fast": "erratisch", "fast-then-very-slow": "fluktuierend"}
+STAT_KEYS = ("kp", "ang", "vert", "spang", "spvert", "init")
+
+
+def catch_chance(rate, ball=1.0, hp_share=1.0, status=1.0, gen=9):
+    """Fangchance in % (ohne kritischen Fang und Level-Boni): a = (3 − 2·KP-Anteil)/3 · Fangrate · Ball · Status.
+    Bis Generation 4 gelingt der Fang mit a/255; ab Generation 5 muss jede Rüttelprobe mit (65536 / (255/a)^0.1875)
+    / 65536 gelingen, in Generation 5 dreimal, ab Generation 6 viermal."""
+    a = (3 - 2 * hp_share) / 3 * rate * ball * status
+    if a >= 255:
+        return 100.0
+    if a <= 0:
+        return 0.0
+    if gen <= 4:
+        return round(100 * a / 255, 1)
+    b = int(65536 / (255 / a) ** 0.1875)
+    return round(100 * (b / 65536) ** (3 if gen == 5 else 4), 1)
+
+
+def catch_table(rate, gen):
+    """Fangchance je Ball bei vollen KP, bei 1 KP und bei 1 KP mit Schlaf (ab Generation 5 ×2,5, sonst ×2)."""
+    sleep = 2.5 if gen >= 5 else 2
+    return [{"ball": n, "voll": catch_chance(rate, f, gen=gen), "rot": catch_chance(rate, f, 0, gen=gen),
+             "schlaf": catch_chance(rate, f, 0, sleep, gen=gen)} for n, f in BALLS]
+
+
+def _more(con, f, g, gen):
+    """Mehr Details: Fangrate mit Fangchance, Geschlecht, Wachstum, Ei-Gruppen, Ei-Zyklen, EV-Ausbeute. Was es im Spiel
+    nicht gibt, bleibt weg (Legenden: Arceus: keine Eier, keine EVs)."""
+    out = {}
+    try:
+        sp = con.execute("SELECT capture_rate, gender_rate, hatch_counter, base_happiness, growth_rate_id FROM pokemon_species "
+                         "WHERE id = ?", (f["art"],)).fetchone()
+    except Exception:
+        return out
+    if not sp:
+        return out
+    kennung = g["kennung"] if g else ""
+    if sp["capture_rate"] is not None:
+        out["fangrate"] = sp["capture_rate"]
+        out["fangen"] = catch_table(sp["capture_rate"], gen)
+        out["fang_grob"] = gen <= 2 or kennung.startswith("legends-")
+    if sp["gender_rate"] is not None and gen >= 2:
+        gr = sp["gender_rate"]
+        out["geschlecht"] = "geschlechtslos" if gr < 0 else f"{100 - gr * 12.5:g} % männlich, {gr * 12.5:g} % weiblich"
+    try:
+        gk = con.execute("SELECT identifier FROM growth_rates WHERE id = ?", (sp["growth_rate_id"],)).fetchone()
+        if gk:
+            out["wachstum"] = GROWTH_DE.get(gk[0], gk[0])
+    except Exception:
+        pass
+    if kennung != "legends-arceus":
+        try:
+            eg = [r[0] for r in con.execute(
+                "SELECT COALESCE(p.name, pe.egg_group_id) FROM pokemon_egg_groups pe LEFT JOIN egg_group_prose p "
+                "ON p.egg_group_id = pe.egg_group_id AND p.local_language_id = 6 WHERE pe.species_id = ?", (f["art"],))]
+        except Exception:
+            eg = []
+        if eg and gen >= 2:
+            out["eigruppen"] = eg
+            if sp["hatch_counter"] is not None:
+                out["eizyklen"] = sp["hatch_counter"]
+        if gen >= 3:
+            try:
+                ev = [(r[0], r[1]) for r in con.execute("SELECT stat_id, effort FROM pokemon_stats WHERE pokemon_id = ? AND effort > 0",
+                                                         (f["id"],))]
+                out["ev"] = [{"wert": STAT_KEYS[s - 1], "punkte": e} for s, e in ev if 1 <= s <= 6]
+            except Exception:
+                pass
+    return out
+
+
+def _extras(fid):
+    """Welche Extras (schillernd, animiert, Ruf) für eine Form schon geladen sind."""
+    out = {}
+    for kind in ("shiny", "anim", "rufe"):
+        folder = os.path.join(db.data_dir(), kind)
+        out[kind] = any(os.path.isfile(os.path.join(folder, f"{fid}{e}")) for e in (".png", ".gif", ".mp3", ".ogg"))
+    return out
+
+
 def detail(fid, p):
     D = data()
     if not D or fid not in D.forms:
@@ -746,7 +847,7 @@ def detail(fid, p):
                     text=" ".join(str(flavor[0]).split()) if flavor else "", faehigkeiten=abil,
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
-                    im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True,
+                    im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
                     wiki=WIKI + _wiki_title(D, f))
     finally:
         con.close()
@@ -766,6 +867,38 @@ def type_chart(p):
     g, gen, ch = game_of(D, p.get("spiel"))
     return {"gen": gen, "typen": [{"id": t, "name": D.tname(t)} for t in ch],
             "tabelle": {str(a): {str(d): f for d, f in ch[a].items()} for a in ch}}
+
+
+def item_list(p):
+    """Items im Spiel, sortiert nach Tasche und Name. Hat die PokéAPI Beschreibungen für das Spiel, sind das genau seine
+    Items; sonst die Items der Generation laut Spielindex, mit Hinweis (zu viele, aber keins fehlt)."""
+    D = data()
+    if not D:
+        return {}
+    g, gen, _ = game_of(D, p.get("spiel"))
+    con = db.game()
+    try:
+        try:
+            rows = con.execute("SELECT id, kennung, name, tasche, text, sprache, preis, gens, spiele FROM item").fetchall()
+        except Exception:
+            rows = []
+    finally:
+        con.close()
+    vg = g["id"] if g else None
+    exact = bool(vg) and sum(1 for r in rows if vg in json.loads(r["spiele"] or "[]")) >= 50
+    out = []
+    for r in rows:
+        if exact and vg not in json.loads(r["spiele"] or "[]"):
+            continue
+        if g and not exact and gen not in json.loads(r["gens"] or "[]"):
+            continue
+        out.append({"id": r["id"], "name": r["name"], "tasche": r["tasche"], "text": r["text"], "englisch": r["sprache"] == "en",
+                    "preis": r["preis"]})
+    order = list(importer.TASCHEN.values())
+    out.sort(key=lambda x: (order.index(x["tasche"]) if x["tasche"] in order else 99, x["name"].lower()))
+    note = "" if exact or not g else (f"Die PokéAPI hat für dieses Spiel keine eigene Item-Liste; gezeigt sind alle Items "
+                                      f"der Generation {gen}, darunter auch welche, die es hier nicht gibt.")
+    return {"gen": gen, "items": out, "taschen": [t for t in order if any(x["tasche"] == t for x in out)], "hinweis": note}
 
 
 def slot_details(details, ids):
