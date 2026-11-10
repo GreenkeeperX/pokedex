@@ -40,6 +40,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Karte (`mapView`, `#karte/<Karte>/<Form>`): Welt 2048 px = Spielkoordinate × 2; Kacheln `karten/<Karte>/<z>-<x>-<y>.png`
   (Zoom 0–2, Stufe nach Maßstab), Punkte behalten ihre Größe (`--inv`). Ziehen mit Pointer-Events, Mausrad und +/−
   zoomen; mit Form werden ihre Punkte gelb hervorgehoben und die Ansicht passt sich ihnen an. Daten: `/api/karte/<Karte>`.
+  Symbole (`.mobj`, Zeichen in `MOBJ`) liegen wie die Spawnpunkte in Spielkoordinaten; jede Art ist eine Ebene zum
+  Ein- und Ausblenden (gemerkt in `mapHide`). Jubeldorf (`jubilifevillage`) hat statt Kacheln ein Bild (`bild.png`).
 - Fangchance (`catchHtml`): eigene Karte unter der Entwicklung, offen, solange das Pokémon nicht als gefangen markiert
   ist; ohne kritischen Fang und Boni, in Generation 1 und 2 und den Legenden-Spielen nur als Richtung (`fang_grob`).
 - Mehr Details (`moreHtml`, `detail.mehr`): eingeklappt; keine Eier und EVs in Legenden: Arceus.

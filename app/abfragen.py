@@ -8,7 +8,7 @@ import os
 import re
 import threading
 
-from . import attacken, db, importer, showdown, team, typen
+from . import altissimo, attacken, db, importer, showdown, team, typen
 
 LA = "legends-arceus"          # Legenden: Arceus kennt keine Fähigkeiten und eigene Attackenwerte
 NO_ABILITIES = {LA}
@@ -695,7 +695,8 @@ def spawn_summary(con, spiel, pid):
 
 
 def map_data(karte, p):
-    """Karte eines Gebiets: Spawnpunkte (x, z in Spielkoordinaten) mit den Pokémon dort, Tageszeit und Anteil.
+    """Karte eines Gebiets: Spawnpunkte (x, z in Spielkoordinaten) mit den Pokémon dort, Tageszeit und Anteil, dazu
+    Kartensymbole und Sammelobjekte (objekte). Jubeldorf hat nur Objekte und ein eigenes Kartenbild (bild).
     p: spiel (bisher nur legends-arceus)."""
     D = data()
     if not D:
@@ -710,9 +711,16 @@ def map_data(karte, p):
                                                   "ORDER BY MIN(rowid)", (spiel,))]
         except Exception:
             return None
+        try:
+            objs = con.execute("SELECT art, nr, x, z, menge, items, gebiet FROM kartenobjekt WHERE spiel = ? AND karte = ?",
+                               (spiel, karte)).fetchall()
+            if con.execute("SELECT 1 FROM kartenobjekt WHERE spiel = ? AND karte = ? LIMIT 1", (spiel, altissimo.VILLAGE)).fetchone():
+                maps.insert(0, {"karte": altissimo.VILLAGE, "gebiet": altissimo.VILLAGE_NAME, "n": 0})
+        except Exception:
+            objs = []
     finally:
         con.close()
-    if not pts:
+    if not pts and not objs:
         return None
     mons = {}
     for r in rows:
@@ -729,10 +737,14 @@ def map_data(karte, p):
     for v in mons.values():
         v.sort(key=lambda m: (m["alpha"], -m["max"]))
     folder = os.path.join(db.data_dir(), "karten", karte)
-    return {"karte": karte, "gebiet": pts[0]["gebiet"], "karten": maps,
-            "kacheln": len(os.listdir(folder)) if os.path.isdir(folder) else 0,
+    files = os.listdir(folder) if os.path.isdir(folder) else []
+    return {"karte": karte, "gebiet": (pts or objs)[0]["gebiet"], "karten": maps,
+            "kacheln": len([f for f in files if f != "bild.png"]), "bild": "bild.png" in files,
             "punkte": [{"nr": r["nr"], "x": r["x"], "z": r["z"], "alpha": bool(r["alpha"]), "mons": mons.get(r["name"], [])}
-                       for r in pts]}
+                       for r in pts],
+            "objekte": [{"art": r["art"], "nr": r["nr"], "x": r["x"], "z": r["z"], "menge": r["menge"], "items": json.loads(r["items"] or "[]")}
+                        for r in objs],
+            "arten": {k: v for k, v in altissimo.ARTEN.items() if any(r["art"] == k for r in objs)}}
 
 
 def _enc_pkhex(con, g, pid):
@@ -974,6 +986,18 @@ def item_list(p):
             rows = con.execute("SELECT * FROM item").fetchall()
         except Exception:
             rows = []
+        recs, mats = {}, {}
+        if g:
+            try:
+                for r in con.execute("SELECT item_id, item, zutaten, ort, hinweis FROM rezept WHERE spiel = ?", (g["kennung"],)):
+                    if r["item_id"]:
+                        recs.setdefault(r["item_id"], {"zutaten": [{"n": n, "name": z, "id": i} for n, z, i in json.loads(r["zutaten"])],
+                                                       "ort": r["ort"], "hinweis": r["hinweis"]})
+                for r in con.execute("SELECT item_id, fundorte FROM zutat WHERE spiel = ?", (g["kennung"],)):
+                    if r["item_id"]:
+                        mats[r["item_id"]] = json.loads(r["fundorte"] or "[]")
+            except Exception:
+                recs, mats = {}, {}
         tms = {}
         if vg:
             try:
@@ -1002,12 +1026,17 @@ def item_list(p):
              "bild": str(r["id"]) in have}
         if r["id"] in tms:
             e["attacke"] = tms[r["id"]]
+        if r["id"] in recs:
+            e["rezept"] = recs[r["id"]]
+        if r["id"] in mats:
+            e["fundorte"] = mats[r["id"]]
         out.append(e)
     order = list(importer.TASCHEN.values())
     out.sort(key=lambda x: (order.index(x["tasche"]) if x["tasche"] in order else 99, x["name"].lower()))
     note = "" if exact or not g else (f"Die PokéAPI hat für dieses Spiel keine eigene Item-Liste; gezeigt sind alle Items "
                                       f"der Generation {gen}, darunter auch welche, die es hier nicht gibt.")
-    return {"gen": gen, "items": out, "taschen": [t for t in order if any(x["tasche"] == t for x in out)], "hinweis": note}
+    return {"gen": gen, "items": out, "taschen": [t for t in order if any(x["tasche"] == t for x in out)], "hinweis": note,
+            "rezepte": sum(1 for x in out if "rezept" in x)}
 
 
 def slot_details(details, ids):

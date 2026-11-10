@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.10.0 (Kartensymbole, Jubeldorf, Items weiterer Spiele, Rezepte; Entscheidung 10.11.2026)
+
+- `app/altissimo.py` liest Altissimo (GPL-3.0): Bäume, Erzbrocken, Laub- und Heuhaufen, Kisten und Truhen mit Items
+  und Anteil, Irrlichter, Icognito, alte Verse und Grabstellen, Rezepte mit Zutaten und Fundorten der Zutaten;
+  `FIT` je Karte aus den gemeinsamen Punkten mit JS-Finder bestimmt. Tabellen `kartenobjekt`, `rezept`, `zutat`
+- Jubeldorf als eigene Karte mit dem Kartenbild von Altissimo (nur im Datenordner); Symbole je Art ein- und ausblendbar
+- Items: Itemlisten von PKHeX (`importer.ITEM_LISTS`, Itemnamen aus den Spieltexten) für Legenden: Arceus,
+  Karmesin/Purpur, Legenden: Z-A, SDLP und die Erweiterungen von Schwert/Schild; unbekannte Items mit eigener Nummer
+  ab `importer.PKHEX_ITEM`. `importer.VERSION` 9
+
 ## 0.9.1 (Rückmeldung zu 0.9.0, Entscheidung 10.11.2026)
 
 - Liste: Kartenbreite wieder 300 px (vier Spalten), Symbole mittig, Pokéball aktiv nur umgefärbt; ⇄ auf der unteren
@@ -90,20 +100,17 @@
 
 ## Als Nächstes
 
-- Karte wie im PokéWiki: Symbole für gewöhnliche Fundorte, Alpha, Aprikoko- und Beerenbäume, Kisten, Kristallsteine,
-  Massenauftreten, Raum-Zeit-Verzerrungen, Items mit Bild und Irrlichter. Quelle klären: die PokéWiki-Karte lädt ihre
-  Daten per JavaScript; der Abruf kommt mit dem PokéWiki-Leser. Karten für weitere Spiele
-- Items: Wirkung auch für Beeren und getragene Items; Fundorte der Items; Zutaten zum Herstellen (Legenden: Arceus,
-  aus dem PokéWiki)
+- Karte wie im PokéWiki, noch offen: Kristallsteine, Massenauftreten, Raum-Zeit-Verzerrungen, Items am Boden. Karten
+  für weitere Spiele
+- Items: Wirkung auch für Beeren und getragene Items; Fundorte der Items
 - Fähigkeiten, die im Kampf zählen (etwa Typ-Verstärker, Immunitäten, Kontakt-Fähigkeiten), knapp in der Teambewertung
 - Smogon-Sets (Wettkampf, mit Items und Wesen), sobald vom Server aus erreichbar
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
-- PokéWiki-Leser erweitern: Edelhorden, Herstell-Zutaten, Kartensymbole (Bäume, Kisten, Kristallsteine, Irrlichter),
-  getragene Items weiterer Spiele (Kürzel der Vorlage `sk` prüfen)
-- Items: Bilder, genaue Listen für Karmesin/Purpur und die Legenden-Spiele (PKHeX), Fundorte der Items
+- PokéWiki-Leser erweitern: Edelhorden, getragene Items weiterer Spiele (Kürzel der Vorlage `sk` prüfen)
 - Karte für Karmesin/Purpur und Legenden: Z-A, danach Regionskarten der älteren Spiele
-- Karte Legenden: Arceus: Jubeldorf, Schnellreise-Punkte und weitere Symbole neben Pokémon
-- Items: Bilder in besserer Auflösung (PokéAPI hat nur 30 px), Items weiterer Spiele
+- Karte Legenden: Arceus: Lager und Schnellreise-Punkte (Quelle fehlt noch: weder Altissimo noch JS-Finder haben sie)
+- Items: Bilder in besserer Auflösung (PokéAPI hat nur 30 px, PKHeX ähnlich klein), Beschreibungen für Items, die es
+  nur in PKHeX gibt
 - Abgleich: Quellen auf verschiedenen Servern (PokéWiki, GitHub) parallel holen
 - Karten: Links auf die Gebietsseiten im PokéWiki statt eigener Bilder (Bildrechte)
 

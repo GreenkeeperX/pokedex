@@ -10,11 +10,19 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.9.1"
+VERSION = "0.10.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.10.0", "10.11.2026", [
+        "Karte: Jubeldorf mit eigenem Kartenbild, Irrlichtern und Icognito",
+        "Karte: Aprikoko- und Beerenbäume, Erzbrocken, Laub- und Heuhaufen, Kisten, Irrlichter, Icognito, alte Verse und "
+        "Grabstellen als Symbole, jede Art einzeln ein- und ausblendbar, mit den Items und ihrem Anteil",
+        "Items: Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Strahlender Diamant/Leuchtende Perle und die Erweiterungen "
+        "von Schwert/Schild mit eigener Item-Liste (deutsche Namen aus den Spieltexten)",
+        "Items in Legenden: Arceus: „Herstellen“ zeigt die Rezepte mit Zutaten, Zutaten zeigen, wo sie zu finden sind",
+    ]),
     ("0.9.1", "10.11.2026", [
         "Pokémon-Liste: wieder vier Spalten, Symbole mittig, Pokéball beim Aktivieren gleich groß",
         "Sammlung übertragen: ⇄ auf der unteren Kartenlinie, Ziel wie die Spielauswahl, neu „Freilassen“ zum Aufräumen",

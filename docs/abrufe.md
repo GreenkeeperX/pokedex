@@ -19,11 +19,17 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Dazu die festen Begegnungen aus der Quelldatei (`Encounters8a.cs`, `importer.pkhex_static`).
    **Spawnpunkte** (Legenden: Arceus): Koordinaten je Karte von JS-Finder, die Tabellen je Punkt nach Tageszeit und
    Wetter von PLA-Live-Map (`abruf.PLA_MAPS`); `importer._derive_spawn` rechnet Gewichte in Anteile je Bedingung um.
+   **Altissimo** (Legenden: Arceus, `app/altissimo.py`): je Gebiet Bäume, Erzbrocken, Haufen und Kisten
+   (`Landmarks/json/<Gebiet>-spawns.json`) und Sammelobjekte (`Collectibles/json/<Gebiet>.json`, auch Jubeldorf), dazu
+   `recipes.html` und einmal das Kartenbild von Jubeldorf (`karten/jubilifevillage/bild.png` im Datenordner). Die Lage
+   steht in Prozent des Kartenbilds; `altissimo.FIT` rechnet sie in Spielkoordinaten um (Geraden aus den Bäumen und
+   Erzbrocken, die auch JS-Finder hat). **PKHeX** liefert außerdem die Itemnamen (deutsch, englisch) und die Itemlisten
+   je Spiel (`ItemStorage<Kürzel>.cs`, `importer.ITEM_LISTS`) für Spiele ohne Liste in der PokéAPI.
    **PokéWiki**: je Spiel in `abruf.WIKI_GAMES` die Seiten der Attacken, die dort jemand lernt (nur die Infobox,
    `rvsection=0`), und der Arten im Spiel, gebündelt zu 50 Seiten je Anfrage mit 2 Sekunden Pause. `app/pokewiki.py`
    liest Attackenwerte (Legenden: Arceus mit Kraft- und Tempostil) und getragene Items; das Ergebnis liegt in
    `pokewiki.json` im Datenordner und gilt weiter, wenn das Wiki ruht. Die Namen stammen aus der bisherigen Datenbank.
-4. Hat sich nichts geändert (Commit, Prüfsumme von Showdown, PKHeX, PokéWiki und `extra/`, `importer.VERSION`), bleibt die
+4. Hat sich nichts geändert (Commit, Prüfsumme von Showdown, PKHeX, PokéWiki, Altissimo und `extra/`, `importer.VERSION`), bleibt die
    Datenbank. Sonst alle CSV-Dateien holen (raw.githubusercontent.com; bei unverändertem Commit aus
    `pokeapi-csv.json.gz` im Datenordner), in `pokeapi.db.neu` bauen und nach
    bestandener Selbstprüfung (Mindestzahl Arten, Attacken, Spiele, 18 Typen) austauschen. Scheitert etwas,

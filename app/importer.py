@@ -8,6 +8,8 @@ Aufbereitete Tabellen (deutsche Namen, Sprache 6, sonst Englisch 9):
 - pruefung: Abweichungen zwischen PokéAPI und Showdown für „Zu erledigen“
 - fundort: Begegnungen aus den Spieldaten (PKHeX) je Spiel, Form, Gebiet und Art, mit Level und Alpha
 - spawnpunkt, spawn: Spawnpunkte mit Koordinaten und wer dort bei welcher Tageszeit und welchem Wetter erscheint
+- item: Items der PokéAPI, dazu die Itemlisten von PKHeX für Spiele ohne eigene Liste (Namen aus den Spieltexten)
+- kartenobjekt, rezept, zutat: Kartensymbole, Sammelobjekte und Rezepte in Legenden: Arceus (Altissimo)
 """
 import csv
 import io
@@ -16,9 +18,9 @@ import os
 import re
 import sqlite3
 
-from . import showdown
+from . import altissimo, showdown
 
-VERSION = "8"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "9"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -474,6 +476,8 @@ def _derive_fundort(con, pkhex):
     by_form, by_art = _form_maps(con)
     n = 0
     for spiel, src in (pkhex or {}).items():
+        if spiel.startswith("_"):           # _items: Itemlisten, keine Begegnungen
+            continue
         names = pkhex_names(src.get("orte"))
         name = lambda i: names[i] if 0 <= i < len(names) and names[i].strip() else f"Ort {i}"
         rows = []
@@ -568,9 +572,110 @@ def item_name(ident, name):
     return name
 
 
-def _derive_item(con):
+# Itemlisten von PKHeX (PKHeX.Core/Items/ItemStorage<Datei>.cs) für Spiele, zu denen die PokéAPI keine Liste hat
+ITEM_LISTS = {"8LA": ("legends-arceus",), "8BDSP": ("brilliant-diamond-shining-pearl",),
+              "8SWSH": ("the-isle-of-armor", "the-crown-tundra"),
+              "9SV": ("scarlet-violet", "the-teal-mask", "the-indigo-disk"), "9ZA": ("legends-za", "mega-dimension")}
+SPAN_POCKET = {"Medicine": "Medizin", "Balls": "Bälle", "Battle": "Kampf-Items", "Berry": "Beeren", "Machine": "Maschinen",
+               "MachineRecord": "Maschinen", "TM": "Maschinen", "Key": "Basis-Items", "Event": "Basis-Items"}
+PKHEX_ITEM = 100000         # eigene Nummern für Items, die die PokéAPI nicht kennt: 100000 + Nummer im Spiel
+_SPAN = re.compile(r"public static ReadOnlySpan<ushort> (\w+) =>[^\[\n]*(?://[^\n]*)?\s*\[([^\]]*)\]")
+
+
+def pkhex_spans(text):
+    """{Name: [Itemnummern]} aus einer ItemStorage-Datei; nur ausgeschriebene Listen, ohne Unveröffentlichtes."""
+    out = {}
+    for m in _SPAN.finditer(text or ""):
+        name = m.group(1)
+        if name.startswith(("Unreleased", "Disallow")):
+            continue
+        out[name] = [int(x) for x in re.findall(r"\b\d+\b", re.sub(r"//[^\n]*", "", m.group(2)))]
+    return out
+
+
+def item_texts(text):
+    """Zeilen einer Textdatei von PKHeX (eine Zeile je Itemnummer)."""
+    return [x.strip() for x in (text or "").lstrip("\ufeff").split("\n")]
+
+
+def en_key(name):
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower().replace("é", "e"))
+
+
+def item_en_de(pkx):
+    """{englischer Name (vereinfacht): deutscher Name} aus den Spieltexten (PKHeX)."""
+    de, en = item_texts((pkx or {}).get("de")), item_texts((pkx or {}).get("en"))
+    out = {}
+    for e, d in zip(en, de):
+        if e and d and en_key(e) not in out:
+            out[en_key(e)] = d
+    return out
+
+
+def _base(name):
+    return re.sub(r"\s*\([^)]*\)$", "", name or "")
+
+
+def _pkhex_items(con, pkx, rows):
+    """Itemlisten aus PKHeX zu den Zeilen der PokéAPI legen: bekannte Items bekommen das Spiel dazu, unbekannte
+    eine eigene Zeile mit deutschem Namen. Zuordnung über den Spielindex der PokéAPI (gleiche Generation), sonst über den
+    englischen Namen. Gleichnamige Einträge desselben Spiels (etwa Rezept-Fassungen) bleiben weg."""
+    de, en = item_texts(pkx.get("de")), item_texts(pkx.get("en"))
+    if not de:
+        return 0
+    vg_of = {k: (i, g) for i, k, g in con.execute("SELECT id, kennung, gen FROM spiel")}
+    by_index = {}
+    if _has(con, "item_game_indices"):
+        for iid, g, idx in con.execute("SELECT item_id, generation_id, game_index FROM item_game_indices"):
+            by_index.setdefault(g, {})[idx] = iid
+    en_names = {}
+    if _has(con, "item_names"):
+        en_names = {en_key(n): i for i, n in con.execute("SELECT item_id, name FROM item_names WHERE local_language_id = ?", (EN,))}
+    by_id = {r[0]: r for r in rows}
+    extra = {}                  # id → [Spiele], [Generationen]
+    new = {}
+    for key, games in ITEM_LISTS.items():
+        spans = pkhex_spans(pkx.get(key))
+        gs = [vg_of[k] for k in games if k in vg_of]
+        if not spans or not gs:
+            continue
+        gen = int(key[0])
+        vgs = [i for i, _ in gs]
+        listed = set()
+        for span, ids in spans.items():
+            for idx in ids:
+                name = de[idx] if idx < len(de) else ""
+                if not name or name.startswith("???") or idx == 0:
+                    continue
+                iid = by_index.get(gen, {}).get(idx)
+                if iid is None and idx < len(en):
+                    iid = en_names.get(en_key(en[idx]))
+                if iid in by_id:
+                    e = extra.setdefault(iid, [set(), set()])
+                    e[0].update(vgs)
+                    e[1].add(gen)
+                    listed.add(_base(by_id[iid][2]))
+                    continue
+                if _base(name) in listed:
+                    continue
+                listed.add(_base(name))
+                e = new.setdefault(idx, {"name": name, "tasche": SPAN_POCKET.get(span, "Items"), "vgs": set(), "gens": set()})
+                e["vgs"].update(vgs)
+                e["gens"].add(gen)
+    for iid, (vgs, gens) in extra.items():
+        r = by_id[iid]
+        con.execute("UPDATE item SET spiele = ?, gens = ? WHERE id = ?",
+                    (json.dumps(sorted(set(json.loads(r[8])) | vgs)), json.dumps(sorted(set(json.loads(r[7])) | gens)), iid))
+    con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [(PKHEX_ITEM + idx, f"pkhex-{idx}", e["name"], e["tasche"], "", "de", 0, json.dumps(sorted(e["gens"])),
+                      json.dumps(sorted(e["vgs"])), "", "", None, 0) for idx, e in sorted(new.items())])
+    return len(new)
+
+
+def _derive_item(con, pkx=None):
     """Items: deutscher Name, Tasche, Beschreibung (deutsch aus dem neuesten Spiel mit deutschem Text, sonst englisch),
     die Spiele mit Beschreibung (genau: dort gibt es das Item) und die Generationen laut Spielindex der PokéAPI (grob).
+    pkx: Itemlisten und -namen von PKHeX ({"de", "en", Dateikürzel aus ITEM_LISTS: Text}) für Spiele ohne eigene Liste.
     Ohne items.csv bleibt die Tabelle leer."""
     con.execute("CREATE TABLE item (id INTEGER PRIMARY KEY, kennung TEXT, name TEXT, tasche TEXT, text TEXT, sprache TEXT, "
                 "preis INTEGER, gens TEXT, spiele TEXT, art TEXT, wirkung TEXT, wert REAL, unfertig INTEGER)")
@@ -609,7 +714,61 @@ def _derive_item(con):
                      json.dumps(sorted(gens.get(iid, ()))), json.dumps(sorted(games.get(iid, ()))), ITEM_ART.get(cat, ""),
                      eff[0], eff[1], int(ODD_TEXT in (t[1] if t else ""))))
     con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
-    return len(rows)
+    return len(rows) + (_pkhex_items(con, pkx, rows) if pkx else 0)
+
+
+def _derive_karte(con, alt, en_de):
+    """Kartensymbole und Sammelobjekte (Altissimo): Tabelle kartenobjekt mit Spielkoordinaten wie spawnpunkt und den
+    Items samt Anteil auf Deutsch (unbekannte Namen bleiben englisch)."""
+    con.execute("CREATE TABLE kartenobjekt (spiel TEXT, karte TEXT, gebiet TEXT, art TEXT, nr INTEGER, x REAL, z REAL, "
+                "menge TEXT, items TEXT)")
+    n = 0
+    for spiel, src in (alt or {}).items():
+        for kind, parse in (("symbole", altissimo.landmarks), ("sammeln", altissimo.collectibles)):
+            for karte, text in (src.get(kind) or {}).items():
+                fit = altissimo.VILLAGE_FIT if karte == altissimo.VILLAGE else altissimo.FIT.get(karte)
+                if not fit:
+                    continue
+                try:
+                    objs = parse(text, fit)
+                except ValueError:
+                    continue
+                gebiet = altissimo.GEBIETE.get(karte, karte)
+                con.executemany("INSERT INTO kartenobjekt VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                [(spiel, karte, gebiet, o["art"], o.get("nr"), o["x"], o["z"], o["menge"],
+                                  json.dumps([[en_de.get(en_key(i), i), p] for i, p in o["items"]], ensure_ascii=False)) for o in objs])
+                n += len(objs)
+    return n
+
+
+def _derive_rezept(con, alt, en_de):
+    """Rezepte zum Herstellen (Altissimo): Tabelle rezept mit Zutaten [Anzahl, Name, Item] und Tabelle zutat mit den
+    Fundorten der Zutaten (englisch). Items werden über den deutschen Namen unter den Items des Spiels gesucht."""
+    con.execute("CREATE TABLE rezept (spiel TEXT, item_id INTEGER, item TEXT, zutaten TEXT, ort TEXT, hinweis TEXT)")
+    con.execute("CREATE TABLE zutat (spiel TEXT, item_id INTEGER, item TEXT, fundorte TEXT)")
+    n = 0
+    for spiel, src in (alt or {}).items():
+        try:
+            recs, mats = altissimo.recipes(src.get("rezepte") or "")
+        except Exception:
+            continue
+        g = con.execute("SELECT id FROM spiel WHERE kennung = ?", (spiel,)).fetchone()
+        ids = {}
+        for iid, name, spiele in con.execute("SELECT id, name, spiele FROM item"):
+            if g and g[0] in json.loads(spiele or "[]"):
+                ids.setdefault(_base(name), iid)
+        de = lambda en: en_de.get(en_key(en), en)
+        find = lambda en: ids.get(_base(de(en)))
+        for r in recs:
+            con.execute("INSERT INTO rezept VALUES (?, ?, ?, ?, ?, ?)",
+                        (spiel, find(r["item"]), de(r["item"]),
+                         json.dumps([[k, de(z), find(z)] for k, z in r["zutaten"]], ensure_ascii=False),
+                         altissimo.place(r["ort"].split(" - ")[0]) + (" – " + r["ort"].split(" - ", 1)[1] if " - " in r["ort"] else ""),
+                         r["hinweis"]))
+            n += 1
+        con.executemany("INSERT INTO zutat VALUES (?, ?, ?, ?)",
+                        [(spiel, find(m), de(m), json.dumps(where, ensure_ascii=False)) for m, where in mats.items()])
+    return n
 
 
 def load_extra(folder):
@@ -700,10 +859,11 @@ def _derive_moveset(con, sets):
     return len(rows)
 
 
-def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns=None, sets=None, wiki=None):
+def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns=None, sets=None, wiki=None, alt=None):
     """Baut die Datenbank unter path (wird überschrieben). csvs: {Name: Text}; sd_texts: {"pokedex": Text,
     "moves": Text}; extra: {Name: Inhalt} aus extra/; pkhex: Begegnungen je Spiel (siehe _derive_fundort);
-    spawns: Spawnpunkte je Spiel und Karte (siehe _derive_spawn).
+    spawns: Spawnpunkte je Spiel und Karte (siehe _derive_spawn); pkhex["_items"]: Itemlisten (siehe _derive_item);
+    alt: Altissimo je Spiel {"symbole": {Karte: Text}, "sammeln": {Karte: Text}, "rezepte": HTML}.
     Gibt Zahlen zurück; mit strict wirft die Selbstprüfung."""
     missing = [n for n in REQUIRED if n not in csvs]
     if missing:
@@ -726,7 +886,11 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_check = _derive_pruefung(con, sd_dex, sd_moves) if sd_dex or sd_moves else 0
         n_fund = _derive_fundort(con, pkhex)
         n_spawn = _derive_spawn(con, spawns)
-        n_item = _derive_item(con)
+        pkx = (pkhex or {}).get("_items")
+        n_item = _derive_item(con, pkx)
+        en_de = item_en_de(pkx)
+        n_obj = _derive_karte(con, alt, en_de)
+        n_rez = _derive_rezept(con, alt, en_de)
         n_sets = _derive_moveset(con, sets)
         n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
         con.execute("CREATE TABLE extra (name TEXT PRIMARY KEY, inhalt TEXT)")
@@ -745,7 +909,8 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "species": con.execute("SELECT COUNT(DISTINCT art) FROM form").fetchone()[0],
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
-                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "items": n_item, "sets": n_sets, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items, "check": why}
+                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "items": n_item, "sets": n_sets, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
+                 "kartenobjekte": n_obj, "rezepte": n_rez, "check": why}
     finally:
         con.close()
     return stats
