@@ -10,11 +10,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.8.2"
+VERSION = "0.9.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.9.0", "10.11.2026", [
+        "PokéWiki-Leser: Stärke, Genauigkeit und AP der Attacken in Legenden: Arceus mit Kraft- und Tempostil (unter der Stärke)",
+        "Detailseite: getragene Items wilder Pokémon in Legenden: Arceus, mit Anteil und „Elite“",
+        "Pokémon HOME in der Spielauswahl: eigene Sammlung mit allen Pokémon",
+        "Sammlung übertragen: bei „nur aus deiner Sammlung“ mit ⇄ auswählen und nach HOME oder in ein anderes Spiel übertragen",
+        "Verbindungstest prüft den gebündelten Abruf aus dem PokéWiki",
+    ]),
     ("0.8.2", "10.11.2026", [
         "Liste: Nummer oben links, Netz mit allen Zahlen, Häkchen, Stern, Pokéball und + an festen Plätzen, Pokéball größer, kein Rand beim Hovern; Typen nebeneinander",
         "Detailseite: Netz-Hinweis als Tabelle mit Balken, Fangchance farbig, Fundort-Art farbig (frei grün, Verzerrung violett, Massenauftreten blau …)",

@@ -185,6 +185,28 @@ def set_mark(table, body):
     return {"ok": True}
 
 
+def transfer(body):
+    """Sammlung übertragen (etwa nach Pokémon HOME): {von, nach, ids, behalten}. Die Pokémon gelten danach im Zielspiel
+    als gefangen; ohne behalten verschwinden sie aus der Sammlung im bisherigen Spiel (wie beim Übertragen im Spiel)."""
+    von, nach = str(body.get("von") or "")[:60], str(body.get("nach") or "")[:60]
+    if not nach or nach == von or nach not in {abfragen.HOME} | {g["kennung"] for g in abfragen.games()}:
+        raise ValueError("nach: ein anderes Spiel")
+    try:
+        ids = [int(x) for x in body.get("ids") or []][:2000]
+    except (TypeError, ValueError):
+        raise ValueError("ids: Zahlen")
+    con = db.user()
+    try:
+        for fid in ids:
+            con.execute("INSERT OR IGNORE INTO gefangen (spiel, form, seit) VALUES (?, ?, ?)", (nach, fid, _now()))
+            if not body.get("behalten"):
+                con.execute("DELETE FROM gefangen WHERE spiel = ? AND form = ?", (von, fid))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True, "n": len(ids)}
+
+
 def set_favorite(body):
     return set_mark("favorit", body)
 
@@ -469,6 +491,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/favoriten": set_favorite,
         "/api/gefangen": lambda b: set_mark("gefangen", b),
         "/api/team/gefangen": abfragen.team_caught,
+        "/api/uebertragen": transfer,
         "/api/restore": restore,
         "/api/entscheidung": decide,
         "/api/antwort": answer,

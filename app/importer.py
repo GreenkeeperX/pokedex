@@ -18,7 +18,7 @@ import sqlite3
 
 from . import showdown
 
-VERSION = "7"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "8"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -646,6 +646,38 @@ def _sd_key(text):
     return re.sub(r"[^a-z0-9]", "", str(text).lower())
 
 
+def _derive_wiki(con, wiki):
+    """Aus dem PokéWiki (abruf._pokewiki): Attackenwerte je Spiel (attacke_spiel) und getragene Items wilder Pokémon
+    (getragen). Namen werden über die deutschen Namen der Datenbank zugeordnet; Unbekanntes bleibt weg.
+    Gibt (Attacken, Items) zurück."""
+    con.execute("CREATE TABLE attacke_spiel (spiel TEXT, attacke INTEGER, staerke INTEGER, kraft INTEGER, tempo INTEGER, "
+                "genauigkeit INTEGER, ap INTEGER, PRIMARY KEY (spiel, attacke))")
+    con.execute("CREATE TABLE getragen (spiel TEXT, art INTEGER, item TEXT, item_id INTEGER, prozent TEXT, elite INTEGER)")
+    wiki = wiki or {}
+    moves = {n: i for i, n in con.execute("SELECT id, name FROM attacke")}
+    n_moves = 0
+    for spiel, vals in (wiki.get("attacken") or {}).items():
+        for name, v in vals.items():
+            mid = moves.get(name)
+            if mid and isinstance(v, dict):
+                con.execute("INSERT OR REPLACE INTO attacke_spiel VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (spiel, mid, v.get("staerke"), v.get("kraft"), v.get("tempo"), v.get("genauigkeit"), v.get("ap")))
+                n_moves += 1
+    species = {n: k for k, n in _names(con, "pokemon_species_names", "pokemon_species_id").items()}
+    items = {n: i for i, n in con.execute("SELECT id, name FROM item")}
+    n_items = 0
+    for spiel, per in (wiki.get("items") or {}).items():
+        for name, xs in per.items():
+            art = species.get(name)
+            if not art:
+                continue
+            for x in xs:
+                con.execute("INSERT INTO getragen VALUES (?, ?, ?, ?, ?, ?)",
+                            (spiel, art, x["item"], items.get(x["item"]), x.get("prozent", ""), int(bool(x.get("elite")))))
+                n_items += 1
+    return n_moves, n_items
+
+
 def _derive_moveset(con, sets):
     """Bewährte Sets (Showdown, Random Battle) je Generation: sets = {Generation: {Showdown-Kennung: {"sets": [{"role",
     "movepool", "abilities", "teraTypes"}], "level"}}}; Generation 1 hat {"moves": [...]} ohne Rolle.
@@ -668,7 +700,7 @@ def _derive_moveset(con, sets):
     return len(rows)
 
 
-def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns=None, sets=None):
+def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns=None, sets=None, wiki=None):
     """Baut die Datenbank unter path (wird überschrieben). csvs: {Name: Text}; sd_texts: {"pokedex": Text,
     "moves": Text}; extra: {Name: Inhalt} aus extra/; pkhex: Begegnungen je Spiel (siehe _derive_fundort);
     spawns: Spawnpunkte je Spiel und Karte (siehe _derive_spawn).
@@ -696,6 +728,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_spawn = _derive_spawn(con, spawns)
         n_item = _derive_item(con)
         n_sets = _derive_moveset(con, sets)
+        n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
         con.execute("CREATE TABLE extra (name TEXT PRIMARY KEY, inhalt TEXT)")
         con.executemany("INSERT INTO extra VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in (extra or {}).items()])
         for sql in ("CREATE INDEX pm_pokemon ON pokemon_moves(pokemon_id, version_group_id)",
@@ -712,7 +745,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "species": con.execute("SELECT COUNT(DISTINCT art) FROM form").fetchone()[0],
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
-                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "items": n_item, "sets": n_sets, "check": why}
+                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "items": n_item, "sets": n_sets, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items, "check": why}
     finally:
         con.close()
     return stats

@@ -477,6 +477,20 @@ table.mvt td{overflow:visible;white-space:normal}
 #tip table.rtip th{font-size:11px;font-weight:400;color:#a6b3b1;padding:0 6px;text-align:center;border:0}
 #tip table.rtip td{padding:1px 6px;border:0;vertical-align:middle}
 #tip table.rtip .sbar{display:block;width:90px}
+/* Kraft- und Tempostil unter der Stärke */
+.stil{display:block;font-size:10.5px;color:var(--muted);white-space:nowrap;line-height:1.2}
+/* Getragene Items */
+table.held td{vertical-align:middle;padding:2px 6px}
+table.held td:first-child{width:48px}
+.ibild.sm{width:40px;height:40px}
+/* Sammlung übertragen */
+.xfer{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 8px}
+#xto{max-width:240px}
+.mon .xs{position:absolute;right:6px;top:4px;z-index:2;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);
+  color:var(--muted);font-size:13px;cursor:pointer;background:var(--card)}
+.mon .xs:hover{color:var(--ink-hi)}
+.mon .xs.on{background:var(--info);border-color:var(--info);color:var(--bg)}
+.mon.xon{border-color:var(--info);box-shadow:inset 0 0 0 1px var(--info)}
 /* eigene Rückfrage */
 dialog.ask{background:var(--hcbg);color:var(--ink);border:1px solid var(--tipline);border-radius:12px;padding:16px 18px;min-width:320px;max-width:min(460px,92vw);box-shadow:0 16px 40px rgba(0,0,0,.55)}
 dialog.ask::backdrop{background:rgba(0,0,0,.45)}

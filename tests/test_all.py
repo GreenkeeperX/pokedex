@@ -265,6 +265,53 @@ class Leser(unittest.TestCase):
         self.assertEqual(rows["poke-ball"][3:5], ("Catches.", "en"))
         self.assertEqual(rows["lapoke-ball"][1], "Pokéball (Hisui)")
 
+    def test_pokewiki(self):
+        from app import pokewiki
+        wt_move = ("{{Infobox Attacke\n|Typ=Normal\n|Stärke=40 (ab Gen. 7)\n|Bildunterschrift=[[Krokel]] setzt [[Tackle|es]] ein.\n"
+                   "|PLStärke=40\n|PLStärkeKraft=50\n|PLStärkeTempo=30\n|PLGenauigkeit=100&nbsp;%\n|PLAP=30\n}}\nText")
+        wt_mon = ("{{Getragene Items\n|Spiele1={{sk|PLA}}\n|Item1={{item|Sinelbeere|sp=PLA}}<br />{{item|Meistersamen|sp=PLA}}"
+                  "{{Anmerkung|Nur Elite-Pokémon}}\n|Prozent1=35&nbsp;%<br />10&nbsp;%{{Anmerkung|Nur Elite-Pokémon}}\n"
+                  "|Spiele2={{sk|SW|SH}}\n|Item2={{item|Tsitrubeere}}\n|Prozent2=5&nbsp;%\n}}")
+        answer = json.dumps({"batchcomplete": True, "query": {
+            "normalized": [{"from": "tackle", "to": "Tackle"}], "redirects": [{"from": "Bidiza (Pokémon)", "to": "Bidiza"}],
+            "pages": [{"title": "Tackle", "revisions": [{"slots": {"main": {"content": wt_move}}}]},
+                      {"title": "Bidiza", "revisions": [{"slots": {"main": {"content": wt_mon}}}]},
+                      {"title": "Fehlt", "missing": True}]}})
+        got = pokewiki.pages(answer)
+        self.assertEqual(sorted(got), ["Bidiza (Pokémon)", "tackle"])
+        self.assertEqual(pokewiki.la_move(got["tackle"]), {"staerke": 40, "kraft": 50, "tempo": 30, "genauigkeit": 100, "ap": 30})
+        self.assertIsNone(pokewiki.la_move("{{Infobox Attacke\n|Stärke=40\n}}"))
+        self.assertEqual(pokewiki.held_items(got["Bidiza (Pokémon)"]), [
+            {"spiel": "legends-arceus", "item": "Sinelbeere", "prozent": "35 %", "elite": False},
+            {"spiel": "legends-arceus", "item": "Meistersamen", "prozent": "10 %", "elite": True}])
+        with self.assertRaises(ValueError):
+            pokewiki.pages(json.dumps({"error": {"code": "x", "info": "kaputt"}}))
+        self.assertIn("titles=Tackle%7CDonnerblitz", pokewiki.batch_url(["Tackle", "Donnerblitz"], True))
+
+    def test_pokewiki_in_der_datenbank(self):
+        import sqlite3
+        from types import SimpleNamespace
+        from app import abfragen
+        con = sqlite3.connect(":memory:")
+        importer.import_csv(con, "pokemon_species_names", "pokemon_species_id,local_language_id,name\n399,6,Bidiza\n399,9,Bidoof\n")
+        con.execute("CREATE TABLE attacke (id INTEGER, name TEXT)")
+        con.execute("INSERT INTO attacke VALUES (33, 'Tackle')")
+        con.execute("CREATE TABLE item (id INTEGER, name TEXT)")
+        con.execute("INSERT INTO item VALUES (155, 'Sinelbeere')")
+        wiki = {"attacken": {"legends-arceus": {"Tackle": {"staerke": 40, "kraft": 50, "tempo": 30, "genauigkeit": 100, "ap": 30},
+                                                "Gibtsnicht": {"staerke": 1}}},
+                "items": {"legends-arceus": {"Bidiza": [{"item": "Sinelbeere", "prozent": "35 %", "elite": False},
+                                                        {"item": "Meistersamen", "prozent": "10 %", "elite": True}]}}}
+        self.assertEqual(importer._derive_wiki(con, wiki), (1, 2))
+        self.assertEqual(con.execute("SELECT item_id, elite FROM getragen ORDER BY item").fetchall(), [(None, 1), (155, 0)])
+        D = SimpleNamespace(changes={}, game_moves={("legends-arceus", 33): {"staerke": 40, "kraft": 50, "tempo": 30,
+                                                                              "genauigkeit": 100, "ap": 30}})
+        m = {"id": 33, "typ": 1, "staerke": 40, "genauigkeit": 100, "ap": 35, "prio": 0}
+        v = abfragen.move_view(D, m, {"kennung": "legends-arceus", "reihenfolge": 20})
+        self.assertEqual((v["ap"], v["kraft"], v["tempo"], v["geaendert"]), (30, 50, 30, True))
+        self.assertNotIn("kraft", abfragen.move_view(D, m, {"kennung": "scarlet-violet", "reihenfolge": 21}))
+        con.close()
+
     def test_bewaehrte_sets(self):
         import sqlite3
         con = sqlite3.connect(":memory:")
@@ -499,6 +546,17 @@ class Server(TempData):
         self.assertTrue(any(f.startswith("vor-einlesen-") for f in os.listdir(os.path.join(self.dir, "sicherung"))))
         with self.assertRaises(ValueError):
             server.restore({"teams": []})
+
+    def test_uebertragen(self):
+        db.migrate()
+        server.set_mark("gefangen", {"spiel": "legends-arceus", "id": [403, 404, 25]})
+        server.transfer({"von": "legends-arceus", "nach": "pokemon-home", "ids": [403, 404]})
+        self.assertEqual(server.marked("gefangen", "legends-arceus"), [25])
+        self.assertEqual(sorted(server.marked("gefangen", "pokemon-home")), [403, 404])
+        server.transfer({"von": "legends-arceus", "nach": "pokemon-home", "ids": [25], "behalten": True})
+        self.assertEqual(server.marked("gefangen", "legends-arceus"), [25])
+        with self.assertRaises(ValueError):
+            server.transfer({"von": "pokemon-home", "nach": "pokemon-home", "ids": [25]})
 
     def test_entscheidung(self):
         db.migrate()

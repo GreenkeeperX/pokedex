@@ -101,6 +101,13 @@ class Data:
                 self.machines[(vg, mid)] = machine_label(ident, 3 if vg in wide else 2)
         except Exception:
             pass
+        # Attackenwerte je Spiel aus dem PokéWiki (Legenden: Arceus mit Kraft- und Tempostil)
+        self.game_moves = {}
+        try:
+            for r in con.execute("SELECT * FROM attacke_spiel"):
+                self.game_moves[(r["spiel"], r["attacke"])] = dict(r)
+        except Exception:
+            pass
         self.charts = {}
         self.max_gen = max((g["gen"] for g in self.games), default=9)
 
@@ -319,6 +326,12 @@ def _ints(v):
 def move_view(D, m, g):
     order = g["reihenfolge"] if g else 10 ** 6
     v = attacken.in_game(m, D.changes.get(m["id"], []), order)
+    w = D.game_moves.get((g["kennung"], m["id"])) if g else None
+    if w:
+        v = dict(v, kraft=w["kraft"], tempo=w["tempo"], quelle="PokéWiki")
+        for k in ("staerke", "genauigkeit", "ap"):
+            if w[k] is not None and w[k] != v.get(k):
+                v[k], v["geaendert"] = w[k], True
     return v
 
 
@@ -450,7 +463,8 @@ def ranked_moves(con, D, f, g, gen, level=None):
         now = level is None or any(w[0] != "level-up" or (w[1] or 0) <= level for w in wege)
         base = {"id": mid, "name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"],
                 "genauigkeit": v["genauigkeit"], "ap": v["ap"], "prio": v["prio"], "wege": [w[3] for w in wege],
-                "jetzt": now, "geaendert": bool(v.get("geaendert")), "text": v.get("text"), "kurz": v.get("kurz") or ""}
+                "jetzt": now, "geaendert": bool(v.get("geaendert")), "text": v.get("text"), "kurz": v.get("kurz") or "",
+                "kraft": v.get("kraft"), "tempo": v.get("tempo")}
         if v["klasse"] == attacken.STATUS or not v["staerke"]:
             status.append(base)
             continue
@@ -468,6 +482,9 @@ def ranked_moves(con, D, f, g, gen, level=None):
     hint = ""
     if g and used and used["id"] != g["id"]:
         hint = f"Im gewählten Spiel ohne Lernliste; gezeigt ist {used['name']}."
+    elif used and used["kennung"] == LA and any(k[0] == LA for k in D.game_moves):
+        hint = ("Stärke, Genauigkeit und AP für Legenden: Arceus aus dem PokéWiki; unter der Stärke stehen Kraftstil "
+                "und Tempostil (Kraft / Tempo).")
     elif used and used["kennung"] == LA:
         hint = ("Stärke und Genauigkeit stammen aus den Hauptspielen: die PokéAPI hat für Legenden: Arceus keine eigenen Werte. "
                 "Dort weichen sie teils ab (Kraft- und Tempostil); die echten Werte kommen mit dem PokéWiki-Abruf.")
@@ -513,6 +530,7 @@ def move_list(p):
         rows.append({"id": v["id"], "name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"],
                      "genauigkeit": v["genauigkeit"], "ap": v["ap"], "prio": v["prio"], "wertung": sc, "gruende": why,
                      "geaendert": bool(v.get("geaendert")), "text": v.get("text"), "kurz": v.get("kurz") or "", "gen": m["gen"], "lernen": learners.get(m["id"], 0),
+                     "kraft": v.get("kraft"), "tempo": v.get("tempo"),
                      "merkmale": [x for x in (v.get("merkmale") or []) if x in ("contact", "punch", "bite", "sound", "pulse", "slicing")],
                      "effekt": v.get("effekt")})
     rows.sort(key=lambda x: (-x["wertung"], x["name"]))
@@ -909,9 +927,20 @@ def detail(fid, p):
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
-                    wiki=WIKI + _wiki_title(D, f))
+                    wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f))
     finally:
         con.close()
+
+
+def _held(con, g, f):
+    """Getragene Items wilder Pokémon im Spiel (PokéWiki): [{item, bild, prozent, elite}]."""
+    if not g:
+        return []
+    try:
+        rows = con.execute("SELECT item, item_id, prozent, elite FROM getragen WHERE spiel = ? AND art = ?", (g["kennung"], f["art"])).fetchall()
+    except Exception:
+        return []
+    return [{"item": r[0], "id": r[1], "prozent": r[2], "elite": bool(r[3])} for r in rows]
 
 
 def _wiki_title(D, f):
@@ -1203,11 +1232,17 @@ def team_matchup(body):
     return {"rows": first["rows"], "gegner": first["gegner"], "einzeln": out, "uebersicht": summary, "ohne_antwort": uncovered}
 
 
+HOME = "pokemon-home"       # kein Spiel der PokéAPI: alle Pokémon mit den neuesten Werten, eigene Sammlung
+
+
 def games():
     D = data()
-    return [{"kennung": g["kennung"], "name": g["name"], "gen": g["gen"], "pokemon": len(D.in_game.get(g["id"], {})),
-             "gebiete": list(D.areas.get(g["kennung"], {}))}
-            for g in reversed(D.games)] if D else []
+    if not D:
+        return []
+    home = {"kennung": HOME, "name": "Pokémon HOME", "gen": 0, "home": True, "gebiete": [],
+            "pokemon": sum(1 for f in D.forms.values() if f["relevant"])}
+    return [home] + [{"kennung": g["kennung"], "name": g["name"], "gen": g["gen"], "pokemon": len(D.in_game.get(g["id"], {})),
+                      "gebiete": list(D.areas.get(g["kennung"], {}))} for g in reversed(D.games)]
 
 
 def meta():

@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.9.0 (PokéWiki-Leser und Pokémon HOME, Entscheidung 10.11.2026)
+
+- `app/pokewiki.py`: Antworten der MediaWiki-API (`action=query`, bis zu 50 Seiten je Anfrage) und Vorlagen lesen;
+  `la_move` (Infobox Attacke: PLStärke, PLStärkeKraft, PLStärkeTempo, PLGenauigkeit, PLAP), `held_items` (Getragene Items)
+- `abruf._pokewiki`: Namen aus der bisherigen Datenbank, Pause 2 s, Ergebnis in `pokewiki.json` im Datenordner
+  (bei Sperre gilt der letzte Stand); Tabellen `attacke_spiel` und `getragen`, `importer.VERSION` 8
+- `move_view` nimmt die Werte des Spiels aus `attacke_spiel` (Wertung rechnet damit)
+- „Pokémon HOME“ (`abfragen.HOME`) als Eintrag der Spielauswahl; `/api/uebertragen` (Sammlung in ein anderes Spiel,
+  ohne „behalten“ verschoben)
+
 ## 0.8.2 (Rückmeldung zu 0.8.1, Entscheidung 10.11.2026)
 
 - Liste: `.nr` oben links, Netz 100 px mit Rand nach Größe, `acts` mit festen Plätzen (`.a.ph` unsichtbar), Raster ab 320 px
@@ -8,10 +18,6 @@
 - `ask`/`askText`: eigener Dialog statt `confirm()` und `prompt()`
 - Items ohne Grenze von 400 Zeilen (Bilder laden erst beim Scrollen), Bilder 64 px
 
-## Später: Sammlung und Pokémon HOME
-
-- Idee: „Pokémon HOME“ als eigener Eintrag in der Spielauswahl über den Generationen; Sammlung je Spiel mit
-  Auswahl „zu HOME übertragen“ oder in ein anderes Spiel, im Pokémon-Reiter über den Filter „aus deiner Sammlung“
 
 ## 0.8.1 (Rückmeldung zu 0.7.1, Entscheidung 10.11.2026)
 
@@ -82,8 +88,8 @@
 - Fähigkeiten, die im Kampf zählen (etwa Typ-Verstärker, Immunitäten, Kontakt-Fähigkeiten), knapp in der Teambewertung
 - Smogon-Sets (Wettkampf, mit Items und Wesen), sobald vom Server aus erreichbar
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
-- PokéWiki-Leser (vom Heimserver aus erreichbar, Proben aus dem Verbindungstest) für das, was PKHeX nicht hat:
-  Tageszeit und Wetter, Edelhorden, Attackenwerte (Kraft- und Tempostil) und Lehrer-Attacken in Legenden: Arceus
+- PokéWiki-Leser erweitern: Edelhorden, Herstell-Zutaten, Kartensymbole (Bäume, Kisten, Kristallsteine, Irrlichter),
+  getragene Items weiterer Spiele (Kürzel der Vorlage `sk` prüfen)
 - Items: Bilder, genaue Listen für Karmesin/Purpur und die Legenden-Spiele (PKHeX), Fundorte der Items
 - Karte für Karmesin/Purpur und Legenden: Z-A, danach Regionskarten der älteren Spiele
 - Karten: Links auf die Gebietsseiten im PokéWiki statt eigener Bilder (Bildrechte)

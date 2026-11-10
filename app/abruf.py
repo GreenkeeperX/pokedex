@@ -19,7 +19,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import db, importer, sources, store
+from . import db, importer, pokewiki, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -39,7 +39,9 @@ EXTRA_DIR = os.path.join(os.path.dirname(__file__), "..", "extra")
 
 SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
-         "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)"}
+         "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki"}
+WIKI_PAUSE = 2.0            # Sekunden zwischen zwei Anfragen an das PokéWiki (je Anfrage bis zu 50 Seiten)
+WIKI_GAMES = ("legends-arceus",)    # Spiele, deren Attacken und Pokémon im PokéWiki gelesen werden
 
 sleep = time.sleep          # Tests setzen hier eine Attrappe ein
 _running = threading.Lock()
@@ -453,19 +455,22 @@ def _build(st, log, force, at):
             st["rest"]["showdown"] = _iso(now() + timedelta(hours=REST_H))
     pkhex = _pkhex(st, log, at)
     spawns = _spawns(st, log, at)
+    wiki = _pokewiki(st, log, at)
     extra = importer.load_extra(EXTRA_DIR)
     stand = {"csv": sha, "showdown": _hash(*(sd_texts.get(k, "") for k in ("pokedex", "moves"))) if len(sd_texts) == 2 else "",
              "pkhex": _hash(*(v for src in pkhex.values() for v in src.values())) if pkhex else "",
              "spawns": _hash(json.dumps(spawns, sort_keys=True)) if spawns else "",
              "sets": _hash(json.dumps(sets, sort_keys=True)) if sets else "",
+             "wiki": _hash(json.dumps(wiki, sort_keys=True)) if wiki else "",
              "extra": _hash(json.dumps(extra, sort_keys=True)), "importer": importer.VERSION}
     old = st.get("stand") or {}
     if (db.has_data() and not force and sha and stand["csv"] == old.get("csv") and stand["extra"] == old.get("extra")
             and stand["importer"] == old.get("importer") and (not stand["showdown"] or stand["showdown"] == old.get("showdown"))
             and (not stand["pkhex"] or stand["pkhex"] == old.get("pkhex"))
             and (not stand["spawns"] or stand["spawns"] == old.get("spawns"))
-            and (not stand["sets"] or stand["sets"] == old.get("sets"))):
-        log("Keine Änderung bei PokéAPI, Showdown, PKHeX, Spawnpunkten und Ergänzungen, Datenbank bleibt")
+            and (not stand["sets"] or stand["sets"] == old.get("sets"))
+            and (not stand["wiki"] or stand["wiki"] == old.get("wiki"))):
+        log("Keine Änderung bei PokéAPI, Showdown, PKHeX, Spawnpunkten, PokéWiki und Ergänzungen, Datenbank bleibt")
         st["sources"]["pokeapi"] = papi.result(geaendert=False)
         return True
     csvs = {}
@@ -486,7 +491,7 @@ def _build(st, log, force, at):
     STATE.update(step="Datenbank bauen", done=0, total=0)
     tmp = db.pokeapi_path() + ".neu"
     try:
-        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex, spawns=spawns, sets=sets)
+        stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex, spawns=spawns, sets=sets, wiki=wiki)
     except Exception as e:
         log(f"Neue Datenbank verworfen: {e}; die bisherige bleibt")
         if os.path.exists(tmp):
@@ -501,13 +506,16 @@ def _build(st, log, force, at):
         stand["spawns"] = old.get("spawns", "")
     if not sets:
         stand["sets"] = old.get("sets", "")
+    if not wiki:
+        stand["wiki"] = old.get("wiki", "")
     st["stand"], st["stats"], st["built"] = stand, stats, _iso(now())
     log(f"Datenbank neu: {stats['species']} Arten, {stats['forms']} Formen, {stats['moves']} Attacken, {stats['games']} Spiele, "
         f"{stats['tables']} Tabellen" + (f"; Showdown {stats['sd_pokemon']} Pokémon, {stats['sd_moves']} Attacken, "
                                          f"{stats['diff']} Abweichungen zu prüfen" if sd_texts else "; ohne Showdown-Abgleich")
         + (f"; {stats['fundorte']} Fundorte aus PKHeX" if pkhex else "; ohne Fundorte aus PKHeX")
         + (f"; {stats['spawns']} Spawn-Einträge mit Tageszeit und Wetter" if spawns else "")
-        + (f"; {stats['sets']} bewährte Sets" if sets else ""))
+        + (f"; {stats['sets']} bewährte Sets" if sets else "")
+        + (f"; PokéWiki: {stats['wiki_attacken']} Attackenwerte, {stats['wiki_items']} getragene Items" if wiki else ""))
     return not papi.stopped and not sd.stopped
 
 
@@ -570,6 +578,66 @@ def _spawns(st, log, at):
     if src.blocked:
         st["rest"]["spawns"] = _iso(now() + timedelta(hours=REST_H))
     return {"legends-arceus": maps} if maps else {}
+
+
+def wiki_titles(con, spiel):
+    """Deutsche Namen der Attacken, die im Spiel jemand lernt, und der Arten im Spiel (Seitentitel im PokéWiki)."""
+    g = con.execute("SELECT id FROM spiel WHERE kennung = ?", (spiel,)).fetchone()
+    if not g:
+        return [], []
+    moves = [r[0] for r in con.execute("SELECT DISTINCT a.name FROM pokemon_moves pm JOIN attacke a ON a.id = pm.move_id "
+                                       "WHERE pm.version_group_id = ? ORDER BY a.name", (g[0],)) if r[0]]
+    species = [r[0] for r in con.execute(
+        "SELECT DISTINCT n.name FROM spiel_form sf JOIN form f ON f.id = sf.form JOIN pokemon_species_names n "
+        "ON n.pokemon_species_id = f.art AND n.local_language_id = 6 WHERE sf.spiel = ? ORDER BY n.name", (g[0],)) if r[0]]
+    return moves, species
+
+
+def _pokewiki(st, log, at):
+    """Werte aus dem PokéWiki, die sonst fehlen: {"attacken": {Spiel: {Name: Werte}}, "items": {Spiel: {Art: [Items]}}}.
+    Die Namen kommen aus der bisherigen Datenbank (ohne sie gibt es noch nichts zu fragen). Bei Sperre oder Fehlern gilt
+    das Ergebnis des letzten Laufs (pokewiki.json im Datenordner)."""
+    old = store.load_json("pokewiki.json", {})
+    if _resting(st, "pokewiki", at):
+        log(f"PokéWiki ruht bis {st['rest']['pokewiki'][:16].replace('T', ' ')} UTC")
+        return old
+    con = db.game()
+    if con is None:
+        return old
+    try:
+        titles = {sp: wiki_titles(con, sp) for sp in WIKI_GAMES}
+    except Exception as e:
+        log(f"PokéWiki: Namen nicht lesbar ({e})")
+        return old
+    finally:
+        con.close()
+    src = _Source("pokewiki", log, pause=WIKI_PAUSE)
+    out = {"attacken": {}, "items": {}}
+    for sp, (moves, species) in titles.items():
+        for kind, names, section0 in (("attacken", moves, True), ("items", species, False)):
+            got = {}
+            for i in range(0, len(names), pokewiki.BATCH):
+                STATE.update(step=f"PokéWiki: {'Attacken' if kind == 'attacken' else 'Pokémon'}", done=i, total=len(names))
+                t = src.get(pokewiki.batch_url(names[i:i + pokewiki.BATCH], section0))
+                if src.stopped:
+                    break
+                try:
+                    for name, wt in pokewiki.pages(t or "{}").items():
+                        v = pokewiki.la_move(wt) if kind == "attacken" else [x for x in pokewiki.held_items(wt) if x["spiel"] == sp]
+                        if v:
+                            got[name] = v
+                except ValueError as e:
+                    log(f"PokéWiki: Antwort nicht lesbar ({e})")
+            out[kind][sp] = got
+        if src.stopped:
+            break
+    st["sources"]["pokewiki"] = src.result(seiten=sum(len(v) for k in out.values() for v in k.values()))
+    if src.blocked:
+        st["rest"]["pokewiki"] = _iso(now() + timedelta(hours=REST_H))
+    if src.stopped or not any(out["attacken"].values()):
+        return old
+    store.save_json("pokewiki.json", out)
+    return out
 
 
 def start(force=False):
@@ -755,6 +823,11 @@ def diagnose(proben=None):
                  "Forschungsaufgabe", "Edelhorde", "Raum-Zeit-Verzerrung"):
         probe(f"PokéWiki, Seite {page}", POKEWIKI_API + "?action=parse&page=" + urllib.parse.quote(page)
               + "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
+    def wiki_batch(text):
+        got = pokewiki.pages(text)
+        vals = {k: pokewiki.la_move(v) for k, v in got.items()}
+        return f"{len(got)} Seiten gebündelt; " + "; ".join(f"{k}: {v}" for k, v in vals.items())
+    probe("PokéWiki, Bündel Attacken (Legenden: Arceus)", pokewiki.batch_url(["Tackle", "Donnerblitz", "Kraftschub"], True), wiki_batch)
     probe("Bulbapedia, API", "https://bulbapedia.bulbagarden.net/w/api.php?action=query&meta=siteinfo&format=json", wiki_info)
     probe("Bulbapedia, Seite Bidoof", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=Bidoof_(Pok%C3%A9mon)"
           "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
