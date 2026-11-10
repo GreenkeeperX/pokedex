@@ -10,11 +10,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.10.0"
+VERSION = "0.10.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.10.1", "10.11.2026", [
+        "Karte: Geisterlichter und Gedichte heißen jetzt wie im Spiel",
+        "Verbindungstest: mögliche Quellen für bessere Item-Bilder (Serebii, PokéWiki) sowie Lager und Schnellreise "
+        "(Serebii-Karte, PokéWiki) mit Probe-Seiten",
+    ]),
     ("0.10.0", "10.11.2026", [
         "Karte: Jubeldorf mit eigenem Kartenbild, Irrlichtern und Icognito",
         "Karte: Aprikoko- und Beerenbäume, Erzbrocken, Laub- und Heuhaufen, Kisten, Irrlichter, Icognito, alte Verse und "

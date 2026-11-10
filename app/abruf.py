@@ -313,7 +313,8 @@ def _images(kind, log, limit=SPRITES_MAX):
     return src.result(neu=got, fehlen=absent, offen=left)
 
 
-MAP_TILES = "https://www.serebii.net/pokearth/hisui/"
+SEREBII = "https://www.serebii.net/"
+MAP_TILES = SEREBII + "pokearth/hisui/"
 MAP_ZOOM = 2                # Kacheln 256 px, Zoom z hat 2^(z+1) × 2^(z+1) Kacheln je Karte
 
 
@@ -794,7 +795,7 @@ def diagnose(proben=None):
         except Exception as e:
             lines.append(f"{head}, nicht auswertbar ({type(e).__name__}: {e})")
         if keep and not raw:
-            proben[name] = r["text"][:PROBE_MAX]
+            proben[name] = r["text"][:keep if keep is not True else PROBE_MAX]
         sleep(PAUSE)
         return r
 
@@ -835,7 +836,7 @@ def diagnose(proben=None):
     probe("Altissimo, Symbole Obsidian-Grasland", altissimo.landmarks_url("fieldlands"),
           lambda t: f"{len(altissimo.landmarks(t, altissimo.FIT['obsidianfieldlands']))} Bäume, Erzbrocken und Haufen")
     probe("Altissimo, Sammelobjekte Jubeldorf", altissimo.collectibles_url("jubilife"),
-          lambda t: f"{len(altissimo.collectibles(t, altissimo.VILLAGE_FIT))} Irrlichter und Icognito")
+          lambda t: f"{len(altissimo.collectibles(t, altissimo.VILLAGE_FIT))} Geisterlichter und Icognito")
     probe("Altissimo, Karte Jubeldorf", altissimo.VILLAGE_IMAGE, lambda b: "PNG" if b[:4] == b"\x89PNG" else "kein PNG", raw=True)
 
     section("Fundorte aus den Spieldaten (PKHeX, GPL-3.0)")
@@ -879,6 +880,37 @@ def diagnose(proben=None):
           lambda t: f"{len(json.loads(t))} Tabellen nach Tageszeit und Wetter")
     probe("Serebii, Kartenkachel", MAP_TILES + "obsidianfieldlands/tile_0-0-0.png",
           lambda b: "PNG" if b[:4] == b"\x89PNG" else "kein PNG", raw=True, headers={"Accept": "image/png,image/*;q=0.8"})
+
+    section("Mögliche Quellen zum Testen: Item-Bilder, Lager und Schnellreise")
+
+    def png(b):
+        if b[:8] != b"\x89PNG\r\n\x1a\n":
+            return "kein PNG"
+        return f"PNG {int.from_bytes(b[16:20], 'big')} × {int.from_bytes(b[20:24], 'big')} px"
+    img = {"Accept": "image/png,image/*;q=0.8"}
+    for path in ("itemdex/sprites/apricorn.png", "itemdex/sprites/legends/apricorn.png", "itemdex/sprites/potion.png",
+                 "itemdex/sprites/sv/potion.png"):
+        probe(f"Serebii, Item-Bild {path.split('sprites/')[1]}", SEREBII + path, png, raw=True, headers=img)
+
+    def markers(t):
+        low = t.lower()
+        keys = ("camp", "fast travel", "distortion", "outbreak", "marker", ".json", "oldverse", "crystal")
+        return ", ".join(f"{k} {low.count(k)}×" for k in keys)
+    probe("Serebii, Karte Obsidian-Grasland (Seite)", SEREBII + "pokearth/hisui/obsidianfieldlands.shtml", markers, keep=400_000, headers=html)
+
+    def wiki_list(t):
+        q = json.loads(t).get("query") or {}
+        xs = q.get("allimages") or q.get("search") or []
+        return "; ".join(f"{x.get('name') or x.get('title')}" + (f" ({x['width']}×{x['height']})" if x.get("width") else "") for x in xs[:12]) or "nichts"
+    probe("PokéWiki, Bilder „Aprikoko…“", POKEWIKI_API + "?" + urllib.parse.urlencode(
+        {"action": "query", "list": "allimages", "aiprefix": "Aprikoko", "aiprop": "url|size", "ailimit": "20", "format": "json"}),
+        wiki_list, keep=True)
+    probe("PokéWiki, Suche Schnellreise", POKEWIKI_API + "?" + urllib.parse.urlencode(
+        {"action": "query", "list": "search", "srsearch": "Schnellreise Basislager Hisui", "srlimit": "15", "format": "json"}),
+        wiki_list, keep=True)
+    probe("PokéWiki, Seite Basislager", POKEWIKI_API + "?" + urllib.parse.urlencode(
+        {"action": "parse", "page": "Basislager", "prop": "wikitext", "format": "json"}),
+        lambda t: f"{len(t)} Zeichen Wikitext", keep=True)
 
     section("Bilder und Rufe (PokéAPI-Repos)")
     img = lambda kind: (lambda b: kind if b[:4] in (b"\x89PNG", b"GIF8") else "unbekanntes Format")
