@@ -18,7 +18,7 @@ import sqlite3
 
 from . import showdown
 
-VERSION = "3"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "4"                  # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -33,8 +33,11 @@ NEEDED = (
     "pokemon_species_names", "pokemon_stats", "pokemon_types", "pokemon_types_past", "regions", "stat_names", "stats",
     "time_of_day_prose", "type_efficacy", "type_efficacy_past", "type_names", "types", "version_group_regions", "version_groups",
     "version_names", "versions",
-    # noch ungenutzt, für TM-Listen, Wesen, Ei-Gruppen und Beeren
-    "berries", "egg_group_prose", "growth_rates", "machines", "nature_names", "natures", "pokemon_egg_groups",
+    # Mehr Details, TM-Nummern und Items
+    "egg_group_prose", "growth_rates", "item_categories", "item_flavor_text", "item_game_indices", "item_prose", "machines",
+    "pokemon_egg_groups",
+    # noch ungenutzt, für Wesen und Beeren
+    "berries", "nature_names", "natures",
 )
 # Ohne diese Dateien ist die Datenbank unbrauchbar: Der Abgleich bricht ab und die alte bleibt
 REQUIRED = ("pokemon", "pokemon_species", "pokemon_species_names", "pokemon_types", "pokemon_stats", "types", "type_names",
@@ -440,6 +443,60 @@ def _derive_fundort(con, pkhex):
     return n
 
 
+TASCHEN = {1: "Items", 2: "Medizin", 3: "Bälle", 4: "Maschinen", 5: "Beeren", 6: "Briefe", 7: "Kampf-Items", 8: "Basis-Items"}
+UNUSED_CATEGORY = 23
+# Gleichnamige Items unterscheiden: Kennung → Zusatz zum Namen
+ITEM_SUFFIX = ((re.compile(r"^la[a-z]+-ball$"), "Hisui"), (re.compile(r"--letsgo$"), "Let’s Go"), (re.compile(r"--galar$"), "Galar"),
+               (re.compile(r"--pikachu$"), "Pikachu"), (re.compile(r"--eevee$"), "Evoli"))
+
+
+def item_name(ident, name):
+    for rx, suffix in ITEM_SUFFIX:
+        if rx.search(ident or ""):
+            return f"{name} ({suffix})"
+    return name
+
+
+def _derive_item(con):
+    """Items: deutscher Name, Tasche, Beschreibung (deutsch aus dem neuesten Spiel mit deutschem Text, sonst englisch),
+    die Spiele mit Beschreibung (genau: dort gibt es das Item) und die Generationen laut Spielindex der PokéAPI (grob).
+    Ohne items.csv bleibt die Tabelle leer."""
+    con.execute("CREATE TABLE item (id INTEGER PRIMARY KEY, kennung TEXT, name TEXT, tasche TEXT, text TEXT, sprache TEXT, "
+                "preis INTEGER, gens TEXT, spiele TEXT)")
+    if not _has(con, "items"):
+        return 0
+    names = _names(con, "item_names", "item_id")
+    pockets = {}
+    if _has(con, "item_categories"):
+        pockets = {c: TASCHEN.get(p, "") for c, p in con.execute("SELECT id, pocket_id FROM item_categories")}
+    order = {r[0]: r[1] for r in con.execute("SELECT id, reihenfolge FROM spiel")}
+    texts, games = {}, {}
+    if _has(con, "item_flavor_text"):
+        for iid, vg, lang, txt in con.execute("SELECT item_id, version_group_id, language_id, flavor_text FROM item_flavor_text "
+                                              "WHERE language_id IN (6, 9)"):
+            games.setdefault(iid, set()).add(vg)
+            key = (lang == 6, order.get(vg, vg or 0))
+            if txt and (iid not in texts or key > texts[iid][0]):
+                texts[iid] = (key, " ".join(txt.split()), "de" if lang == 6 else "en")
+    if _has(con, "item_prose"):
+        for iid, eff in con.execute("SELECT item_id, short_effect FROM item_prose WHERE local_language_id = 9"):
+            if eff and iid not in texts:
+                texts[iid] = (None, " ".join(eff.split()), "en")
+    gens = {}
+    if _has(con, "item_game_indices"):
+        for iid, g in con.execute("SELECT item_id, generation_id FROM item_game_indices"):
+            gens.setdefault(iid, set()).add(g)
+    rows = []
+    for iid, ident, cat, cost in con.execute("SELECT id, identifier, category_id, cost FROM items"):
+        if cat == UNUSED_CATEGORY or not names.get(iid):
+            continue
+        t = texts.get(iid)
+        rows.append((iid, ident, item_name(ident, names[iid]), pockets.get(cat, ""), t[1] if t else "", t[2] if t else "", cost or 0,
+                     json.dumps(sorted(gens.get(iid, ()))), json.dumps(sorted(games.get(iid, ())))))
+    con.executemany("INSERT INTO item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    return len(rows)
+
+
 def load_extra(folder):
     """Gepflegte Ergänzungen: jede JSON-Datei in extra/ als {Name: Inhalt}. Kaputte Dateien brechen ab."""
     out = {}
@@ -496,6 +553,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_check = _derive_pruefung(con, sd_dex, sd_moves) if sd_dex or sd_moves else 0
         n_fund = _derive_fundort(con, pkhex)
         n_spawn = _derive_spawn(con, spawns)
+        n_item = _derive_item(con)
         con.execute("CREATE TABLE extra (name TEXT PRIMARY KEY, inhalt TEXT)")
         con.executemany("INSERT INTO extra VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in (extra or {}).items()])
         for sql in ("CREATE INDEX pm_pokemon ON pokemon_moves(pokemon_id, version_group_id)",
@@ -512,7 +570,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "species": con.execute("SELECT COUNT(DISTINCT art) FROM form").fetchone()[0],
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
-                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "check": why}
+                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "items": n_item, "check": why}
     finally:
         con.close()
     return stats

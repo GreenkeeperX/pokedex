@@ -1,5 +1,5 @@
 /* Pokédex-Oberfläche: reines JavaScript ohne Build. Reiter über die Adresse (#pokemon, #pokemon/6, #team, #attacken,
-   #typen, #karte/<Karte>/<Form>, #einstellungen), deshalb öffnet „In neuem Tab öffnen“ jede Karte. Gewähltes Spiel, Filter und das aktuelle
+   #typen, #items, #karte/<Karte>/<Form>, #einstellungen), deshalb öffnet „In neuem Tab öffnen“ jede Karte. Gewähltes Spiel, Filter und das aktuelle
    Team merkt sich der Browser; ein gespeichertes Team ändert sich auf dem Server erst mit „Speichern“. */
 "use strict";
 const $ = (s, el = document) => el.querySelector(s);
@@ -21,7 +21,7 @@ const S = {
   tfilter: filter0(Object.assign({endstufe: true}, store.get("tfilter", {}))),
   tleg: store.get("tleg", true), dock: store.get("dock", window.innerWidth > 700), foes: store.get("foes", []),
 };
-const TABS = [["pokemon", "Pokémon"], ["team", "Team"], ["attacken", "Attacken"], ["typen", "Typen"], ["karte", "Karte"], ["einstellungen", "Einstellungen"]];
+const TABS = [["pokemon", "Pokémon"], ["team", "Team"], ["attacken", "Attacken"], ["typen", "Typen"], ["items", "Items"], ["karte", "Karte"], ["einstellungen", "Einstellungen"]];
 const STAT = ["KP", "Angriff", "Verteidigung", "Sp.-Angriff", "Sp.-Verteidigung", "Initiative"];
 const STAT_K = ["KP", "Ang", "Vert", "SpA", "SpV", "Init"];
 const CRIT = {defensive: "Defensive", abdeckung: "Abdeckung", tempo: "Tempo", staerke: "Stärke", balance: "Balance"};
@@ -433,6 +433,7 @@ async function route() {
     else if (tab === "team") await teamView();
     else if (tab === "attacken") await movesView();
     else if (tab === "typen") await chartView();
+    else if (tab === "items") await itemsView();
     else if (tab === "karte") await mapView(arg, arg2 === undefined ? null : +arg2);
     else if (tab === "einstellungen") await settingsView();
     else location.hash = "pokemon";
@@ -874,9 +875,10 @@ async function detailView(id, slot = null) {
     ${!d.im_spiel && S.game ? `<div class="note warn">In ${esc(gameName())} nicht enthalten.</div>` : ""}
     ${inTeam && S.team.ids.filter((x) => x === id).length > 1 ? `<div class="note info">${esc(d.name)} ist mehrmals im Team; hier geht es um Platz ${DSLOT + 1}.</div>` : ""}
     <div class="cols">
-      <div class="box"><div class="head">${img(d.id, "big", true)}<div><h2>${esc(d.name)}</h2><div class="muted">#${d.nr ?? d.art} · ${esc(d.kategorie)}</div>
+      <div class="box"><div class="head"><div class="pic">${img(d.id, "big", true)}${extrasHtml(d)}</div><div><h2>${esc(d.name)}</h2><div class="muted">#${d.nr ?? d.art} · ${esc(d.kategorie)}</div>
         <div style="margin-top:4px">${tchips(d.typen)}</div><span data-tip="${esc(radarTip(d.werte))}">${radar(d.werte, 220, true)}</span></div></div>
         <p>${esc(d.text)}</p><div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
+        ${moreHtml(d)}
         ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${esc(a.name)}</b> ${wikiLink(a.name)}${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
           : S.game === "legends-arceus" ? `<p class="hint">In Legenden: Arceus gibt es keine Fähigkeiten.</p>` : ""}
       </div>
@@ -892,7 +894,49 @@ async function detailView(id, slot = null) {
     <div class="box" id="mbox"></div>`;
   header();
   renderMoves(d.attacken, level);
+  wireExtras(d);
   window.scrollTo(0, 0);
+}
+// Sprite-Umschalter (Artwork, schillernd, animiert) und Ruf, nur für schon geladene Extras
+function extrasHtml(d) {
+  const x = d.extras || {}, b = [];
+  if (x.shiny || x.anim) {
+    b.push(`<button class="small on" data-pic="art">Artwork</button>`);
+    if (x.shiny) b.push(`<button class="small" data-pic="shiny" data-tip="Schillernde Form (Sprite)">Schillernd</button>`);
+    if (x.anim) b.push(`<button class="small" data-pic="anim" data-tip="Animiertes Sprite">Animiert</button>`);
+  }
+  if (x.rufe) b.push(`<button class="small" data-ruf="${d.id}" data-tip="Ruf abspielen">▶ Ruf</button>`);
+  return b.length ? `<div class="picbar">${b.join("")}</div>` : "";
+}
+function wireExtras(d) {
+  const pic = $(".head .pic img");
+  $$("[data-pic]").forEach((b) => b.addEventListener("click", () => {
+    $$("[data-pic]").forEach((x) => x.classList.toggle("on", x === b));
+    pic.src = b.dataset.pic === "art" ? `artwork/${d.id}.png` : `${b.dataset.pic}/${d.id}`;
+    pic.classList.toggle("px", b.dataset.pic !== "art");
+  }));
+  const rb = $("[data-ruf]");
+  if (rb) rb.addEventListener("click", () => { new Audio(`rufe/${d.id}`).play().catch(() => { rb.textContent = "Ruf fehlt"; }); });
+}
+// Mehr Details, eingeklappt: Fangchance, Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute
+const EVK = ["kp", "ang", "vert", "spang", "spvert", "init"];
+function moreHtml(d) {
+  const m = d.mehr || {};
+  if (!Object.keys(m).length) return "";
+  const pc = (v) => String(v).replace(".", ",") + " %";
+  const rows = [];
+  if (m.geschlecht) rows.push(["Geschlecht", esc(m.geschlecht)]);
+  if (m.wachstum) rows.push(["Wachstum", esc(m.wachstum)]);
+  if (m.eigruppen) rows.push(["Ei-Gruppen", esc(m.eigruppen.join(", ")) + (m.eizyklen != null ? ` · ${m.eizyklen} Ei-Zyklen` : "")]);
+  if (m.ev && m.ev.length) rows.push(["EV-Ausbeute", m.ev.map((e) => `${e.punkte} ${STAT[EVK.indexOf(e.wert)]}`).join(", ")]);
+  const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
+  const fang = m.fangen ? `<h3>Fangchance <span class="hint">(Fangrate ${m.fangrate})</span></h3>
+    <table class="rows"><tr><th>Ball</th><th>volle KP</th><th>1 KP</th><th>1 KP, schlafend</th></tr>
+    ${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td>${pc(f.voll)}</td><td>${pc(f.rot)}</td><td>${pc(f.schlaf)}</td></tr>`).join("")}</table>
+    <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
+      : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p>` : "";
+  return `<details class="mehr"><summary>Mehr Details</summary>
+    ${rows.length ? `<div class="kv">${rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join("")}</div>` : ""}${fang}</details>`;
 }
 // Farben für Werte: Stärke (bis 150), Genauigkeit (ab 70), Wertung (bis 160), von Rot nach Grün
 const ramp = (x) => `hsl(${Math.max(0, Math.min(1, x)) * 125} 62% 40%)`;
@@ -1411,6 +1455,34 @@ async function mapView(karte, fid) {
   });
 }
 
+// Items des Spiels: Suche und Tasche
+async function itemsView() {
+  const rid = RID;
+  const d = await api("/api/items?" + qs({spiel: S.game}));
+  if (rid !== RID) return;
+  let pocket = "", q = "";
+  main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Items</h2><span class="hint">Spiel</span><select class="gamesel"></select>
+      <input id="itemq" type="search" placeholder="Name oder Beschreibung" style="width:220px">
+      <span class="seg" id="itemseg"><a class="btn on" data-t="">alle</a>${(d.taschen || []).map((t) => `<a class="btn" data-t="${esc(t)}">${esc(t)}</a>`).join("")}</span>
+      <span class="hint grow" id="itemn"></span></div>
+    ${d.hinweis ? `<div class="note info">${esc(d.hinweis)}</div>` : ""}
+    <div class="scroll"><table class="rows"><thead><tr><th>Name</th><th>Tasche</th><th>Beschreibung</th><th class="num">Preis</th></tr></thead><tbody id="itemrows"></tbody></table></div>
+    <p class="hint">Quelle: PokéAPI. Englisch, wo es keinen deutschen Text gibt.</p></div>`;
+  header();
+  const items = d.items || [];
+  const draw = () => {
+    const ql = q.toLowerCase(), xs = items.filter((x) => (!pocket || x.tasche === pocket) && (!ql || x.name.toLowerCase().includes(ql) || x.text.toLowerCase().includes(ql)));
+    $("#itemn").textContent = `${xs.length} Items`;
+    $("#itemrows").innerHTML = xs.slice(0, 600).map((x) => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.tasche)}</td>
+      <td class="why"${x.englisch ? ` lang="en"` : ""}>${esc(x.text)}</td><td class="num">${x.preis || "–"}</td></tr>`).join("")
+      + (xs.length > 600 ? `<tr><td colspan="4" class="hint">… ${xs.length - 600} weitere, Suche eingrenzen</td></tr>` : "");
+  };
+  $("#itemq").addEventListener("input", (e) => { q = e.target.value.trim(); draw(); });
+  $$("#itemseg .btn").forEach((b) => b.addEventListener("click", () => {
+    pocket = b.dataset.t; $$("#itemseg .btn").forEach((x) => x.classList.toggle("on", x === b)); draw();
+  }));
+  draw();
+}
 async function chartView() {
   const ch = S.chart, ts = Object.keys(ch);
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Typtabelle Generation ${S.chartGen}</h2><span class="hint">Spiel</span><select class="gamesel"></select>
@@ -1471,11 +1543,11 @@ async function settingsView() {
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
       <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
         <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button></div>
-      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}</table>
+      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}</table>
       <h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
-      <div class="bar"><label><input type="checkbox" id="sprites"${s.sprites ? " checked" : ""}> Bilder laden (Sprites 96 × 96 und offizielle Artworks 475 × 475, zusammen gut 180 MB)</label></div>
+      <div class="bar"><label><input type="checkbox" id="sprites"${s.sprites ? " checked" : ""}> Bilder laden (Sprites 96 × 96 und offizielle Artworks 475 × 475, zusammen gut 180 MB; dazu schillernde und animierte Sprites und Rufe, gut 40 MB)</label></div>
       <p class="hint">Ändert sich bei keiner Quelle etwas, bleibt die Datenbank. Eine neue gilt erst nach bestandener Selbstprüfung; deine Teams liegen getrennt (user.db) und werden täglich gesichert.</p>
     </div>
     <div class="box"><h2>Zu erledigen</h2>

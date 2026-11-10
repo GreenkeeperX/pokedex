@@ -14,11 +14,12 @@ dem Vorbild von VR-Navigator und eShopKompass.
   je Spiel.
 - **Detailseite**: Basiswerte, Fähigkeiten, Typwirkung (mit Fähigkeiten wie Schwebe), Entwicklung mit Bedingungen,
   „Im Duell gegen Typen“ (klar stark, stark, schwer), Fundorte im Spiel (Legenden: Arceus aus den Spieldaten mit
-  Stellen, Level und Alpha), Links ins PokéWiki.
+  Stellen, Level und Alpha), „Mehr Details“ zum Aufklappen (Fangchance je Ball, Geschlecht, Wachstum, Ei-Gruppen,
+  EV-Ausbeute, je nach Spiel), schillerndes und animiertes Sprite, Ruf, Links ins PokéWiki.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
   Vorschlag für vier Attacken mit Typ-Abdeckung. Eigene Auswahl mit Standard-Attacken wie im Spiel, beigebrachten
-  Attacken (TM, Lehrer) und Reihenfolge per Ziehen.
+  Attacken (TM, Lehrer) und Reihenfolge per Ziehen. TM-Nummern des Spiels.
 - **Attacken**: alle Attacken des gewählten Spiels mit Filtern und sortierbaren Spalten.
 - **Team-Leiste** unten in jedem Reiter (Drag & Drop, „+“, Favoriten). Dasselbe Pokémon darf mehrfach ins Team;
   Level und vier Attacken je Platz. Gespeicherte Teams ändern sich erst mit „Speichern“ („Verwerfen“ geht zurück).
@@ -28,6 +29,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   festgesetzten Plätzen und denselben Filtern wie die Liste, Verbesserungsvorschläge zu den gewählten Attacken,
   Gegner-Modus auch gegen ein ganzes Gegner-Team (Vorteil, Nachteil), Empfehlungen aus den Gefangenen (bessere
   Alternative, langfristig mehr Potential) und Teamsuche nur aus Gefangenen.
+- **Items** des Spiels mit Tasche, Beschreibung (deutsch, wo vorhanden) und Preis, mit Suche.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten.
 - **Karte** (Legenden: Arceus): Spawnpunkte je Gebiet zum Ziehen und Zoomen, Alpha hervorgehoben, wer dort wann
   erscheint; von der Detailseite aus mit den Spawnpunkten des Pokémon.

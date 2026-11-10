@@ -40,6 +40,11 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Karte (`mapView`, `#karte/<Karte>/<Form>`): Welt 2048 px = Spielkoordinate × 2; Kacheln `karten/<Karte>/<z>-<x>-<y>.png`
   (Zoom 0–2, Stufe nach Maßstab), Punkte behalten ihre Größe (`--inv`). Ziehen mit Pointer-Events, Mausrad und +/−
   zoomen; mit Form werden ihre Punkte gelb hervorgehoben und die Ansicht passt sich ihnen an. Daten: `/api/karte/<Karte>`.
+- Mehr Details (`moreHtml`, `detail.mehr`): eingeklappt; Fangchance ohne kritischen Fang und Boni, in Generation 1
+  und 2 und den Legenden-Spielen nur als Richtung (`fang_grob`). Keine Eier und EVs in Legenden: Arceus.
+- Extras (`extrasHtml`, `detail.extras`): Knöpfe nur für schon geladene Dateien; `/shiny/<id>`, `/anim/<id>`, `/rufe/<id>`.
+- Items (`itemsView`, `#items`): Daten aus `/api/items?spiel=…`, Suche und Taschen filtern im Browser, höchstens 600
+  Zeilen auf einmal.
 - Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
   Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
   (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.
