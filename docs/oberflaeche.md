@@ -51,6 +51,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   zu sehen, die übrigen Knöpfe und „+“ beim Hovern, alles an derselben Stelle. Anderswo stehen Marken (`marks`) hinter dem Namen.
 - Hover-Karte (`glanceHtml`): Angriff (bester eigener Typ je Ziel), Verteidigung (beide Typen), „gut einzusetzen gegen“
   (trifft ×2 oder mehr, steckt höchstens ×½ ein). Das ausführliche Duell steht auf der Detailseite.
+- PokéWiki-Links (`wikiLink`, `a.wl`): der Name selbst ist der Link, unterstrichen nur beim Hovern, kein Pfeil.
+- Zentrierte Spalten mit `thc(…)` im Kopf und `td.c` in den Zellen; Zahlen, Typ und Klasse stehen mittig, Text links.
+- Rückfragen nie mit `confirm()` oder `prompt()`: `await ask(titel, text, knopf, gefährlich)` und `await askText(…)`.
 - Sortierbare Tabellen (`table.sort`): Text erst aufsteigend, Zahlen erst absteigend, dann umgekehrt, dritter Klick neutral.
 - Extras (`extrasHtml`, `detail.extras`): Knöpfe nur für schon geladene Dateien; `/shiny/<id>`, `/anim/<id>`, `/rufe/<id>`.
 - Attacken: `moveMarks` setzt Marken für Lehrer und Beherrschung nach den Wegen; `setsHtml` zeigt die bewährten

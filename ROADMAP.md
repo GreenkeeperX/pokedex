@@ -1,5 +1,18 @@
 # Roadmap
 
+## 0.8.2 (Rückmeldung zu 0.8.1, Entscheidung 10.11.2026)
+
+- Liste: `.nr` oben links, Netz 100 px mit Rand nach Größe, `acts` mit festen Plätzen (`.a.ph` unsichtbar), Raster ab 320 px
+- Netz-Hinweis `data-tip-stats` (HTML-Tabelle), `kurzHtml` für Statuswörter, `artCell` für die Fundort-Art
+- `thc` und `td.c` für zentrierte Spalten; `MVCOLS` gleiche Spalten für Schadens- und Status-Attacken
+- `ask`/`askText`: eigener Dialog statt `confirm()` und `prompt()`
+- Items ohne Grenze von 400 Zeilen (Bilder laden erst beim Scrollen), Bilder 64 px
+
+## Später: Sammlung und Pokémon HOME
+
+- Idee: „Pokémon HOME“ als eigener Eintrag in der Spielauswahl über den Generationen; Sammlung je Spiel mit
+  Auswahl „zu HOME übertragen“ oder in ein anderes Spiel, im Pokémon-Reiter über den Filter „aus deiner Sammlung“
+
 ## 0.8.1 (Rückmeldung zu 0.7.1, Entscheidung 10.11.2026)
 
 - Dunkle Farben: `--hcbg` und `--tipbg` #253033, `--sel` gleich dem Seitenhintergrund; nichts dunkler als die Team-Plätze
@@ -64,7 +77,9 @@
 - Karte wie im PokéWiki: Symbole für gewöhnliche Fundorte, Alpha, Aprikoko- und Beerenbäume, Kisten, Kristallsteine,
   Massenauftreten, Raum-Zeit-Verzerrungen, Items mit Bild und Irrlichter. Quelle klären: die PokéWiki-Karte lädt ihre
   Daten per JavaScript; der Abruf kommt mit dem PokéWiki-Leser. Karten für weitere Spiele
-- Items: Wirkung auch für Beeren und getragene Items; Fundorte der Items
+- Items: Wirkung auch für Beeren und getragene Items; Fundorte der Items; Zutaten zum Herstellen (Legenden: Arceus,
+  aus dem PokéWiki)
+- Fähigkeiten, die im Kampf zählen (etwa Typ-Verstärker, Immunitäten, Kontakt-Fähigkeiten), knapp in der Teambewertung
 - Smogon-Sets (Wettkampf, mit Items und Wesen), sobald vom Server aus erreichbar
 - Fundorte aus PKHeX auch für Karmesin/Purpur und Legenden: Z-A (Format der Dateien lesen)
 - PokéWiki-Leser (vom Heimserver aus erreichbar, Proben aus dem Verbindungstest) für das, was PKHeX nicht hat:
