@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, showdown
 
-VERSION = "12"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "13"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -440,6 +440,84 @@ def pkhex_static(text):
 def pkhex_names(text):
     """Ortsnamen aus einer PKHeX-Textdatei: Zeile = Ortsnummer."""
     return (text or "").lstrip("\ufeff").splitlines()
+
+
+# Lernlisten aus PKHeX für Spiele, die in der PokéAPI noch keine haben. Kürzel → (Spiel, Erweiterung mit allen TMs)
+PKHEX_LEARN = {"za": ("legends-za", "mega-dimension")}
+# TMs in Legenden: Z-A (PersonalInfo9ZA.MachineMoves): Bit i der TM-Flags = Attacke; ab ZA_TM_BASE erst mit Mega-Dimension
+ZA_TM = (29, 337, 473, 249, 46, 347, 92, 86, 812, 280, 339, 157, 58, 424, 423, 113, 182, 612, 408, 583,
+         422, 332, 9, 8, 242, 412, 129, 91, 7, 14, 115, 104, 34, 400, 203, 317, 446, 126, 435, 331,
+         352, 202, 19, 63, 282, 341, 97, 120, 196, 315, 219, 414, 188, 434, 416, 38, 261, 442, 428, 248,
+         421, 53, 94, 76, 444, 521, 85, 257, 89, 250, 304, 83, 57, 247, 406, 710, 398, 523, 542, 334,
+         404, 369, 417, 430, 164, 528, 231, 191, 390, 399, 174, 605, 200, 18, 269, 56, 377, 127, 118, 441,
+         527, 411, 526, 394, 59, 87, 370,
+         4, 263, 886, 47, 491, 490, 488, 885, 6, 318, 325, 466, 246, 259, 206, 305, 706, 102, 443, 138,
+         402, 509, 451, 409, 458, 299, 814, 530, 815, 480, 524, 207, 330, 252, 660, 799, 813, 13, 130, 161,
+         503, 333, 410, 80, 669, 143, 90, 329, 800, 796, 307, 308, 338)
+ZA_TM_BASE = 107
+PERSONAL_SIZE, PERSONAL_TM = 0x50, 0x2C
+
+
+def pkhex_learnsets(lvl, personal):
+    """Lernlisten aus PKHeX (lvlmove_za.pkl: BinLinker16, je Eintrag n Attacken als u16, dann n Level als Byte;
+    personal_za: 0x50 Bytes je Eintrag, Formen ab FormStatsIndex, TM-Flags ab 0x2C).
+    Gibt {(Art, Form im Spiel): ([(Attacke, Level)], [TM-Index])} für die Einträge im Spiel zurück."""
+    import struct
+    if len(lvl) < 4 or len(personal) < PERSONAL_SIZE:
+        return {}
+    n = struct.unpack_from("<H", lvl, 2)[0]
+    offs = [struct.unpack_from("<H", lvl, 4 + 2 * i)[0] for i in range(n + 1)]
+    count = len(personal) // PERSONAL_SIZE
+
+    def entry(i):
+        p = personal[i * PERSONAL_SIZE:(i + 1) * PERSONAL_SIZE]
+        if i >= n or not p[0x1C]:                       # nicht im Spiel
+            return None
+        e = lvl[offs[i]:offs[i + 1]]
+        k = len(e) // 3
+        up = [(struct.unpack_from("<H", e, 2 * j)[0], e[2 * k + j]) for j in range(k)]
+        tms = [b for b in range(len(ZA_TM)) if p[PERSONAL_TM + (b >> 3)] & (1 << (b & 7))]
+        return up, tms
+
+    # Arten bis vor den ersten Formeintrag (FormStatsIndex), danach folgen nur Formen
+    fsis = [struct.unpack_from("<H", personal, i * PERSONAL_SIZE + 0x18)[0] for i in range(count)]
+    last = min([f for f in fsis if f] or [count])
+    out = {}
+    for art in range(1, min(last, n)):
+        p = personal[art * PERSONAL_SIZE:(art + 1) * PERSONAL_SIZE]
+        fsi, fc = fsis[art], p[0x1A]
+        for form in range(fc or 1):
+            i = art if form == 0 or not fsi else fsi + form - 1
+            if i < count and (x := entry(i)):
+                out[(art, form)] = x
+    return out
+
+
+def _derive_lernen(con, pkhex):
+    """Lernlisten aus PKHeX in pokemon_moves für Spiele ohne Lernliste in der PokéAPI (Legenden: Z-A). Level-up und TMs;
+    die TMs der Erweiterung nur in der Erweiterung. Gibt die Zahl der Zeilen zurück."""
+    n = 0
+    by_form, by_art = _form_maps(con)
+    vgs = {k: i for i, k in con.execute("SELECT id, identifier FROM version_groups")} if _has(con, "version_groups") else {}
+    for key, (spiel, dlc) in PKHEX_LEARN.items():
+        src = (pkhex or {}).get(f"_lernen_{key}") or {}
+        data = pkhex_learnsets(src.get("lvl") or b"", src.get("personal") or b"")
+        targets = [(vgs.get(spiel), False), (vgs.get(dlc), True)]
+        for vg, full in targets:
+            if not data or vg is None or con.execute("SELECT 1 FROM pokemon_moves WHERE version_group_id = ? LIMIT 1", (vg,)).fetchone():
+                continue                    # die PokéAPI hat schon eine Lernliste: die gilt
+            rows, seen = [], set()
+            for (art, form), (up, tms) in data.items():
+                pid = by_form.get((art, form)) or (by_art.get(art) if form == 0 else None)
+                if not pid or pid in seen:      # Formen nur zum Ansehen (Vivillon …) teilen sich ein Pokémon
+                    continue
+                seen.add(pid)
+                rows += [(pid, vg, m, 1, lv, k + 1, None) for k, (m, lv) in enumerate(up) if m]
+                rows += [(pid, vg, ZA_TM[b], 4, 0, None, None) for b in tms if full or b < ZA_TM_BASE]
+            con.executemany("INSERT INTO pokemon_moves (pokemon_id, version_group_id, move_id, pokemon_move_method_id, level, "
+                            "\"order\", mastery) VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+            n += len(rows)
+    return n
 
 
 def _form_maps(con):
@@ -1086,6 +1164,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         sd_dex = showdown.pokedex(sd_texts.get("pokedex", ""))
         sd_moves = showdown.moves(sd_texts.get("moves", ""))
         _derive_spiel(con)
+        n_lernen = _derive_lernen(con, pkhex) if _has(con, "pokemon_moves") else 0
         _derive_form(con)
         _derive_spiel_form(con)
         _derive_attacke(con, sd_moves, (extra or {}).get("attacken_kurz"))
@@ -1119,7 +1198,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
                  "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "items": n_item, "sets": n_sets, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
-                 "kartenobjekte": n_obj, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez, "check": why}
+                 "kartenobjekte": n_obj, "lernen": n_lernen, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez, "check": why}
     finally:
         con.close()
     return stats

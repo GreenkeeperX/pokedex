@@ -223,12 +223,15 @@ EXTRAS = {"shiny": (SPRITE_RAW + "shiny/", ".png"), "shinyart": (SPRITE_RAW + "o
           # Item-Bilder: Datei heißt wie die Kennung des Items, gespeichert unter der Nummer
           "itembild": (SPRITE_RAW.replace("/pokemon/", "/items/"), ".png"),
           # größere Item-Bilder von Serebii (Legenden: Arceus 128 px, Karmesin/Purpur und Z-A 160 px) nach dem englischen Namen
-          "itemhq": ("https://www.serebii.net/itemdex/sprites/", ".png")}
+          "itemhq": ("https://www.serebii.net/itemdex/sprites/", ".png"),
+          # Formen nur zum Ansehen (Burmy, Vivillon, Icognito …): Datei <Art>-<Form>.png, gespeichert unter der Formnummer
+          "formen": (SPRITE_RAW, ".png")}
 # Spiele, für die Serebii eigene Item-Bilder hat: Unterordner → Spielkennungen
 ITEM_HQ = {"legends": ("legends-arceus",), "sv": ("scarlet-violet", "the-teal-mask", "the-indigo-disk", "legends-za", "mega-dimension")}
 ITEM_HQ_MAX = 1500          # so viele große Item-Bilder je Lauf (eine Sekunde Pause: knapp eine halbe Stunde beim ersten Mal)
 MEDIA_LABEL = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernde Sprites", "shinyart": "Schillernde Artworks",
-               "anim": "Animierte Sprites", "rufe": "Rufe", "itembild": "Item-Bilder", "itemhq": "Große Item-Bilder"}
+               "anim": "Animierte Sprites", "rufe": "Rufe", "itembild": "Item-Bilder", "itemhq": "Große Item-Bilder",
+               "formen": "Formen zum Ansehen"}
 
 
 def miss_name(kind):
@@ -246,6 +249,14 @@ def media_ids(kind):
                 return {r[0]: r[1] for r in con.execute("SELECT id, kennung FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 "
                                                         "AND kennung NOT LIKE 'pkhex-%' ORDER BY id")}
             except Exception:           # Datenbank noch ohne die Spalten von 0.8.0
+                return {}
+        if kind == "formen":
+            try:
+                return {r[0]: f"{r[1]}-{r[2]}" for r in con.execute(
+                    "SELECT f.id, p.species_id, f.form_identifier FROM pokemon_forms f JOIN pokemon p ON p.id = f.pokemon_id "
+                    "WHERE f.is_default = 0 AND f.form_identifier != '' AND f.pokemon_id IN "
+                    "(SELECT pokemon_id FROM pokemon_forms GROUP BY pokemon_id HAVING COUNT(*) > 1) ORDER BY f.id")}
+            except Exception:
                 return {}
         if kind == "itemhq":            # Ordner bei Serebii nach dem neuesten Spiel mit dem Item
             try:
@@ -566,6 +577,7 @@ def _build(st, log, force, at):
         f"{stats['tables']} Tabellen" + (f"; Showdown {stats['sd_pokemon']} Pokémon, {stats['sd_moves']} Attacken, "
                                          f"{stats['diff']} Abweichungen zu prüfen" if sd_texts else "; ohne Showdown-Abgleich")
         + (f"; {stats['fundorte']} Fundorte aus PKHeX" if pkhex else "; ohne Fundorte aus PKHeX")
+        + (f"; Lernlisten Legenden: Z-A aus PKHeX: {stats['lernen']} Einträge" if stats.get("lernen") else "")
         + (f"; {stats['spawns']} Spawn-Einträge mit Tageszeit und Wetter" if spawns else "")
         + (f"; {stats['sets']} bewährte Sets" if sets else "")
         + (f"; PokéWiki: {stats['wiki_attacken']} Attackenwerte, {stats['wiki_items']} getragene Items, "
@@ -641,6 +653,13 @@ def _pkhex(st, log, at):
         if b and t:
             out[spiel] = {"begegnungen": b, "orte": t, "orte3": texts.get(names.replace("_00000_", "_30000_"), ""),
                           "fest": (src.get(PKHEX_SRC + fixed) or "") if fixed else ""}
+    # Lernlisten für Spiele ohne Lernliste in der PokéAPI (importer.PKHEX_LEARN)
+    for key in importer.PKHEX_LEARN:
+        STATE["step"] = f"PKHeX: Lernlisten {key}"
+        lvl = src.get(PKHEX_RAW + f"byte/levelup/lvlmove_{key}.pkl", raw=True)
+        per = src.get(PKHEX_RAW + f"byte/personal/personal_{key}", raw=True) if lvl else None
+        if lvl and per:
+            out[f"_lernen_{key}"] = {"lvl": lvl, "personal": per}
     # Itemlisten je Spiel und die Itemnamen (deutsch, englisch) für Spiele ohne Liste in der PokéAPI
     STATE["step"] = "PKHeX: Items"
     items = {lang: src.get(PKHEX_RAW + f"text/items/text_Items_{lang}.txt") for lang in ("de", "en")}
@@ -948,6 +967,7 @@ def diagnose(proben=None):
     probe("PKHeX, Begegnungen Karmesin/Purpur", PKHEX_RAW + "legality/wild/Gen9/encounter_wild_paldea.pkl", la_info, raw=True)
     probe("PKHeX, Orte Karmesin/Purpur deutsch", PKHEX_RAW + "text/locations/gen9/text_sv_00000_de.txt", names)
     probe("PKHeX, Begegnungen Legenden: Z-A", PKHEX_RAW + "legality/wild/Gen9/encounter_za.pkl", la_info, raw=True)
+    probe("PKHeX, Lernlisten Legenden: Z-A", PKHEX_RAW + "byte/levelup/lvlmove_za.pkl", lambda b: f"{len(b)} Bytes, {int.from_bytes(b[2:4], 'little') if b[:2] == b'za' else 0} Lernlisten" if b else "leer", raw=True)
     probe("PKHeX, Begegnungen Mega-Dimension", PKHEX_RAW + "legality/wild/Gen9/encounter_hyperspace_za.pkl", la_info, raw=True)
     probe("PKHeX, Orte Legenden: Z-A deutsch", PKHEX_RAW + "text/locations/gen9a/text_za_00000_de.txt", names)
     probe("PKHeX, Beherrschung Legenden: Arceus", PKHEX_RAW + "legality/misc/mastery_la.pkl", pkl, raw=True)
@@ -1085,6 +1105,19 @@ def diagnose(proben=None):
             n[e["t"]] = n.get(e["t"], 0) + 1
         return "Einträge mit Lage: " + ", ".join(f"{k} {v}" for k, v in sorted(n.items()))
     probe("PLA Companion, Karte Obsidian-Grasland", companion.url("obsidianfieldlands"), kinds, keep=True)
+    # Karten weiterer Spiele: welche Dateien die offenen Projekte haben (Kartenbilder, Koordinaten), als Probe zum Herunterladen
+    def tree(t):
+        ps = [x.get("path", "") for x in json.loads(t).get("tree", [])]
+        hits = [x for x in ps if re.search(r"(?i)(paldea|kitakami|terarium|lumiose|z-?a|scarlet|violet|sv)[^/]*$|map", x)
+                and re.search(r"(?i)\.(json|png|jpe?g|webp|js|html)$", x)]
+        return f"{len(ps)} Dateien, davon {len(hits)} zu Karten und neueren Spielen: " + ", ".join(hits[:12])
+    probe("GitHub: Dateien von sv-live-map (Karmesin/Purpur)", "https://api.github.com/repos/Lincoln-LM/sv-live-map/git/trees/master?recursive=1",
+          tree, keep=True)
+    probe("GitHub: Dateien von Altissimo", "https://api.github.com/repos/Altissimo1/altissimo1.github.io/git/trees/main?recursive=1",
+          tree, keep=True)
+    probe("sv-live-map: Tera-Raid-Höhlen (Spielkoordinaten)",
+          "https://raw.githubusercontent.com/Lincoln-LM/sv-live-map/master/resources/den_locations.json",
+          lambda t: f"{len(json.loads(t))} Höhlen")
     page_info = lambda t: f"Titel „{(t.split('<title>')[1].split('</title>')[0].strip() if '<title>' in t else '?')[:80]}“"
     probe("Serebii, Legenden: Arceus Bidiza", "https://www.serebii.net/pokedex-swsh/bidoof/", page_info, keep=True, headers=html)
     probe("Serebii, Legenden: Arceus Übersicht", "https://www.serebii.net/legendsarceus/", page_info, keep=True, headers=html)

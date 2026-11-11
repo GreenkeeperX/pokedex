@@ -1096,6 +1096,7 @@ async function detailView(id, slot = null) {
         ${evo ? `<div class="box"><h2>Entwicklung</h2><div class="evo">${evo}</div></div>` : ""}
         ${catchHtml(d)}
         ${heldHtml(d)}
+        ${optikHtml(d)}
       </div>
     </div>
     <div class="box" style="margin-top:12px"><h2>Fundorte in ${esc(gameName())}</h2>${encHtml(d)}</div>
@@ -1125,6 +1126,15 @@ function wireExtras(d) {
   }));
   const rb = $("[data-ruf]");
   if (rb) rb.addEventListener("click", () => { new Audio(`rufe/${d.id}`).play().catch(() => { rb.textContent = "Ruf fehlt"; }); });
+}
+/* Formen nur zum Ansehen (Burmy, Vivillon, Icognito …): gleiche Werte, eigenes Aussehen; Bilder lädt der Abgleich */
+function optikHtml(d) {
+  const xs = d.optik || [];
+  if (!xs.length) return "";
+  return `<details class="box"><summary><h2>Formen zum Ansehen</h2><span class="hint">${xs.length} · gleiche Werte, anderes Aussehen</span></summary>
+    <div class="optik">${xs.map((x) => `<figure>${x.id == null ? img(d.id) : x.bild ? `<img class="spr" src="formen/${x.id}" alt="" loading="lazy">` : `<img class="spr none" src="icon.svg" alt="">`}
+      <figcaption>${esc(x.name)}</figcaption></figure>`).join("")}</div>
+    ${xs.some((x) => !x.bild) ? `<p class="hint">Fehlende Bilder lädt der nächste Abgleich.</p>` : ""}</details>`;
 }
 /* Getragene Items wilder Pokémon (PokéWiki), mit Bild und Anteil; „Elite“ nur bei Alpha-Pokémon */
 function heldHtml(d) {

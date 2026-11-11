@@ -427,7 +427,7 @@ class Handler(BaseHTTPRequestHandler):
                         break
                 else:
                     self._send(404, {"error": "kein Bild"})
-            elif m := re.fullmatch(r"/(shiny|shinyart|anim|rufe|itembild)/(\d{1,6})", path):
+            elif m := re.fullmatch(r"/(shiny|shinyart|anim|rufe|itembild|formen)/(\d{1,6})", path):
                 # Item-Bilder: das große von Serebii, wenn es da ist
                 kinds = ("itemhq", "itembild") if m.group(1) == "itembild" else (m.group(1),)
                 f = next((os.path.join(db.data_dir(), k, m.group(2) + e) for k in kinds for e in (".png", ".gif", ".mp3", ".ogg")
