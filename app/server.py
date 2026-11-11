@@ -496,6 +496,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._file(f, "max-age=2592000")
                 else:
                     self._send(404, {"error": "keine Kachel"})
+            elif path == "/api/mapgenie/eigene":
+                # eigene Punkte (Legenden: Arceus) auf der Karte von Map Genie
+                d = abruf.mg_maps(q.get("spiel"))
+                m = next((m for m in (d or {}).get("karten", []) if m["slug"] == q.get("karte")), None)
+                ok = m and d["spiel"] == "legends-arceus"
+                self._send(200 if ok else 404, abfragen.mg_overlay(m, d.get("am")) if ok else {"error": "keine eigenen Punkte"})
             elif path == "/api/mapgenie":
                 d = abruf.mg_maps(q.get("spiel"))
                 if d and q.get("karte"):

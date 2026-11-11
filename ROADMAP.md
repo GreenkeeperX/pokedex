@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.17.0 (große Karte, Vergleich, Typkombinationen; Entscheidung 11.11.2026)
+
+- Eigene Punkte auf Map Genie (`abfragen.mg_overlay`, `/api/mapgenie/eigene`): je Gebiet von Legenden: Arceus richtet
+  `mapgenie.align` die Spielkoordinaten an Geisterlichtern und Icognito aus (Abstimmung über Maßstab und Verschiebung,
+  dann Ausgleich je Achse; Abweichung um 15 Pixel auf Zoomstufe 14). „Karte“ öffnet in jedem Spiel zuerst die große Karte
+- „Gehe zu“ aus den Gebieten von Map Genie (`gebiete` in `mapgenie.parse`), Trefferliste der Suche, `#karte/mg/<Karte>/<Ort>`
+- Vergleich (`compareView`, `#vergleich/<A>/<B>`), Typkombinationen (`combosHtml` im Reiter Typen)
+- Danach: Leser für pokemoncompletion (ältere Spiele), Champions nach Rückmeldung zum Kurzkonzept
+
 ## 0.16.0 (Map Genie, gefundene Symbole; Entscheidung 11.11.2026)
 
 - Map Genie (`app/mapgenie.py`, `abruf._mapgenie`): je Spiel in `mapgenie.GAMES` die Kartenseiten (`window.mapData`:

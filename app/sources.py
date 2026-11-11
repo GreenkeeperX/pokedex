@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.16.0"
+VERSION = "0.17.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.17.0", "11.11.2026", [
+        "Große Karte: Legenden: Arceus zeigt ganz Hisui mit den eigenen Spawnpunkten und Symbolen (an Geisterlichtern "
+        "und Icognito ausgerichtet); „Gehe zu“ für Gebiete, Suche nach Ort, Symbol oder Pokémon mit Trefferliste, ein Klick zoomt hin",
+        "Vergleich zweier Pokémon nebeneinander: Werte mit Unterschied, Typwirkung, Fähigkeiten, Attacken (Detailseite → Vergleichen)",
+        "Typen: alle 171 Typkombinationen als Verteidiger, sortierbar nach Schwächen und Resistenzen, Filter auf einen Typ",
+    ]),
     ("0.16.0", "11.11.2026", [
         "Karten von Map Genie für jedes Spiel, das es dort gibt: Orte, Sammelobjekte und Materialien als Ebenen, "
         "Suche, Kacheln lädt der Server beim ersten Ansehen (Karte → Map Genie)",

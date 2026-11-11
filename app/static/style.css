@@ -520,6 +520,31 @@ a.bm:active{cursor:grabbing}
 .o-baumpkmn{background:#9ccc65}.o-alpha{background:#e53935;color:#fff}.o-boden{background:#d7ccc8;width:12px;height:12px;font-size:8px}
 .pins .mobj.o-boden{margin:-6px 0 0 -6px}
 .pins .mobj.hit{outline:3px solid #fff;z-index:4}
+/* Vergleich: links A, Mitte die Werte, rechts B */
+.cmpgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
+.cmphead{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.cmphead .ac{align-self:stretch;position:relative}
+.cmphead .ac input{width:100%}
+.cmpmon{display:flex;flex-direction:column;align-items:center;color:var(--ink);text-decoration:none;font-size:18px}
+.cmpst{width:100%;border-collapse:collapse}
+.cmpst td,.cmpst th{padding:5px 6px}
+.cmpst th{text-align:center;font-weight:600;white-space:nowrap}
+.cmpst th .hint{font-weight:400;font-size:12px}
+.cmpst td.num{width:44px;text-align:center}
+.cmpst td:nth-child(2),.cmpst td:nth-child(4){width:32%}
+.cmpst .sbar{display:block;width:100%}
+.cmpst .sbar.rev{transform:scaleX(-1)}
+.cmpst tr:last-child{border-top:1px solid var(--line)}
+.win{color:#7ee08a;font-weight:700}
+.f.win{outline:2px solid #3d8b4a}
+.cmpdef{width:100%;border-collapse:collapse}
+.cmpdef td,.cmpdef th{padding:3px 6px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cmpmoves{display:flex;flex-wrap:wrap;gap:4px 12px;padding:6px 0 10px}
+.cmpmoves span{white-space:nowrap}
+.combos summary{cursor:pointer}
+.combos .bar{margin:8px 0}
+@media (max-width:800px){.cmpgrid{grid-template-columns:1fr}.cols2{grid-template-columns:1fr}}
 /* Map Genie: Kacheln und Punkte in Weltpixeln, verschoben über transform */
 .mgmap .mgtiles,.mgmap .mgpins{position:absolute;left:0;top:0;width:0;height:0}
 .mgmap .mgtiles img{position:absolute;width:256px;height:256px;user-select:none;pointer-events:none}
@@ -532,6 +557,13 @@ a.bm:active{cursor:grabbing}
 .mgp.got::after{content:"✓";position:absolute;right:-7px;top:-8px;font-size:11px;color:#7ee08a;text-shadow:0 0 2px #000}
 .mlay .mgdot{margin-right:4px;width:16px;height:16px;font-size:9px}
 .mgdesc{white-space:pre-line;font-size:13.5px}
+.mghits{display:flex;flex-direction:column;gap:2px}
+.mghits button{display:flex;align-items:center;gap:6px;text-align:left;border:0;background:none;color:var(--ink);padding:4px 6px;border-radius:6px;cursor:pointer}
+.mghits button:hover{background:var(--hov)}
+.mgpins .mpin,.mgpins .mobj{position:absolute;transform:none}
+.mgpins .mobj{margin:-9px 0 0 -9px;cursor:pointer}
+.mgpins .mobj.got,.mgpins .mgp.got{opacity:.45;filter:grayscale(.6)}
+.mgpins .mobj.sel,.mgpins .mpin.sel{outline:3px solid var(--accent);z-index:3}
 .mgside{display:flex;flex-direction:column;gap:10px;min-width:0;max-height:74vh}
 .mgside .mapside{max-height:none;flex:0 0 auto}
 .mgcats{border:1px solid var(--line);border-radius:10px;padding:8px 10px;overflow:auto;flex:1 1 auto;min-height:0}
