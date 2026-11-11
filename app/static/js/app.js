@@ -1775,6 +1775,38 @@ const heatTip = (s) => `${s.name}: ${s.n} Stelle${s.n === 1 ? "" : "n"} hier, zu
    zwischengespeichert), Orte als farbige Punkte je Gruppe, Filter je Kategorie, „gefunden“ per Rechtsklick wie bei
    Legenden: Arceus. #karte/mg/<Karte>; ohne Karte für das Spiel geht es zu den Gebieten */
 const MGDATA = {};
+const MGWORDS = {"How to unlock": "Freischalten", "How to get": "So bekommst du es", "How to catch": "Fangen", "Location": "Ort",
+  "Note": "Hinweis", "Hint": "Hinweis", "Steps": "Schritte", "Reward": "Belohnung", "Rewards": "Belohnung", "Requirements": "Voraussetzung",
+  "Weather / Time": "Wetter / Tageszeit", "Rarity": "Seltenheit", "Level range": "Level", "Level": "Level", "Cloak": "Umhang",
+  "Verse description": "Vers", "Description": "Beschreibung", "Recipe": "Rezept", "Item": "Item", "Items": "Items", "Price": "Preis"};
+const MGVALS = {"All": "immer", "Day": "tagsüber", "Night": "nachts", "Common": "häufig", "Rare": "selten", "Very Rare": "sehr selten",
+  "Shaking trees": "Bäume schütteln", "Night only": "nur nachts", "Day only": "nur tagsüber", "Shake trees": "Bäume schütteln"};
+function mgMd(text, slug) {
+  const inline = (s) => esc(s)
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (_, t, u) => { const m = u.match(/locationIds=(\d+)/);
+      return m ? `<a href="#karte/mg/${esc(slug)}/${m[1]}">${t}</a>` : `<a href="${u}" target="_blank" rel="noopener">${t}</a>`; })
+    .replace(/\*\*([^*]+)\*\*/g, (_, t) => `<b>${MGWORDS[t.replace(/:$/, "").trim()] ? MGWORDS[t.replace(/:$/, "").trim()] + ":" : t}</b>`)
+    .replace(/(^|[\s(\[])[*_]([^*_]+)[*_](?=[\s.,)\]]|$)/g, (_, a, t) => { const k = t.replace(/^\[|\]$/g, ""); return `${a}<i>${MGVALS[k] ? (k === t ? MGVALS[k] : `[${MGVALS[k]}]`) : t}</i>`; });
+  const out = [];
+  let list = "";
+  String(text).split("\n").forEach((raw) => {
+    const ln = raw.trimEnd(), m = ln.match(/^(\s*)(?:[-*]|(\d+)\.)\s+(.*)$/);
+    if (m) {
+      const kind = m[2] ? "ol" : "ul";
+      if (list !== kind) { if (list) out.push(`</${list}>`); out.push(`<${kind}>`); list = kind; }
+      out.push(`<li${m[1].length ? ' class="sub"' : ""}>${inline(m[3])}</li>`);
+      return;
+    }
+    if (list) { out.push(`</${list}>`); list = ""; }
+    if (!ln.trim()) return;
+    // „**Feld:** Wert“: Wert übersetzen, wenn es ein bekannter Begriff ist
+    const kv = ln.match(/^\*\*([^*]+?):?\*\*:?\s*(.*)$/);
+    if (kv) { const v = kv[2].trim(); out.push(`<p><b>${esc(MGWORDS[kv[1].trim()] || kv[1].trim())}:</b> ${MGVALS[v] ? esc(MGVALS[v]) : inline(v)}</p>`); return; }
+    out.push(`<p>${inline(ln)}</p>`);
+  });
+  if (list) out.push(`</${list}>`);
+  return out.join("");
+}
 const mgProj = (lat, lng, z) => {
   const s = 256 * 2 ** z, r = Math.PI / 180, sy = Math.sin(lat * r);
   return [(lng + 180) / 360 * s, (0.5 - Math.log((1 + sy) / (1 - sy)) / (4 * Math.PI)) * s];
@@ -1803,7 +1835,8 @@ async function mgView(slug, want) {
   /* alle Punkte in einer Liste: Orte von Map Genie (t "mg"), eigene Spawnpunkte ("sp") und eigene Symbole ("ob") */
   const pts = d.orte.filter((o) => cats[o[1]]).map((o) => ({t: "mg", id: o[0], c: o[1], la: o[2], lo: o[3], name: o[4], text: o[5]}));
   if (own && (own.punkte.length || own.objekte.length)) {
-    const arten = own.arten || {}, og = {id: "own", titel: "Aus den Spieldaten", farbe: "#3a7bd5", kategorien: []};
+    const arten = own.arten || {}, og = {id: "own", titel: "Aus dem Pokédex", farbe: "#3a7bd5", kategorien: [],
+      tipp: "Unsere eigenen Daten wie auf den Einzelkarten: Spawnpunkte aus den Spieldaten und Symbole (Bäume, Erzbrocken …). Map Genie hat vieles davon selbst; deshalb sind sie anfangs aus, nur die Spawnpunkte nicht."};
     if (own.punkte.length) og.kategorien.push({id: "sp", titel: "Spawnpunkte", n: own.punkte.length, own: 1});
     Object.keys(arten).forEach((a) => { const n = own.objekte.filter((o) => o.art === a).length; if (n) og.kategorien.push({id: "o:" + a, titel: arten[a][1], n, own: 1, art: a}); });
     og.kategorien.forEach((c) => { cats[c.id] = Object.assign(c, {g: og}); });
@@ -1830,13 +1863,14 @@ async function mgView(slug, want) {
       ${S.game === "legends-arceus" ? `<a class="btn" href="#karte/obsidianfieldlands" data-tip="Einzelkarten je Gebiet mit Tageszeit- und Wetterfilter">Einzelkarten</a>` : ""}
       <a class="btn" href="#karte/gebiete" data-tip="Alle Orte mit ihren Pokémon als Liste">Gebiete</a>
       <input id="mgq" type="search" placeholder="Ort, Symbol oder Pokémon suchen" style="width:240px">
-      <label class="mgot" data-tip="Orte, die du als gefunden markiert hast (Rechtsklick oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> gefundene ausblenden</label>
+      <label class="mgot" data-tip="Was du als erledigt markiert hast (Rechtsklick oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> erledigte ausblenden</label>
       <span class="hint grow" id="mgn"></span></div>
+    <div id="mgwarn"></div>
     <div class="mapwrap"><div class="mapcol"><div id="mgmap" class="map mgmap"><div class="mgtiles"></div><div class="mgpins"></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
-      <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für den Namen, klicke für Einzelheiten. Rechtsklick markiert ihn als gefunden. Die Suche listet die Treffer hier; ein Klick springt hin.</p></aside>
+      <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für den Namen, klicke für Einzelheiten. Rechtsklick markiert ihn als erledigt. Die Suche listet die Treffer hier; ein Klick springt hin.</p></aside>
       <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button></span></div>
-        ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary>${g.id === "own" ? `<span class="mpin-l"></span>` : `<span class="mgdot" style="--c:${esc(g.farbe)}"></span>`}${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
+        ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
     <p class="hint">Karte und Orte: Map Genie (mapgenie.io), Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}; Namen und Texte englisch wie dort.${own ? " „Aus den Spieldaten“: Spawnpunkte und Symbole wie auf den Einzelkarten, je Gebiet an Geisterlichtern und Icognito ausgerichtet (auf wenige Meter genau)." : ""} Kacheln lädt der Server beim ersten Ansehen und hebt sie auf.</p></div>`;
   header();
@@ -1870,20 +1904,33 @@ async function mgView(slug, want) {
     $("#mgn").textContent = `${n} von ${pts.length} Punkten`;
   };
   const tiles = () => {
-    const w = box.clientWidth, h = box.clientHeight, ox = cx - w / 2, oy = cy - h / 2, nmax = 2 ** z;
+    const w = box.clientWidth, h = box.clientHeight, ox = cx - w / 2, oy = cy - h / 2;
     tl.style.transform = pl.style.transform = `translate(${-ox}px,${-oy}px)`;
+    // nur Kacheln innerhalb der Karte: außerhalb gibt es keine (Map Genie antwortet dort mit 403)
+    const [gx0, gy0] = mgProj(bb[3], bb[0], z), [gx1, gy1] = mgProj(bb[1], bb[2], z);
     const wantT = new Set();
-    for (let tx = Math.max(0, Math.floor(ox / 256)); tx <= Math.min(nmax - 1, Math.floor((ox + w) / 256)); tx++)
-      for (let ty = Math.max(0, Math.floor(oy / 256)); ty <= Math.min(nmax - 1, Math.floor((oy + h) / 256)); ty++) wantT.add(`${z}/${tx}/${ty}`);
+    for (let tx = Math.max(Math.floor(gx0 / 256), Math.floor(ox / 256)); tx <= Math.min(Math.floor((gx1 - 1e-6) / 256), Math.floor((ox + w) / 256)); tx++)
+      for (let ty = Math.max(Math.floor(gy0 / 256), Math.floor(oy / 256)); ty <= Math.min(Math.floor((gy1 - 1e-6) / 256), Math.floor((oy + h) / 256)); ty++) wantT.add(`${z}/${tx}/${ty}`);
     $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) im.remove(); else wantT.delete(im.dataset.k); });
     wantT.forEach((k) => {
       const [, tx, ty] = k.split("/").map(Number), im = new Image();
       im.dataset.k = k; im.alt = ""; im.draggable = false;
       im.style.left = tx * 256 + "px"; im.style.top = ty * 256 + "px";
-      im.onerror = () => { im.style.visibility = "hidden"; };
+      im.onerror = () => { im.style.visibility = "hidden"; tileTrouble(); };
       im.src = `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
       tl.appendChild(im);
     });
+  };
+  // fehlen Kacheln, sagt die Karte warum (Map Genie ruht nach 403/429 einen Tag; ein Neustart des Dienstes hebt das auf)
+  let troubleT = 0;
+  const tileTrouble = () => {
+    if (troubleT) return;
+    troubleT = setTimeout(async () => {
+      const st = (await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({}))).kacheln || {};
+      if (rid !== RID || !$("#mgwarn")) return;
+      $("#mgwarn").innerHTML = st.ruht ? `<div class="note warn">Map Genie liefert gerade keine Kacheln (${esc(st.fehler)}); der Abruf ruht bis ${esc(st.ruht.slice(11, 16))} Uhr (UTC) am ${esc(st.ruht.slice(0, 10).split("-").reverse().join("."))}. Ein Neustart des Dienstes setzt das zurück.</div>`
+        : st.fehler ? `<div class="note warn">Einige Kacheln fehlen (zuletzt ${esc(st.fehler)}).</div>` : "";
+    }, 1500);
   };
   const redraw = () => { tl.innerHTML = ""; tiles(); pins(); };
   const zoomTo = (nz, px, py) => {
@@ -1922,13 +1969,13 @@ async function mgView(slug, want) {
   $("#mggo")?.addEventListener("change", (e) => { const r = regions[+e.target.value]; if (r) { fitBox(r.slice(1)); redraw(); } e.target.value = ""; });
   const side = (i) => {
     const p = pts[i], c = cats[p.c], on = got.has(gkey(p));
-    const gotBtn = p.t === "sp" ? "" : `<p><button class="btn gotbtn${on ? " on" : ""}" id="gotbtn">${on ? "✓ gefunden" : "als gefunden markieren"}</button></p>`;
+    const gotBtn = p.t === "sp" ? "" : `<p><button class="btn gotbtn${on ? " on" : ""}" id="gotbtn">${on ? "✓ erledigt" : "als erledigt markieren"}</button></p>`;
     let body = "";
     if (p.t === "sp") body = `<table class="rows"><tr><th></th><th>Pokémon</th><th>Anteil</th><th>Tageszeit</th><th>Wetter</th></tr>${p.mons.map((m) => `<tr><td>${img(m.id, "sm")}</td>
       <td><a href="#pokemon/${m.id}">${m.alpha ? `<span class="alpha">Alpha</span> ` : ""}${esc(m.name)}</a></td><td>bis ${mpct(m.max)}</td><td>${esc(m.zeit)}</td><td>${esc(m.wetter)}</td></tr>`).join("")}</table>`;
     else if (p.t === "ob") body = p.o.items.length ? `<table class="rows">${p.o.items.map(([n, t, id]) => `<tr><td>${id ? img(id, "sm") : ""}</td><td>${id ? `<a href="#pokemon/${id}">${esc(n)}</a>` : wikiLink(n)}</td><td>${esc(t)}</td></tr>`).join("")}</table>`
       + (p.o.menge ? `<p class="hint">${esc(p.o.menge)} Stück je Mal.</p>` : "") : `<p class="hint">${esc(MOBJHINT[p.o.art] || "")}</p>`;
-    else body = p.text ? `<p class="mgdesc">${esc(p.text)}</p>` : "";
+    else body = p.text ? `<div class="mgdesc">${mgMd(p.text, slug)}</div><p class="hint">Text von Map Genie, Begriffe übersetzt.</p>` : "";
     $("#mapside").innerHTML = `<h3>${dot(c)} ${esc(p.t === "sp" ? (p.alpha ? "Alpha-Spawnpunkt" : "Spawnpunkt") : p.name || c.titel)}</h3>
       <p class="hint">${esc(c.g.titel)} · ${esc(c.titel)}${p.k && own ? " · " + esc(own.gebiete[p.k] || "") : ""}</p>${gotBtn}${body}`;
     $("#gotbtn")?.addEventListener("click", () => toggle(i));
@@ -2068,7 +2115,7 @@ async function mapView(karte, fid) {
       <span class="hint grow">${fid != null ? (hits || ohits ? [hits && `${hits} Spawnpunkte`, ohits && `${ohits} weitere Stellen`].filter(Boolean).join(" und ") + " hervorgehoben" : "hier an keinem Spawnpunkt") : `${pts.length} Spawnpunkte, davon ${pts.filter((p) => p.alpha).length} Alpha`}</span>` : ""}
 </div>
     ${objs.length || pts.length ? `<div class="bar mlays">${pts.length ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="heatbtn" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto wahrscheinlicher">▦ Übersicht mit Bildern</button>` : ""}${hasCond ? condSel("mapZeit", "Tageszeit", d.zeiten || [], fz) + condSel("mapWetter", "Wetter", d.wetterarten || [], fw) : ""}
-      ${objs.length ? `<label class="mgot" data-tip="Symbole, die du als gefunden markiert hast (Rechtsklick auf ein Symbol oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> gefundene ausblenden</label>` : ""}
+      ${objs.length ? `<label class="mgot" data-tip="Symbole, die du als erledigt markiert hast (Rechtsklick auf ein Symbol oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> gefundene ausblenden</label>` : ""}
       <span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button></span></div>
     <div class="bar mlays mgrps">${layerBar}</div>` : ""}
     ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus. <a href="#karte/gebiete">Gebiete von ${esc(gameName())}</a></div>` : ""}
@@ -2136,7 +2183,7 @@ async function mapView(karte, fid) {
     const c = $(`[data-cnt="${o.art}"]`);
     if (c) c.innerHTML = cnt(o.art, objs.filter((x) => x.art === o.art).length);
     const gb = $("#gotbtn");
-    if (gb && +gb.dataset.o === i) { gb.classList.toggle("on", on); gb.textContent = on ? "✓ gefunden" : "als gefunden markieren"; }
+    if (gb && +gb.dataset.o === i) { gb.classList.toggle("on", on); gb.textContent = on ? "✓ erledigt" : "als erledigt markieren"; }
     showLayers();
     api("/api/gefunden", {spiel: MAPSPIEL, karte: key, objekt: k, an: on}).catch(() => {
       if (on) got.delete(k); else got.add(k);        // nicht gespeichert: zurück

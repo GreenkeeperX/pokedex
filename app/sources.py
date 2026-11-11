@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.19.0"
+VERSION = "0.19.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.19.1", "11.11.2026", [
+        "Karten von Map Genie laden wieder ganz: Kacheln außerhalb der Karte werden nicht mehr angefragt (Map Genie "
+        "antwortete dort mit 403, und der Pokédex ließ die Quelle daraufhin einen Tag ruhen); fehlen Kacheln, sagt die Karte warum",
+        "Beschreibungen auf der Karte gegliedert (Absätze, Listen, Links zu anderen Orten), Begriffe deutsch; „erledigt“ statt „gefunden“; "
+        "die eigenen Punkte heißen „Aus dem Pokédex“ und erklären sich per Tooltip",
+    ]),
     ("0.19.0", "11.11.2026", [
         "Champions: Reiter „Kampf“ statt „Karte“, „im Kader“ statt gefangen, ohne Schillernd und Fangchance",
         "Doppelkampf-Bewertung (Reiter Kampf): Rollen wie Schutz, Tempo-Kontrolle, Störer, Umlenken und Unterstützung mit "

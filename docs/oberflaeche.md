@@ -60,6 +60,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Wesen; Team-Zeilen (`tr.mine`) mit eigenem Wert an ihrer Stelle in der Liste.
 - Kampf (`battleView`, `#kampf`): Doppelkampf-Bewertung aus `/api/team/doppel`. `BATTLE()` (Champions) benennt den
   Reiter „Karte“ in „Kampf“ um, leitet `#karte` dorthin und macht aus „gefangen“ „im Kader“ (ohne Schillernd, ohne Fangchance).
+- Map Genie: nur Kacheln innerhalb von `bounds`; `#mgwarn` erklärt fehlende Kacheln (`kacheln` in `/api/mapgenie`);
+  `mgMd` für Beschreibungen (Markdown, Feldnamen deutsch über `MGWORDS`, Werte über `MGVALS`).
 - Vergleich (`compareView`, `#vergleich/<A>/<B>`, „-“ = leer): zwei Suchfelder, Werte mit Unterschied, Verteidigung je
   Angriffstyp (grün = steckt weniger ein), Fähigkeiten, Attacken (nur A, beide, nur B).
 - Typkombinationen (`combosHtml`, unter der Typtabelle, aufklappbar `combosOpen`): Verteidigung je Kombination, sortierbar.

@@ -831,7 +831,12 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set()}
+_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": ""}
+
+
+def mg_status():
+    """Zustand der Kacheln für die Oberfläche: ruht bis (ISO oder leer), letzter Fehler."""
+    return {"ruht": _mg["rest"] if _mg["rest"] > _iso(now()) else "", "fehler": _mg["fehler"]}
 
 
 def mg_tile(spiel, karte, z, x, y):
@@ -842,6 +847,9 @@ def mg_tile(spiel, karte, z, x, y):
     rel = mapgenie.tile_ok(m["kacheln"], z, x, y) if m else None
     if not rel or not (m["min_zoom"] - 2 <= z <= m["max_zoom"]):
         return None
+    r = mapgenie.tile_range(m.get("bounds"), z)
+    if r and not (r[0] <= x <= r[1] and r[2] <= y <= r[3]):
+        return None                      # außerhalb der Karte gibt es keine Kachel; nicht nachfragen
     f = mg_dir("kacheln", *rel.split("/"))
     if os.path.isfile(f):
         return f
@@ -856,6 +864,7 @@ def mg_tile(spiel, karte, z, x, y):
         try:
             body = sources.fetch(mapgenie.TILES + rel, timeout=30, raw=True)
         except sources.FetchError as e:
+            _mg["fehler"] = f"HTTP {e.status or '?'} bei {rel} ({_iso(now())[:16].replace('T', ' ')})"
             if e.status in sources.BLOCKED:
                 _mg["rest"] = _iso(now() + timedelta(hours=REST_H))
             elif e.status:
@@ -1236,6 +1245,12 @@ def diagnose(proben=None):
     for spiel, slug in mapgenie.GAMES.items():
         probe(f"Map Genie, {slug}", mapgenie.game_url(slug),
               lambda t, s=slug: page_info(t) + ", Karten: " + (", ".join(mapgenie.map_slugs(t, s)) or "keine"), headers=html)
+    # eine Kachel innerhalb der Karte (zeigt, ob der Kachelspeicher antwortet; außerhalb meldet er 403)
+    probe("Map Genie, Kachel Hisui 9/254/254", mapgenie.TILES + "pokemon-legends-arceus/hisui-region/default-v3/9/254/254.png",
+          lambda b: f"{len(b)} Bytes, " + ("PNG" if b[:4] == b"\x89PNG" else "kein Bild"), raw=True)
+    st = mg_status()
+    lines.append(f"Map Genie, Kacheln im Dienst: {'ruht bis ' + st['ruht'] if st['ruht'] else 'bereit'}"
+                 + (f", zuletzt {st['fehler']}" if st["fehler"] else ""))
     # ältere Spiele: interaktive Karten mit Symbolen (Items, Trainer, Pokémon) zum Abhaken
     for g in ("Yellow", "Crystal", "Emerald", "Platinum", "Red", "Gold", "FireRed", "HeartGold", "Black", "X", "Sun"):
         probe(f"pokemoncompletion, {g}", f"https://pokemoncompletion.com/completion/{g}", page_info, keep=200_000, headers=html)
