@@ -1101,6 +1101,24 @@ class Server(TempData):
         self.assertEqual(_mg.slugs("red-blue"), ("pokemon-red-blue-yellow",))
         self.assertEqual(_mg.slugs("sword-shield"), ())                                          # gibt es dort nicht
         self.assertEqual(_mg.SHARE["yellow"], "red-blue")
+        # pokemoncompletion: Karte in derselben Form, Schwester-Edition sieht sie, Kacheln zu 512 auf eigener Stufe
+        from app import pkcompletion as _pc
+        data = {"interactiveMap": {"dim": {"w": 2048, "h": 1024}, "cropSize": 512},
+                "locations": [{"name": "Erfundenstadt", "pos": [-64, 128]}],
+                "categories": [{"id": "battle", "list": [{"uid": 7, "name": "Trainer Test", "location": "Route 1", "pos": [[-32, 64], [-96, 192]]}]}]}
+        m = _pc.parse(json.dumps(data), "crystal")
+        self.assertEqual((m["min_zoom"], m["max_zoom"], m["kachel"]), (2, 3, 512))
+        self.assertEqual(sorted(o[0] for o in m["orte"]), [7000, 7001, 10_000_000])
+        x, y = _mg.project(*[o for o in m["orte"] if o[0] == 7000][0][2:4], 3)
+        self.assertAlmostEqual(x, 64 * 2, places=2)            # M = 1: ein Kartenpunkt sind zwei Pixel
+        self.assertAlmostEqual(y, 32 * 2, places=2)
+        self.assertEqual(_pc.tile(m, 3, 3, 1)[0], "pc/crystal/1_3_1.png")
+        self.assertIsNone(_pc.tile(m, 3, 4, 0))
+        self.assertEqual(_pc.tile(m, 2, 1, 0)[0], "pc/crystal/2_1_0.png")
+        self.assertEqual(len(_pc.tile_list(m)), 8 + 2)
+        abruf.store.save_json("mapgenie/crystal.json", {"spiel": "crystal", "am": "2026-11-11", "quelle": "pokemoncompletion", "karten": [m]})
+        self.assertEqual(abruf.mg_maps("gold-silver")["karten"][0]["quelle"], "pokemoncompletion")
+        self.assertEqual(abruf._tile_of(m, 3, 0, 0)[1], "https://pokemonmap.b-cdn.net/crystal/1_0_0.png?v=1")
         f = os.path.join(self.dir, "mapgenie", "kacheln", "spiel", "erfunden", "10", "1", "2.png")
         os.makedirs(os.path.dirname(f))
         open(f, "wb").write(b"\x89PNG\r\n\x1a\n")

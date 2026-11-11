@@ -94,6 +94,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln) und große Item-Bilder, nur im Datenordner auf dem Server | Bilder von Serebii, Spielgrafik von Nintendo |
 | [PLA Companion](https://software-notion.de/apps/pla-companion/) | Legenden: Arceus: Schnellreise und Lager | Daten von software-notion.de |
 | [Map Genie](https://mapgenie.io) | Interaktive Karten (Orte, Sammelobjekte, Materialien) für jedes Spiel, das es dort gibt; nur im Datenordner, für den privaten Gebrauch | Daten und Kacheln von Map Genie |
+| [pokemoncompletion](https://github.com/RainingChain/pokemoncompletion) | Karten für Kristall, Smaragd und Platin (Orte, Pokémon, Items, Trainer, Sammelobjekte); auch für Gold/Silber, Rubin/Saphir, Diamant/Perl | GPL-3.0 |
 | [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items, Karte (Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas, Items am Boden und in Grabstellen); geplant: Edelhorden | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.

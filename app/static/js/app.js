@@ -2110,11 +2110,12 @@ async function mgView(slug, want) {
       <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button></span></div>
         ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
-    <p class="hint">Alles liegt auf dem Server: Karte und Orte von Map Genie (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
+    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${d.quelle === "pokemoncompletion" ? "pokemoncompletion" : "Map Genie"}${d.quelle === "pokemoncompletion" && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
   header();
   const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box), old = $(".mgold", box), ld = $(".mgload", box);
   const tileUrl = (k) => `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
   let oldZ = null, pending = 0, warm = new Set();
+  const TS = d.kachel || 256;        // Kachelgröße: Map Genie 256, pokemoncompletion 512
   const zmin = d.min_zoom, zmax = d.max_zoom;
   const bb = d.bounds || (() => { const la = pts.map((p) => p.la), lo = pts.map((p) => p.lo); return [Math.min(...lo), Math.min(...la), Math.max(...lo), Math.max(...la)]; })();
   let z = zmin, cx = 0, cy = 0;
@@ -2148,8 +2149,8 @@ async function mgView(slug, want) {
   const view = (zz, pad = 0) => {
     const f = 2 ** (zz - z), w = box.clientWidth, h = box.clientHeight, ox = (cx - w / 2) * f, oy = (cy - h / 2) * f;
     const [gx0, gy0] = mgProj(bb[3], bb[0], zz), [gx1, gy1] = mgProj(bb[1], bb[2], zz), out = [];
-    for (let tx = Math.max(Math.floor(gx0 / 256), Math.floor(ox / 256) - pad); tx <= Math.min(Math.floor((gx1 - 1e-6) / 256), Math.floor((ox + w * f) / 256) + pad); tx++)
-      for (let ty = Math.max(Math.floor(gy0 / 256), Math.floor(oy / 256) - pad); ty <= Math.min(Math.floor((gy1 - 1e-6) / 256), Math.floor((oy + h * f) / 256) + pad); ty++) out.push(`${zz}/${tx}/${ty}`);
+    for (let tx = Math.max(Math.floor(gx0 / TS), Math.floor(ox / TS) - pad); tx <= Math.min(Math.floor((gx1 - 1e-6) / TS), Math.floor((ox + w * f) / TS) + pad); tx++)
+      for (let ty = Math.max(Math.floor(gy0 / TS), Math.floor(oy / TS) - pad); ty <= Math.min(Math.floor((gy1 - 1e-6) / TS), Math.floor((oy + h * f) / TS) + pad); ty++) out.push(`${zz}/${tx}/${ty}`);
     return out;
   };
   const progress = () => {
@@ -2169,7 +2170,8 @@ async function mgView(slug, want) {
     wantT.forEach((k) => {
       const [, tx, ty] = k.split("/").map(Number), im = new Image();
       im.dataset.k = k; im.alt = ""; im.draggable = false;
-      im.style.left = tx * 256 + "px"; im.style.top = ty * 256 + "px";
+      im.style.left = tx * TS + "px"; im.style.top = ty * TS + "px";
+      if (TS !== 256) im.style.width = im.style.height = TS + "px";
       pending++;
       im.onload = () => { im.onload = im.onerror = null; pending--; progress(); };
       im.onerror = () => { im.onload = im.onerror = null; pending--; im.style.visibility = "hidden"; tileTrouble(); progress(); };
@@ -2193,7 +2195,7 @@ async function mgView(slug, want) {
     troubleT = setTimeout(async () => {
       const st = (await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({}))).kacheln || {};
       if (rid !== RID || !$("#mgwarn")) return;
-      $("#mgwarn").innerHTML = st.ruht ? `<div class="note warn">Map Genie liefert gerade keine Kacheln (${esc(st.fehler)}); der Abruf ruht bis ${esc(st.ruht.slice(11, 16))} Uhr (UTC) am ${esc(st.ruht.slice(0, 10).split("-").reverse().join("."))}. Ein Neustart des Dienstes setzt das zurück.</div>`
+      $("#mgwarn").innerHTML = st.ruht && d.quelle !== "pokemoncompletion" ? `<div class="note warn">Map Genie liefert gerade keine Kacheln (${esc(st.fehler)}); der Abruf ruht bis ${esc(st.ruht.slice(11, 16))} Uhr (UTC) am ${esc(st.ruht.slice(0, 10).split("-").reverse().join("."))}. Ein Neustart des Dienstes setzt das zurück.</div>`
         : st.fehler ? `<div class="note warn">Einige Kacheln fehlen (zuletzt ${esc(st.fehler)}).</div>` : "";
     }, 1500);
   };
