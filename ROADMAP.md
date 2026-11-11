@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.28.2 (11.11.2026)
+
+- Verbindungstest: `Kachelpfad` für Map Genie wieder über `tile_ok` (0.28.0 prüfte die Ecke 0/0, die außerhalb liegt); Kartenseiten nennen eingebettete Daten
+
 ## 0.28.1 (11.11.2026)
 
 - Verbindungstest nach der Prüfung vom 11.11.: Serebii-Ortsseiten unter `pokearth/galar|sinnoh/…`, Bulbapedia `Category:Game maps`; IGN nur Galar und Let's Go (DLC- und BDSP-Pfade 404)
