@@ -101,7 +101,8 @@ def teams():
 
 
 def _details(v, members):
-    """Je Platz {"level": 1–100, "attacken": bis zu 4 IDs}, als Liste parallel zu den Mitgliedern. Ältere Oberflächen
+    """Je Platz {"level": 1–100, "attacken": bis zu 4 IDs, dazu wahlweise item, faehigkeit, wesen, tera, evs, ivs,
+    geschlecht, schillernd, spitzname}, als Liste parallel zu den Mitgliedern. Ältere Oberflächen
     schicken {id: {...}}; das wird hier zur Liste."""
     out = []
     for d in abfragen.slot_details(v, members):
@@ -116,7 +117,21 @@ def _details(v, members):
                 moves.append(int(x))
             except (TypeError, ValueError):
                 raise ValueError("Attacken: Zahlen erwartet")
-        out.append({"level": lv, "attacken": moves})
+        e = {"level": lv, "attacken": moves}
+        for k in ("item", "faehigkeit", "wesen", "tera"):        # seit 0.18.0 (Showdown-Import): IDs
+            if isinstance(d.get(k), int) and 0 < d[k] < 100000:
+                e[k] = d[k]
+        for k in ("evs", "ivs"):
+            v6 = d.get(k)
+            if isinstance(v6, list) and len(v6) == 6 and all(isinstance(x, int) and 0 <= x <= 255 for x in v6):
+                e[k] = v6
+        if d.get("geschlecht") in ("M", "F"):
+            e["geschlecht"] = d["geschlecht"]
+        if d.get("schillernd") is True:
+            e["schillernd"] = True
+        if d.get("spitzname"):
+            e["spitzname"] = " ".join(str(d["spitzname"]).split())[:30]
+        out.append(e)
     return out
 
 
@@ -582,6 +597,8 @@ class Handler(BaseHTTPRequestHandler):
         "/api/alpha": lambda b: set_mark("alpha", b),
         "/api/gefunden": set_found,
         "/api/team/gefangen": abfragen.team_caught,
+        "/api/team/import": abfragen.paste_import,
+        "/api/team/export": abfragen.paste_export,
         "/api/uebertragen": transfer,
         "/api/restore": restore,
         "/api/entscheidung": decide,

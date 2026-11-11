@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.17.0"
+VERSION = "0.18.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.18.0", "11.11.2026", [
+        "Team als Showdown-Text: übernehmen (auch PokePaste, deutsche Namen gehen ebenfalls) und weitergeben, mit Item, "
+        "Fähigkeit, Wesen, EVs, IVs und Tera-Typ; die Plätze zeigen Item, Fähigkeit und Wesen",
+        "Initiative-Liste: alle Pokémon des Spiels nach Initiative (minimal, neutral, maximal, mit Wesen), Level 50 oder 100, "
+        "mit Rückenwind und Wahlschal; dein Team steht mit seinem eigenen Wert dazwischen",
+    ]),
     ("0.17.0", "11.11.2026", [
         "Große Karte: Legenden: Arceus zeigt ganz Hisui mit den eigenen Spawnpunkten und Symbolen (an Geisterlichtern "
         "und Icognito ausgerichtet); „Gehe zu“ für Gebiete, Suche nach Ort, Symbol oder Pokémon mit Trefferliste, ein Klick zoomt hin",

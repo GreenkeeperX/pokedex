@@ -54,6 +54,10 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - α (`alphaBtn`, `/api/alpha`): bündig über dem Pokéball, nur für mögliche Alphas des Spiels; setzt auch gefangen.
 - Fester Tabellenkopf: `.scroll.sticky` (Attacken, Items) mit `top: var(--stick)`; auf schmalen Bildschirmen scrollt die
   Tabelle seitlich ohne festen Kopf.
+- Team: „Showdown-Text“ (`#sdbox`, offen gemerkt als `sdOpen`) mit `sdExport` und `sdImport` (ersetzt das Team nach
+  Rückfrage); `slotExtra` zeigt Item, Fähigkeit, Wesen und Tera-Typ aus `plaetze` der Bewertung.
+- Initiative-Liste (`speedView`, `#initiative`, Einstellungen in `speed`): Spalten minimal, neutral, maximal, maximal mit
+  Wesen; Team-Zeilen (`tr.mine`) mit eigenem Wert an ihrer Stelle in der Liste.
 - Vergleich (`compareView`, `#vergleich/<A>/<B>`, „-“ = leer): zwei Suchfelder, Werte mit Unterschied, Verteidigung je
   Angriffstyp (grün = steckt weniger ein), Fähigkeiten, Attacken (nur A, beide, nur B).
 - Typkombinationen (`combosHtml`, unter der Typtabelle, aufklappbar `combosOpen`): Verteidigung je Kombination, sortierbar.

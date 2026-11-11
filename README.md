@@ -47,6 +47,10 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Detailseite aus mit den Spawnpunkten des Pokémon. Die „Übersicht mit Bildern“
   zeigt je Kartenfeld die häufigsten Pokémon (je größer, desto wahrscheinlicher), die häufigsten im Gebiet und für ein
   gewähltes Pokémon den Vergleich aller Gebiete.
+- **Showdown-Text** (Reiter Team): Team aus dem Text von Pokémon Showdown oder PokePaste übernehmen und als Text
+  weitergeben, mit Item, Fähigkeit, Wesen, EVs, IVs und Tera-Typ.
+- **Initiative-Liste** (Team → Initiative-Liste): alle Pokémon des Spiels nach Initiative auf Level 50 oder 100, mit
+  Rückenwind und Wahlschal; das eigene Team steht mit seinem Wert dazwischen.
 - **Vergleich**: zwei Pokémon nebeneinander (Werte mit Unterschied, Typwirkung, Fähigkeiten, Attacken), über
   „Vergleichen“ auf der Detailseite.
 - **Typkombinationen** (Reiter Typen): alle 171 Kombinationen als Verteidiger, sortierbar.

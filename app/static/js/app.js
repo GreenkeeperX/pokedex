@@ -570,6 +570,7 @@ async function route() {
     else if (tab === "attacken") await movesView();
     else if (tab === "typen") await chartView();
     else if (tab === "vergleich") await compareView(arg, arg2);
+    else if (tab === "initiative") await speedView();
     else if (tab === "items") await itemsView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
     else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);
@@ -847,6 +848,32 @@ async function saveToServer(name = S.team.name, asNew = false) {
     gewichte: weights(), details: t.details});
   Object.assign(t, {tid: r.id, name, spiel: t.spiel || S.game, dirty: false});
   store.set("team", t);
+}
+/* Showdown-Text: Export des aktuellen Teams, Import ersetzt das Team (Level, Attacken, Item, Fähigkeit, Wesen, EVs) */
+async function sdExport() {
+  const r = await api("/api/team/export", {spiel: S.game, ids: S.team.ids, details: S.team.details});
+  if (!$("#sdtext")) return;
+  $("#sdtext").value = r.text;
+  $("#sdnote").textContent = S.team.ids.length ? "Englische Namen, wie in Showdown." : "Das Team ist leer: Text einfügen und übernehmen.";
+}
+async function sdImport() {
+  const text = $("#sdtext").value;
+  if (!text.trim()) return;
+  const r = await api("/api/team/import", {spiel: S.game, text});
+  if (!r.ids.length) { $("#sdnote").textContent = r.hinweise.join(" · ") || "Kein Pokémon erkannt."; return; }
+  if (S.team.ids.length && !await ask("Team ersetzen?", `${r.ids.length} Pokémon aus dem Text ersetzen das aktuelle Team.`, "Ersetzen")) return;
+  S.team.ids = r.ids;
+  S.team.details = r.details;
+  S.team.fest = [];
+  teamChanged();
+  $("#sdnote").textContent = r.hinweise.length ? "Übernommen; nicht erkannt: " + r.hinweise.join(" · ") : `${r.ids.length} Pokémon übernommen.`;
+}
+const STATK = ["KP", "Ang", "Vert", "SpAng", "SpVert", "Init"];
+function slotExtra(x) {
+  if (!x || !Object.keys(x).length) return "";
+  const mod = x.wesen_mod ? ` (+${STATK[x.wesen_mod[0]]} −${STATK[x.wesen_mod[1]]})` : "";
+  const parts = [x.item && `@ ${esc(x.item)}`, x.faehigkeit && esc(x.faehigkeit), x.wesen && esc(x.wesen + mod)].filter(Boolean);
+  return `<div class="hint slotx">${parts.join(" · ")}${x.tera ? ` · Tera ${tchip(x.tera)}` : ""}</div>`;
 }
 function teamChanged() {
   saveTeam();
@@ -1413,7 +1440,13 @@ async function teamView() {
       <span id="tbar" class="bar" style="margin:0"></span>
       <label class="hint">Sortieren <select id="tsort"><option value="">eigene Reihenfolge</option>${Object.entries(TSORT).map(([k, [n]]) => `<option value="${k}"${S.tsort === k ? " selected" : ""}>${n}</option>`).join("")}</select></label></div>
       <div id="tnote"></div>
-      <div class="bar"><div class="ac grow"><input id="add" type="search" placeholder="Pokémon hinzufügen: Name oder Nummer" style="width:100%"></div></div>
+      <div class="bar"><div class="ac grow"><input id="add" type="search" placeholder="Pokémon hinzufügen: Name oder Nummer" style="width:100%"></div>
+        <a class="btn" href="#initiative" data-tip="Wer ist schneller: alle Pokémon des Spiels nach Initiative, mit deinem Team">Initiative-Liste</a></div>
+      <details class="sdbox" id="sdbox"><summary>Showdown-Text <span class="hint">Team als Text übernehmen oder weitergeben (Pokémon Showdown, PokePaste)</span></summary>
+        <textarea id="sdtext" rows="12" spellcheck="false" placeholder="Garchomp @ Choice Scarf&#10;Ability: Rough Skin&#10;EVs: 252 Atk / 4 SpD / 252 Spe&#10;Jolly Nature&#10;- Earthquake"></textarea>
+        <div class="bar"><button data-act="sdexp" data-tip="Das aktuelle Team als Text">Aus dem Team</button>
+          <button class="primary" data-act="sdimp" data-tip="Ersetzt das aktuelle Team">Als Team übernehmen</button>
+          <button data-act="sdcopy">Kopieren</button><span id="sdnote" class="hint"></span></div></details>
       <div class="tslots" id="slots"><p class="hint">Lädt …</p></div>
       <details class="favd dropmark" data-drop="fav" open><summary>${icon("fav")} Favoriten in ${esc(gameName())} <span id="favn"></span> <span class="hint">zum schnellen Tauschen auf einen Platz ziehen; hierher ziehen macht zum Favoriten</span></summary><div id="favs"></div></details></div>
     <div class="cols">
@@ -1443,6 +1476,9 @@ async function teamView() {
   favBox();
   teamNote();
   autocomplete($("#add"), (r) => addToTeam(r.id));
+  $("#sdbox").open = store.get("sdOpen", false);
+  $("#sdbox").addEventListener("toggle", (e) => { store.set("sdOpen", e.target.open); if (e.target.open && !$("#sdtext").value.trim()) sdExport(); });
+  if ($("#sdbox").open) sdExport();
   autocomplete($("#foe"), (r) => { if (S.foes.length < 6 && !S.foes.includes(r.id)) { S.foes.push(r.id); store.set("foes", S.foes); } matchup(); });
   bindFilter(S.tfilter, "tf", () => teamRefresh(), () => store.set("tfilter", S.tfilter));
   $("#tleg").addEventListener("change", (e) => { S.tleg = e.target.checked; store.set("tleg", S.tleg); teamRefresh(); });
@@ -1508,6 +1544,7 @@ async function teamRefresh() {
       <a href="#pokemon/${id}/${i}" draggable="false">${img(id, "mid", true)}<br><b>${esc(m.name)}</b></a>
       ${bad.has(i) ? `<div class="note warn small">Nicht in ${esc(gameName())}</div>` : ""}
       <div>${tchips(m.typen)}</div><div class="hint">${det.level ? "Level " + det.level + " · " : ""}Basiswerte <b style="color:${sumColor(m.summe)}">${m.summe}</b></div>
+      ${slotExtra(ev.plaetze?.[i])}
       <div class="mvs">${(det.attacken || []).map((x) => MOVES[x] ? (CHECK.fremd?.[i] || []).includes(x)
         ? `<span class="mv off" data-tip="${esc(`Nicht in der Lernliste von ${gameName()}`)}">${tchip(MOVES[x].typ)} ${esc(MOVES[x].name)} <b class="wbadge">!</b></span>`
         : `<span class="mv">${tchip(MOVES[x].typ)} ${esc(MOVES[x].name)}</span>` : "").join("") || `<a class="hint" href="#pokemon/${id}/${i}">Attacken wählen</a>`}</div></div>`;
@@ -2423,6 +2460,69 @@ async function chartView() {
 /* ------------------------------------------------------------------ Vergleich */
 /* Zwei Pokémon nebeneinander (#vergleich/<A>/<B>): Werte mit Unterschied, Typwirkung, Fähigkeiten, Attacken. Das jeweils
    bessere ist grün; ein Feld ohne Pokémon bietet die Suche an */
+/* ------------------------------------------------------------------ Initiative-Liste */
+// Initiative-Wert ab Generation 3: ((2·Basis + DV + EV/4) · Level/100 + 5) · Wesen; bis Generation 2 mit DV (0–15) und Stat Exp
+function speedStat(base, lv, iv, ev, nat, gen) {
+  if (gen <= 2) return Math.floor(((base + iv) * 2 + Math.floor(Math.ceil(Math.sqrt(ev)) / 4)) * lv / 100) + 5;
+  return Math.floor((Math.floor((2 * base + iv + Math.floor(ev / 4)) * lv / 100) + 5) * nat);
+}
+function speedCols(base, lv, gen) {
+  if (gen <= 2) return [speedStat(base, lv, 0, 0, 1, gen), null, speedStat(base, lv, 15, 65535, 1, gen), null];
+  return [speedStat(base, lv, 0, 0, 0.9, gen), speedStat(base, lv, 31, 0, 1, gen), speedStat(base, lv, 31, 252, 1, gen), speedStat(base, lv, 31, 252, 1.1, gen)];
+}
+async function speedView() {
+  const rid = RID, gen = S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;
+  const o = Object.assign({level: 50, wind: false, schal: false, q: "", team: false}, store.get("speed", {}));
+  main.innerHTML = `<div class="box"><div class="bar"><b>Initiative in</b> <select class="gamesel"></select>
+      <label>Level <select id="splv">${[50, 100].map((v) => `<option${v === o.level ? " selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label data-tip="Verdoppelt die Initiative (vier Runden)"><input type="checkbox" id="spwind"${o.wind ? " checked" : ""}> Rückenwind</label>
+      <label data-tip="Wahlschal: Initiative ×1,5"><input type="checkbox" id="spschal"${o.schal ? " checked" : ""}> Wahlschal</label>
+      <label><input type="checkbox" id="spteam"${o.team ? " checked" : ""}> nur mein Team</label>
+      <input id="spq" type="search" placeholder="Pokémon suchen" value="${esc(o.q)}" class="grow"></div>
+      <p class="hint">${gen <= 2 ? "Bis Generation 2: ohne und mit vollen DVs und Stat Exp." : "Spalten: minimal (0 IV, 0 EV, senkendes Wesen), neutral (31 IV, 0 EV), maximal (31 IV, 252 EV), maximal mit Wesen (+10 %)."}
+        Dein Team ist hervorgehoben, mit dem Wert aus Level, EVs, IVs und Wesen, soweit eingetragen (sonst neutral). Unter Bitterraum gilt die Liste umgekehrt.</p>
+      <div id="splist"><p class="hint">Lädt …</p></div></div>`;
+  header();
+  const d = await api("/api/pokemon?" + qs({spiel: S.game, formen: "relevant", kampf: 1, sort: "init", limit: 2000}));
+  if (rid !== RID) return;
+  d.rows.forEach((r) => { ROWS[r.id] = Object.assign(ROWS[r.id] || {}, r); });
+  const ev = S.team.ids.length ? await api("/api/team/bewerten", {spiel: S.game, ids: S.team.ids, details: S.team.details, kurz: 1}) : {mitglieder: [], plaetze: []};
+  if (rid !== RID) return;
+  (ev.mitglieder || []).forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
+  const draw = () => {
+    const mult = (o.wind ? 2 : 1) * (o.schal ? 1.5 : 1), lv = o.level, q = o.q.trim().toLowerCase();
+    const mine = S.team.ids.map((id, i) => {
+      const r = ROWS[id], det = S.team.details[i] || {}, x = ev.plaetze?.[i] || {};
+      if (!r) return null;
+      const iv = det.ivs ? det.ivs[5] : (gen <= 2 ? 15 : 31), evv = det.evs ? det.evs[5] : 0;
+      const nat = x.wesen_mod ? (x.wesen_mod[0] === 5 ? 1.1 : x.wesen_mod[1] === 5 ? 0.9 : 1) : 1;
+      const own = speedStat(r.werte[5], det.level || lv, iv, evv, nat, gen) * (x.item === "Wahlschal" && !o.schal ? 1.5 : 1);
+      return {r, own: Math.floor(own * (o.wind ? 2 : 1) * (o.schal ? 1.5 : 1)), det, x, slot: i};
+    }).filter(Boolean);
+    let rows = d.rows.map((r) => ({r, cols: speedCols(r.werte[5], lv, gen).map((v) => v == null ? null : Math.floor(v * mult))}));
+    if (q) rows = rows.filter(({r}) => r.name.toLowerCase().includes(q));
+    if (o.team) rows = [];
+    const mrow = (m) => `<tr class="mine" data-hc="${m.r.id}"><td>${img(m.r.id)} <a href="#pokemon/${m.r.id}/${m.slot}">${esc(m.r.name)}</a> <span class="hint">dein Team${m.det.level ? ", Level " + m.det.level : ""}${m.x.wesen ? ", " + esc(m.x.wesen) : ""}${m.x.item ? ", " + esc(m.x.item) : ""}</span></td>
+      <td class="num">${m.r.werte[5]}</td><td class="num" colspan="4"><b>${m.own}</b></td></tr>`;
+    // Team-Zeilen stehen dort, wo ihr eigener Wert in die Liste fällt
+    const out = [], todo = [...mine].sort((a, b) => b.own - a.own);
+    rows.forEach(({r, cols}) => {
+      const top = cols[3] ?? cols[2];
+      while (todo.length && todo[0].own >= top) out.push(mrow(todo.shift()));
+      out.push(`<tr data-hc="${r.id}"><td>${img(r.id)} <a href="#pokemon/${r.id}">${esc(r.name)}</a></td><td class="num">${r.werte[5]}</td>${cols.map((v) => `<td class="num">${v ?? ""}</td>`).join("")}</tr>`);
+    });
+    todo.forEach((m) => out.push(mrow(m)));
+    $("#splist").innerHTML = `<div class="scroll"><table class="speed"><thead><tr><th>Pokémon</th><th class="num">Basis</th>${gen <= 2 ? "<th class=\"num\">ohne</th><th></th><th class=\"num\">voll</th><th></th>" : "<th class=\"num\">minimal</th><th class=\"num\">neutral</th><th class=\"num\">maximal</th><th class=\"num\">maximal +</th>"}</tr></thead>
+      <tbody>${out.join("") || `<tr><td colspan="6" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
+  };
+  const set = (k, v) => { o[k] = v; store.set("speed", o); draw(); };
+  $("#splv").addEventListener("change", (e) => set("level", +e.target.value));
+  $("#spwind").addEventListener("change", (e) => set("wind", e.target.checked));
+  $("#spschal").addEventListener("change", (e) => set("schal", e.target.checked));
+  $("#spteam").addEventListener("change", (e) => set("team", e.target.checked));
+  $("#spq").addEventListener("input", (e) => set("q", e.target.value));
+  draw();
+}
 async function compareView(a, b) {
   const rid = RID;
   const ids = [a, b].map((x) => (x && !isNaN(+x) ? +x : null));
@@ -2767,6 +2867,9 @@ document.addEventListener("click", async (e) => {
       store.set(which === "filter" ? "filter2" : "tfilter", S[which]);
       route();
     } else if (act === "opt") await optimize();
+    else if (act === "sdexp") await sdExport();
+    else if (act === "sdimp") await sdImport();
+    else if (act === "sdcopy") await copyText($("#sdtext").value, b);
     else if (act === "take") {
       const ids = S.lastOpt[+b.dataset.i].ids, old = S.team;
       // Level und Attacken bleiben bei Pokémon, die schon im Team waren
