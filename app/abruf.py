@@ -645,6 +645,7 @@ def _pkhex(st, log, at):
     texts = {}
     for spiel, (enc, names, fixed) in PKHEX_GAMES.items():
         STATE["step"] = f"PKHeX: {spiel}"
+        enc, _, enc2 = enc.partition("|")          # zweite Datei: die andere Edition
         b = src.get(PKHEX_RAW + enc, raw=True)
         for f in (names, names.replace("_00000_", "_30000_")) if b else ():
             if f not in texts:
@@ -653,6 +654,8 @@ def _pkhex(st, log, at):
         if b and t:
             out[spiel] = {"begegnungen": b, "orte": t, "orte3": texts.get(names.replace("_00000_", "_30000_"), ""),
                           "fest": (src.get(PKHEX_SRC + fixed) or "") if fixed else ""}
+            if enc2:
+                out[spiel]["begegnungen2"] = src.get(PKHEX_RAW + enc2, raw=True) or b""
     # Lernlisten für Spiele ohne Lernliste in der PokéAPI (importer.PKHEX_LEARN)
     for key in importer.PKHEX_LEARN:
         STATE["step"] = f"PKHeX: Lernlisten {key}"
@@ -875,7 +878,9 @@ PLA_MAPS = {"obsidianfieldlands": "Obsidian-Grasland", "crimsonmirelands": "Rote
 SPAWN_POINTS = "https://raw.githubusercontent.com/Lincoln-LM/JS-Finder/main/Resources/pla_spawners/jsons/"
 SPAWN_SLOTS = "https://raw.githubusercontent.com/Lincoln-LM/PLA-Live-Map/main/static/resources/"
 # Erweiterungen bekommen die Fundorte ihres Hauptspiels dazu (importer.PKHEX_SHARE); Mega-Dimension hat eigene
-PKHEX_GAMES = {"legends-arceus": ("legality/wild/Gen8/encounter_la.pkl", "text/locations/gen8a/text_la_00000_de.txt",
+PKHEX_GAMES = {"brilliant-diamond-shining-pearl": ("legality/wild/Gen8/encounter_bd.pkl|legality/wild/Gen8/encounter_sp.pkl",
+                                                   "text/locations/gen8b/text_bdsp_00000_de.txt", "Gen8/Encounters8b.cs"),
+               "legends-arceus": ("legality/wild/Gen8/encounter_la.pkl", "text/locations/gen8a/text_la_00000_de.txt",
                                    "Gen8/Encounters8a.cs"),
                "scarlet-violet": ("legality/wild/Gen9/encounter_wild_paldea.pkl", "text/locations/gen9/text_sv_00000_de.txt",
                                   "Gen9/Encounters9.cs"),

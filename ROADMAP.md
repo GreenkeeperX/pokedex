@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.15.0 (Gebiete für alle Spiele, BDSP; Entscheidung 11.11.2026)
+
+- Gebiete (`abfragen.areas`, `/api/gebiete`, `areasView`, `#karte/gebiete/<Ort>`): je Ort alle Pokémon nach Methode,
+  aus `fundort` (PKHeX) oder den Begegnungen der PokéAPI; Spiele ohne Karte öffnen unter „Karte“ die Gebiete
+- Strahlender Diamant/Leuchtende Perle: `encounter_bd.pkl` und `encounter_sp.pkl` (Kennung „bs“, `importer._areas_bdsp`),
+  Orte `text_bdsp_00000_de.txt`, feste Begegnungen `Encounters8b.cs`; Methoden als `PKHEX_ART` 101–108.
+  `importer.VERSION` 14
+- Offen: Tutor-Attacken der Erweiterungen (Schwert/Schild, Karmesin/Purpur) aus PKHeX; Karte Karmesin/Purpur (Tera-Raid-Höhlen)
+
 ## 0.14.0 (Lernlisten Z-A, Formen zum Ansehen; Entscheidung 11.11.2026)
 
 - `importer.pkhex_learnsets` liest `byte/levelup/lvlmove_za.pkl` (BinLinker16: n Attacken als u16, dann n Level als

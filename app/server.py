@@ -448,6 +448,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._file(f, "max-age=604800")
                 else:
                     self._send(404, {"error": "kein Kartenbild"})
+            elif path == "/api/gebiete":
+                d = abfragen.areas(q)
+                self._send(200 if d else 404, d or {"error": "keine Gebiete"})
             elif m := re.fullmatch(r"/api/karte/([a-z]{4,30})", path):
                 d = abfragen.map_data(m.group(1), q)
                 self._send(200 if d else 404, d or {"error": "keine Karte"})

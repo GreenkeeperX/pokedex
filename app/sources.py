@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.14.0"
+VERSION = "0.15.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.15.0", "11.11.2026", [
+        "Gebiete für alle Spiele: Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition; "
+        "Gefangene blass, auf Wunsch nur die fehlenden (Karte → Gebiete)",
+        "Strahlender Diamant/Leuchtende Perle: Fundorte aus den Spieldaten (PKHeX)",
+        "Ortsnamen ohne doppelten Ort („Dunkelhöhle (Viola City Eingang)“)",
+    ]),
     ("0.14.0", "11.11.2026", [
         "Legenden: Z-A und Mega-Dimension: eigene Lernlisten (Level und TMs) aus den Spieldaten (PKHeX)",
         "Detailseite: „Formen zum Ansehen“ für Pokémon mit Formen ohne eigene Werte (Burmy, Vivillon, Icognito …)",

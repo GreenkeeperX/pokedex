@@ -846,10 +846,107 @@ def _enc(con, g, pid):
         area = areas.get(r["la"]) or ""
         place = locs.get(r["loc"]) or ""
         vs = [int(v) for v in str(r["vers"] or "").split(",") if v]
-        out.append({"ort": place + (f" ({area})" if area and area.lower() not in place.lower() else ""),
+        out.append({"ort": _place(place, area),
                     "methode": meths.get(r["meth"], ""), "level": f"{r['lo']}" if r["lo"] == r["hi"] else f"{r['lo']}–{r['hi']}",
                     "bedingungen": [conds[int(c)] for c in str(r["cond"] or "").split(",") if c and int(c) in conds],
                     "editionen": [vn.get(v, "") for v in vs] if len(vs) < nv else []})
+    return out
+
+
+_AREAS = {}
+
+
+def _place(place, area):
+    """Ort mit Teilgebiet: „Eispfad (1.UG)“; enthält das Teilgebiet schon den Ort („Dunkelhöhle (Viola City Eingang)“),
+    nur das Teilgebiet."""
+    if not area or area.lower() in place.lower():
+        return place
+    return area if place.lower() in area.lower() else f"{place} ({area})"
+
+
+def areas(p):
+    """Gebiete eines Spiels mit allen Pokémon dort (für Spiele ohne Karte): {spiel, quelle, gebiete: [{ort, mons:
+    [{id, name, methode, level, anteil, editionen, bedingungen}]}]}. Aus den Spieldaten (PKHeX), sonst aus der PokéAPI."""
+    D = data()
+    if not D:
+        return None
+    g, _, _ = game_of(D, p.get("spiel"))
+    if not g:
+        return None
+    try:
+        key = (g["kennung"], os.path.getmtime(db.pokeapi_path()))
+    except OSError:
+        return None
+    if key in _AREAS:
+        return _AREAS[key]
+    con = db.game()
+    try:
+        out = _areas_pkhex(con, D, g)
+        quelle = "PKHeX"
+        if out is None:
+            out, quelle = _areas_pokeapi(con, D, g), "PokéAPI"
+    finally:
+        con.close()
+    res = {"spiel": g["kennung"], "quelle": quelle,
+           "gebiete": [{"ort": k, "mons": sorted(v, key=lambda m: (m["methode"], -(m["anteil"] or 0), m["name"]))} for k, v in out.items()]}
+    _AREAS.clear()
+    _AREAS[key] = res
+    return res
+
+
+def _areas_pkhex(con, D, g):
+    try:
+        rows = con.execute("SELECT form, gebiet, gebiet_nr, art, MIN(min) lo, MAX(max) hi, MAX(alpha) al FROM fundort WHERE spiel = ? "
+                           "GROUP BY gebiet, form, art ORDER BY MIN(gebiet_nr), gebiet", (g["kennung"],)).fetchall()
+    except Exception:
+        return None
+    if not rows:
+        return None
+    out = {}
+    for r in rows:
+        f = D.forms.get(r["form"])
+        if not f:
+            continue
+        lv = f"{r['lo']}" if r["lo"] == r["hi"] else f"{r['lo']}–{r['hi']}"
+        out.setdefault(r["gebiet"], []).append({"id": f["id"], "name": f["name"], "methode": importer.PKHEX_ART.get(r["art"], str(r["art"])),
+                                                "level": lv if r["lo"] else "", "anteil": None, "editionen": [], "bedingungen": [],
+                                                "alpha": r["al"] == 2})
+    return out
+
+
+def _areas_pokeapi(con, D, g):
+    try:
+        rows = con.execute(
+            """SELECT e.pokemon_id pid, l.id loc, e.location_area_id la, es.encounter_method_id meth, MIN(e.min_level) lo,
+                      MAX(e.max_level) hi, GROUP_CONCAT(DISTINCT v.id) vers, GROUP_CONCAT(DISTINCT m.encounter_condition_value_id) cond,
+                      SUM(es.rarity) rar
+               FROM encounters e JOIN versions v ON v.id = e.version_id JOIN location_areas la ON la.id = e.location_area_id
+               JOIN locations l ON l.id = la.location_id JOIN encounter_slots es ON es.id = e.encounter_slot_id
+               LEFT JOIN encounter_condition_value_map m ON m.encounter_id = e.id
+               WHERE v.version_group_id = ?
+               GROUP BY e.pokemon_id, e.location_area_id, es.encounter_method_id ORDER BY l.id, la.id""", (g["id"],)).fetchall()
+    except Exception:
+        return {}
+    locs = _names(con, "location_names", "location_id")
+    area_n = _names(con, "location_area_prose", "location_area_id")
+    meths = _names(con, "encounter_method_prose", "encounter_method_id")
+    conds = _names(con, "encounter_condition_value_prose", "encounter_condition_value_id")
+    vn = _names(con, "version_names", "version_id")
+    nv = con.execute("SELECT COUNT(*) FROM versions WHERE version_group_id = ?", (g["id"],)).fetchone()[0]
+    out = {}
+    for r in rows:
+        f = D.forms.get(r["pid"])
+        if not f:
+            continue
+        place, area = locs.get(r["loc"]) or f"Ort {r['loc']}", area_n.get(r["la"]) or ""
+        ort = _place(place, area)
+        vs = [int(v) for v in str(r["vers"] or "").split(",") if v]
+        out.setdefault(ort, []).append({
+            "id": f["id"], "name": f["name"], "methode": meths.get(r["meth"], ""),
+            "level": f"{r['lo']}" if r["lo"] == r["hi"] else f"{r['lo']}–{r['hi']}",
+            "anteil": min(100, r["rar"]) if r["rar"] else None,
+            "editionen": [vn.get(v, "") for v in vs] if len(vs) < nv else [],
+            "bedingungen": [conds[int(c)] for c in str(r["cond"] or "").split(",") if c and int(c) in conds]})
     return out
 
 

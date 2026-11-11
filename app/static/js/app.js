@@ -570,6 +570,7 @@ async function route() {
     else if (tab === "attacken") await movesView();
     else if (tab === "typen") await chartView();
     else if (tab === "items") await itemsView();
+    else if (tab === "karte" && (arg === "gebiete" || (!arg && S.game && S.game !== "legends-arceus"))) await areasView(arg2);
     else if (tab === "karte") await mapView(arg, arg2 === undefined ? null : +arg2);
     else if (tab === "einstellungen") await settingsView();
     else location.hash = "pokemon";
@@ -1719,6 +1720,53 @@ function mapHeat(pts, objs, sh = (m) => m.max || 0) {
   return {cells, tot};
 }
 const heatTip = (s) => `${s.name}: ${s.n} Stelle${s.n === 1 ? "" : "n"} hier, zusammen ${String(Math.round(s.w * 100) / 100).replace(".", ",")}`;
+/* Gebiete eines Spiels (für Spiele ohne Karte): links die Orte, rechts alle Pokémon dort als Bildergitter, nach Methode.
+   Gefangene sind blass (Filter „nur fehlende“). Gewählter Ort je Spiel gemerkt; #karte/gebiete/<Ort> öffnet ihn direkt */
+async function areasView(want) {
+  const rid = RID;
+  const d = await api("/api/gebiete?" + qs({spiel: S.game})).catch(() => null);
+  if (rid !== RID) return;
+  if (!d || !d.gebiete.length) {
+    main.innerHTML = `<div class="box"><h2>Gebiete</h2><p class="hint">Für ${esc(gameName())} gibt es keine Fundorte in den Daten.</p>
+      <p><a href="#karte/obsidianfieldlands">Karte von Legenden: Arceus öffnen</a></p></div>`;
+    return;
+  }
+  const key = "gebiet:" + S.game;
+  let sel = want ? decodeURIComponent(want) : store.get(key, d.gebiete[0].ort), q = "", miss = store.get("gebietFehlend", false);
+  if (!d.gebiete.some((g) => g.ort === sel)) sel = d.gebiete[0].ort;
+  main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Gebiete</h2><span class="hint">Spiel</span><select class="gamesel"></select>
+      <input id="gq" type="search" placeholder="Ort oder Pokémon" style="width:220px">
+      <label data-tip="Pokémon, die du in diesem Spiel schon gefangen hast, ausblenden"><input type="checkbox" id="gmiss"${miss ? " checked" : ""}> nur noch nicht gefangene</label>
+      ${S.game === "legends-arceus" ? `<a class="btn" href="#karte/obsidianfieldlands">Zur Karte</a>` : ""}<span class="hint grow">${d.gebiete.length} Orte</span></div>
+    <div class="gwrap"><nav class="glist" id="glist"></nav><div class="gmain" id="gmain"></div></div>
+    <p class="hint">Quelle: ${d.quelle === "PKHeX" ? "Spieldaten (PKHeX)" : "PokéAPI"}. Anteil: so oft erscheint es mit dieser Methode (Summe der Plätze).</p></div>`;
+  header();
+  const own = (m) => isCaught(m.id);
+  const list = () => {
+    const ql = q.toLowerCase();
+    $("#glist").innerHTML = d.gebiete.filter((g) => !ql || g.ort.toLowerCase().includes(ql) || g.mons.some((m) => m.name.toLowerCase().includes(ql)))
+      .map((g) => { const ids = new Set(g.mons.map((m) => m.id)), left = [...ids].filter((i) => !isCaught(i)).length;
+        return `<button class="${g.ort === sel ? "on" : ""}" data-g="${esc(g.ort)}"><span>${esc(g.ort)}</span><span class="hint" data-tip="noch nicht gefangen / Pokémon">${left ? left + "/" : "✓ "}${ids.size}</span></button>`; }).join("")
+      || `<p class="hint">Nichts gefunden.</p>`;
+    $$("#glist [data-g]").forEach((b) => b.addEventListener("click", () => { sel = b.dataset.g; store.set(key, sel); list(); show(); }));
+  };
+  const show = () => {
+    const g = d.gebiete.find((x) => x.ort === sel);
+    const ms = g.mons.filter((m) => !miss || !own(m));
+    const by = {};
+    ms.forEach((m) => (by[m.methode || "–"] ||= []).push(m));
+    $("#gmain").innerHTML = `<h3>${areaName(g.ort)}</h3>` + (Object.entries(by).map(([meth, xs]) => `<h4>${esc(meth)}</h4><div class="ggrid">${xs.map((m) =>
+      `<a class="gmon${own(m) ? " got" : ""}" href="#pokemon/${m.id}" data-id="${m.id}">${img(m.id)}${own(m) ? `<span class="gball">${ball(m.id)}</span>` : ""}<b>${esc(m.name)}</b>
+        <span class="hint">${m.level ? "Lv " + esc(m.level) : ""}${m.anteil ? ` · ${m.anteil} %` : ""}${m.alpha ? ` · <span class="alpha">Alpha</span>` : ""}</span>
+        ${m.editionen.length ? `<span class="ged">nur ${esc(m.editionen.join(", "))}</span>` : ""}${m.bedingungen.length ? `<span class="hint">${esc(m.bedingungen.join(", "))}</span>` : ""}</a>`).join("")}</div>`).join("")
+      || `<p class="hint">${miss ? "Hier hast du schon alles gefangen." : "Keine Pokémon."}</p>`);
+  };
+  $("#gq").addEventListener("input", (e) => { q = e.target.value.trim(); list(); });
+  $("#gmiss").addEventListener("change", (e) => { miss = e.target.checked; store.set("gebietFehlend", miss); list(); show(); });
+  list(); show();
+  const on = $("#glist .on"), gl = $("#glist");
+  if (on) gl.scrollTop = on.offsetTop - gl.offsetTop - gl.clientHeight / 2;     // nur die Liste scrollen, nicht die Seite
+}
 async function mapView(karte, fid) {
   const rid = RID;
   const key = karte || "obsidianfieldlands";
@@ -1751,6 +1799,7 @@ async function mapView(karte, fid) {
   main.innerHTML = `<div class="box mapbox">
     <div class="bar"><h2 style="margin:0">Karte</h2>
       <span class="seg">${d.karten.map((k) => `<a class="btn${k.karte === d.karte ? " on" : ""}" href="#karte/${k.karte}${fid != null ? "/" + fid : ""}">${esc(k.gebiet)}</a>`).join("")}</span>
+      <a class="btn" href="#karte/gebiete" data-tip="Alle Orte mit ihren Pokémon als Liste">Gebiete</a>
       ${pts.length ? `<div class="pick" id="mapmon"><button class="pickbtn" aria-haspopup="true" aria-expanded="false">${fid != null && species[fid] ? img(fid) + `<b>${esc(species[fid].name)}</b>` : "Pokémon wählen"} <span class="hint">▾</span></button>
         <div class="pickm" hidden><input type="search" placeholder="Pokémon suchen" aria-label="Pokémon suchen">
           <div class="pickl"><a href="#karte/${d.karte}" class="${fid == null ? "on" : ""}"><span class="spr none"></span><span>alle Spawnpunkte</span><span class="hint">${pts.length}</span></a>${list.map((s) => `<a href="#karte/${d.karte}/${s.id}" class="${s.id === fid ? "on" : ""}" data-n="${esc(s.name.toLowerCase())}">${img(s.id)}<span>${esc(s.name)}</span><span class="hint" data-tip="Stellen in diesem Gebiet">${s.n}</span></a>`).join("")}</div></div></div>
@@ -1759,7 +1808,7 @@ async function mapView(karte, fid) {
     ${objs.length || pts.length ? `<div class="bar mlays">${pts.length ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="heatbtn" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto wahrscheinlicher">▦ Übersicht mit Bildern</button>` : ""}${hasCond ? condSel("mapZeit", "Tageszeit", d.zeiten || [], fz) + condSel("mapWetter", "Wetter", d.wetterarten || [], fw) : ""}
       <span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button></span></div>
     <div class="bar mlays mgrps">${layerBar}</div>` : ""}
-    ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus.</div>` : ""}
+    ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus. <a href="#karte/gebiete">Gebiete von ${esc(gameName())}</a></div>` : ""}
     ${d.kacheln || d.bild ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
     <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>

@@ -47,6 +47,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Detailseite aus mit den Spawnpunkten des Pokémon. Die „Übersicht mit Bildern“
   zeigt je Kartenfeld die häufigsten Pokémon (je größer, desto wahrscheinlicher), die häufigsten im Gebiet und für ein
   gewähltes Pokémon den Vergleich aller Gebiete.
+- **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
+  Gefangene blass, auf Wunsch nur die fehlenden.
 - **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen): Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
   zum Herunterladen), Lesezeichen „Seite untersuchen“ für Seiten, deren Karten erst im Browser laden (liest geladene
   Daten-Dateien, Variablen und Kartenmarker in eine Datei; nichts geht an einen Server), „Zu erledigen“ (Abweichungen zwischen
@@ -61,7 +63,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [PokéAPI](https://github.com/PokeAPI/pokeapi) (CSV) | Primärquelle: alle Grunddaten, alle Spiele, deutsche Namen | BSD-3 |
 | [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) | Gegenprüfung von Werten und Attacken, Merkmale wie „Aufladen“ | MIT |
 | [PokéAPI-Sprites](https://github.com/PokeAPI/sprites) | Bilder (Sprites und offizielle Artworks) | siehe dort |
-| [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Mega-Dimension: Gebiet, Level, Alpha, feste Begegnungen); Item-Listen und Itemnamen je Spiel; Lernlisten von Legenden: Z-A | GPL-3.0 |
+| [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Strahlender Diamant/Leuchtende Perle, Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Mega-Dimension: Gebiet, Level, Alpha, feste Begegnungen); Item-Listen und Itemnamen je Spiel; Lernlisten von Legenden: Z-A | GPL-3.0 |
 | [Altissimo](https://github.com/Altissimo1/altissimo1.github.io) | Legenden: Arceus: Kartensymbole, Geisterlichter, Icognito, Gedichte, Grabstellen, Kartenbild Jubeldorf, Rezepte | GPL-3.0 (Kartenbild nur im Datenordner) |
 | [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
 | [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln) und große Item-Bilder, nur im Datenordner auf dem Server | Bilder von Serebii, Spielgrafik von Nintendo |
