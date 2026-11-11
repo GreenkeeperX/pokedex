@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.34.0 (12.11.2026)
+
+- Rechenweg-Tooltips für die Fangchance (`catchTip`, Zeilen tragen `faktor`, `mehr.fang_gen`) und die Initiative-Liste
+  (`speedTip`; die Liste rechnet die Tooltips erst beim Hovern über `data-tip-speed="Basis:Spalte"`, weil sie über
+  tausend Zeilen hat)
+
 ## 0.33.0 (11.11.2026)
 
 - Getragene Items: `abfragen._held` nimmt das PokéWiki (Legenden: Arceus), sonst `pokemon_items` der PokéAPI je Editionsgruppe
@@ -7,7 +13,6 @@
   Legenden: Arceus), Z-A; Let's Go und Legenden: Arceus kennen keine getragenen Items im Kampf
 - Rechenweg-Tooltips: `tipRef` (HTML in `TIPM`, Element trägt `data-tip-calc`), `partsTip` (Anteile, Summe, Formel), `dmgTip`
   (aus `grund`, `staerke`, `faktoren`, `a_info`, `d_info` von `abfragen._calc_steps`)
-- Offen: Rechenweg auch für Fangrate und Initiative-Liste
 
 ## 0.32.0 (11.11.2026)
 

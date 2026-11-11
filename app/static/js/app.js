@@ -135,9 +135,57 @@ function partsTip(title, parts, total, formulas) {
   return `<div class="tt">${esc(title)}</div><table class="ctip">${parts.filter((p) => p[2]).map(([cls, label, v], k) => `<tr><td><span class="sw ${cls}"></span>${esc(label)}</td><td class="n">${k && v > 0 ? "+" : ""}${v}</td></tr>`).join("")}
     <tr class="sum"><td>Wert</td><td class="n">${total}</td></tr></table>${formulas.filter(Boolean).map((f) => `<div class="muted">${esc(f)}</div>`).join("")}`;
 }
+const de = (v) => String(v).replace(".", ",");
+/* Kleine Tabelle für Rechenwege: [Bezeichnung, Wert, Erklärung]; leere Zeilen fallen weg */
+const calcRows = (rows) => `<table class="ctip">${rows.filter(Boolean).map(([l, v, h]) => `<tr><td>${esc(l)}</td><td class="n">${v}</td><td class="muted">${esc(h || "")}</td></tr>`).join("")}</table>`;
+/* Fangchance: a = (3 − 2 × KP-Anteil) / 3 × Fangrate × Ball × Status, dann je nach Generation */
+function catchTip(m, f, hpLabel, share, st, stLabel, v) {
+  const gen = m.fang_gen || 9, rate = m.fangrate, a = (3 - 2 * share) / 3 * rate * f.faktor * st;
+  const n = gen === 5 ? 3 : 4, b = a < 255 && a > 0 ? Math.floor(65536 / (255 / a) ** 0.1875) : 0;
+  return `<div class="tt">${esc(f.ball)}, ${esc(hpLabel)}${stLabel ? ", " + esc(stLabel) : ""}</div>
+    ${calcRows([["Fangrate", rate, "der Art, 3 bis 255"], ["KP", `×${share ? "⅓" : "1"}`, share ? "volle KP: (3 − 2) / 3" : "fast keine KP: (3 − 0) / 3"],
+      ["Ball", `×${de(f.faktor)}`, ""], st !== 1 ? ["Status", `×${de(st)}`, stLabel] : null])}
+    <div class="tt">Fangwert a</div><div>(3 × KP<sub>max</sub> − 2 × KP) / (3 × KP<sub>max</sub>) × Fangrate × Ball × Status</div>
+    <div class="muted">= ${share ? "⅓" : "1"} × ${rate} × ${de(f.faktor)}${st !== 1 ? " × " + de(st) : ""} = <b style="color:#fff">${de(Math.round(a * 10) / 10)}</b></div>
+    <div class="tt">Chance je Wurf</div>
+    ${a >= 255 ? `<div>a ab 255: der Ball fängt immer</div>`
+      : gen <= 4 ? `<div>a / 255 = ${de(Math.round(a * 10) / 10)} / 255</div>`
+      : `<div>${n} Rüttelproben, jede mit b / 65536</div><div class="muted">b = ⌊65536 / (255 / a)<sup>0,1875</sup>⌋ = ${b}; (${b} / 65536)<sup>${n}</sup></div>`}
+    <div class="tt">Ergebnis</div><div><b>${de(v)} %</b>${m.fang_grob ? " (Richtwert: dieses Spiel rechnet anders)" : ""}</div>`;
+}
+/* Initiative-Wert: Werte, Formel mit Zahlen, Faktoren (Item, Rückenwind, Wahlschal), Ergebnis */
+function speedTip(title, o) {
+  const {base, lv, gen, iv, ev, nat = 1, el, mults = []} = o;
+  let rows, form, nums, val;
+  if (LA()) {
+    const fk = EL_FAKTOR[el];
+    val = laStat(base, lv, el, nat);
+    rows = [["Basis", base], ["Level", lv], ["Effort Level", el, `Faktor ${fk}`], nat !== 1 ? ["Wesen", `×${de(nat)}`] : null];
+    form = "⌊(Level / 50 + 1) × Basis / 1,5 × Wesen⌋ + ⌊(√Basis × Faktor + Level) / 2,5 + 0,5⌋";
+    nums = `⌊(${lv} / 50 + 1) × ${base} / 1,5${nat !== 1 ? " × " + de(nat) : ""}⌋ + ⌊(√${base} × ${fk} + ${lv}) / 2,5 + 0,5⌋`;
+  } else if (gen <= 2) {
+    val = speedStat(base, lv, iv, ev, 1, gen);
+    const r = Math.min(255, Math.ceil(Math.sqrt(ev)));
+    rows = [["Basis", base], ["Level", lv], ["DV", iv, "0 bis 15"], ["Stat Exp", ev, `Wurzel ${r}, höchstens 255`]];
+    form = "⌊((Basis + DV) × 2 + ⌊√StatExp / 4⌋) × Level / 100⌋ + 5";
+    nums = `⌊((${base} + ${iv}) × 2 + ⌊${r} / 4⌋) × ${lv} / 100⌋ + 5`;
+  } else {
+    val = speedStat(base, lv, iv, ev, nat, gen);
+    rows = [["Basis", base], ["Level", lv], ["IV", iv, "0 bis 31"], ["EV", ev, "0 bis 252"], nat !== 1 ? ["Wesen", `×${de(nat)}`, nat > 1 ? "steigert Initiative" : "senkt Initiative"] : null];
+    form = "⌊(⌊(2 × Basis + IV + ⌊EV / 4⌋) × Level / 100⌋ + 5) × Wesen⌋";
+    nums = `⌊(⌊(2 × ${base} + ${iv} + ⌊${ev} / 4⌋) × ${lv} / 100⌋ + 5)${nat !== 1 ? " × " + de(nat) : ""}⌋`;
+  }
+  let end = val;
+  mults.forEach(([, f]) => { end *= f; });
+  end = Math.floor(end);
+  return `<div class="tt">${esc(title)}</div>${calcRows(rows)}
+    <div class="tt">Initiative-Wert</div><div>${form}</div><div class="muted">${nums} = <b style="color:#fff">${val}</b></div>
+    ${mults.length ? `<div class="tt">Dann</div><div class="tg">${mults.map(([l, f]) => `<span class="fx">${esc(l)} <b>×${de(f)}</b></span>`).join("")}</div>
+      <div class="tt">Ergebnis</div><div><b>${end}</b></div>` : ""}`;
+}
 /* Schadensrechner: Rechenweg einer Zeile (Werte, Grundschaden, Faktoren der Reihe nach, Ergebnis) */
 function dmgTip(r, x) {
-  const fx = (x.faktoren || []).map(([l, v]) => `<span class="fx">${esc(l)}${v == null ? "" : ` <b>×${typeof v === "number" ? fl(v) : esc(v)}</b>`}</span>`).join("");
+  const fx = (x.faktoren || []).map(([l, v]) => `<span class="fx">${esc(l)}${v == null ? "" : ` <b>×${typeof v === "number" ? de(v) : esc(v)}</b>`}</span>`).join("");
   const lv = r.gen === 1 && x.faktoren?.some((f) => String(f[0]).startsWith("Volltreffer")) ? r.level * 2 : r.level;
   const k = Math.floor(2 * lv / 5) + 2, old = r.gen <= 2;
   return `<div class="tt">${esc(r.angreifer)}: ${esc(r.attacke)} gegen ${esc(x.name)}</div>
@@ -340,7 +388,7 @@ function cellTip(a, v) {
 let tipTimer, cardTimer;
 document.addEventListener("mouseover", (e) => {
   if (e.pointerType === "touch") return;
-  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats],[data-tip-calc]");
+  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats],[data-tip-calc],[data-tip-speed]");
   if (t) {
     clearTimeout(tipTimer);
     tipTimer = setTimeout(() => {
@@ -348,6 +396,7 @@ document.addEventListener("mouseover", (e) => {
       else if (t.dataset.tipCell) tip.innerHTML = cellTip(...t.dataset.tipCell.split(":"));
       else if (t.dataset.tipStats) tip.innerHTML = radarTipHtml(t.dataset.tipStats.split(",").map(Number));
       else if (t.dataset.tipCalc) tip.innerHTML = TIPM.get(+t.dataset.tipCalc) || "";
+      else if (t.dataset.tipSpeed) tip.innerHTML = speedListTip(...t.dataset.tipSpeed.split(":").map(Number));
       else tip.textContent = t.dataset.tip;
       tip.classList.toggle("rich", !t.dataset.tip);
       tip.hidden = !t.isConnected || !tip.textContent.trim();
@@ -364,7 +413,7 @@ document.addEventListener("mouseover", (e) => {
 // Klick vor dem Erscheinen: keine Karte mehr (sonst blieb sie auf der nächsten Seite oben links stehen)
 document.addEventListener("pointerdown", () => { clearTimeout(cardTimer); clearTimeout(tipTimer); card.hidden = true; tip.hidden = true; }, true);
 document.addEventListener("mouseout", (e) => {
-  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats],[data-tip-calc]");
+  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats],[data-tip-calc],[data-tip-speed]");
   if (t && !t.contains(e.relatedTarget)) { clearTimeout(tipTimer); tip.hidden = true; }
   const c = e.target.closest(".mon,[data-hc]");
   if (c && !c.contains(e.relatedTarget)) { clearTimeout(cardTimer); card.hidden = true; }
@@ -1331,7 +1380,7 @@ async function statBox(d, slot) {
 function elTipHtml(x, i, lv) {
   const t = x.teile;
   return partsTip(`${STAT[i]} bei Level ${lv}, Effort Level ${x.el}`, [["e-b", "Basiswert", t.basis], ["e-l", "durch das Level", t.level], ["e-e", "durch Effort Levels", t.el], ["e-w", "Wesen", t.wesen]], x.wert,
-    [i === 0 ? `Grundwert: (Level/100 + 1) × Basis + Level = (${lv}/100 + 1) × ${x.basis} + ${lv}` : `Grundwert: (Level/50 + 1) × Basis / 1,5${x.wesen !== 1 ? " × Wesen" : ""} = (${lv}/50 + 1) × ${x.basis} / 1,5${x.wesen !== 1 ? ` × ${fl(x.wesen)}` : ""}`,
+    [i === 0 ? `Grundwert: (Level/100 + 1) × Basis + Level = (${lv}/100 + 1) × ${x.basis} + ${lv}` : `Grundwert: (Level/50 + 1) × Basis / 1,5${x.wesen !== 1 ? " × Wesen" : ""} = (${lv}/50 + 1) × ${x.basis} / 1,5${x.wesen !== 1 ? ` × ${de(x.wesen)}` : ""}`,
       `Bonus: (√Basis × Faktor + Level) / 2,5, gerundet; Faktor bei Stufe ${x.el}: ${x.faktor}, Bonus ${x.bonus}`]);
 }
 function elTip(x, i, lv) {
@@ -1492,7 +1541,10 @@ function catchHtml(d) {
   const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
   return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
     <table class="rows sort catch"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: der beste Fall, etwa dreimal so gut wie volle KP. Die Chance steigt gleichmäßig, je weniger KP übrig sind, ohne Schwellen")}${thc("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${thc("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
-    <tbody>${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}">${pc(f.voll)}</td><td class="c" data-s="${f.rot}">${pc(f.rot)}</td><td class="c" data-s="${f.status ?? ""}">${f.status != null ? pc(f.status) : "–"}</td><td class="c" data-s="${f.schlaf}">${pc(f.schlaf)}</td></tr>`).join("")}</tbody></table>
+    <tbody>${m.fangen.map((f) => { const ct = (lbl, sh, st, stl, v) => f.faktor != null ? tipRef(catchTip(m, f, lbl, sh, st, stl, v)) : "";
+      return `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}" ${ct("volle KP", 1, 1, "", f.voll)}>${pc(f.voll)}</td><td class="c" data-s="${f.rot}" ${ct("1 KP", 0, 1, "", f.rot)}>${pc(f.rot)}</td>
+        <td class="c" data-s="${f.status ?? ""}" ${f.status != null ? ct("1 KP", 0, 1.5, "gelähmt, vergiftet oder verbrannt", f.status) : ""}>${f.status != null ? pc(f.status) : "–"}</td>
+        <td class="c" data-s="${f.schlaf}" ${ct("1 KP", 0, +String(m.schlaf_faktor || 2.5).replace(",", "."), "schlafend oder eingefroren", f.schlaf)}>${pc(f.schlaf)}</td></tr>`; }).join("")}</tbody></table>
     <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
       : grob && S.game.startsWith("lets-go") ? ". Let’s Go rechnet anders (siehe unten); die Werte geben nur eine Richtung."
       : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p>${wissenHtml(d.spielwissen)}</details>`;
@@ -2936,6 +2988,16 @@ function speedStat(base, lv, iv, ev, nat, gen) {
 const EL_FAKTOR = [0, 2, 3, 4, 7, 8, 9, 14, 15, 16, 25];
 const laStat = (base, lv, el, nat = 1) => Math.floor((lv / 50 + 1) * base / 1.5 * nat) + Math.floor((Math.sqrt(base) * EL_FAKTOR[el] + lv) / 2.5 + 0.5);
 const LA = () => S.game === "legends-arceus";
+/* Rechenweg einer Zelle der Initiative-Liste (Spalte k: minimal, neutral, maximal, maximal +), Einstellungen aus SPO */
+let SPO = {};
+const SPEED_COLS = ["minimal", "neutral", "maximal", "maximal +"];
+function speedListTip(base, k) {
+  const {lv, gen, wind, schal} = SPO, mults = [wind ? ["Rückenwind", 2] : null, schal ? ["Wahlschal", 1.5] : null].filter(Boolean);
+  const o = LA() ? {el: k >= 2 ? 10 : 0, nat: [0.9, 1, 1, 1.1][k]}
+    : gen <= 2 ? {iv: k >= 2 ? 15 : 0, ev: k >= 2 ? 65535 : 0}
+    : {iv: k ? 31 : 0, ev: k >= 2 ? 252 : 0, nat: [0.9, 1, 1, 1.1][k]};
+  return speedTip(gen <= 2 && !LA() ? (k >= 2 ? "voll" : "ohne") : SPEED_COLS[k], Object.assign({base, lv, gen, mults}, o));
+}
 function speedCols(base, lv, gen) {
   if (LA()) return [laStat(base, lv, 0, 0.9), laStat(base, lv, 0), laStat(base, lv, 10), laStat(base, lv, 10, 1.1)];
   if (gen <= 2) return [speedStat(base, lv, 0, 0, 1, gen), null, speedStat(base, lv, 15, 65535, 1, gen), null];
@@ -3165,25 +3227,28 @@ async function speedView() {
   (ev.mitglieder || []).forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
   const draw = () => {
     const mult = (o.wind ? 2 : 1) * (o.schal ? 1.5 : 1), lv = o.level, q = o.q.trim().toLowerCase();
+    SPO = {lv, gen, wind: o.wind, schal: o.schal};
     const mine = S.team.ids.map((id, i) => {
       const r = ROWS[id], det = S.team.details[i] || {}, x = ev.plaetze?.[i] || {};
       if (!r) return null;
       const iv = det.ivs ? det.ivs[5] : (gen <= 2 ? 15 : 31), evv = det.evs ? det.evs[5] : 0;
       const nat = x.wesen_mod ? (x.wesen_mod[0] === 5 ? 1.1 : x.wesen_mod[1] === 5 ? 0.9 : 1) : 1;
       const own = (LA() ? laStat(r.werte[5], det.level || lv, det.el?.[5] || 0, nat) : speedStat(r.werte[5], det.level || lv, iv, evv, nat, gen)) * (x.item === "Wahlschal" && !o.schal ? 1.5 : 1);
-      return {r, own: Math.floor(own * (o.wind ? 2 : 1) * (o.schal ? 1.5 : 1)), det, x, slot: i};
+      const mults = [x.item === "Wahlschal" && !o.schal ? ["Wahlschal (Item)", 1.5] : null, o.wind ? ["Rückenwind", 2] : null, o.schal ? ["Wahlschal", 1.5] : null].filter(Boolean);
+      const tipH = speedTip(`${r.name}, dein Team`, {base: r.werte[5], lv: det.level || lv, gen, iv, ev: evv, nat, el: det.el?.[5] || 0, mults});
+      return {r, own: Math.floor(own * (o.wind ? 2 : 1) * (o.schal ? 1.5 : 1)), det, x, slot: i, tipH};
     }).filter(Boolean);
     let rows = d.rows.map((r) => ({r, cols: speedCols(r.werte[5], lv, gen).map((v) => v == null ? null : Math.floor(v * mult))}));
     if (q) rows = rows.filter(({r}) => r.name.toLowerCase().includes(q));
     if (o.team) rows = [];
     const mrow = (m) => `<tr class="mine" data-hc="${m.r.id}"><td>${img(m.r.id)} <a href="#pokemon/${m.r.id}/${m.slot}">${esc(m.r.name)}</a> <span class="hint">dein Team${m.det.level ? ", Level " + m.det.level : ""}${LA() ? (m.det.el ? ", Effort Level " + m.det.el[5] : ", Effort Level nicht eingetragen (0)") : ""}${m.x.wesen ? ", " + esc(m.x.wesen) : ""}${m.x.item ? ", " + esc(m.x.item) : ""}</span></td>
-      <td class="num">${m.r.werte[5]}</td><td class="num" colspan="4"><b>${m.own}</b></td></tr>`;
+      <td class="num">${m.r.werte[5]}</td><td class="num" colspan="4" ${tipRef(m.tipH)}><b>${m.own}</b></td></tr>`;
     // Team-Zeilen stehen dort, wo ihr eigener Wert in die Liste fällt
     const out = [], todo = [...mine].sort((a, b) => b.own - a.own);
     rows.forEach(({r, cols}) => {
       const top = cols[3] ?? cols[2];
       while (todo.length && todo[0].own >= top) out.push(mrow(todo.shift()));
-      out.push(`<tr data-hc="${r.id}"><td>${img(r.id)} <a href="#pokemon/${r.id}">${esc(r.name)}</a></td><td class="num">${r.werte[5]}</td>${cols.map((v) => `<td class="num">${v ?? ""}</td>`).join("")}</tr>`);
+      out.push(`<tr data-hc="${r.id}"><td>${img(r.id)} <a href="#pokemon/${r.id}">${esc(r.name)}</a></td><td class="num">${r.werte[5]}</td>${cols.map((v, k) => v == null ? `<td class="num"></td>` : `<td class="num" data-tip-speed="${r.werte[5]}:${k}">${v}</td>`).join("")}</tr>`);
     });
     todo.forEach((m) => out.push(mrow(m)));
     $("#splist").innerHTML = `<div class="scroll"><table class="speed"><thead><tr><th>Pokémon</th><th class="num">Basis</th>${gen <= 2 ? "<th class=\"num\">ohne</th><th></th><th class=\"num\">voll</th><th></th>" : "<th class=\"num\">minimal</th><th class=\"num\">neutral</th><th class=\"num\">maximal</th><th class=\"num\">maximal +</th>"}</tr></thead>

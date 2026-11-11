@@ -10,11 +10,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.33.0"
+VERSION = "0.34.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.34.0", "12.11.2026", [
+        "Fangchance: jede Zelle zeigt im Tooltip den Rechenweg (Fangrate, KP, Ball, Status, Fangwert, Rüttelproben)",
+        "Initiative-Liste: jeder Wert zeigt im Tooltip Basis, Level, IV, EV, Wesen, die Formel mit Zahlen und Rückenwind oder Wahlschal",
+    ]),
     ("0.33.0", "11.11.2026", [
         "Getragene Items wilder Pokémon jetzt für alle Spiele von Rubin bis Ultrasonne (PokéAPI, je Edition)",
         "Rechenweg als Tooltip: Schadensrechner mit Werten, Grundschaden-Formel und allen Faktoren der Reihe nach",
