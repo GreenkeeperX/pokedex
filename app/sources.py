@@ -10,11 +10,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.28.2"
+VERSION = "0.28.3"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.28.3", "11.11.2026", [
+        "Verbindungstest: Kartenseiten von IGN, RankedBoost, DittoBase und PokéTools ganz, IGNs Abfragen für Kartenpunkte "
+        "und je eine IGN-Kachel (Vorbereitung für Karten zu Schwert/Schild und Let’s Go)",
+    ]),
     ("0.28.2", "11.11.2026", [
         "Verbindungstest: Kachelpfad der Map-Genie-Karten wieder richtig angezeigt; Kartenseiten melden eingebettete Daten "
         "(Next.js, JSON-Blöcke, Marker mit Koordinaten)",
