@@ -50,6 +50,35 @@ WIKI_PAUSE = 2.0            # Sekunden zwischen zwei Anfragen an das PokéWiki (
 WIKI_GAMES = ("legends-arceus",)    # Spiele, deren Attacken und Pokémon im PokéWiki gelesen werden
 
 sleep = time.sleep          # Tests setzen hier eine Attrappe ein
+# Pausen je Server gelten für alle Quellen zusammen: laufen Quellen parallel (ab 0.20.0), wartet jeder Abruf an einem
+# Server, bis der vorige dort fertig ist und die Pause um ist. Verschiedene Server laufen gleichzeitig.
+_HOST_LAST = {}
+_HOST_LOCKS = {}
+_HOST_GUARD = threading.Lock()
+
+
+def _host_lock(host):
+    with _HOST_GUARD:
+        return _HOST_LOCKS.setdefault(host, threading.Lock())
+
+
+def _parallel(jobs):
+    """Aufgaben ohne gegenseitige Abhängigkeit gleichzeitig: {Name: Funktion} → {Name: Ergebnis}. Ein Fehler in einer
+    Aufgabe kommt als Ausnahme zurück, die anderen laufen zu Ende."""
+    out, threads = {}, []
+
+    def one(k, fn):
+        try:
+            out[k] = fn()
+        except Exception as e:          # noqa: BLE001 – der Aufrufer protokolliert
+            out[k] = e
+    for k, fn in jobs.items():
+        t = threading.Thread(target=one, args=(k, fn), name=f"abgleich-{k}", daemon=True)
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
+    return out
 _running = threading.Lock()
 STATE = {"started": "", "step": "", "done": 0, "total": 0, "log": []}
 
@@ -139,7 +168,11 @@ class _Source:
         if self.stopped:
             return None
         host = urllib.parse.urlsplit(url).hostname or ""
-        wait = self._last.get(host, 0) + self.pause - time.monotonic()
+        with _host_lock(host):
+            return self._get(url, host, raw, absent)
+
+    def _get(self, url, host, raw, absent):
+        wait = _HOST_LAST.get(host, 0) + self.pause - time.monotonic()
         if wait > 0:
             sleep(wait)
         self.n += 1
@@ -148,7 +181,7 @@ class _Source:
                 try:
                     body = sources.fetch(url, timeout=90, raw=raw)
                 finally:
-                    self._last[host] = time.monotonic()
+                    _HOST_LAST[host] = time.monotonic()
                 break
             except sources.FetchError as e:
                 if e.status == 0 and attempt == 1:
@@ -238,8 +271,14 @@ MEDIA_LABEL = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernd
 
 
 def miss_name(kind):
-    """Datei mit den Bildern, die es nicht gibt. Große Item-Bilder ab 0.13.0 neu: es gibt jetzt mehrere Orte je Bild."""
-    return "itemhq2_fehlen.json" if kind == "itemhq" else f"{kind}_fehlen.json"
+    """Datei mit den Bildern, die es nicht gibt. Große Item-Bilder ab 0.20.0 neu: Serebii-Namen mit Bindestrich und Apostroph."""
+    return "itemhq3_fehlen.json" if kind == "itemhq" else f"{kind}_fehlen.json"
+
+
+def serebii_key(name):
+    """Dateiname bei Serebii: klein, ohne Leerzeichen; Bindestrich und Apostroph bleiben (King’s Leaf → king'sleaf)."""
+    t = (name or "").lower().replace("é", "e").replace("’", "'")
+    return re.sub(r"[^a-z0-9'-]", "", t)
 
 
 def media_ids(kind):
@@ -276,7 +315,8 @@ def media_ids(kind):
                 # Ordner der Spiele mit dem Item zuerst, dann der andere, zuletzt das kleine Bild (40 px) für ältere Items
                 games, key = set(json.loads(spiele or "[]")), importer.en_key(en)
                 subs = sorted(ITEM_HQ, key=lambda sub: (not games & {vgs.get(k) for k in ITEM_HQ[sub]}, sub != "sv"))
-                out[iid] = tuple(f"{sub}/{key}" for sub in subs) + (key,)
+                keys = list(dict.fromkeys([key, serebii_key(en)]))       # Serebii behält Bindestrich und Apostroph
+                out[iid] = tuple(f"{sub}/{k}" for k in keys for sub in subs) + tuple(keys)
             return out
         return {r[0]: str(r[0]) for r in con.execute("SELECT id FROM form ORDER BY id")}
     finally:
@@ -447,40 +487,12 @@ def _run(by_hand, force):
         log(f"Sicherung deiner Daten: sicherung/{name}")
     try:
         ok = _build(st, log, force, at)
-        if db.has_data() and settings["sprites"] and not _resting(st, "sprites", at):
-            STATE["step"] = "Sprites"
-            res = _sprites(log)
-            if not res["blocked"]:
-                STATE["step"] = "Artworks"
-                art = _images("artwork", log)
-                res = dict(art, requests=res["requests"] + art["requests"], errors=res["errors"] + art["errors"],
-                           neu=res["neu"] + art["neu"], fehlen=res["fehlen"] + art["fehlen"], offen=res["offen"] + art["offen"])
-            st["sources"]["sprites"] = res
-            if res["blocked"]:
-                st["rest"]["sprites"] = _iso(now() + timedelta(hours=REST_H))
-        if db.has_data() and settings["sprites"] and not _resting(st, "karten", at):
-            STATE["step"] = "Kartenkacheln"
-            res = _tiles(log)
-            st["sources"]["karten"] = res
-            if res["blocked"]:
-                st["rest"]["karten"] = _iso(now() + timedelta(hours=REST_H))
-        if db.has_data() and not _resting(st, "mapgenie", at):
-            STATE["step"] = "Map Genie"
-            res = _mapgenie(log)
-            st["sources"]["mapgenie"] = res
-            if res["blocked"]:
-                st["rest"]["mapgenie"] = _iso(now() + timedelta(hours=REST_H))
-        if db.has_data() and settings["sprites"] and not _resting(st, "extras", at):
-            total = None
-            for kind in EXTRAS:
-                STATE["step"] = MEDIA_LABEL[kind]
-                res = _images(kind, log)
-                total = res if total is None else dict(res, **{k: total[k] + res[k] for k in ("requests", "errors", "neu", "fehlen", "offen")})
-                if res["blocked"]:
-                    break
-            st["sources"]["extras"] = total
-            if total["blocked"]:
-                st["rest"]["extras"] = _iso(now() + timedelta(hours=REST_H))
+        STATE["step"] = "Bilder, Karten und Map Genie (parallel)"
+        res = _parallel({"bilder": lambda: _media(st, log, settings, at), "karten": lambda: _media_tiles(st, log, settings, at),
+                         "mapgenie": lambda: _media_mg(st, log, at), "itemhq": lambda: _media_itemhq(st, log, settings, at)})
+        for k, v in res.items():
+            if isinstance(v, Exception):
+                log(f"{k}: abgebrochen: {type(v).__name__}: {v}")
         st["ok"] = ok
     except Exception as e:          # ein Fehler im Code soll den Dienst nicht beenden
         log(f"Abgebrochen: {type(e).__name__}: {e}")
@@ -490,6 +502,57 @@ def _run(by_hand, force):
     log(f"fertig nach {s // 60}:{s % 60:02d} min" + ("" if st["ok"] else ", mit Fehlern"))
     save()
     return True
+
+
+def _media(st, log, settings, at):
+    """Sprites, Artworks und Extras (ohne große Item-Bilder): alles bei GitHub, nacheinander."""
+    if True:
+        if db.has_data() and settings["sprites"] and not _resting(st, "sprites", at):
+            res = _sprites(log)
+            if not res["blocked"]:
+                art = _images("artwork", log)
+                res = dict(art, requests=res["requests"] + art["requests"], errors=res["errors"] + art["errors"],
+                           neu=res["neu"] + art["neu"], fehlen=res["fehlen"] + art["fehlen"], offen=res["offen"] + art["offen"])
+            st["sources"]["sprites"] = res
+            if res["blocked"]:
+                st["rest"]["sprites"] = _iso(now() + timedelta(hours=REST_H))
+        if db.has_data() and settings["sprites"] and not _resting(st, "extras", at):
+            total = None
+            for kind in EXTRAS:
+                if kind == "itemhq":
+                    continue                # eigener Faden (Serebii)
+                res = _images(kind, log)
+                total = res if total is None else dict(res, **{k: total[k] + res[k] for k in ("requests", "errors", "neu", "fehlen", "offen")})
+                if res["blocked"]:
+                    break
+            st["sources"]["extras"] = total
+            if total["blocked"]:
+                st["rest"]["extras"] = _iso(now() + timedelta(hours=REST_H))
+
+
+def _media_tiles(st, log, settings, at):
+    if db.has_data() and settings["sprites"] and not _resting(st, "karten", at):
+        res = _tiles(log)
+        st["sources"]["karten"] = res
+        if res["blocked"]:
+            st["rest"]["karten"] = _iso(now() + timedelta(hours=REST_H))
+
+
+def _media_mg(st, log, at):
+    if db.has_data() and not _resting(st, "mapgenie", at):
+        res = _mapgenie(log)
+        st["sources"]["mapgenie"] = res
+        if res["blocked"]:
+            st["rest"]["mapgenie"] = _iso(now() + timedelta(hours=REST_H))
+
+
+def _media_itemhq(st, log, settings, at):
+    """Große Item-Bilder von Serebii: eine Sekunde Pause je Abruf, deshalb neben den anderen Bildern."""
+    if db.has_data() and settings["sprites"] and not _resting(st, "itemhq", at) and not _resting(st, "extras", at):
+        res = _images("itemhq", log)
+        st["sources"]["itemhq"] = res
+        if res["blocked"]:
+            st["rest"]["itemhq"] = _iso(now() + timedelta(hours=REST_H))
 
 
 def _build(st, log, force, at):
@@ -502,9 +565,12 @@ def _build(st, log, force, at):
     names, sha = csv_list(papi, log)
     sd = _Source("showdown", log)
     sd_texts, sets = {}, {}
-    if not _resting(st, "showdown", at):
+
+    def showdown_all():
+        nonlocal sets
+        if _resting(st, "showdown", at):
+            return
         for k in ("pokedex", "moves"):
-            STATE["step"] = f"Showdown: {k}.ts"
             t = sd.get(f"{SD_RAW}{k}.ts")
             if t:
                 sd_texts[k] = t
@@ -512,11 +578,17 @@ def _build(st, log, force, at):
         st["sources"]["showdown"] = sd.result(dateien=len(sd_texts) + len(sets))
         if sd.blocked:
             st["rest"]["showdown"] = _iso(now() + timedelta(hours=REST_H))
-    pkhex = _pkhex(st, log, at)
-    spawns = _spawns(st, log, at)
-    wiki = _pokewiki(st, log, at)
-    alt = _altissimo(st, log, at)
-    comp = _companion(st, log, at)
+    # Quellen ohne gegenseitige Abhängigkeit gleichzeitig; die Pause je Server gilt weiter für alle zusammen
+    STATE["step"] = "Showdown, PKHeX, Spawnpunkte, PokéWiki, Altissimo, PLA Companion (parallel)"
+    got = _parallel({"showdown": showdown_all, "pkhex": lambda: _pkhex(st, log, at), "spawns": lambda: _spawns(st, log, at),
+                     "pokewiki": lambda: _pokewiki(st, log, at), "altissimo": lambda: _altissimo(st, log, at),
+                     "companion": lambda: _companion(st, log, at)})
+    for k, v in got.items():
+        if isinstance(v, Exception):
+            log(f"{NAMES.get(k, k)}: abgebrochen: {type(v).__name__}: {v}")
+            got[k] = None
+    pkhex, spawns, wiki = got["pkhex"] or {}, got["spawns"] or {}, got["pokewiki"] or {}
+    alt, comp = got["altissimo"] or {}, got["companion"]
     if comp:
         alt.setdefault("legends-arceus", {})["companion"] = comp
     extra = importer.load_extra(EXTRA_DIR)

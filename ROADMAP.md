@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.20.0 (Rückmeldung zu 0.19.0, 11.11.2026)
+
+- `abruf._parallel` und globale Pause je Server (`_HOST_LAST`, eine Sperre je Server): `_build` holt Showdown, PKHeX,
+  Spawnpunkte, PokéWiki, Altissimo und Companion gleichzeitig; danach Bilder, Kacheln, Map Genie und `itemhq` (eigene Quelle)
+- `abruf.serebii_key`: Serebii-Namen behalten Bindestrich und Apostroph; Fehlliste neu (`itemhq3_fehlen.json`)
+- `team_caught`: Potential auch für Mitglieder (`im_team`), gefangene niedrigere Stufen einer Kette im Team fallen weg
+- Oberfläche: `.dgrid` (Detailseite), Vergleich mit `cmpMerk` und Kurzfazit, Typfilter `chartPick`, `combosSicht`,
+  `favStar`, Spaltensymbol `.pinc` vor dem Titel, Champions-Erklärung (`dblHelp`)
+
 ## 0.19.1 (Karten reparieren; Rückmeldung 11.11.2026)
 
 - `mapgenie.tile_range` aus den Kartengrenzen: Server (`abruf.mg_tile`) und Oberfläche fragen nur Kacheln innerhalb an.

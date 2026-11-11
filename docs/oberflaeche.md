@@ -62,9 +62,15 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Reiter „Karte“ in „Kampf“ um, leitet `#karte` dorthin und macht aus „gefangen“ „im Kader“ (ohne Schillernd, ohne Fangchance).
 - Map Genie: nur Kacheln innerhalb von `bounds`; `#mgwarn` erklärt fehlende Kacheln (`kacheln` in `/api/mapgenie`);
   `mgMd` für Beschreibungen (Markdown, Feldnamen deutsch über `MGWORDS`, Werte über `MGVALS`).
-- Vergleich (`compareView`, `#vergleich/<A>/<B>`, „-“ = leer): zwei Suchfelder, Werte mit Unterschied, Verteidigung je
-  Angriffstyp (grün = steckt weniger ein), Fähigkeiten, Attacken (nur A, beide, nur B).
-- Typkombinationen (`combosHtml`, unter der Typtabelle, aufklappbar `combosOpen`): Verteidigung je Kombination, sortierbar.
+- Vergleich (`compareView`, `#vergleich/<A>/<B>`, „-“ = leer): zwei Suchfelder mit Schnellwahl (gemerkte `cmpMerk`, bis 8,
+  und Favoriten), Artwork und Netz wie die Hover-Karte, Werte mit Unterschied, „Kurz gesagt“ (Initiative Lv 50, bester
+  Eigentyp-Faktor, physisch/speziell, Schwächen), Verteidigung je Angriffstyp, Fähigkeiten, Attacken (nur A, beide, nur B).
+- Typtabelle: Typfilter (`chartPick`, Zeilen der Tabelle, Kombinationen mit allen gewählten Typen).
+- Typkombinationen (`combosHtml`, unter der Typtabelle, aufklappbar `combosOpen`, nicht bei „Mein Team“): Sicht `combosSicht`
+  als Verteidiger (Faktoren multipliziert) oder Angreifer (bester der beiden Typen), sortierbar, Zeilen und Spalten markierbar (`CPIN`).
+- Spalten markieren (`crossTable`): Spaltensymbol `.pinc` vor dem Titel, auch für nicht sortierbare Spalten.
+- Detailseite: `.dgrid` mit drei Spalten (Stammdaten · Verteidigung und Duell · Entwicklung, Fang, Items, Optik), schmaler zwei, am Telefon eine.
+- `favStar(id)`: Stern zum Favorisieren an Team-Karten und Vorschlägen, `redrawMarks` hält ihn aktuell.
 - Map Genie: eigene Ebenen „Aus den Spieldaten“ (Legenden: Arceus, `/api/mapgenie/eigene`), „Gehe zu“, Trefferliste der
   Suche, `#karte/mg/<Karte>/<Ort>` springt zu einem Ort. Gefunden gilt auf der großen Karte und den Einzelkarten gleich.
 - Map Genie (`mgView`, `#karte/mg/<Karte>`, `/api/mapgenie`, Kacheln `/mgkachel/<Spiel>/<Karte>/<z>/<x>/<y>`): eigene
