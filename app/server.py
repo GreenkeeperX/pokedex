@@ -18,7 +18,8 @@ from . import abfragen, abruf, altissimo, aufgaben, db, sources, store
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
 TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml",
-         ".png": "image/png", ".html": "text/html; charset=utf-8", ".gif": "image/gif", ".mp3": "audio/mpeg", ".ogg": "audio/ogg"}
+         ".png": "image/png", ".html": "text/html; charset=utf-8", ".gif": "image/gif", ".mp3": "audio/mpeg", ".ogg": "audio/ogg",
+         ".jpg": "image/jpeg", ".webp": "image/webp"}
 
 
 def host_allowed(host, extra=None):
@@ -189,6 +190,41 @@ def set_mark(table, body):
     return {"ok": True}
 
 
+def found(spiel, karte=None):
+    """Gefundene Kartensymbole: {Karte: [Objekt]} im Spiel, mit karte nur diese."""
+    con = db.user()
+    try:
+        sql, args = "SELECT karte, objekt FROM gefunden WHERE spiel = ?", [str(spiel or "")]
+        if karte:
+            sql, args = sql + " AND karte = ?", args + [str(karte)]
+        out = {}
+        for k, o in con.execute(sql + " ORDER BY seit", args):
+            out.setdefault(k, []).append(o)
+        return out
+    finally:
+        con.close()
+
+
+def set_found(body):
+    """Kartensymbol als gefunden markieren oder nicht: {spiel, karte, objekt (Text oder Liste), an}."""
+    spiel, karte = str(body.get("spiel") or "")[:60], str(body.get("karte") or "")[:60]
+    raw = body.get("objekt")
+    objs = [str(x)[:80] for x in (raw if isinstance(raw, list) else [raw]) if x not in (None, "")][:5000]
+    if not karte or not objs:
+        raise ValueError("karte und objekt erwartet")
+    con = db.user()
+    try:
+        for o in objs:
+            if body.get("an", True):
+                con.execute("INSERT OR IGNORE INTO gefunden (spiel, karte, objekt, seit) VALUES (?, ?, ?, ?)", (spiel, karte, o, _now()))
+            else:
+                con.execute("DELETE FROM gefunden WHERE spiel = ? AND karte = ? AND objekt = ?", (spiel, karte, o))
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True, "n": len(objs)}
+
+
 FREE = "freilassen"         # Ziel „Freilassen“: nur aus der Sammlung nehmen
 
 
@@ -228,10 +264,11 @@ def export():
     try:
         out = {t: [dict(r) for r in con.execute(f"SELECT spiel, form, seit FROM {t} ORDER BY spiel, seit, form")] for t in MARKS}
         dec = [dict(r) for r in con.execute("SELECT art, schluessel, wert, at FROM entscheidung ORDER BY art, schluessel")]
+        got = [dict(r) for r in con.execute("SELECT spiel, karte, objekt, seit FROM gefunden ORDER BY spiel, karte, seit")]
     finally:
         con.close()
     return {"app": "pokedex", "version": sources.VERSION, "exportiert": _now(), "teams": teams(), "favoriten": out["favorit"],
-            "gefangen": out["gefangen"], "schillernd": out["schillernd"], "alpha": out["alpha"], "entscheidungen": dec}
+            "gefangen": out["gefangen"], "schillernd": out["schillernd"], "alpha": out["alpha"], "gefunden": got, "entscheidungen": dec}
 
 
 def restore(body):
@@ -239,7 +276,7 @@ def restore(body):
     Vorher legt db.backup() eine Kopie von user.db an."""
     if body.get("app") != "pokedex" or not isinstance(body.get("teams"), list):
         raise ValueError("Keine Sicherung des Pokédex (es fehlen app und teams)")
-    rows = {"team": [], "favorit": [], "gefangen": [], "schillernd": [], "alpha": [], "entscheidung": []}
+    rows = {"team": [], "favorit": [], "gefangen": [], "schillernd": [], "alpha": [], "gefunden": [], "entscheidung": []}
     for t in body["teams"][:500]:
         name = " ".join(str(t.get("name") or "").split())[:80] or "Team"
         members = _ids(t.get("mitglieder"))
@@ -253,6 +290,9 @@ def restore(body):
                 rows[table].append((str(r.get("spiel") or "")[:60], int(r["form"]), str(r.get("seit") or _now())[:40]))
             except (TypeError, ValueError, KeyError, AttributeError):
                 raise ValueError(f"{key}: Einträge mit spiel und form erwartet")
+    for r in (body.get("gefunden") or [])[:50000]:
+        if isinstance(r, dict) and r.get("karte") and r.get("objekt"):
+            rows["gefunden"].append((str(r.get("spiel") or "")[:60], str(r["karte"])[:60], str(r["objekt"])[:80], str(r.get("seit") or _now())[:40]))
     for r in (body.get("entscheidungen") or [])[:20000]:
         if isinstance(r, dict) and r.get("art") == "pruefung" and r.get("wert") in ("pokeapi", "showdown", "egal"):
             rows["entscheidung"].append(("pruefung", str(r.get("schluessel") or "")[:200], r["wert"], str(r.get("at") or _now())[:40]))
@@ -260,16 +300,18 @@ def restore(body):
     con = db.user()
     try:
         for table in rows:
-            con.execute(f"DELETE FROM {table}")
+            if table != "gefunden" or "gefunden" in body:      # ältere Sicherungen ohne gefundene Symbole lassen sie stehen
+                con.execute(f"DELETE FROM {table}")
         con.executemany("INSERT INTO team (name, spiel, mitglieder, fest, gewichte, details, geaendert) VALUES (?, ?, ?, ?, ?, ?, ?)", rows["team"])
         for table in MARKS:
             con.executemany(f"INSERT OR IGNORE INTO {table} (spiel, form, seit) VALUES (?, ?, ?)", rows[table])
         con.executemany("INSERT OR REPLACE INTO entscheidung VALUES (?, ?, ?, ?)", rows["entscheidung"])
+        con.executemany("INSERT OR IGNORE INTO gefunden (spiel, karte, objekt, seit) VALUES (?, ?, ?, ?)", rows["gefunden"])
         con.commit()
     finally:
         con.close()
     return {"teams": len(rows["team"]), "favoriten": len(rows["favorit"]), "gefangen": len(rows["gefangen"]),
-            "entscheidungen": len(rows["entscheidung"])}
+            "gefunden": len(rows["gefunden"]), "entscheidungen": len(rows["entscheidung"])}
 
 
 def delete_team(body):
@@ -448,6 +490,19 @@ class Handler(BaseHTTPRequestHandler):
                     self._file(f, "max-age=604800")
                 else:
                     self._send(404, {"error": "kein Kartenbild"})
+            elif m := re.fullmatch(r"/mgkachel/([a-z0-9-]{2,60})/([a-z0-9-]{1,60})/(\d{1,2})/(\d{1,6})/(\d{1,6})", path):
+                f = abruf.mg_tile(m.group(1), m.group(2), *(int(m.group(i)) for i in (3, 4, 5)))
+                if f:
+                    self._file(f, "max-age=2592000")
+                else:
+                    self._send(404, {"error": "keine Kachel"})
+            elif path == "/api/mapgenie":
+                d = abruf.mg_maps(q.get("spiel"))
+                if d and q.get("karte"):
+                    m = next((m for m in d["karten"] if m["slug"] == q["karte"]), None)
+                    self._send(200 if m else 404, dict(m, spiel=d["spiel"], am=d["am"]) if m else {"error": "keine Karte"})
+                else:
+                    self._send(200, {"karten": [{"slug": m["slug"], "titel": m["titel"], "orte": len(m["orte"])} for m in (d or {}).get("karten", [])]})
             elif path == "/api/gebiete":
                 d = abfragen.areas(q)
                 self._send(200 if d else 404, d or {"error": "keine Gebiete"})
@@ -482,6 +537,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, marked("schillernd", q.get("spiel")))
             elif path == "/api/alpha":
                 self._send(200, {"ids": marked("alpha", q.get("spiel")), "moeglich": abfragen.alpha_possible(q.get("spiel"))})
+            elif path == "/api/gefunden":
+                self._send(200, found(q.get("spiel"), q.get("karte")))
             elif path == "/api/export":
                 day = _now()[:10]
                 self._send(200, export(), extra={"Content-Disposition": f'attachment; filename="pokedex-daten-{day}.json"'})
@@ -517,6 +574,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/gefangen": lambda b: set_mark("gefangen", b),
         "/api/schillernd": lambda b: set_mark("schillernd", b),
         "/api/alpha": lambda b: set_mark("alpha", b),
+        "/api/gefunden": set_found,
         "/api/team/gefangen": abfragen.team_caught,
         "/api/uebertragen": transfer,
         "/api/restore": restore,

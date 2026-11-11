@@ -570,7 +570,8 @@ async function route() {
     else if (tab === "attacken") await movesView();
     else if (tab === "typen") await chartView();
     else if (tab === "items") await itemsView();
-    else if (tab === "karte" && (arg === "gebiete" || (!arg && S.game && S.game !== "legends-arceus"))) await areasView(arg2);
+    else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
+    else if (tab === "karte" && (arg === "mg" || (!arg && S.game && S.game !== "legends-arceus"))) await mgView(arg2 && decodeURIComponent(arg2));
     else if (tab === "karte") await mapView(arg, arg2 === undefined ? null : +arg2);
     else if (tab === "einstellungen") await settingsView();
     else location.hash = "pokemon";
@@ -1697,6 +1698,8 @@ const MOBJHINT = {irrlicht: "Geisterlicht zum Einsammeln; 107 gibt es in ganz Hi
   kristall: "Kristallbrocken: zerschlagen, dann erscheint das Pokémon.", verzerrung: "Raum-Zeit-Verzerrung: hier erscheinen die Pokémon während einer Verzerrung.",
   massen: "Massenauftreten: hier kann es zu einem Massenauftreten kommen.", baumpkmn: "Baum schütteln oder werfen: das Pokémon fällt heraus.",
   alpha: "Festes Alpha-Pokémon an dieser Stelle.", reise: "Schnellreise: hierher bringt dich Pikas Flug.", lager: "Lager: ausruhen, herstellen, Pokémon tauschen."};
+const MAPSPIEL = "legends-arceus";          // bisher die einzige Karte mit Symbolen
+const okey = (o) => `${o.art}:${Math.round(o.x)}:${Math.round(o.z)}`;
 const mobjTip = (o, arten) => `${arten[o.art]?.[0] || o.art}${o.nr ? " " + o.nr : ""}` + (o.menge ? `\n${o.menge} Stück je Mal` : "")
   + (o.items.length ? "\n" + o.items.map(([n, p]) => p ? `${n}: ${p}` : n).join("\n") : "");
 /* Übersicht mit Pokémon-Bildern: die Karte in Felder (64 Spieleinheiten) geteilt; je Feld die häufigsten Pokémon als
@@ -1722,6 +1725,163 @@ function mapHeat(pts, objs, sh = (m) => m.max || 0) {
 const heatTip = (s) => `${s.name}: ${s.n} Stelle${s.n === 1 ? "" : "n"} hier, zusammen ${String(Math.round(s.w * 100) / 100).replace(".", ",")}`;
 /* Gebiete eines Spiels (für Spiele ohne Karte): links die Orte, rechts alle Pokémon dort als Bildergitter, nach Methode.
    Gefangene sind blass (Filter „nur fehlende“). Gewählter Ort je Spiel gemerkt; #karte/gebiete/<Ort> öffnet ihn direkt */
+/* Karten von Map Genie (für jedes Spiel, für das es dort eine gibt): Kacheln über den eigenen Server (im Datenordner
+   zwischengespeichert), Orte als farbige Punkte je Gruppe, Filter je Kategorie, „gefunden“ per Rechtsklick wie bei
+   Legenden: Arceus. #karte/mg/<Karte>; ohne Karte für das Spiel geht es zu den Gebieten */
+const MGDATA = {};
+const mgProj = (lat, lng, z) => {
+  const s = 256 * 2 ** z, r = Math.PI / 180, sy = Math.sin(lat * r);
+  return [(lng + 180) / 360 * s, (0.5 - Math.log((1 + sy) / (1 - sy)) / (4 * Math.PI)) * s];
+};
+async function mgView(slug) {
+  const rid = RID;
+  const lst = await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({karten: []}));
+  if (rid !== RID) return;
+  if (!lst.karten.length) return areasView();
+  const kk = "mgKarte:" + S.game;
+  if (!slug || !lst.karten.some((k) => k.slug === slug)) slug = store.get(kk, lst.karten[0].slug);
+  if (!lst.karten.some((k) => k.slug === slug)) slug = lst.karten[0].slug;
+  store.set(kk, slug);
+  const ck = S.game + "/" + slug;
+  const d = MGDATA[ck] || (MGDATA[ck] = await api("/api/mapgenie?" + qs({spiel: S.game, karte: slug})));
+  const gk = "mg-" + slug;
+  const gotRes = await api("/api/gefunden?" + qs({spiel: d.spiel, karte: gk})).catch(() => ({}));
+  if (rid !== RID) return;
+  window.scrollTo(0, 0);
+  const got = new Set(gotRes[gk] || []);
+  const cats = {}, groups = d.gruppen;
+  groups.forEach((g) => g.kategorien.forEach((c) => { cats[c.id] = Object.assign(c, {g}); }));
+  const orte = d.orte.filter((o) => cats[o[1]]);
+  const hk = "mgHide:" + d.spiel;
+  const hide = new Set(store.get(hk, []));
+  let gotHide = store.get("mapGotHide", false), q = "";
+  const open = new Set(store.get("mgOpen", groups.filter((g) => g.kategorien.length <= 12).map((g) => g.id)));    // aufgeklappte Gruppen
+  const okey = (o) => "mg:" + o[0];
+  const cnt = (c) => { const f = orte.filter((o) => o[1] === c.id && got.has(okey(o))).length; return f ? `${f}/${c.n} ✓` : c.n; };
+  const catBtn = (c) => `<button class="mlay${hide.has(c.id) ? "" : " on"}" data-cat="${c.id}"><span class="mgdot" style="--c:${esc(c.g.farbe)}">${esc(c.titel[0] || "•")}</span>${esc(c.titel)} <span class="hint" data-cnt="${c.id}">${cnt(c)}</span></button>`;
+  main.innerHTML = `<div class="box mapbox">
+    <div class="bar"><h2 style="margin:0">Karte</h2><span class="hint">Spiel</span><select class="gamesel"></select>
+      ${lst.karten.length > 1 ? `<span class="seg">${lst.karten.map((k) => `<a class="btn${k.slug === slug ? " on" : ""}" href="#karte/mg/${esc(k.slug)}">${esc(k.titel)}</a>`).join("")}</span>` : ""}
+      ${S.game === "legends-arceus" ? `<a class="btn" href="#karte/obsidianfieldlands" data-tip="Eigene Karte mit Spawnpunkten aus den Spieldaten">Spawnpunkte</a>` : ""}
+      <a class="btn" href="#karte/gebiete" data-tip="Alle Orte mit ihren Pokémon als Liste">Gebiete</a>
+      <input id="mgq" type="search" placeholder="Ort oder Symbol suchen" style="width:200px">
+      <label class="mgot" data-tip="Orte, die du als gefunden markiert hast (Rechtsklick oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> gefundene ausblenden</label>
+      <span class="hint grow" id="mgn"></span></div>
+    <div class="mapwrap"><div class="mapcol"><div id="mgmap" class="map mgmap"><div class="mgtiles"></div><div class="mgpins"></div></div>
+      <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
+      <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für den Namen, klicke für Einzelheiten. Rechtsklick markiert ihn als gefunden.</p></aside>
+      <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button></span></div>
+        ${groups.map((g, gi) => `<details class="mgg"${open.has(g.id) ? " open" : ""} data-gid="${g.id}"><summary><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
+          <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
+    <p class="hint">Karte und Orte: Map Genie (mapgenie.io), Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}; Namen und Texte englisch wie dort. Kacheln lädt der Server beim ersten Ansehen und hebt sie auf.</p></div>`;
+  header();
+  const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box);
+  const zmin = d.min_zoom, zmax = d.max_zoom;
+  const bb = d.bounds || (() => { const la = orte.map((o) => o[2]), lo = orte.map((o) => o[3]); return [Math.min(...lo), Math.min(...la), Math.max(...lo), Math.max(...la)]; })();
+  let z = zmin, cx = 0, cy = 0;
+  const fit = () => {
+    const w = box.clientWidth, h = box.clientHeight;
+    z = zmin;
+    for (let t = zmax; t >= zmin; t--) {
+      const [x1, y1] = mgProj(bb[3], bb[0], t), [x2, y2] = mgProj(bb[1], bb[2], t);
+      if (x2 - x1 <= w && y2 - y1 <= h) { z = t; break; }
+    }
+    const [x1, y1] = mgProj(bb[3], bb[0], z), [x2, y2] = mgProj(bb[1], bb[2], z);
+    cx = (x1 + x2) / 2; cy = (y1 + y2) / 2;
+  };
+  const vis = (o) => !hide.has(o[1]) && !(gotHide && got.has(okey(o))) && (!q || o[4].toLowerCase().includes(q) || cats[o[1]].titel.toLowerCase().includes(q));
+  const pins = () => {
+    let n = 0;
+    pl.innerHTML = orte.map((o, i) => {
+      if (!vis(o)) return "";
+      n++;
+      const [x, y] = mgProj(o[2], o[3], z), c = cats[o[1]];
+      return `<button class="mgp${got.has(okey(o)) ? " got" : ""}" data-i="${i}" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;--c:${esc(c.g.farbe)}" data-tip="${esc(o[4] || c.titel)}${o[4] && o[4] !== c.titel ? "\n" + esc(c.titel) : ""}">${esc(c.titel[0] || "•")}</button>`;
+    }).join("");
+    $("#mgn").textContent = `${n} von ${orte.length} Orten`;
+  };
+  const tiles = () => {
+    const w = box.clientWidth, h = box.clientHeight, ox = cx - w / 2, oy = cy - h / 2, nmax = 2 ** z;
+    tl.style.transform = pl.style.transform = `translate(${-ox}px,${-oy}px)`;
+    const want = new Set();
+    for (let tx = Math.max(0, Math.floor(ox / 256)); tx <= Math.min(nmax - 1, Math.floor((ox + w) / 256)); tx++)
+      for (let ty = Math.max(0, Math.floor(oy / 256)); ty <= Math.min(nmax - 1, Math.floor((oy + h) / 256)); ty++) want.add(`${z}/${tx}/${ty}`);
+    $$("img", tl).forEach((im) => { if (!want.has(im.dataset.k)) im.remove(); else want.delete(im.dataset.k); });
+    want.forEach((k) => {
+      const [, tx, ty] = k.split("/").map(Number), im = new Image();
+      im.dataset.k = k; im.alt = ""; im.draggable = false;
+      im.style.left = tx * 256 + "px"; im.style.top = ty * 256 + "px";
+      im.onerror = () => { im.style.visibility = "hidden"; };
+      im.src = `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
+      tl.appendChild(im);
+    });
+  };
+  const zoomTo = (nz, px, py) => {
+    nz = Math.max(zmin, Math.min(zmax, nz));
+    if (nz === z) return;
+    const w = box.clientWidth, h = box.clientHeight;
+    px ??= w / 2; py ??= h / 2;
+    const f = 2 ** (nz - z), wx = cx - w / 2 + px, wy = cy - h / 2 + py;
+    cx = wx * f - px + w / 2; cy = wy * f - py + h / 2; z = nz;
+    tl.innerHTML = "";
+    tiles(); pins();
+  };
+  fit(); tiles(); pins();
+  let drag = null, moved = false;
+  box.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; drag = {x: e.clientX, y: e.clientY, cx, cy}; moved = false; });
+  box.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+    if (!moved) { moved = true; box.setPointerCapture(e.pointerId); box.classList.add("grab"); }
+    cx = drag.cx - dx; cy = drag.cy - dy; tiles();
+  });
+  const stop = () => { drag = null; box.classList.remove("grab"); };
+  box.addEventListener("pointerup", stop);
+  box.addEventListener("pointercancel", stop);
+  box.addEventListener("wheel", (e) => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomTo(z + (e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+  box.addEventListener("dblclick", (e) => { const r = box.getBoundingClientRect(); zoomTo(z + 1, e.clientX - r.left, e.clientY - r.top); });
+  $$("[data-mz]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mz === "0") { fit(); tl.innerHTML = ""; tiles(); pins(); } else zoomTo(z + +b.dataset.mz); }));
+  const side = (i) => {
+    const o = orte[i], c = cats[o[1]], on = got.has(okey(o));
+    $("#mapside").innerHTML = `<h3><span class="mgdot" style="--c:${esc(c.g.farbe)}">${esc(c.titel[0] || "•")}</span> ${esc(o[4] || c.titel)}</h3>
+      <p class="hint">${esc(c.g.titel)} · ${esc(c.titel)}</p>
+      <p><button class="btn gotbtn${on ? " on" : ""}" id="gotbtn">${on ? "✓ gefunden" : "als gefunden markieren"}</button></p>
+      ${o[5] ? `<p class="mgdesc">${esc(o[5])}</p>` : ""}`;
+    $("#gotbtn").addEventListener("click", () => toggle(i));
+  };
+  let selI = -1;
+  const toggle = (i) => {
+    const o = orte[i], k = okey(o), on = !got.has(k);
+    if (on) got.add(k); else got.delete(k);
+    const c = $(`[data-cnt="${o[1]}"]`);
+    if (c) c.innerHTML = cnt(cats[o[1]]);
+    pins();
+    if (selI === i) side(i);
+    api("/api/gefunden", {spiel: d.spiel, karte: gk, objekt: k, an: on}).catch(() => { if (on) got.delete(k); else got.add(k); pins(); });
+  };
+  pl.addEventListener("click", (e) => {
+    if (moved) return;
+    const b = e.target.closest(".mgp");
+    if (!b) return;
+    $$(".mgp.sel", pl).forEach((x) => x.classList.remove("sel"));
+    b.classList.add("sel");
+    selI = +b.dataset.i; side(selI);
+  });
+  pl.addEventListener("contextmenu", (e) => { const b = e.target.closest(".mgp"); if (!b) return; e.preventDefault(); toggle(+b.dataset.i); });
+  const saveHide = () => { store.set(hk, [...hide]); $$("[data-cat]").forEach((b) => b.classList.toggle("on", !hide.has(+b.dataset.cat))); pins(); };
+  $$("[data-cat]").forEach((b) => b.addEventListener("click", () => { const k = +b.dataset.cat; if (hide.has(k)) hide.delete(k); else hide.add(k); saveHide(); }));
+  $$("[data-grp]").forEach((b) => b.addEventListener("click", () => {
+    const ks = groups[+b.dataset.grp].kategorien.map((c) => c.id), anyOn = ks.some((k) => !hide.has(k));
+    ks.forEach((k) => { if (anyOn) hide.add(k); else hide.delete(k); });
+    saveHide();
+  }));
+  $$("[data-all]").forEach((b) => b.addEventListener("click", () => { Object.keys(cats).forEach((k) => { if (b.dataset.all === "1") hide.delete(+k); else hide.add(+k); }); saveHide(); }));
+  $$("details.mgg").forEach((x) => x.addEventListener("toggle", () => { if (x.open) open.add(+x.dataset.gid); else open.delete(+x.dataset.gid); store.set("mgOpen", [...open]); }));
+  $$("summary [data-grp]").forEach((b) => b.addEventListener("click", (e) => e.preventDefault()));
+  $("#gothide").addEventListener("change", (e) => { gotHide = e.target.checked; store.set("mapGotHide", gotHide); pins(); });
+  $("#mgq").addEventListener("input", (e) => { q = e.target.value.trim().toLowerCase(); pins(); });
+}
 async function areasView(want) {
   const rid = RID;
   const d = await api("/api/gebiete?" + qs({spiel: S.game})).catch(() => null);
@@ -1771,8 +1931,12 @@ async function mapView(karte, fid) {
   const rid = RID;
   const key = karte || "obsidianfieldlands";
   const d = MAPCACHE[key] || (MAPCACHE[key] = await api("/api/karte/" + encodeURIComponent(key)));
+  /* gefundene Symbole (Geisterlichter, Icognito, Kisten …): je Karte; Schlüssel Art:x:z, damit er einen Neubau übersteht */
+  const gotRes = await api("/api/gefunden?" + qs({spiel: MAPSPIEL, karte: key})).catch(() => ({}));
   if (rid !== RID) return;
   if (!$("#map")) window.scrollTo(0, 0);
+  const got = new Set(gotRes[key] || []);
+  let gotHide = store.get("mapGotHide", false);
   /* Tageszeit und Wetter: -1 = alle; der Anteil eines Pokémon ist dann der höchste unter den gewählten Bedingungen */
   const fz = store.get("mapZeit", -1), fw = store.get("mapWetter", -1), cond = fz >= 0 || fw >= 0;
   const sh = (m) => !cond || !m.c ? m.max || 0 : Math.max(0, ...m.c.filter((v, i) => (fz < 0 || Math.floor(i / 9) === fz) && (fw < 0 || i % 9 === fw)));
@@ -1789,7 +1953,8 @@ async function mapView(karte, fid) {
   let heatOn = store.get("mapHeat", false);
   const H = mapHeat(pts, objs, sh);
   const layerBtn = (k, label, n) => `<button class="mlay${hide.has(k) ? "" : " on"}" data-lay="${k}" data-tip="${hide.has(k) ? "einblenden" : "ausblenden"}">${k === "pokemon"
-    ? `<span class="mpin-l"></span>` : `<span class="mobj o-${k}">${MOBJ[k] || "•"}</span>`}${esc(label)} <span class="hint">${n}</span></button>`;
+    ? `<span class="mpin-l"></span>` : `<span class="mobj o-${k}">${MOBJ[k] || "•"}</span>`}${esc(label)} <span class="hint" data-cnt="${k}">${cnt(k, n)}</span></button>`;
+  const cnt = (k, n) => { const f = k === "pokemon" ? 0 : objs.filter((o) => o.art === k && got.has(okey(o))).length; return f ? `${f}/${n} ✓` : n; };
   const lays = [...(pts.length ? [["pokemon", "Spawnpunkte", pts.length]] : []), ...Object.entries(arten).map(([k, v]) => [k, v[1], objs.filter((o) => o.art === k).length])];
   const known = new Set(MGROUPS.flatMap((g) => g[1]));
   const groups = [...MGROUPS.map(([n, ks]) => [n, ks.map((k) => lays.find((l) => l[0] === k)).filter(Boolean)]), ["Weitere", lays.filter((l) => !known.has(l[0]))]].filter((g) => g[1].length);
@@ -1800,19 +1965,21 @@ async function mapView(karte, fid) {
     <div class="bar"><h2 style="margin:0">Karte</h2>
       <span class="seg">${d.karten.map((k) => `<a class="btn${k.karte === d.karte ? " on" : ""}" href="#karte/${k.karte}${fid != null ? "/" + fid : ""}">${esc(k.gebiet)}</a>`).join("")}</span>
       <a class="btn" href="#karte/gebiete" data-tip="Alle Orte mit ihren Pokémon als Liste">Gebiete</a>
+      <a class="btn" href="#karte/mg" data-tip="Karte von Map Genie mit Orten, Sammelobjekten und Materialien (wenn geladen)">Map Genie</a>
       ${pts.length ? `<div class="pick" id="mapmon"><button class="pickbtn" aria-haspopup="true" aria-expanded="false">${fid != null && species[fid] ? img(fid) + `<b>${esc(species[fid].name)}</b>` : "Pokémon wählen"} <span class="hint">▾</span></button>
         <div class="pickm" hidden><input type="search" placeholder="Pokémon suchen" aria-label="Pokémon suchen">
           <div class="pickl"><a href="#karte/${d.karte}" class="${fid == null ? "on" : ""}"><span class="spr none"></span><span>alle Spawnpunkte</span><span class="hint">${pts.length}</span></a>${list.map((s) => `<a href="#karte/${d.karte}/${s.id}" class="${s.id === fid ? "on" : ""}" data-n="${esc(s.name.toLowerCase())}">${img(s.id)}<span>${esc(s.name)}</span><span class="hint" data-tip="Stellen in diesem Gebiet">${s.n}</span></a>`).join("")}</div></div></div>
       <span class="hint grow">${fid != null ? (hits || ohits ? [hits && `${hits} Spawnpunkte`, ohits && `${ohits} weitere Stellen`].filter(Boolean).join(" und ") + " hervorgehoben" : "hier an keinem Spawnpunkt") : `${pts.length} Spawnpunkte, davon ${pts.filter((p) => p.alpha).length} Alpha`}</span>` : ""}
 </div>
     ${objs.length || pts.length ? `<div class="bar mlays">${pts.length ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="heatbtn" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto wahrscheinlicher">▦ Übersicht mit Bildern</button>` : ""}${hasCond ? condSel("mapZeit", "Tageszeit", d.zeiten || [], fz) + condSel("mapWetter", "Wetter", d.wetterarten || [], fw) : ""}
+      ${objs.length ? `<label class="mgot" data-tip="Symbole, die du als gefunden markiert hast (Rechtsklick auf ein Symbol oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> gefundene ausblenden</label>` : ""}
       <span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button></span></div>
     <div class="bar mlays mgrps">${layerBar}</div>` : ""}
     ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus. <a href="#karte/gebiete">Gebiete von ${esc(gameName())}</a></div>` : ""}
     ${d.kacheln || d.bild ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
     <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
-      <aside id="mapside" class="mapside"><p class="hint">${pts.length ? "Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha." : "Fahre über ein Symbol für Einzelheiten, klicke für die Liste."}</p></aside></div>
+      <aside id="mapside" class="mapside"><p class="hint">${pts.length ? "Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha." : "Fahre über ein Symbol für Einzelheiten, klicke für die Liste."}${objs.length ? " Rechtsklick auf ein Symbol markiert es als gefunden." : ""}</p></aside></div>
     <p class="hint">Kartenbild: ${d.bild ? "Altissimo" : "Serebii"}${pts.length ? "; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten" : ""}${objs.length ? "; Symbole und Sammelobjekte: Altissimo (GPL-3.0)" : ""}${objs.some((o) => MOBJMON.has(o.art) || o.art === "boden") ? "; Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas und Items am Boden: PokéWiki (CC BY-SA 3.0)" : ""}${objs.some((o) => o.art === "reise" || o.art === "lager") ? "; Schnellreise und Lager: PLA Companion (software-notion.de)" : ""}.</p></div>`;
   const pick = $("#mapmon") || document.createElement("div"), pickM = $(".pickm", pick) || document.createElement("div");
   const pickOpen = (on) => { pickM.hidden = !on; $(".pickbtn", pick).setAttribute("aria-expanded", on); if (on) { const f = $("input", pickM); f.value = ""; pickFilter(""); f.focus(); $("a.on", pickM)?.scrollIntoView({block: "center"}); } };
@@ -1859,13 +2026,35 @@ async function mapView(karte, fid) {
     + (!cond && m.zeit !== "immer" ? ` (${m.zeit})` : "")).join("\n") || "zu dieser Zeit und bei diesem Wetter nichts" : "keine Angaben");
   pins.innerHTML = pts.map((p, i) => `<button class="mpin${p.alpha ? " alpha" : ""}${p.hit ? " hit" : ""}${(fid != null && !p.hit) || p.off ? " dim" : ""}" data-i="${i}"
     style="left:${p.x * 2}px;top:${p.z * 2}px" data-tip="${esc(tipOf(p))}" aria-label="Spawnpunkt"></button>`).join("")
-    + objs.map((o, i) => `<button class="mobj o-${o.art}${o.hit ? " hit" : ""}" data-o="${i}" style="left:${o.x * 2}px;top:${o.z * 2}px" data-tip="${esc(mobjTip(o, arten))}"
+    + objs.map((o, i) => `<button class="mobj o-${o.art}${o.hit ? " hit" : ""}${got.has(okey(o)) ? " got" : ""}" data-o="${i}" style="left:${o.x * 2}px;top:${o.z * 2}px" data-tip="${esc(mobjTip(o, arten))}"
       aria-label="${esc(arten[o.art]?.[0] || o.art)}">${MOBJ[o.art] || "•"}</button>`).join("");
   const showLayers = () => {
     $$(".mpin", pins).forEach((b) => { b.hidden = hide.has("pokemon"); });
-    $$(".mobj[data-o]", pins).forEach((b) => { b.hidden = hide.has(objs[+b.dataset.o].art); });
+    $$(".mobj[data-o]", pins).forEach((b) => { const o = objs[+b.dataset.o]; b.hidden = hide.has(o.art) || (gotHide && got.has(okey(o))); });
   };
   showLayers();
+  const toggleGot = (i) => {
+    const o = objs[i], k = okey(o), on = !got.has(k);
+    if (on) got.add(k); else got.delete(k);
+    $(`.mobj[data-o="${i}"]`, pins)?.classList.toggle("got", on);
+    const c = $(`[data-cnt="${o.art}"]`);
+    if (c) c.innerHTML = cnt(o.art, objs.filter((x) => x.art === o.art).length);
+    const gb = $("#gotbtn");
+    if (gb && +gb.dataset.o === i) { gb.classList.toggle("on", on); gb.textContent = on ? "✓ gefunden" : "als gefunden markieren"; }
+    showLayers();
+    api("/api/gefunden", {spiel: MAPSPIEL, karte: key, objekt: k, an: on}).catch(() => {
+      if (on) got.delete(k); else got.add(k);        // nicht gespeichert: zurück
+      $(`.mobj[data-o="${i}"]`, pins)?.classList.toggle("got", !on);
+      showLayers();
+    });
+  };
+  $("#gothide")?.addEventListener("change", (e) => { gotHide = e.target.checked; store.set("mapGotHide", gotHide); showLayers(); });
+  pins.addEventListener("contextmenu", (e) => {
+    const ob = e.target.closest(".mobj[data-o]");
+    if (!ob) return;
+    e.preventDefault();
+    toggleGot(+ob.dataset.o);
+  });
   const layBtns = () => $$(".mlay[data-lay]").forEach((b) => { b.classList.toggle("on", !hide.has(b.dataset.lay)); b.dataset.tip = hide.has(b.dataset.lay) ? "einblenden" : "ausblenden"; });
   $$(".mlay[data-lay]").forEach((b) => b.addEventListener("click", () => {
     const k = b.dataset.lay;
@@ -1982,11 +2171,14 @@ async function mapView(karte, fid) {
       ob.classList.add("sel");
       const o = objs[+ob.dataset.o];
       const mon = MOBJMON.has(o.art);
+      const isGot = got.has(okey(o));
       $("#mapside").innerHTML = `<h3><span class="mobj o-${o.art}">${MOBJ[o.art] || "•"}</span> ${esc(arten[o.art]?.[0] || o.art)}${o.nr ? " " + o.nr : ""}</h3>`
+        + `<p><button class="btn gotbtn${isGot ? " on" : ""}" id="gotbtn" data-o="${ob.dataset.o}" data-tip="Merken, dass du das schon hast (auch per Rechtsklick auf das Symbol)">${isGot ? "✓ gefunden" : "als gefunden markieren"}</button></p>`
         + (mon ? `<table class="rows"><tr><th></th><th>Pokémon</th><th>${o.art === "alpha" ? "Level" : "Level, Anteil"}</th></tr>${o.items.map(([n, t, id]) => `<tr${id === fid ? ` class="on"` : ""}><td>${id ? img(id, "sm") : ""}</td>
             <td>${id ? `<a href="#pokemon/${id}">${esc(n)}</a>` : esc(n)}</td><td>${esc(t)}</td></tr>`).join("")}</table><p class="hint">${esc(MOBJHINT[o.art] || "")}</p>`
         : o.items.length ? `<table class="rows"><tr><th>Item</th><th class="c">Anteil</th></tr>${o.items.map(([n, p]) => `<tr><td>${wikiLink(n)}</td><td class="c num">${esc(p)}</td></tr>`).join("")}</table>`
           + (o.menge ? `<p class="hint">${esc(o.menge)} Stück je Mal; Anteil: so oft ist es dieses Item.</p>` : "") : `<p class="hint">${esc(MOBJHINT[o.art] || "")}</p>`);
+      $("#gotbtn").addEventListener("click", () => toggleGot(+ob.dataset.o));
       return;
     }
     const b = e.target.closest(".mpin");

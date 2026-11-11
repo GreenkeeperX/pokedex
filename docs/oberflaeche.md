@@ -54,6 +54,10 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - α (`alphaBtn`, `/api/alpha`): bündig über dem Pokéball, nur für mögliche Alphas des Spiels; setzt auch gefangen.
 - Fester Tabellenkopf: `.scroll.sticky` (Attacken, Items) mit `top: var(--stick)`; auf schmalen Bildschirmen scrollt die
   Tabelle seitlich ohne festen Kopf.
+- Map Genie (`mgView`, `#karte/mg/<Karte>`, `/api/mapgenie`, Kacheln `/mgkachel/<Spiel>/<Karte>/<z>/<x>/<y>`): eigene
+  Kachelanzeige (Web-Mercator, ganze Zoomstufen), Punkte je Kategorie in der Farbe der Gruppe, Ebenen rechts zum
+  Auf- und Zuklappen (`mgHide:<Spiel>`, `mgOpen`), Suche, Rechtsklick = gefunden (`/api/gefunden`, `mapGotHide`).
+  Auf der Karte von Legenden: Arceus gilt dasselbe für die Symbole (Schlüssel Art:x:z).
 - Gebiete (`areasView`, `#karte/gebiete/<Ort>`, `/api/gebiete`): links die Orte mit „noch nicht gefangen / alle“,
   rechts das Bildergitter nach Methode; Spiele ohne Karte landen unter „Karte“ direkt hier. Ort je Spiel gemerkt
   (`gebiet:<Spiel>`), Filter „nur noch nicht gefangene“ (`gebietFehlend`).

@@ -1,5 +1,17 @@
 # Roadmap
 
+## 0.16.0 (Map Genie, gefundene Symbole; Entscheidung 11.11.2026)
+
+- Map Genie (`app/mapgenie.py`, `abruf._mapgenie`): je Spiel in `mapgenie.GAMES` die Kartenseiten (`window.mapData`:
+  Gruppen, Kategorien, Kachelsatz) und `/api/v1/maps/<Nummer>/data` (Orte) nach `data/mapgenie/<Spiel>.json`;
+  Kacheln holt `abruf.mg_tile` beim ersten Ansehen (`/mgkachel/…`, eine Anfrage zur Zeit, Pause, Sperre ruht 24 Stunden).
+  Oberfläche `mgView` (`#karte/mg/<Karte>`), Spiele ohne eigene Karte öffnen sie unter „Karte“, ohne Map Genie die Gebiete
+- Gefunden (user.db `gefunden`, `/api/gefunden`): Schlüssel Art:x:z (Legenden: Arceus) oder `mg:<Ort>`; Sicherung und Einlesen
+- Lernlisten der Erweiterungen: `abfragen.LEARN_PARENT`; vorher zeigte etwa Die Insel der Rüstung die Liste von Champions
+- Ältere Spiele: Proben von pokemoncompletion (Yellow, Crystal …) im Verbindungstest; danach ein Leser für Symbole
+  (Items, Trainer) und Ortskarten, angelehnt an die Ortsseiten der Spieleberater (Karte mit nummerierten Fundstellen)
+- Champions: Kurzkonzept (Kampfansicht statt Karte, Doppelkampf-Bewertung, Regeln je Saison, Schadensrechner)
+
 ## 0.15.0 (Gebiete für alle Spiele, BDSP; Entscheidung 11.11.2026)
 
 - Gebiete (`abfragen.areas`, `/api/gebiete`, `areasView`, `#karte/gebiete/<Ort>`): je Ort alle Pokémon nach Methode,

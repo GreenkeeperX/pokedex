@@ -10,11 +10,19 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.16.0", "11.11.2026", [
+        "Karten von Map Genie für jedes Spiel, das es dort gibt: Orte, Sammelobjekte und Materialien als Ebenen, "
+        "Suche, Kacheln lädt der Server beim ersten Ansehen (Karte → Map Genie)",
+        "Kartensymbole als gefunden markieren (Rechtsklick oder ✓ in den Details), Zähler je Ebene, „gefundene ausblenden“",
+        "Erweiterungen (Die Insel der Rüstung, Die Schneelande der Krone, Die türkisblaue Maske, Die Indigoblaue Scheibe) "
+        "zeigen die Lernliste ihres Hauptspiels mit den Lehrer-Attacken und TMs der Erweiterung",
+        "Verbindungstest: Map Genie je Spiel, pokemoncompletion für ältere Spiele",
+    ]),
     ("0.15.0", "11.11.2026", [
         "Gebiete für alle Spiele: Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition; "
         "Gefangene blass, auf Wunsch nur die fehlenden (Karte → Gebiete)",

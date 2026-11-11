@@ -499,6 +499,40 @@ class Leser(unittest.TestCase):
         self.assertEqual(sorted(r[0] for r in con.execute("SELECT gebiet FROM fundort")), ["Erfundener See", "Erfundener Wald", "Erfundener Wald"])
         con.close()
 
+    def test_mapgenie_lesen(self):
+        from app import mapgenie
+        md = {"map": {"id": 7, "title": "Erfundene Region", "slug": "erfundene-region"},
+              "mapConfig": {"tile_sets": [{"pattern": "spiel/erfundene-region/v1/{z}/{x}/{y}.png", "extension": "png", "min_zoom": 9,
+                                           "max_zoom": 14, "tiles_max_zoom": 13, "order": 0}]},
+              "groups": [{"id": 1, "title": "Sammeln", "color": "89418F", "order": 2, "categories": [
+                  {"id": 10, "title": "Licht", "icon": "wisp", "order": 1}, {"id": 11, "title": "Leer", "order": 2}]},
+                         {"id": 2, "title": "Orte", "color": "3F7791", "order": 1, "categories": [{"id": 20, "title": "Lager", "order": 1}]}]}
+        page = ('<a href="/spiel/maps/erfundene-region">x</a><a href="\\/spiel\\/maps\\/zweite">y</a>'
+                '<script>window.mapData = ' + json.dumps(md) + ';window.user = null;</script>')
+        data = json.dumps({"locations": [
+            {"id": 1, "category_id": 10, "latitude": "0.5", "longitude": "-0.25", "title": "Licht 1", "description": "<p>Am <b>Felsen</b></p><p>oben</p>"},
+            {"id": 2, "category_id": 20, "latitude": "0.75", "longitude": "-1", "title": "Lager"},
+            {"id": 3, "category_id": 10, "latitude": "kaputt", "longitude": "0"}],
+            "styles": {"mapStyle": {"bounds": [-1.4, 0, 0, 1.4]}}})
+        self.assertEqual(mapgenie.map_slugs(page, "spiel"), ["erfundene-region", "zweite"])
+        m = mapgenie.parse(page, data)
+        self.assertEqual((m["id"], m["titel"], m["max_zoom"], m["bounds"]), (7, "Erfundene Region", 13, [-1.4, 0, 0, 1.4]))
+        self.assertEqual([g["titel"] for g in m["gruppen"]], ["Orte", "Sammeln"])            # nach Reihenfolge, leere Kategorien fallen weg
+        self.assertEqual(m["gruppen"][1]["kategorien"], [{"id": 10, "titel": "Licht", "icon": "wisp", "n": 1}])
+        self.assertEqual(m["orte"][0], [1, 10, 0.5, -0.25, "Licht 1", "Am Felsen\noben"])
+        self.assertEqual(len(m["orte"]), 2)
+        self.assertEqual(mapgenie.tile_ok(m["kacheln"], 10, 508, 509), "spiel/erfundene-region/v1/10/508/509.png")
+        self.assertIsNone(mapgenie.tile_ok("../x/{z}/{x}/{y}.png", 1, 1, 1))
+        self.assertIsNone(mapgenie.parse("<html></html>", data))
+
+    def test_lernliste_erweiterung(self):
+        from app import abfragen
+        D = type("D", (), {})()
+        D.games = [{"id": 20, "kennung": "sword-shield"}, {"id": 21, "kennung": "the-isle-of-armor"}, {"id": 32, "kennung": "champions"}]
+        self.assertEqual(abfragen.learn_game(D, D.games[1])["id"], 20)        # nicht die Liste des neuesten Spiels
+        self.assertEqual(abfragen.learn_game(D, D.games[2])["id"], 32)
+        self.assertIsNone(abfragen.learn_game(D, None))
+
     def test_gebiet_namen(self):
         from app import abfragen
         self.assertEqual(abfragen._place("Dunkelhöhle", "Dunkelhöhle (Viola City Eingang)"), "Dunkelhöhle (Viola City Eingang)")
@@ -861,6 +895,36 @@ class Server(TempData):
         self.assertEqual(abruf.media_ids("itemhq"), {1: ("sv/pokeball", "legends/pokeball", "pokeball"),
                                                      2: ("legends/gigatonball", "sv/gigatonball", "gigatonball")})
         self.assertEqual(sorted(abruf.media_ids("itembild")), [1, 3, 5])           # PKHeX-Items haben kein Bild bei der PokéAPI
+
+    def test_gefunden(self):
+        db.migrate()
+        server.set_found({"spiel": "legends-arceus", "karte": "erfundene-karte", "objekt": ["irrlicht:1:2", "vers:3:4"]})
+        server.set_found({"spiel": "legends-arceus", "karte": "erfundene-karte", "objekt": "vers:3:4", "an": False})
+        server.set_found({"spiel": "scarlet-violet", "karte": "mg-erfunden", "objekt": "mg:7"})
+        self.assertEqual(server.found("legends-arceus"), {"erfundene-karte": ["irrlicht:1:2"]})
+        with self.assertRaises(ValueError):
+            server.set_found({"spiel": "x", "karte": "", "objekt": "a"})
+        dump = json.loads(json.dumps(server.export()))
+        self.assertEqual(len(dump["gefunden"]), 2)
+        old = {k: v for k, v in dump.items() if k != "gefunden"}           # ältere Sicherung ohne gefundene Symbole
+        server.restore(old)
+        self.assertEqual(server.found("scarlet-violet", "mg-erfunden"), {"mg-erfunden": ["mg:7"]})
+        server.set_found({"spiel": "x", "karte": "k", "objekt": "o"})
+        server.restore(dump)
+        self.assertEqual(server.found("x"), {})
+
+    def test_mapgenie_karte(self):
+        os.makedirs(os.path.join(self.dir, "mapgenie"))
+        abruf.store.save_json("mapgenie/scarlet-violet.json", {"spiel": "scarlet-violet", "am": "2026-11-11", "karten": [
+            {"slug": "erfunden", "titel": "Erfunden", "kacheln": "spiel/erfunden/{z}/{x}/{y}.png", "min_zoom": 9, "max_zoom": 12, "orte": []}]})
+        self.assertEqual(abruf.mg_maps("the-teal-mask")["karten"][0]["slug"], "erfunden")       # Erweiterung: Karte des Hauptspiels
+        self.assertIsNone(abruf.mg_maps("red-blue"))
+        f = os.path.join(self.dir, "mapgenie", "kacheln", "spiel", "erfunden", "10", "1", "2.png")
+        os.makedirs(os.path.dirname(f))
+        open(f, "wb").write(b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(abruf.mg_tile("scarlet-violet", "erfunden", 10, 1, 2), f)
+        self.assertIsNone(abruf.mg_tile("scarlet-violet", "erfunden", 3, 1, 2))                   # Zoom außerhalb
+        self.assertIsNone(abruf.mg_tile("scarlet-violet", "andere", 10, 1, 2))
 
     def test_alpha(self):
         db.migrate()

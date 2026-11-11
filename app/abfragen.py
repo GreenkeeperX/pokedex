@@ -335,8 +335,22 @@ def move_view(D, m, g):
     return v
 
 
+# Erweiterungen ohne eigene Lernliste: die PokéAPI führt deren Lehrer-Attacken und TMs beim Hauptspiel
+LEARN_PARENT = {"the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield",
+                "the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet"}
+
+
+def learn_game(D, g):
+    """Spiel, dessen Lernliste für g gilt: das Hauptspiel bei Erweiterungen, sonst g selbst."""
+    if g and g["kennung"] in LEARN_PARENT:
+        return next((x for x in D.games if x["kennung"] == LEARN_PARENT[g["kennung"]]), g)
+    return g
+
+
 def learnset(con, D, f, g):
-    """Erlernbare Attacken im Spiel: [(Attacke, Methode, Level, Beherrschung)]; ohne Spiel das neueste mit Liste."""
+    """Erlernbare Attacken im Spiel: [(Attacke, Methode, Level, Beherrschung)]; ohne Spiel das neueste mit Liste.
+    Erweiterungen nehmen die Liste ihres Hauptspiels (`learn_game`)."""
+    g = learn_game(D, g)
     vg = g["id"] if g else None
     if vg is not None and not con.execute("SELECT 1 FROM pokemon_moves WHERE pokemon_id = ? AND version_group_id = ? LIMIT 1",
                                           (f["id"], vg)).fetchone():
@@ -480,7 +494,7 @@ def ranked_moves(con, D, f, g, gen, level=None):
         x.pop("_v", None)
     status.sort(key=lambda x: x["name"])
     hint = ""
-    if g and used and used["id"] != g["id"]:
+    if g and used and used["id"] != learn_game(D, g)["id"]:
         hint = f"Im gewählten Spiel ohne Lernliste; gezeigt ist {used['name']}."
     elif used and used["kennung"] == LA and any(k[0] == LA for k in D.game_moves):
         hint = ("Stärke, Genauigkeit und AP für Legenden: Arceus aus dem PokéWiki; unter der Stärke stehen Kraftstil "
@@ -509,7 +523,7 @@ def move_list(p):
         con = db.game()
         try:
             learners = dict(con.execute("SELECT move_id, COUNT(DISTINCT pokemon_id) FROM pokemon_moves WHERE version_group_id = ? "
-                                        "GROUP BY move_id", (g["id"],)).fetchall())
+                                        "GROUP BY move_id", (learn_game(D, g)["id"],)).fetchall())
         finally:
             con.close()
     rows = []
@@ -1275,7 +1289,7 @@ def foreign_moves(D, ms, details, g):
             if not chosen:
                 continue
             ls, used = learnset(con, D, D.forms[m["id"]], g)
-            if not used or used["id"] != g["id"]:
+            if not used or used["id"] != learn_game(D, g)["id"]:
                 continue
             known = {x[0] for x in ls}
             bad = [i for i in chosen if i not in known]
