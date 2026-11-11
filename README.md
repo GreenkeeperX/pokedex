@@ -45,7 +45,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Item und Fähigkeit des Mitglieds zählen, wo sie immer wirken, dazu Sonne oder Regen; Generation 1 und 2 mit eigener Formel,
   Legenden: Arceus mit Effort Levels, Let's Go mit AVs. Gegen das eigene Team zählen dessen Items (Offensivweste, Evolith, Fokusgurt).
   Jede Zeile zeigt im Tooltip den Rechenweg: Werte, Grundschaden-Formel mit Zahlen, Faktoren der Reihe nach, Ergebnis.
-  Auch Werte-Diagramm und Effort Levels erklären jeden Wert im Tooltip (Anteile, Summe, Formel).
+  Auch Werte-Diagramm und Effort Levels erklären jeden Wert im Tooltip (Anteile, Summe, Formel), ebenso Fangchance und
+  Initiative-Liste (Formel mit den eingesetzten Zahlen).
 - **Legenden: Z-A**: Abklingzeit jeder Attacke, auch in der Attacken-Wertung. **Pokopia**: die Pokémon des Spiels mit ihren Spezialitäten.
 - **Frühere Basiswerte**: ältere Spiele zeigen die Werte von damals, Generation 1 den Spezial-Wert (Showdown-Mods).
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).

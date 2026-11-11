@@ -10,7 +10,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Hover: Karten zeigen nach kurzer Pause eine Hover-Karte neben sich (rechts, sonst links, sonst darunter), nie
   darüber. Elemente mit `data-tip` oder `data-tip-type` zeigen einen Hinweis; Typ-Hinweise rechnet die Oberfläche aus
   der Typtabelle des Spiels. Rechenwege (Schaden, Werte, Effort Levels) liegen als HTML in `TIPM`; das Element trägt
-  nur `data-tip-calc="n"` (`tipRef(html)`), gebaut von `partsTip` und `dmgTip`.
+  nur `data-tip-calc="n"` (`tipRef(html)`), gebaut von `partsTip`, `dmgTip`, `catchTip` und `speedTip`. Lange Listen
+  (Initiative) tragen statt dessen `data-tip-speed` und rechnen den Tooltip erst beim Hovern.
 - Team-Leiste (`#dock`): Karten und Vorschläge lassen sich auf einen Platz ziehen; Plätze untereinander tauschen.
   Ein gespeichertes Team speichert jede Änderung selbst (`POST /api/teams`), Level und Attacken liegen unter `details`.
 - Tabellen mit `class="sort"` sortieren per Klick auf die Kopfzeile, nach `data-s` der Zellen.

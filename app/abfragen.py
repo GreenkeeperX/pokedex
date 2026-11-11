@@ -1110,7 +1110,7 @@ def catch_table(rate, gen):
     """Fangchance je Ball bei vollen KP, bei 1 KP, bei 1 KP mit Paralyse, Gift oder Verbrennung (×1,5) und bei 1 KP mit
     Schlaf oder Einfrieren (ab Generation 5 ×2,5, sonst ×2)."""
     sleep = sleep_factor(gen)
-    return [{"ball": n, "voll": catch_chance(rate, f, gen=gen), "rot": catch_chance(rate, f, 0, gen=gen),
+    return [{"ball": n, "faktor": f, "voll": catch_chance(rate, f, gen=gen), "rot": catch_chance(rate, f, 0, gen=gen),
              "status": catch_chance(rate, f, 0, 1.5, gen=gen), "schlaf": catch_chance(rate, f, 0, sleep, gen=gen)} for n, f in BALLS]
 
 
@@ -1134,6 +1134,7 @@ def _more(con, f, g, gen):
         out["fangrate"] = sp["capture_rate"]
         out["fangen"] = catch_table(sp["capture_rate"], gen)
         out["schlaf_faktor"] = str(sleep_factor(gen)).replace(".", ",")
+        out["fang_gen"] = gen
         out["fang_grob"] = gen <= 2 or kennung.startswith("legends-") or kennung.startswith("lets-go")
     if sp["gender_rate"] is not None and gen >= 2:
         gr = sp["gender_rate"]
