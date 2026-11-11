@@ -65,7 +65,8 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Ergebnis kompakt in `mapgenie/<Spiel>.json` im Datenordner; Spiele, die es dort nicht gibt, melden 404 und fallen weg.
    Kacheln (`abruf.mg_tile`) liegen unter `mapgenie/kacheln/`: Die Oberfläche fragt sie über `/mgkachel/…` an (0,3 Sekunden
    Pause), der Kachelvorrat (`abruf.mg_stock`, eigener Thread nach jedem Abgleich und beim Start) holt im Hintergrund alle
-   Kacheln bis eine Stufe unter der größten, weite Stufen zuerst, 0,6 Sekunden Pause; was da ist, bleibt. Eine Anfrage zur
+   Kacheln aller Stufen (erst für alle Karten bis eine unter der größten, dann die größte), 0,6 Sekunden Pause; was da ist,
+   bleibt. Danach braucht die Karte kein Netz; ohne Vorrat holt das Ansehen eine fehlende Kachel einmal. Eine Anfrage zur
    Zeit. Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“ (kommt außerhalb der Karte); erst 8 nacheinander oder
    ein 429 lassen die Quelle 24 Stunden ruhen. Fehlen die Grenzen einer Karte, gelten die der Orte (`mapgenie.bounds_of`).
 8. **Showdown-Mods** (mit Showdown): `data/mods/gen{1,2,4,5,6,7,8}/pokedex.ts` für frühere Basiswerte (Tabelle `werte_alt`,

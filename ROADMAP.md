@@ -1,5 +1,17 @@
 # Roadmap
 
+## 0.24.0 (Rückmeldung zu 0.23.0, 11.11.2026)
+
+- Offline: `abruf.mg_stock` holt alle Zoomstufen (erst bis `max_zoom − 1` für alle Karten, dann `max_zoom`), Vorrat mit `ganz`
+- Eine Datenbank (Entscheidung 11.11.2026: keine Ebenen nach Herkunft): `mapgenie.merge` führt Orte von Map Genie und
+  `abfragen.mg_overlay` zusammen (`GLEICH`, `NACH_ITEM`, `DRIN`, `MERGE_TOL`, `MERGE_WIDE`), deutsche Gruppen, Kategorien und
+  Namen (`GRUPPEN_DE`, `KAT_DE`, `name_de`, `abfragen.mg_names`); `/api/mapgenie?karte` liefert `punkte` (`abfragen.mg_map`)
+- Schadensrechner: Gegner „Favoriten“
+- Let's Go: `extra/spielwissen.json` (Fangen, Fang-Kombo, Partner-Techniken, Geheime Techniken, Quellen), `abfragen.knowledge`,
+  auf der Detailseite `wissenHtml`, `partnerHtml`
+- Offen: Effort Levels in Legenden: Arceus (Umfang wartet auf Entscheidung), Abklingzeiten in Legenden: Z-A, Karten älterer
+  Spiele, Zusammenführen auch für andere Spiele, sobald es eigene Punkte gibt, Fähigkeiten und Items im Schadensrechner
+
 ## 0.23.0 (Rückmeldung zu 0.22.0, 11.11.2026)
 
 - Kachelvorrat: `abruf.mg_stock` (Thread nach jedem Abgleich und beim Start), `mapgenie.tile_list`, `mapgenie.bounds_of`

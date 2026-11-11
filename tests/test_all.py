@@ -593,6 +593,59 @@ class Leser(unittest.TestCase):
         self.assertAlmostEqual(lat, 0.75, places=6)
         self.assertAlmostEqual(lng, -0.5, places=6)
 
+    def test_mapgenie_eine_datenbank(self):
+        from app import mapgenie
+        # erfundene Karte: ein Geisterlicht, ein Beerenbaum, ein Erzbrocken und ein Ort ohne Gegenstück
+        m = {"gruppen": [{"id": 1, "titel": "Collectibles", "farbe": "#aa0000", "kategorien": [{"id": 10, "titel": "Wisp", "n": 1}]},
+                         {"id": 2, "titel": "Materials", "farbe": "#00aa00", "kategorien": [{"id": 20, "titel": "Oran Berry", "n": 1},
+                                                                                             {"id": 21, "titel": "Tumblestone", "n": 1}]},
+                         {"id": 3, "titel": "Locations", "farbe": "#0000aa", "kategorien": [{"id": 30, "titel": "Cave", "n": 1}]}],
+                "orte": [[1, 10, 0.5, 0.5, "Wisp #1", "Text"], [2, 20, 0.6, 0.6, "Oran Berry Tree", ""],
+                         [3, 21, 0.7, 0.7, "Tumblestone", ""], [4, 30, 0.8, 0.8, "Höhle X", ""]]}
+        de = {"Oran Berry": "Sinelbeere", "Tumblestone": "Glanzstein"}
+        near = lambda la, lo, d=0.00005: (la + d, lo + d)
+        ob = lambda art, la, lo, items: dict(zip(("la", "lo"), near(la, lo)), art=art, nr=None, menge="", items=items, k="gebiet", x=1.0, z=2.0)
+        own = {"gebiete": {"gebiet": "Gebiet"}, "arten": {"irrlicht": ("Geisterlicht", "Geisterlichter"), "kristall": ("Kristallbrocken", "Kristallbrocken"),
+                                                          "erz": ("Erzbrocken", "Erzbrocken"), "beere": ("Beerenbaum", "Beerenbäume")},
+               "objekte": [ob("irrlicht", 0.5, 0.5, []), ob("beere", 0.6, 0.6, [["Sinelbeere", "100%"]]),
+                           ob("erz", 0.7, 0.7, [["Glanzstein", "50%"]]), ob("kristall", 0.7, 0.7, [["Georok", "100%", 74]]),
+                           ob("irrlicht", -0.5, -0.5, []), ob("erz", -0.6, -0.6, [["Seltenstein", "5%"]])],
+               "punkte": [{"la": 0.1, "lo": 0.1, "alpha": False, "mons": [{"name": "Bidiza"}], "k": "gebiet"}]}
+        r = mapgenie.merge(m, own, de)
+        by = {p.get("id"): p for p in r["punkte"] if p.get("id")}
+        self.assertEqual(by[1]["o"]["art"], "irrlicht")                       # gleiche Stelle: ein Punkt mit beidem
+        self.assertEqual(by[1]["q"], ["Map Genie", "Spieldaten"])
+        self.assertEqual(by[2]["o"]["items"][0][0], "Sinelbeere")            # Beere über ihr Item zugeordnet
+        self.assertEqual(by[2]["name"], "Beerenbaum (Sinelbeere)")
+        self.assertEqual(by[3]["drin"][0]["items"][0][0], "Georok")          # Pokémon im Erzbrocken an dieselbe Stelle
+        self.assertNotIn("o", by[4])
+        rest = [p for p in r["punkte"] if not p.get("id")]
+        self.assertIn(10, [p["c"] for p in rest])                            # weiteres Geisterlicht: in die Ebene von Map Genie
+        self.assertIn("o:erz", [p["c"] for p in rest])                       # Erz ohne Gegenstück: eigene Ebene
+        self.assertIn("sp", [p["c"] for p in rest])
+        titel = {g["titel"]: [c["titel"] for c in g["kategorien"]] for g in r["gruppen"]}
+        self.assertEqual(titel["Sammelobjekte"], ["Geisterlichter"])
+        self.assertIn("Sinelbeere", titel["Materialien und Fundstellen"])
+        self.assertEqual(titel["Pokémon"], ["Spawnpunkte"])
+        self.assertEqual(r["gebiete_eigen"], {"gebiet": "Gebiet"})
+        self.assertEqual(sum(c["n"] for g in r["gruppen"] for c in g["kategorien"]), len(r["punkte"]))
+        # ohne eigene Daten: nur übersetzt
+        r = mapgenie.merge(m, None, de)
+        self.assertEqual(len(r["punkte"]), 4)
+        self.assertEqual(mapgenie.name_de("Wisp #12", {}), "Geisterlicht #12")
+        self.assertEqual(mapgenie.name_de("Unbekannt", {}), "Unbekannt")
+
+    def test_spielwissen(self):
+        import json
+        from app import abfragen
+        with open(abfragen.WISSEN, encoding="utf-8") as fh:
+            w = json.load(fh)
+        lg = w["lets-go-pikachu-lets-go-eevee"]
+        self.assertEqual(len(lg["kombo"]["schillernd_kopf"]), len(lg["kombo"]["schillernd"][0]))
+        self.assertIn("pika-papow", lg["partner"]["10158"])
+        self.assertTrue(all(len(t) == 3 for t in lg["techniken"]["liste"]))
+        self.assertTrue(all(u.startswith("https://") for _, u in lg["quellen"]))
+
     def test_lernliste_erweiterung(self):
         from app import abfragen
         D = type("D", (), {})()
@@ -1033,6 +1086,15 @@ class Server(TempData):
                 abruf.mg_tile("scarlet-violet", "erfunden", 10, x, 3, pause=0)
             self.assertNotEqual(abruf.mg_status()["ruht"], "")
         abruf._mg.update(rest="", n403=0, miss=set())
+        # der Vorrat holt alle Stufen: erst bis eine unter der größten, dann die größte
+        abruf.store.save_json("mapgenie/scarlet-violet.json", {"spiel": "scarlet-violet", "am": "2026-11-11", "karten": [
+            {"slug": "erfunden", "titel": "Erfunden", "kacheln": "spiel/erfunden/{z}/{x}/{y}.png", "min_zoom": 9, "max_zoom": 10,
+             "bounds": [-1.4, 0, 0, 1.4], "orte": []}]})
+        asked = []
+        with mock.patch.object(abruf, "mg_tile", lambda s, k, z, x, y, pause=0: asked.append(z)):
+            abruf.mg_stock()
+        self.assertEqual(max(asked), 10)
+        self.assertTrue(abruf.mg_status()["vorrat"]["scarlet-violet/erfunden"]["ganz"])
 
     def test_alpha(self):
         db.migrate()

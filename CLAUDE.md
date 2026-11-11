@@ -40,5 +40,6 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/abfragen.py`: Abfragen für die Oberfläche (Liste, Detailseite, Attacken, Typtabelle, Teams)
 - `app/server.py`: Webserver und JSON-Schnittstelle
 - `app/static/`: Oberfläche (`index.html`, `style.css`, `js/app.js`); siehe `docs/oberflaeche.md`
-- `extra/`: gepflegte Ergänzungen als JSON
+- `extra/`: gepflegte Ergänzungen als JSON (`spielwissen.json`: Spielwissen für die Detailseite, liest der Server direkt)
+- `app/mapgenie.py`: Karten von Map Genie lesen, eigene Punkte ausrichten und mit ihnen zu einer Datenbank zusammenführen
 - `tests/test_all.py`: Tests ohne Netz; mit `POKEAPI_DB=/pfad/pokeapi.db` auch gegen eine gebaute Datenbank

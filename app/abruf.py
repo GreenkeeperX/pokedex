@@ -972,25 +972,27 @@ def _mg_map(spiel, karte):
 
 
 def mg_stock():
-    """Kachelvorrat im Hintergrund: holt für jede Karte von Map Genie alle Kacheln bis eine Stufe unter der größten,
-    weite Stufen zuerst, mit Pause; was da ist, bleibt. Die größte Stufe holt erst das Ansehen. Ein Lauf zur Zeit."""
+    """Kachelvorrat im Hintergrund: holt für jede Karte von Map Genie alle Kacheln aller Zoomstufen, mit Pause; was da
+    ist, bleibt. Erst alle Karten bis eine Stufe unter der größten (weite Stufen zuerst), dann die größte Stufe. Danach
+    braucht die Karte kein Netz mehr. Ein Lauf zur Zeit."""
     if _mg["laeuft"]:
         return
     _mg["laeuft"] = True
     try:
-        for spiel in mapgenie.GAMES:
-            for m in (mg_maps(spiel) or {}).get("karten", []):
-                ts = mapgenie.tile_list(m, m["max_zoom"] - 1)
-                key = f"{spiel}/{m['slug']}"
-                have = 0
-                for i, (z, x, y) in enumerate(ts):
-                    if _mg["rest"] > _iso(now()):
-                        return
-                    rel = mapgenie.tile_ok(m["kacheln"], z, x, y, m.get("endung", "png"))
-                    if rel and (os.path.isfile(mg_dir("kacheln", *rel.split("/"))) or mg_tile(spiel, m["slug"], z, x, y, pause=MG_STOCK_PAUSE)):
-                        have += 1
-                    if i % 50 == 0 or i == len(ts) - 1:
-                        _mg["vorrat"][key] = {"da": have, "alle": len(ts), "bis": m["max_zoom"] - 1, "fertig": i == len(ts) - 1}
+        jobs = [(spiel, m, top) for top in (1, 0) for spiel in mapgenie.GAMES for m in (mg_maps(spiel) or {}).get("karten", [])]
+        for spiel, m, top in jobs:
+            ts = mapgenie.tile_list(m, m["max_zoom"] - top)
+            key = f"{spiel}/{m['slug']}"
+            have = 0
+            for i, (z, x, y) in enumerate(ts):
+                if _mg["rest"] > _iso(now()):
+                    return
+                rel = mapgenie.tile_ok(m["kacheln"], z, x, y, m.get("endung", "png"))
+                if rel and (os.path.isfile(mg_dir("kacheln", *rel.split("/"))) or mg_tile(spiel, m["slug"], z, x, y, pause=MG_STOCK_PAUSE)):
+                    have += 1
+                if i % 50 == 0 or i == len(ts) - 1:
+                    _mg["vorrat"][key] = {"da": have, "alle": len(ts), "bis": m["max_zoom"] - top, "fertig": i == len(ts) - 1,
+                                          "ganz": not top}
     except Exception as e:          # der Vorrat darf den Dienst nicht stören
         print("Kachelvorrat:", e, file=sys.stderr)
     finally:
