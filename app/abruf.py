@@ -1644,6 +1644,41 @@ def diagnose(proben=None):
     probe("GitHub: Insektaure/pkTeraRaid (Raid-Nester SwSh mit Lage)", "https://api.github.com/repos/Insektaure/pkTeraRaid/git/trees/HEAD?recursive=1",
           tree_hits("den", "map", "swsh", "location"), keep=True)
 
+    section("Kartenquellen im Detail: IGN, RankedBoost, DittoBase, PokéTools")
+    # IGN (Next.js): Karte, Kacheln und ein Teil der Punkte stehen in __NEXT_DATA__, der Rest kommt per GraphQL
+    # (mollusk.apis.ign.com). Die Abfrage steht im Code der Seite; deshalb die Skripte nach Abfragen mit „marker“ durchsuchen
+    def ign_info(t):
+        mk = re.findall(r'"__typename":"MapMarker"', t)
+        ty = sorted(set(re.findall(r'"typeSlug":"([^"]+)","typeName"', t)))
+        ts = re.findall(r'wikimaps/[^"]+\{z\}[^"]*', t)
+        zz = re.findall(r'"(minZoom|maxZoom|width|height)":([\d.]+),', t)[:4]
+        return f"{len(mk)} Punkte in der Seite, Arten: {', '.join(ty)}; Kacheln {ts[:1]}, {zz}"
+    ign_js = set()
+    for name, url in (("IGN, Galar (ganz)", "https://www.ign.com/maps/pokemon-sword-shield/galar"),
+                      ("IGN, Let’s Go Kanto (ganz)", "https://www.ign.com/maps/pokemon-lets-go-pikachu-eevee/kanto")):
+        r = probe(name, url, ign_info, keep=600_000, headers=html)
+        if r:
+            ign_js.update(u for u in re.findall(r'<script src="(https://kraken\.ignimgs\.com/_next/static/chunks/[^"]+\.js)"', r["text"])
+                          if "polyfills" not in u and "framework" not in u)
+
+    def gql_info(t):
+        ops = sorted(set(re.findall(r"(?:query|fragment)\s+(\w+)", t)))
+        hits = [t[max(0, m.start() - 80):m.start() + 700] for m in re.finditer(r"(?:query|fragment)\s+\w*[Mm]arker\w*", t)][:4]
+        return f"{len(ops)} Abfragen: {', '.join(ops[:30])}" + (" | " + " || ".join(" ".join(h.split()) for h in hits) if hits else "")
+    for u in sorted(ign_js)[:25]:
+        probe(f"IGN, Skript {u.rsplit('/', 1)[-1]}", u, gql_info)
+    for slug in ("pokemon-lets-go-pikachu-eevee/kanto-hi-res", "pokemon-sword-shield/locations"):
+        probe(f"IGN, Kachel {slug} 2/0-0", f"https://oyster.ignimgs.com/ignmedia/wikimaps/{slug}/2/0-0.jpg",
+              lambda b: f"{len(b)} Bytes, " + ("JPEG" if b[:3] == b"\xff\xd8\xff" else "kein Bild"), raw=True)
+    # die übrigen Kartenseiten ganz (die erste Probe war bei 200 000 Zeichen abgeschnitten)
+    for name, url in (("RankedBoost, Let’s Go (ganz)", "https://rankedboost.com/pokemon/location/letsgo-pikachu-eevee/"),
+                      ("RankedBoost, HG/SS (ganz)", "https://rankedboost.com/pokemon/location/heartgold-soulsilver/"),
+                      ("DittoBase, Kristall (ganz)", "https://www.dittobase.com/crystal/map"),
+                      ("PokéTools, Smaragd (ganz)", "https://www.poketools.com/emerald/map")):
+        probe(name, url, lambda t: looks(t) + "; Muster: " + ", ".join(sorted(set(re.findall(r'[\w/.:-]*\{z\}[\w/.{}-]*', t)))[:5])
+              + "; JSON-Adressen: " + ", ".join(sorted(set(re.findall(r'https?://[^"\' ]+\.json', t)))[:8]),
+              keep=1_600_000, headers=html)
+
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",
           lambda t: f"{len(json.loads(t))} Pokémon mit Sets")

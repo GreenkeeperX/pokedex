@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.28.3 (11.11.2026)
+
+- Verbindungstest „Kartenquellen im Detail“: IGN-Seiten ganz (Karte, Kacheln `oyster.ignimgs.com/ignmedia/wikimaps/<slug>/{z}/{x}-{y}.jpg`,
+  Punkte zum Teil in `__NEXT_DATA__`), IGN-Skripte nach GraphQL-Abfragen mit „marker“ durchsucht, RankedBoost, DittoBase, PokéTools ganz
+
 ## 0.28.2 (11.11.2026)
 
 - Verbindungstest: `Kachelpfad` für Map Genie wieder über `tile_ok` (0.28.0 prüfte die Ecke 0/0, die außerhalb liegt); Kartenseiten nennen eingebettete Daten
