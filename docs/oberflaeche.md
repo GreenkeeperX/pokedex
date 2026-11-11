@@ -93,8 +93,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   aus: Materialien und Pokémon. Suche auch in ausgeblendeten Ebenen. „Gehe zu“, `#karte/mg/<Karte>/<Ort>` springt zu einem Ort.
 - Detailseite: `wissenHtml` (gepflegtes Spielwissen in der Fangchance), `partnerHtml` (Partner-Techniken, Geheime Techniken).
 - Schadensrechner: Gegner `favs` (Favoriten des Spiels).
-- Werte `statBox` (`#stbox`, übrige Spiele außer Let's Go, Champions, Pokopia; `STATS_OK`): `/api/werte`, Team-Platz `ivs`,
-  `evs`, `ev_ziel`, `wesen` (bis Generation 2 `dvs`, `exp`, `exp_ziel`), ohne Team `statBox.tmp`, aufgeklappt `stOpen`.
+- Werte `statBox` (`#stbox`, übrige Spiele außer Champions, Pokopia; `STATS_OK`): `/api/werte`, Team-Platz `ivs`,
+  `evs`, `ev_ziel`, `wesen` (bis Generation 2 `dvs`, `exp`, `exp_ziel`; Let's Go `avs`, `av_ziel`), ohne Team `statBox.tmp`, aufgeklappt `stOpen`.
 - Effort Levels `elBox` (`#elbox`, Legenden: Arceus): `/api/effort`, Team-Platz `el`, `el_ziel`, `wesen`; ohne Team ein
   Zwischenstand nur für die Seite (`elBox.tmp`), aufgeklappt `elOpen`. Team: `elTeam` (`#elteam`, `/api/effort/team`,
   `elTeamOpen`); Initiative: `laStat`, `EL_FAKTOR`, nur wenn `LA()`. Diagramm `elChart` (Balken und Netz aus `teile`),

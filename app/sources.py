@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.31.0"
+VERSION = "0.32.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.32.0", "11.11.2026", [
+        "Schadensrechner Legenden: Arceus: Werte nach Effort Levels statt EVs; Let's Go: mit AVs",
+        "Schadensrechner gegen das eigene Team: Items der Verteidiger zählen (Offensivweste, Evolith, Fokusgurt)",
+        "Werte-Diagramm auch in Let's Go (IVs und AVs)",
+        "Legenden: Z-A: die Abklingzeit fließt in die Attacken-Wertung ein und steht auch in der Attackenliste der Detailseite",
+    ]),
     ("0.31.0", "11.11.2026", [
         "Detailseite: Werte-Diagramm für alle Spiele mit IVs und EVs (bis Generation 2 DVs und Stat Exp): Balken und Netz zeigen "
         "live, woraus jeder Wert besteht (Basiswert, Level, IV, EV, Wesen), dazu Ziel-EVs mit Rest bis 510; im Team je Platz gemerkt",

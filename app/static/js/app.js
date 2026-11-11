@@ -1243,22 +1243,23 @@ async function elBox(d, slot) {
   $("#elmax").addEventListener("click", () => { det.el = cur(); det.el_ziel = [10, 10, 10, 10, 10, 10]; save(); });
   $("#elreach").addEventListener("click", () => { det.el = goal(); det.el_ziel = goal(); save(); });
 }
-/* Werte-Diagramm (alle Spiele außer Legenden: Arceus, Let's Go, Champions, Pokopia): IVs und EVs (bis Generation 2
-   DVs und Stat Exp), Wesen und Ziel-EVs; der Server rechnet die Werte. Im Team je Platz gespeichert, sonst zum Ausprobieren. */
-const STATS_OK = () => !["legends-arceus", "lets-go-pikachu-lets-go-eevee", "champions", "pokopia"].includes(S.game);
+/* Werte-Diagramm (alle Spiele außer Legenden: Arceus, Champions, Pokopia): IVs und EVs (bis Generation 2
+   DVs und Stat Exp, in Let's Go AVs), Wesen und Ziel-EVs; der Server rechnet die Werte. Im Team je Platz gespeichert, sonst zum Ausprobieren. */
+const STATS_OK = () => !["legends-arceus", "champions", "pokopia"].includes(S.game);
 async function statBox(d, slot) {
   const el = $("#stbox");
   if (!el) return;
   const det = slot !== null ? S.team.details[slot] || {} : (statBox.tmp ||= {});
   if (slot === null && statBox.tmpId !== d.id) { statBox.tmpId = d.id; Object.keys(det).forEach((k) => delete det[k]); }
-  const lv = det.level || 50, K = GEN() <= 2 ? {iv: "dvs", ev: "exp", z: "exp_ziel"} : {iv: "ivs", ev: "evs", z: "ev_ziel"};   // bis Gen. 2 eigene Felder (Showdown schreibt dort EVs)
+  const lv = det.level || 50, K = GEN() <= 2 ? {iv: "dvs", ev: "exp", z: "exp_ziel"} : S.game === "lets-go-pikachu-lets-go-eevee" ? {iv: "ivs", ev: "avs", z: "av_ziel"} : {iv: "ivs", ev: "evs", z: "ev_ziel"};   // bis Gen. 2 eigene Felder (Showdown schreibt dort EVs)
   const r = await api("/api/werte", {spiel: S.game, id: d.id, level: lv, wesen: det.wesen || null, ivs: det[K.iv] || null, evs: det[K.ev] || null, ziel: det[K.z] || null}).catch(() => null);
   if (!r || !$("#stbox") || !r.rows.length) return;
-  const old = r.gen <= 2, IV = old ? "DV" : "IV", EV = old ? "Stat Exp" : "EV";
+  const old = r.gen <= 2, lg = r.art === "lgpe", IV = old ? "DV" : "IV", EV = old ? "Stat Exp" : lg ? "AV" : "EV";
   const nat = (x) => x.wesen > 1 ? ` <span class="f fd" data-tip="Wesen +10 %">+</span>` : x.wesen < 1 ? ` <span class="f fa05" data-tip="Wesen −10 %">−</span>` : "";
   const open = store.get("stOpen", true), left = r.ev_gesamt ? r.ev_gesamt - r.ev_ziel_summe : null;
   const tip = (x, i) => `${STAT[i]} ${x.wert}: Basiswert ${x.teile.basis}, durch Level ${lv} +${x.teile.level}, ${IV} ${x.iv}: +${x.teile.iv}, ${EV} ${x.ev}: +${x.teile.ev}${x.teile.wesen ? `, Wesen ${x.teile.wesen > 0 ? "+" : ""}${x.teile.wesen}` : ""}`
-    + (old ? `\nFormel: ((Basis + DV) × 2 + √Stat Exp / 4) × Level / 100 + ${i === 0 ? "Level + 10" : "5"}` : `\nFormel: (2 × Basis + IV + EV / 4) × Level / 100 + ${i === 0 ? "Level + 10" : "5, dann × Wesen"}`);
+    + (old ? `\nFormel: ((Basis + DV) × 2 + √Stat Exp / 4) × Level / 100 + ${i === 0 ? "Level + 10" : "5"}` : lg ? `\nFormel: (2 × Basis + IV) × Level / 100 + ${i === 0 ? "Level + 10" : "5, dann × Wesen"}, dann + AV`
+      : `\nFormel: (2 × Basis + IV + EV / 4) × Level / 100 + ${i === 0 ? "Level + 10" : "5, dann × Wesen"}`);
   const top = Math.max(...r.rows.map((x) => x.max), 1), pc = (v) => (Math.max(0, v) / top * 100).toFixed(2);
   const seg = (cls, v, t) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%" data-tip="${esc(t)}"></i>` : "";
   const bars = r.rows.map((x, i) => { const t = x.teile, extra = x.ev_ziel_teil - t.ev;
@@ -1270,7 +1271,7 @@ async function statBox(d, slot) {
     ${poly((x) => x.wert_ziel, "n-z")}${poly((x) => x.wert, "n-e")}${poly((x) => x.wert - x.teile.ev, "n-l")}${poly((x) => x.teile.basis, "n-b")}
     ${RADAR_ORDER.map((i, k) => { const [x, y] = pt(k, 1.22); return `<text x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="middle">${STAT_K[i]}</text>`; }).join("")}</svg>`;
   el.innerHTML = `<details class="sub" id="stdet"${open ? " open" : ""}><summary><h3 style="display:inline">Werte</h3> <span class="hint">${slot !== null ? `Platz ${slot + 1}, Level ${lv}` : `zum Ausprobieren, Level ${lv}`}</span></summary>
-    <p class="hint">${old ? "Bis Generation 2: DVs 0 bis 15 und Stat Exp bis 65535 je Wert (aus besiegten Pokémon und Vitaminen); es gibt kein Wesen." : `IVs 0 bis 31 (angeboren), EVs bis 252 je Wert und ${r.ev_gesamt} zusammen, aus besiegten Pokémon, Vitaminen (+10) und Federn (+1).${r.minzen ? " Minzen ändern, welchen Wert das Wesen hebt und senkt." : ""}`}${slot === null ? " Im Team merkt sich jeder Platz seine Werte." : ""}</p>
+    <p class="hint">${old ? "Bis Generation 2: DVs 0 bis 15 und Stat Exp bis 65535 je Wert (aus besiegten Pokémon und Vitaminen); es gibt kein Wesen." : lg ? "Let's Go: statt EVs gibt es AVs (Punkte aus Bonbons), 0 bis 200 je Wert und ohne Grenze für die Summe; jeder AV ist ein Punkt. Den Freundschafts-Bonus (bis +10 %) rechnet das Diagramm nicht ein." : `IVs 0 bis 31 (angeboren), EVs bis 252 je Wert und ${r.ev_gesamt} zusammen, aus besiegten Pokémon, Vitaminen (+10) und Federn (+1).${r.minzen ? " Minzen ändern, welchen Wert das Wesen hebt und senkt." : ""}`}${slot === null ? " Im Team merkt sich jeder Platz seine Werte." : ""}</p>
     <div class="bar slim">${old ? "" : `<label>Wesen <select id="stnat"><option value="">neutral</option>${r.wesen_liste.filter((w) => w.mod).map((w) => `<option value="${w.id}"${w.id === r.wesen ? " selected" : ""}>${esc(w.name)} (+${STAT[w.mod[0]]} −${STAT[w.mod[1]]})</option>`).join("")}</select></label>`}
       ${slot !== null ? `<span class="hint">Level wie unten bei den Attacken</span>` : `<label>Level <input type="number" id="stlv" min="1" max="100" value="${lv}" style="width:64px"></label>`}</div>
     <div class="elchart"><div class="elbars">${bars}</div><div>${net}</div></div>
@@ -1278,8 +1279,8 @@ async function statBox(d, slot) {
     <table class="rows eltab stab"><tr><th>Wert</th><th class="c">Basis</th><th class="c" data-tip="0 bis ${r.iv_max}">${IV}</th><th class="c" data-tip="0 bis ${r.ev_max}">${EV}</th><th class="c">jetzt</th>
       <th class="c" data-tip="${EV}, auf die du hinarbeitest">Ziel</th><th class="c">am Ziel</th><th class="c" data-tip="mit vollen ${IV}s und ${EV}${old ? "" : " und passendem Wesen"}">höchstens</th></tr>
     ${r.rows.map((x, i) => `<tr><td>${STAT[i]}${nat(x)}</td><td class="c">${x.basis}</td><td class="c"><input type="number" min="0" max="${r.iv_max}" value="${x.iv}" data-stiv="${i}"></td>
-      <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old ? 1 : 4}" value="${x.ev}" data-stev="${i}"></td><td class="c" data-tip="${esc(tip(x, i))}"><b>${x.wert}</b></td>
-      <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old ? 1 : 4}" value="${x.ziel}" data-stz="${i}"></td>
+      <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old || lg ? 1 : 4}" value="${x.ev}" data-stev="${i}"></td><td class="c" data-tip="${esc(tip(x, i))}"><b>${x.wert}</b></td>
+      <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old || lg ? 1 : 4}" value="${x.ziel}" data-stz="${i}"></td>
       <td class="c">${x.ziel > x.ev ? `<b style="color:var(--go)">${x.wert_ziel}</b> <span class="hint">+${x.wert_ziel - x.wert}</span>` : `<span class="hint">${x.wert_ziel}</span>`}</td><td class="c hint">${x.max}</td></tr>`).join("")}</table>
     <p class="hint">${left === null ? "" : left >= 0 ? `Ziel-EVs zusammen ${r.ev_ziel_summe} von ${r.ev_gesamt}, noch ${left} frei. ` : `<span style="color:var(--stop)">Ziel-EVs zusammen ${r.ev_ziel_summe}: ${-left} mehr als erlaubt (${r.ev_gesamt}).</span> `}
       <button class="link" id="streach" data-tip="Ziel erreicht: ${EV} auf das Ziel setzen">Ziel erreicht</button></p></details>`;
@@ -3044,13 +3045,13 @@ async function calcBox() {
     autocomplete($("#cfoeq"), (x) => { store.set(ownKey, [x.id]); calcBox(); });
     return;
   }
-  const r = await api("/api/schaden", {spiel: S.game, ids: t.ids, details: t.details, slot: o.slot, attacke: o.move, verteidiger: foes,
+  const r = await api("/api/schaden", {spiel: S.game, ids: t.ids, details: t.details, slot: o.slot, attacke: o.move, verteidiger: foes, verteidiger_details: o.gegen === "team" ? t.details : null,
     vert: o.vert, krit: o.krit ? 1 : "", flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null,
     level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv, wetter: o.wetter || ""});
   if (rid !== RID || !el()) return;
   if (r.hinweis) { el().innerHTML = `${CH()}<p class="hint">${esc(r.hinweis)}</p>`; return; }
   // Übersicht: je Mitglied gegen jeden Gegner die stärkste seiner gewählten Attacken
-  const all = o.ansicht === "alle" ? await api("/api/schaden/uebersicht", {spiel: S.game, ids: t.ids, details: t.details, verteidiger: foes, vert: o.vert, krit: o.krit ? 1 : "",
+  const all = o.ansicht === "alle" ? await api("/api/schaden/uebersicht", {spiel: S.game, ids: t.ids, details: t.details, verteidiger: foes, verteidiger_details: o.gegen === "team" ? t.details : null, vert: o.vert, krit: o.krit ? 1 : "",
     flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null, level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv, wetter: o.wetter || ""}) : null;
   if (rid !== RID || !el()) return;
   const pct = (x) => String(x).replace(".", ",");
@@ -3059,6 +3060,8 @@ async function calcBox() {
   const cls = (x) => x.sicher === 1 ? "go" : x.moeglich === 1 ? "warn" : x.sicher === 0 || !x.sicher ? "stop" : "";
   const old = r.gen <= 2, inc = (r.eingerechnet || []).length ? `Eingerechnet: ${esc(r.eingerechnet.join(", "))}. ` : "";
   const rest = old ? `${inc}Bis Generation 2: volle DVs und Stat Exp, Zufall 217 bis 255 von 255${r.gen === 1 ? ", ein Spezial-Wert für Angriff und Verteidigung" : ""}.`
+    : r.art === "la" ? `Werte nach Effort Levels (deine von der Detailseite); ohne Kraft- und Tempostil; Zufall 85 bis 100 %.`
+    : r.art === "lgpe" ? `Werte mit IV 31 und AVs (deine von der Detailseite), ohne Freundschafts-Bonus; Zufall 85 bis 100 %.`
     : `${inc}Ohne Felder und Fähigkeiten mit Bedingung (wenig KP, Kontakt …); Zufall 85 bis 100 %.`;
   el().innerHTML = `${CH()}
     <div class="bar"><span class="seg"><button class="${o.ansicht === "alle" ? "" : "on"}" data-cv="eins" data-tip="Eine Attacke eines Mitglieds gegen alle Gegner, mit Balken und Treffern bis K.O.">eine Attacke</button><button class="${o.ansicht === "alle" ? "on" : ""}" data-cv="alle" data-tip="Jedes Mitglied gegen jeden Gegner mit seiner stärksten gewählten Attacke">Übersicht</button></span>
@@ -3067,7 +3070,7 @@ async function calcBox() {
       <label data-tip="${champ ? "Häufige Gegner: die 30 meistgenutzten Pokémon der Nutzungsstatistik von Smogon (unten unter „Häufige Gegner“)." : "Gegner von oben: die aus „Gegen Gegner“."} Mein Team: deine eigenen sechs. Favoriten: deine Favoriten in diesem Spiel. Eigene Auswahl: wen du selbst hinzufügst">gegen <select id="cgegen">${champ && (S.usageIds || []).length ? `<option value="smogon"${o.gegen === "smogon" ? " selected" : ""}>häufige Gegner (Top 30)</option>` : ""}
         ${!champ && S.foes.length ? `<option value="foes"${o.gegen === "foes" ? " selected" : ""}>Gegner von oben (${S.foes.length})</option>` : ""}
         <option value="team"${o.gegen === "team" ? " selected" : ""}>mein Team</option>${favIds.length ? `<option value="favs"${o.gegen === "favs" ? " selected" : ""}>Favoriten (${favIds.length})</option>` : ""}<option value="eigene"${o.gegen === "eigene" ? " selected" : ""}>eigene Auswahl (${own.length})</option></select></label>
-      <label data-tip="${old ? "Ob die Verteidiger volle Stat Exp in KP und der passenden Verteidigung haben (DVs immer 15)" : "Wie viel die Verteidiger in KP und die passende Verteidigung stecken (252 EVs)"}">Gegner <select id="cvert">${[["0", "nicht investiert"], ["kp", "volle KP"], ["kp_vert", "volle KP und Verteidigung"]].map(([k, n]) => `<option value="${k}"${o.vert === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label data-tip="${old ? "Ob die Verteidiger volle Stat Exp in KP und der passenden Verteidigung haben (DVs immer 15)" : "Wie viel die Verteidiger in KP und die passende Verteidigung stecken (252 EVs)"}">Gegner <select id="cvert">${[["0", "nicht investiert"], ["kp", "volle KP"], ["kp_vert", "volle KP und Verteidigung"]].map(([k, n]) => [k, r.art === "la" && k !== "0" ? n + " (Effort Level 10)" : r.art === "lgpe" && k !== "0" ? n + " (200 AVs)" : n]).map(([k, n]) => `<option value="${k}"${o.vert === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       ${champ ? "" : `<label data-tip="Level deines Pokémon; leer: wie auf seiner Detailseite eingetragen, sonst 50">Level <input type="number" id="clv" min="1" max="100" value="${esc(o.level)}" placeholder="${r.level}" style="width:64px"></label>
         <label data-tip="Level der Gegner; leer: wie dein Pokémon">Level Gegner <input type="number" id="clvv" min="1" max="100" value="${esc(o.lvv)}" placeholder="${r.level_vert}" style="width:64px"></label>`}
       ${champ || TERA() ? `<label data-tip="Tera-Typ aller Verteidiger (ersetzt ihre Typen)">Tera Gegner <select id="ctera"><option value="">–</option>${Object.entries(S.types).map(([k, n]) => `<option value="${k}"${o.tera === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label>` : ""}
@@ -3075,7 +3078,7 @@ async function calcBox() {
       ${r.gen >= 2 ? `<label data-tip="Sonne: Feuer ×1,5, Wasser ×0,5; Regen umgekehrt">Wetter <select id="cwet">${[["", "keins"], ["sonne", "Sonne"], ["regen", "Regen"]].map(([k, n]) => `<option value="${k}"${(o.wetter || "") === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
       <label data-tip="Volltreffer: ${r.gen === 1 ? "das Level zählt doppelt" : r.krit === 2 ? "× 2 (bis Generation 5)" : "× 1,5"}"><input type="checkbox" id="ckrit"${o.krit ? " checked" : ""}> Volltreffer</label></div>
     ${all ? `<p class="hint">Je Zelle die stärkste gewählte Attacke des Mitglieds gegen den Gegner, Schaden in Prozent seiner KP (größter Wurf, Einzelheiten beim Darüberfahren); grün: sicher K.O., gelb: K.O. mit Glück. Level ${r.level}${r.level_vert !== r.level ? `, Gegner Level ${r.level_vert}` : ""}. ${rest}</p>` : `<p class="hint">${esc(r.angreifer)}: ${esc(r.attacke)} ${tchip(r.typ)} ${r.klasse === 2 ? "physisch" : "speziell"}, Stärke ${r.staerke}${r.stab > 1 ? `, <span data-tip="Eigentyp-Bonus: Attacke vom eigenen Typ ×1,5${r.stab === 2 ? "; Tera-Typ gleich eigenem Typ: ×2" : ""}">Eigentyp ×${fl(r.stab)}</span>` : `, <span data-tip="Kein eigener Typ: ohne Eigentyp-Bonus (sonst ×1,5)">ohne Eigentyp-Bonus</span>`}, Level ${r.level},
-      ${old ? "volle DVs und Stat Exp" : r.ev == null ? "Angriff voll investiert (252 EVs)" : `${r.ev} EVs`}${r.wesen > 1 ? ", Wesen +10 %" : r.wesen < 1 ? ", Wesen −10 %" : ""}${r.tera ? `, Tera ${tname(r.tera)}` : ""}${r.flaeche ? ", als Flächenattacke (× 0,75)" : ""}${r.level_vert !== r.level ? `; Gegner Level ${r.level_vert}` : ""}.
+      ${old ? "volle DVs und Stat Exp" : r.art === "la" ? `Effort Level ${r.el}` : r.art === "lgpe" ? `${r.av} AVs` : r.ev == null ? "Angriff voll investiert (252 EVs)" : `${r.ev} EVs`}${r.wesen > 1 ? ", Wesen +10 %" : r.wesen < 1 ? ", Wesen −10 %" : ""}${r.tera ? `, Tera ${tname(r.tera)}` : ""}${r.flaeche ? ", als Flächenattacke (× 0,75)" : ""}${r.level_vert !== r.level ? `; Gegner Level ${r.level_vert}` : ""}.
       ${rest}</p>`}
     ${o.gegen === "eigene" ? `<div class="bar logpick">${own.map((id) => `<span class="chip on" data-act="calcfoe" data-id="${id}" data-tip="Entfernen">${img(id, "sm")}${esc(ROWS[id]?.name || "#" + id)} ✕</span>`).join("")}
       <div class="ac"><input id="cfoeq" type="search" placeholder="Gegner hinzufügen" style="width:200px"></div></div>` : ""}
@@ -3084,7 +3087,7 @@ async function calcBox() {
         : `<td class="c ${toneOf(x)}" data-tip="${esc(`${m.name}: ${x.attacke} gegen ${all.gegner[k].name}\n${pct(x.min_pct)}–${pct(x.max_pct)} % (${ko(x)}), Wirkung ×${fl(x.eff)}`)}"><b>${pct(x.max_pct)} %</b><div class="hint">${esc(x.attacke)}</div></td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<div class="scroll sticky"><table class="rows sort dmg fixed"><colgroup><col style="width:26%"><col style="width:84px"><col style="width:180px"><col style="width:110px"><col style="width:120px"><col></colgroup>
       <thead><tr>${th("Verteidiger")}${thc("Wirkung")}${thc("Schaden", "Balken: kräftig der kleinste Wurf, blass bis zum größten; ein voller Balken ist 100 % der KP")}${thc("in %", "Prozent der KP, kleinster bis größter Wurf")}${thc("KP")}${th("Treffer bis K.O.", "", true)}</tr></thead>
       <tbody>${r.rows.map((x) => { const tone = x.min_pct >= 100 ? "go" : x.max_pct >= 100 ? "warn" : x.max_pct >= 50 ? "mid" : "low";
-        return `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a>${x.faehigkeit_vert ? ` <span class="cls" data-tip="Fähigkeit des Verteidigers ändert die Wirkung dieser Attacke (gerechnet mit seiner ersten Fähigkeit)">${esc(x.faehigkeit_vert)}</span>` : ""}</td>
+        return `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a>${x.faehigkeit_vert ? ` <span class="cls" data-tip="Fähigkeit des Verteidigers ändert die Wirkung dieser Attacke (gerechnet mit seiner ersten Fähigkeit)">${esc(x.faehigkeit_vert)}</span>` : ""}${x.item_vert ? ` <span class="cls" data-tip="${esc("Item des Verteidigers: " + x.item_vert)}">Item</span>` : ""}</td>
         <td class="c" data-s="${x.eff}">${x.eff === 1 ? `<span class="hint">×1</span>` : `<span class="f ${fcls(x.eff)}">×${fl(x.eff)}</span>`}</td>
         <td data-s="${x.max_pct}"><span class="dbar ${tone}"><i class="mx" style="width:${Math.min(100, x.max_pct)}%"></i><i class="mn" style="width:${Math.min(100, x.min_pct)}%"></i></span></td>
         <td class="c num ${tone}" data-s="${x.max_pct}">${pct(x.min_pct)}–${pct(x.max_pct)} %</td>

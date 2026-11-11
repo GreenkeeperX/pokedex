@@ -515,7 +515,7 @@ def ranked_moves(con, D, f, g, gen, level=None):
         base = {"id": mid, "name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"],
                 "genauigkeit": v["genauigkeit"], "ap": v["ap"], "prio": v["prio"], "wege": [w[3] for w in wege],
                 "jetzt": now, "geaendert": bool(v.get("geaendert")), "text": v.get("text"), "kurz": v.get("kurz") or "",
-                "kraft": v.get("kraft"), "tempo": v.get("tempo")}
+                "kraft": v.get("kraft"), "tempo": v.get("tempo"), "abkling": v.get("abkling")}
         if v["klasse"] == attacken.STATUS or not v["staerke"]:
             status.append(base)
             continue
@@ -2048,7 +2048,8 @@ def effort_view(body):
     return out
 
 
-STATS_OTHER = ("legends-arceus", "lets-go-pikachu-lets-go-eevee", "champions", "pokopia")   # eigene Formeln oder keine Werte
+STATS_OTHER = ("legends-arceus", "champions", "pokopia")   # eigene Formeln (Effort Levels) oder keine Werte
+LGPE = "lets-go-pikachu-lets-go-eevee"                     # Let's Go: IVs und AVs statt EVs
 
 
 def stats_view(body):
@@ -2067,7 +2068,8 @@ def stats_view(body):
     level = min(100, max(1, _int(body.get("level")) or 50))
     six = lambda v: [_int(x) for x in v][:6] if isinstance(v, list) and len(v) == 6 else None
     out = schaden.stat_view(form_stats(D, f, gen)[0], level, gen, six(body.get("ivs")), six(body.get("evs")),
-                            six(body.get("ziel")), P["nat_mod"].get(wesen) if wesen and gen >= 3 else None)
+                            six(body.get("ziel")), P["nat_mod"].get(wesen) if wesen and gen >= 3 else None,
+                            lgpe=bool(g) and g["kennung"] == LGPE)
     out["wesen_liste"] = sorted(({"id": i, "name": n, "mod": P["nat_mod"].get(i)} for i, n in P["nat_de"].items()),
                                 key=lambda x: x["name"]) if gen >= 3 else []
     out["wesen"] = wesen if gen >= 3 else None
@@ -2110,7 +2112,9 @@ def damage_matrix(body):
         return {}
     ids = _ints(body.get("ids"))[:6]
     per = slot_details(body.get("details"), ids)
-    foes = [v for v in _ints(body.get("verteidiger"))[:30] if v in D.forms]
+    vd = body.get("verteidiger_details") if isinstance(body.get("verteidiger_details"), list) else []
+    pairs = [(v, vd[k] if k < len(vd) else {}) for k, v in enumerate(_ints(body.get("verteidiger"))[:30]) if v in D.forms]
+    foes, body = [v for v, _ in pairs], dict(body, verteidiger_details=[x for _, x in pairs])
     out = []
     for i, fid in enumerate(ids):
         best = [None] * len(foes)
@@ -2179,9 +2183,19 @@ def damage_view(body):
     if no_abilities(g):
         a_abil = ""
     tkey = D.type_key.get(mv["typ"], "")
+    from . import effort
+    art = "la" if g and g["kennung"] == LA else "lgpe" if g and g["kennung"] == LGPE else ""
+    a_base, EV_ALL = form_stats(D, f, gen)[0], schaden.EV_MAX
+    six = lambda v, d: [max(0, _int(x) or 0) for x in v][:6] if isinstance(v, list) and len(v) == 6 else [d] * 6
+    a_el, a_av = six(d.get("el"), 0), six(d.get("avs"), 0)
+    if art:
+        a_item = a_abil = ""
     rows, used = [], []
-    for vid in _ints(body.get("verteidiger"))[:60]:
+    vdet = body.get("verteidiger_details") if isinstance(body.get("verteidiger_details"), list) else []
+    for k, vid in enumerate(_ints(body.get("verteidiger"))[:60]):
         v = D.forms.get(vid)
+        vd = vdet[k] if k < len(vdet) and isinstance(vdet[k], dict) else {}
+        v_item = names["items"].get(_int(vd.get("item")), ("", ""))[0] if _int(vd.get("item")) and not art and gen >= 2 else ""
         if not v or mv["klasse"] not in (2, 3) or not mv["staerke"]:
             continue
         v_types = form_types(D, v, gen)
@@ -2195,13 +2209,30 @@ def damage_view(body):
         else:
             eff = schaden.effect(ch, mv["typ"], [d_tera] if d_tera else v_types)
             m = schaden.modifiers(mv["klasse"], mv["staerke"], tkey, eff, a_abil, a_item, wetter, gen)
+            if art:                            # eigene Werte-Formel: Werte vorab, Fähigkeiten und Items gibt es nicht
+                di = 2 if mv["klasse"] == 2 else 4
+                vb = form_stats(D, v, gen)[0]
+                if art == "la":
+                    a_stat = effort.stat(a_base[ai], level, a_el[ai], ai, nat)
+                    sv = (effort.stat(vb[di], d_level, 10 if inv[1] else 0, di), effort.stat(vb[0], d_level, 10 if inv[0] else 0, 0))
+                else:
+                    a_stat = schaden.stat_lgpe(a_base[ai], level, 31, a_av[ai], nat)
+                    sv = (schaden.stat_lgpe(vb[di], d_level, 31, 200 if inv[1] else 0), schaden.stat_lgpe(vb[0], d_level, 31, 200 if inv[0] else 0, hp=True))
             d_ab = ability_of(D, v, g)
             dm = typen.ABILITY_DEFENSE.get(d_ab or "", {}).get(mv["typ"], 1.0)
-            r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], form_stats(D, f, gen)[0], a_types, form_stats(D, v, gen)[0], v_types, ch,
-                             a_tera=tera, d_tera=d_tera, a_ev=a_ev, a_iv=a_iv, a_nat=nat, d_ev=inv, spread=spread,
-                             crit=bool(body.get("krit")), crit_mult=2.0 if gen <= 5 else 1.5, d_level=d_level, mods=m, d_mod=dm)
+            di_ = schaden.DEF_ITEMS.get(v_item)
+            d_mult = di_[1] if di_ and di_[0] in (0, mv["klasse"]) and gen >= 4 and (v_item != "eviolite" or not v["endstufe"]) else 1.0
+            r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], a_base, a_types, form_stats(D, v, gen)[0], v_types, ch,
+                             a_tera=tera, d_tera=d_tera, a_ev=EV_ALL if art else a_ev, a_iv=a_iv, a_nat=nat, d_ev=inv, spread=spread,
+                             crit=bool(body.get("krit")), crit_mult=2.0 if gen <= 5 else 1.5, d_level=d_level, mods=m, d_mod=dm,
+                             d_stats=sv if art else None, a_stat=a_stat if art else None, d_mult=d_mult)
+            if d_mult != 1.0:
+                r["item_vert"] = f"{names['item_de'].get(v_item, v_item)}: {di_[2]}"
             if dm != 1.0:
                 r["faehigkeit_vert"] = D.abilities.get(next((a for a, h in v["faehigkeiten"] if not h), 0), ("", d_ab))[1]
+        if v_item == "focus-sash" and gen >= 4 and r.get("sicher") == 1:
+            r["item_vert"], r["sicher"] = names["item_de"].get(v_item, v_item) + ": übersteht den ersten Treffer aus vollen KP mit 1 KP", 2
+            r["moeglich"] = 2
         for t in m["texte"]:
             if t not in used:
                 used.append(t)
@@ -2210,7 +2241,8 @@ def damage_view(body):
              "wetter": lambda k: {"sonne": "Sonne", "regen": "Regen"}.get(k, k)}
     return {"angreifer": f["name"], "attacke": mv["name"], "typ": mv["typ"], "klasse": mv["klasse"], "staerke": mv["staerke"],
             "stab": schaden.stab_of(mv["typ"], a_types, tera), "level": level, "level_vert": d_level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "gen": gen,
-            "krit": 2.0 if gen <= 5 else 1.5, "rows": rows, "wetter": wetter,
+            "krit": 2.0 if gen <= 5 else 1.5, "rows": rows, "wetter": wetter, "art": art,
+            "el": a_el[ai] if art == "la" else None, "av": a_av[ai] if art == "lgpe" else None,
             "eingerechnet": [f"{label[kind](k)}: {txt}" for kind, k, txt in used]}
 
 

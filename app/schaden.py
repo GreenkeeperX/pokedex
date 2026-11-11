@@ -66,6 +66,8 @@ TYPE_ITEMS = {"charcoal": "fire", "flame-plate": "fire", "mystic-water": "water"
               "dragon-fang": "dragon", "draco-plate": "dragon", "black-glasses": "dark", "dread-plate": "dark",
               "metal-coat": "steel", "iron-plate": "steel", "silk-scarf": "normal", "pixie-plate": "fairy",
               "fairy-feather": "fairy", "sea-incense": "water", "wave-incense": "water", "rose-incense": "grass"}
+# Items des Verteidigers: Kennung → (Klasse 2/3/0, Faktor auf die Verteidigung, Text); Evolith nur vor der Endstufe
+DEF_ITEMS = {"assault-vest": (3, 1.5, "Sp.-Verteidigung ×1,5"), "eviolite": (0, 1.5, "Verteidigung ×1,5 (noch nicht voll entwickelt)")}
 WEATHER = {"sonne": {"fire": 1.5, "water": 0.5}, "regen": {"water": 1.5, "fire": 0.5}}
 
 
@@ -117,17 +119,25 @@ def hits(hp, lo, hi):
 
 
 def calc(level, power, cls, move_type, a_base, a_types, d_base, d_types, ch, a_tera=None, d_tera=None, a_ev=None,
-         a_iv=31, a_nat=1.0, d_ev=(0, 0), d_nat=1.0, spread=False, crit=False, crit_mult=1.5, d_level=None, mods=None, d_mod=1.0):
+         a_iv=31, a_nat=1.0, d_ev=(0, 0), d_nat=1.0, spread=False, crit=False, crit_mult=1.5, d_level=None, mods=None, d_mod=1.0,
+         d_stats=None, a_stat=None, d_mult=1.0):
     """Ein Treffer: {min, max, kp, min_pct, max_pct, sicher, moeglich, eff, stab}. a_base/d_base: sechs Basiswerte;
     cls 2 = physisch (Angriff gegen Verteidigung), 3 = speziell (Spezial-Angriff gegen Spezial-Verteidigung).
     a_ev: Investition in den Angriffswert (None = voll); d_ev: (KP, Verteidigungswert); d_level: Level des Verteidigers
-    (Vorgabe: wie der Angreifer); mods: modifiers(); d_mod: Faktor aus der Fähigkeit des Verteidigers (Schwebe 0 …)."""
+    (Vorgabe: wie der Angreifer); mods: modifiers(); d_mod: Faktor aus der Fähigkeit des Verteidigers (Schwebe 0 …);
+    d_stats: (Verteidigung, KP) des Verteidigers, a_stat: Angriffswert, fertig gerechnet (Spiele mit eigener Werte-Formel)."""
     d_level = d_level or level
     mods = mods or {}
     ai, di = (1, 2) if cls == 2 else (3, 4)
     atk = math.floor(stat(a_base[ai], level, a_iv, EV_MAX if a_ev is None else a_ev, a_nat) * mods.get("wert", 1.0))
     dfn = stat(d_base[di], d_level, 31, d_ev[1], d_nat)
     hp = stat(d_base[0], d_level, 31, d_ev[0], hp=True)
+    if d_stats:
+        dfn, hp = d_stats
+    if a_stat:
+        atk = math.floor(a_stat * mods.get("wert", 1.0))
+    if d_mult != 1.0:
+        dfn = math.floor(dfn * d_mult)            # Item des Verteidigers (Offensivweste, Evolith)
     st = stab_of(move_type, a_types, a_tera)
     if st > 1 and mods.get("stab"):
         st = max(st, mods["stab"])
@@ -227,11 +237,22 @@ def stat_parts(base, level, iv, ev, nat, i, gen):
     return {"basis": basis, "level": grund - basis, "iv": ci - c0, "ev": ce - ci, "wesen": wert - (ce + add)}, wert
 
 
-def stat_view(werte, level, gen, ivs=None, evs=None, ziel=None, nat_mod=None):
+AV_MAX = 200
+
+
+def stat_lgpe(base, level, iv=31, av=0, nat=1.0, hp=False):
+    """Let's Go: wie ab Gen. 3 ohne EVs, danach + AV (Punkte aus Bonbons, 0–200 je Wert). Den Freundschafts-Bonus
+    (bis × 1,1) rechnen wir nicht ein."""
+    core = (2 * base + iv) * level // 100
+    return core + level + 10 + av if hp else math.floor((core + 5) * nat) + av
+
+
+def stat_view(werte, level, gen, ivs=None, evs=None, ziel=None, nat_mod=None, lgpe=False):
     """Tabelle für das Werte-Diagramm: je Wert Basis, IV/DV, EV/Stat Exp, Wert, Ziel-EVs, Wert am Ziel, höchstens.
-    Bis Generation 2 sind ivs DVs (0–15) und evs Stat Exp (0–65535), sonst IVs (0–31) und EVs (0–252, zusammen 510)."""
+    Bis Generation 2 sind ivs DVs (0–15) und evs Stat Exp (0–65535), sonst IVs (0–31) und EVs (0–252, zusammen 510);
+    in Let's Go (lgpe) sind evs AVs (0–200 je Wert, ohne Summengrenze)."""
     old = gen <= 2
-    iv_max, ev_max = (DV_MAX, EXP_MAX) if old else (31, EV_MAX)
+    iv_max, ev_max = (DV_MAX, EXP_MAX) if old else (31, AV_MAX) if lgpe else (31, EV_MAX)
     clamp = lambda v, hi, d: [max(0, min(hi, int(x))) if isinstance(x, (int, float)) else d for x in (v or [d] * 6)][:6]
     ivs, evs = clamp(ivs, iv_max, iv_max), clamp(evs, ev_max, 0)
     ziel = [max(e, z) for e, z in zip(evs, clamp(ziel, ev_max, 0))] if ziel else list(evs)
@@ -239,11 +260,17 @@ def stat_view(werte, level, gen, ivs=None, evs=None, ziel=None, nat_mod=None):
     if nat_mod and not old:
         nat[nat_mod[0]], nat[nat_mod[1]] = 1.1, 0.9
     rows = []
+    parts = stat_parts
+    if lgpe:
+        def parts(b, lv, iv, av, n, i, g):
+            t, w = stat_parts(b, lv, iv, 0, n, i, g)
+            return dict(t, ev=av), w + av
     for i, b in enumerate(werte[:6]):
-        t, w = stat_parts(b, level, ivs[i], evs[i], nat[i], i, gen)
-        tz, wz = stat_parts(b, level, ivs[i], ziel[i], nat[i], i, gen)
-        _, top = stat_parts(b, level, iv_max, ev_max, max(nat[i], 1.0) if not old else 1.0, i, gen)
+        t, w = parts(b, level, ivs[i], evs[i], nat[i], i, gen)
+        tz, wz = parts(b, level, ivs[i], ziel[i], nat[i], i, gen)
+        _, top = parts(b, level, iv_max, ev_max, max(nat[i], 1.0) if not old else 1.0, i, gen)
         rows.append({"basis": b, "iv": ivs[i], "ev": evs[i], "wert": w, "ziel": ziel[i], "wert_ziel": wz, "max": top,
                      "wesen": nat[i], "teile": t, "ev_ziel_teil": tz["ev"]})
     return {"level": level, "gen": gen, "rows": rows, "iv_max": iv_max, "ev_max": ev_max,
-            "ev_summe": sum(evs), "ev_ziel_summe": sum(ziel), "ev_gesamt": None if old else EV_TOTAL}
+            "ev_summe": sum(evs), "ev_ziel_summe": sum(ziel), "ev_gesamt": None if old or lgpe else EV_TOTAL,
+            "art": "lgpe" if lgpe else "alt" if old else ""}

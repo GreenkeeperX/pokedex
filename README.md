@@ -42,8 +42,9 @@ dem Vorbild von VR-Navigator und eShopKompass.
   zeigt nur die Typen des Teams und dazu Verteidigung und Angriff je Mitglied.
 - **Schadensrechner** (Reiter Team, alle Spiele): eine Attacke gegen die Gegner aus „Gegen Gegner“, das
   eigene Team oder eine eigene Auswahl, mit Level beider Seiten; „Übersicht“ zeigt jedes Mitglied gegen jeden Gegner.
-  Item und Fähigkeit des Mitglieds zählen, wo sie immer wirken, dazu Sonne oder Regen; Generation 1 und 2 mit eigener Formel.
-- **Legenden: Z-A**: Abklingzeit jeder Attacke. **Pokopia**: die Pokémon des Spiels mit ihren Spezialitäten.
+  Item und Fähigkeit des Mitglieds zählen, wo sie immer wirken, dazu Sonne oder Regen; Generation 1 und 2 mit eigener Formel,
+  Legenden: Arceus mit Effort Levels, Let's Go mit AVs. Gegen das eigene Team zählen dessen Items (Offensivweste, Evolith, Fokusgurt).
+- **Legenden: Z-A**: Abklingzeit jeder Attacke, auch in der Attacken-Wertung. **Pokopia**: die Pokémon des Spiels mit ihren Spezialitäten.
 - **Frühere Basiswerte**: ältere Spiele zeigen die Werte von damals, Generation 1 den Spezial-Wert (Showdown-Mods).
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
 - **Karte** (Legenden: Arceus): Jubeldorf und die fünf Gebiete zum Ziehen und Zoomen; Spawnpunkte (Alpha hervorgehoben,
@@ -73,7 +74,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Leistungssand, -kies, -stein und -fels; im Team je Platz gespeichert. Im Reiter Team der Stand aller Mitglieder und was dem
   Team fehlt; die Initiative-Liste rechnet in diesem Spiel mit Effort Levels. Balken und Netz zeigen live, woraus jeder Wert
   besteht (Basiswert, Level, Effort Levels, Wesen, bis zum Ziel).
-- **Werte** (übrige Spiele, Detailseite): dasselbe Diagramm mit IVs, EVs und Wesen (bis Generation 2 DVs und Stat Exp),
+- **Werte** (übrige Spiele, Detailseite): dasselbe Diagramm mit IVs, EVs und Wesen (bis Generation 2 DVs und Stat Exp, Let's Go AVs),
   Ziel-EVs mit Rest bis 510; im Team je Platz gemerkt.
 - **Let’s Go**: Fangen ohne Kampf und Fang-Kombo auf der Detailseite, Partner-Techniken und Geheime Techniken beim Partner.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
