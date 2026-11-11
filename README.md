@@ -57,15 +57,17 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Rückenwind und Wahlschal; das eigene Team steht mit seinem Wert dazwischen.
 - **Kampf** (in Champions statt „Karte“, sonst über `#kampf`): Doppelkampf-Bewertung des Teams mit Rollen,
   Flächenattacken, Gefahr für den Partner und Tempo, dazu häufige Gegner aus der Nutzungsstatistik von Smogon, ein
-  Schadensrechner (Level 50, gegen die häufigsten Gegner, das eigene Team oder eigene Gegner) und ein Kampftagebuch. In Champions heißt „gefangen“ „im Kader“.
+  Schadensrechner (Level 50, gegen die häufigsten Gegner, das eigene Team, die Favoriten oder eigene Gegner) und ein Kampftagebuch. In Champions heißt „gefangen“ „im Kader“.
 - **Raids** (Karmesin/Purpur): alle Tera-Raids aus den Spieldaten mit Tera-Typ, Attacken und Kontern aus dem eigenen Team.
 - **Crypto-Pokémon** (Colosseum, XD): auf der Detailseite, mit Trainer, Ort, Level und Attacken.
 - **Vergleich**: zwei Pokémon nebeneinander (Werte mit Unterschied, Kurzfazit, Typwirkung, Fähigkeiten, Attacken), über
   „Vergleichen“ auf der Detailseite; „Zum Vergleich merken“ und Favoriten stehen dort zur schnellen Wahl.
 - **Typkombinationen** (Reiter Typen): alle 171 Kombinationen als Verteidiger, sortierbar.
-- **Karte (Map Genie)**: in Legenden: Arceus mit den eigenen Spawnpunkten und Symbolen auf der Karte von ganz Hisui;
-  „Gehe zu“ für Gebiete, Suche mit Trefferliste. für jedes Spiel mit Karte bei Map Genie die Orte, Sammelobjekte und Materialien als Ebenen,
-  mit Suche; Symbole lassen sich als gefunden markieren (Rechtsklick), auch auf der Karte von Legenden: Arceus.
+- **Karte (Map Genie)**: für jedes Spiel mit Karte bei Map Genie die Orte, Sammelobjekte und Materialien als Ebenen auf Deutsch,
+  „Gehe zu“, Suche mit Trefferliste; Symbole lassen sich als gefunden markieren (Rechtsklick). In Legenden: Arceus ist alles
+  eine Datenbank: Map Genie und die Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken) sind zusammengeführt,
+  gleiche Stellen sind ein Punkt. Kacheln, Punkte und Texte liegen auf dem Server; die Karte braucht kein Internet.
+- **Let’s Go**: Fangen ohne Kampf und Fang-Kombo auf der Detailseite, Partner-Techniken und Geheime Techniken beim Partner.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
   Gefangene blass, auf Wunsch nur die fehlenden.
 - **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen, wie im VR-Navigator): Abgleich mit Quellen, Protokoll und Verbindungstest zum Aufklappen, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten

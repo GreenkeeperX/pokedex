@@ -1171,7 +1171,7 @@ async function detailView(id, slot = null) {
       </div>
       <div class="stack">
         <div class="box"><h2>Entwicklung</h2>${evo ? `<div class="evo">${evo}</div>` : `<p class="hint">${esc(d.name)} entwickelt sich nicht.</p>`}</div>
-        ${catchHtml(d)}
+        ${catchHtml(d)}${partnerHtml(d)}
         ${raidHtml(d)}
         ${cryptoHtml(d)}
         ${heldHtml(d)}
@@ -1290,8 +1290,32 @@ function catchHtml(d) {
     <table class="rows sort catch"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: der beste Fall, etwa dreimal so gut wie volle KP. Die Chance steigt gleichmäßig, je weniger KP übrig sind, ohne Schwellen")}${thc("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${thc("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
     <tbody>${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}">${pc(f.voll)}</td><td class="c" data-s="${f.rot}">${pc(f.rot)}</td><td class="c" data-s="${f.status ?? ""}">${f.status != null ? pc(f.status) : "–"}</td><td class="c" data-s="${f.schlaf}">${pc(f.schlaf)}</td></tr>`).join("")}</tbody></table>
     <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
-      : grob && S.game.startsWith("lets-go") ? ". Let’s Go fängt ohne Kampf: KP und Status zählen nicht, dafür Beeren (Himmihbeere ×1,5, Silberne ×2,5), Wurfkreis und Fangkombo; die Werte geben nur eine Richtung."
-      : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p></details>`;
+      : grob && S.game.startsWith("lets-go") ? ". Let’s Go rechnet anders (siehe unten); die Werte geben nur eine Richtung."
+      : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p>${wissenHtml(d.spielwissen)}</details>`;
+}
+/* Gepflegtes Spielwissen (extra/spielwissen.json), bisher Let’s Go: Fangen ohne Kampf und Fang-Kombo */
+const miniTable = (head, rows) => `<table class="rows">${head ? `<tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>` : ""}${rows.map((r) => `<tr>${r.map((c, i) => `<td${i && String(c).length < 14 ? ' class="c"' : ""}>${esc(c)}</td>`).join("")}</tr>`).join("")}</table>`;
+const quellenHtml = (q) => q?.length ? `<p class="hint">Quellen: ${q.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a>`).join(" · ")}</p>` : "";
+function wissenHtml(w) {
+  if (!w || (!w.fangen && !w.kombo)) return "";
+  const f = w.fangen, k = w.kombo;
+  return `${f ? `<h3>Fangen in diesem Spiel</h3><p class="hint">${esc(f.text)}</p><div class="cols2">
+      <div>${miniTable(["Wirkt", "Faktor"], f.faktoren)}</div>
+      <div>${miniTable(["Wurfkreis", "Fangen"], f.ringe)}<p class="hint">${esc(f.ring_text)}</p></div></div>` : ""}
+    ${k ? `<details class="sub"><summary>Fang-Kombo: schillernde, seltene und perfekte Pokémon</summary><p class="hint">${esc(k.text)}</p>
+      ${miniTable(k.schillernd_kopf, k.schillernd)}
+      <div class="cols2"><div>${miniTable(["Kombo", k.dvs_text], k.dvs)}</div><div>${miniTable(["Kombo", k.selten_text], k.selten)}</div></div>
+      <p class="hint">${esc(k.ep_text)}</p></details>` : ""}${quellenHtml(w.quellen)}`;
+}
+/* Partner-Pikachu und Partner-Evoli (Let’s Go): eigene Techniken und die Geheimen Techniken */
+function partnerHtml(d) {
+  const w = d.spielwissen, p = w?.partner;
+  if (!p) return "";
+  const t = w.techniken;
+  return `<div class="box"><h2>Partner-Techniken</h2><p class="hint">${esc(p.text)}</p>
+    <table class="rows"><tr><th>Attacke</th><th>Typ</th><th class="c">Stärke</th><th>Wirkung</th></tr>${p.attacken.map((m) => `<tr><td><b>${esc(m.name)}</b></td><td>${tchip(m.typ)}</td>
+      <td class="c">${m.staerke ? powCell(m.staerke) : `<span data-tip="hängt von der Freundschaft ab, bis 102">Freundschaft</span>`}</td><td class="hint">${esc(m.kurz || "")}</td></tr>`).join("")}</table>
+    ${t ? `<h3>Geheime Techniken</h3><p class="hint">${esc(t.text)}</p>${miniTable(["Technik", "Wirkung", "So bekommst du sie"], t.liste)}` : ""}${quellenHtml(w.quellen)}</div>`;
 }
 // Mehr Details, eingeklappt: Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute
 const EVK = ["kp", "ang", "vert", "spang", "spvert", "init"];
@@ -1933,36 +1957,29 @@ async function mgView(slug, want) {
   const ck = S.game + "/" + slug;
   const d = MGDATA[ck] || (MGDATA[ck] = await api("/api/mapgenie?" + qs({spiel: S.game, karte: slug})));
   const gk = "mg-" + slug;
-  // Legenden: Arceus: eigene Spawnpunkte und Symbole, an Geisterlichtern und Icognito ausgerichtet
-  const own = d.spiel === "legends-arceus" ? (MGDATA[ck + "/eigene"] ||= await api("/api/mapgenie/eigene?" + qs({spiel: S.game, karte: slug})).catch(() => null)) : null;
   const gotRes = await api("/api/gefunden?" + qs({spiel: d.spiel})).catch(() => ({}));
   if (rid !== RID) return;
   window.scrollTo(0, 0);
   const got = new Set((gotRes[gk] || []).map((o) => gk + "|" + o));
   Object.entries(gotRes).forEach(([k, os]) => { if (k !== gk) os.forEach((o) => got.add(k + "|" + o)); });
+  /* eine Datenbank: der Server hat Map Genie und die Spieldaten schon zusammengeführt (gleiche Stellen sind ein Punkt);
+     t "mg" Ort von Map Genie (vielleicht mit Angaben aus den Spieldaten), "ob" nur aus den Spieldaten, "sp" Spawnpunkt */
   const cats = {}, groups = d.gruppen.map((g) => ({...g, kategorien: g.kategorien.map((c) => ({...c}))}));
   groups.forEach((g) => g.kategorien.forEach((c) => { cats[c.id] = Object.assign(c, {g}); }));
-  /* alle Punkte in einer Liste: Orte von Map Genie (t "mg"), eigene Spawnpunkte ("sp") und eigene Symbole ("ob") */
-  const pts = d.orte.filter((o) => cats[o[1]]).map((o) => ({t: "mg", id: o[0], c: o[1], la: o[2], lo: o[3], name: o[4], text: o[5]}));
-  if (own && (own.punkte.length || own.objekte.length)) {
-    const arten = own.arten || {}, og = {id: "own", titel: "Aus dem Pokédex", farbe: "#3a7bd5", kategorien: [],
-      tipp: "Unsere eigenen Daten wie auf den Einzelkarten: Spawnpunkte aus den Spieldaten und Symbole (Bäume, Erzbrocken …). Map Genie hat vieles davon selbst; deshalb sind sie anfangs aus, nur die Spawnpunkte nicht."};
-    if (own.punkte.length) og.kategorien.push({id: "sp", titel: "Spawnpunkte", n: own.punkte.length, own: 1});
-    Object.keys(arten).forEach((a) => { const n = own.objekte.filter((o) => o.art === a).length; if (n) og.kategorien.push({id: "o:" + a, titel: arten[a][1], n, own: 1, art: a}); });
-    og.kategorien.forEach((c) => { cats[c.id] = Object.assign(c, {g: og}); });
-    groups.unshift(og);
-    own.punkte.forEach((p) => pts.push({t: "sp", c: "sp", la: p.la, lo: p.lo, alpha: p.alpha, mons: p.mons, k: p.k,
-      name: p.mons.map((m) => m.name).join(", ")}));
-    own.objekte.forEach((o) => pts.push({t: "ob", c: "o:" + o.art, la: o.la, lo: o.lo, o, k: o.k,
-      name: (arten[o.art]?.[0] || o.art) + (o.nr ? " " + o.nr : ""), items: o.items.map((e) => e[0]).join(", ")}));
-  }
-  const gkey = (p) => p.t === "mg" ? gk + "|mg:" + p.id : p.t === "ob" ? p.k + "|" + okey(p.o) : "";
-  const hk = "mgHide:" + d.spiel;
-  // eigene Symbole außer den Spawnpunkten anfangs aus: Map Genie hat vieles davon selbst
-  const hide = new Set(store.get(hk, Object.keys(cats).filter((k) => k.startsWith("o:"))).map((k) => (isNaN(+k) ? k : +k)));
+  const own = {gebiete: d.gebiete_eigen || {}};
+  const pts = d.punkte.filter((p) => cats[p.c]).map((p) => ({...p, t: p.sp ? "sp" : p.id ? "mg" : "ob", k: p.sp?.k || p.o?.k,
+    alpha: p.sp?.alpha, mons: p.sp?.mons,
+    items: [...(p.o?.items || []), ...(p.drin || []).flatMap((x) => x.items)].map((e) => e[0]).join(", ")}));
+  const okeyOf = (p) => p.o ? p.o.k + "|" + okey(p.o) : "";
+  const gkey = (p) => p.t === "mg" ? gk + "|mg:" + p.id : p.t === "ob" ? okeyOf(p) : "";
+  const isGot = (p) => got.has(gkey(p)) || (p.t === "mg" && p.o && got.has(okeyOf(p)));
+  const hk = "mgEbenen:" + d.spiel;
+  // anfangs aus: die vielen Materialien und Spawnpunkte (an- und abschaltbar je Ebene)
+  const hide0 = groups.filter((g) => /^(Materialien|Pokémon$)/.test(g.titel)).flatMap((g) => g.kategorien.map((c) => c.id));
+  const hide = new Set(store.get(hk, hide0).map((k) => (isNaN(+k) ? k : +k)));
   let gotHide = store.get("mapGotHide", false), q = "", sel = -1;
   const open = new Set(store.get("mgOpen", groups.filter((g) => g.kategorien.length <= 12).map((g) => String(g.id))).map(String));
-  const cnt = (c) => { const f = pts.filter((p) => p.c === c.id && got.has(gkey(p))).length; return f ? `${f}/${c.n} ✓` : c.n; };
+  const cnt = (c) => { const f = pts.filter((p) => p.c === c.id && isGot(p)).length; return f ? `${f}/${c.n} ✓` : c.n; };
   const dot = (c) => c.id === "sp" ? `<span class="mpin-l"></span>` : c.art ? `<span class="mobj o-${c.art}">${MOBJ[c.art] || "•"}</span>` : `<span class="mgdot" style="--c:${esc(c.g.farbe)}">${esc(c.titel[0] || "•")}</span>`;
   const catBtn = (c) => `<button class="mlay${hide.has(c.id) ? "" : " on"}" data-cat="${esc(c.id)}">${dot(c)}${esc(c.titel)} <span class="hint" data-cnt="${esc(c.id)}">${cnt(c)}</span></button>`;
   const regions = d.gebiete || [];
@@ -1982,7 +1999,7 @@ async function mgView(slug, want) {
       <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button></span></div>
         ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
-    <p class="hint">Karte und Orte: Map Genie (mapgenie.io), Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}; Namen und Texte englisch wie dort.${own ? " „Aus den Spieldaten“: Spawnpunkte und Symbole wie auf den Einzelkarten, je Gebiet an Geisterlichtern und Icognito ausgerichtet (auf wenige Meter genau)." : ""} Kacheln hebt der Server auf; was noch fehlt, holt er im Hintergrund nach (<span id="mgstock"></span>).</p></div>`;
+    <p class="hint">Alles liegt auf dem Server: Karte und Orte von Map Genie (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
   header();
   const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box), old = $(".mgold", box), ld = $(".mgload", box);
   const tileUrl = (k) => `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
@@ -2001,14 +2018,15 @@ async function mgView(slug, want) {
     cx = (x1 + x2) / 2; cy = (y1 + y2) / 2;
   };
   const ql = () => q.toLowerCase();
-  const match = (p) => !q || (p.name || "").toLowerCase().includes(ql()) || cats[p.c].titel.toLowerCase().includes(ql()) || (p.items || "").toLowerCase().includes(ql());
-  const vis = (p) => !hide.has(p.c) && !(gotHide && got.has(gkey(p))) && match(p);
+  const match = (p) => { if (!q) return true; const c = cats[p.c], l = ql();
+    return [p.name, p.en, c.titel, c.en, p.items].some((x) => (x || "").toLowerCase().includes(l)); };
+  const vis = (p) => !hide.has(p.c) && !(gotHide && isGot(p)) && match(p);
   const pinHtml = (p, i) => {
-    const [x, y] = mgProj(p.la, p.lo, z), pos = `left:${x.toFixed(1)}px;top:${y.toFixed(1)}px`, g = got.has(gkey(p)) ? " got" : "", s = i === sel ? " sel" : "";
+    const [x, y] = mgProj(p.la, p.lo, z), pos = `left:${x.toFixed(1)}px;top:${y.toFixed(1)}px`, g = isGot(p) ? " got" : "", s = i === sel ? " sel" : "";
     if (p.t === "sp") return `<button class="mpin${p.alpha ? " alpha" : ""}${s}" data-i="${i}" style="${pos}" data-tip="${esc((p.alpha ? "Alpha-Spawnpunkt\n" : "") + p.mons.map((m) => `${m.alpha ? "Alpha-" : ""}${m.name}: bis ${mpct(m.max)}`).join("\n"))}"></button>`;
-    if (p.t === "ob") return `<button class="mobj o-${p.o.art}${g}${s}" data-i="${i}" style="${pos}" data-tip="${esc(p.name + (p.items ? "\n" + p.items : ""))}">${MOBJ[p.o.art] || "•"}</button>`;
-    const c = cats[p.c];
-    return `<button class="mgp${g}${s}" data-i="${i}" style="${pos};--c:${esc(c.g.farbe)}" data-tip="${esc(p.name || c.titel)}${p.name && p.name !== c.titel ? "\n" + esc(c.titel) : ""}">${esc(c.titel[0] || "•")}</button>`;
+    const c = cats[p.c], tipText = (p.name || c.titel) + (p.name && p.name !== c.titel ? "\n" + c.titel : "") + (p.items ? "\n" + p.items : "");
+    if (c.art) return `<button class="mobj o-${c.art}${g}${s}" data-i="${i}" style="${pos}" data-tip="${esc(tipText)}">${MOBJ[c.art] || "•"}</button>`;
+    return `<button class="mgp${g}${s}" data-i="${i}" style="${pos};--c:${esc(c.g.farbe)}" data-tip="${esc(tipText)}">${esc(c.titel[0] || "•")}</button>`;
   };
   const pins = () => {
     let n = 0;
@@ -2036,14 +2054,14 @@ async function mgView(slug, want) {
     tl.style.transform = pl.style.transform = `translate(${-ox}px,${-oy}px)`;
     if (oldZ !== null) old.style.transform = `translate(${-ox}px,${-oy}px) scale(${2 ** (z - oldZ)})`;
     const wantT = new Set(view(z));
-    $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) { if (!im.complete) pending--; im.remove(); } else wantT.delete(im.dataset.k); });
+    $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) { if (im.onload) pending--; im.onload = im.onerror = null; im.remove(); } else wantT.delete(im.dataset.k); });
     wantT.forEach((k) => {
       const [, tx, ty] = k.split("/").map(Number), im = new Image();
       im.dataset.k = k; im.alt = ""; im.draggable = false;
       im.style.left = tx * 256 + "px"; im.style.top = ty * 256 + "px";
       pending++;
-      im.onload = () => { pending--; progress(); };
-      im.onerror = () => { pending--; im.style.visibility = "hidden"; tileTrouble(); progress(); };
+      im.onload = () => { im.onload = im.onerror = null; pending--; progress(); };
+      im.onerror = () => { im.onload = im.onerror = null; pending--; im.style.visibility = "hidden"; tileTrouble(); progress(); };
       im.src = tileUrl(k); warm.add(k);
       tl.appendChild(im);
     });
@@ -2054,7 +2072,8 @@ async function mgView(slug, want) {
     const v = r.kacheln?.vorrat?.[`${d.spiel}/${slug}`], el = $("#mgstock");
     if (!el || rid !== RID) return;
     el.textContent = !v ? (r.kacheln?.laedt ? "läuft gerade" : "startet nach dem nächsten Abgleich")
-      : v.fertig && v.da >= v.alle ? `alle ${v.alle} Kacheln bis Stufe ${v.bis} da` : `${v.da} von ${v.alle} Kacheln bis Stufe ${v.bis} da`;
+      : v.fertig && v.ganz ? `alle ${v.da} Kacheln liegen auf dem Server, die Karte braucht kein Netz mehr`
+      : `${v.da} von ${v.alle} Kacheln bis Stufe ${v.bis} liegen auf dem Server; der Rest kommt im Hintergrund`;
   }).catch(() => {});
   // fehlen Kacheln, sagt die Karte warum (Map Genie ruht nach 403/429 einen Tag; ein Neustart des Dienstes hebt das auf)
   let troubleT = 0;
@@ -2072,7 +2091,7 @@ async function mgView(slug, want) {
     if (prevZ !== undefined && prevZ !== z) {
       if (!pending || oldZ === null) { old.innerHTML = ""; $$("img", tl).forEach((im) => { if (im.complete && im.style.visibility !== "hidden") old.appendChild(im); }); oldZ = prevZ; }
     } else { old.innerHTML = ""; oldZ = null; }
-    tl.innerHTML = ""; pending = 0; tiles(); pins();
+    $$("img", tl).forEach((im) => { im.onload = im.onerror = null; }); tl.innerHTML = ""; pending = 0; tiles(); pins();
   };
   const zoomTo = (nz, px, py) => {
     nz = Math.max(zmin, Math.min(zmax, nz));
@@ -2110,21 +2129,25 @@ async function mgView(slug, want) {
   $$("[data-mz]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mz === "0") { const pz = z; fitBox(bb); redraw(pz); } else zoomTo(z + +b.dataset.mz); }));
   $("#mggo")?.addEventListener("change", (e) => { const r = regions[+e.target.value]; if (r) { const pz = z; fitBox(r.slice(1)); redraw(pz); } e.target.value = ""; });
   const side = (i) => {
-    const p = pts[i], c = cats[p.c], on = got.has(gkey(p));
+    const p = pts[i], c = cats[p.c], on = isGot(p);
     const gotBtn = p.t === "sp" ? "" : `<p><button class="btn gotbtn${on ? " on" : ""}" id="gotbtn">${on ? "✓ erledigt" : "als erledigt markieren"}</button></p>`;
+    const itemRows = (its) => `<table class="rows">${its.map(([n, t, id]) => `<tr><td>${id ? img(id, "sm") : ""}</td><td>${id ? `<a href="#pokemon/${id}">${esc(n)}</a>` : wikiLink(n)}</td><td>${esc(t || "")}</td></tr>`).join("")}</table>`;
     let body = "";
     if (p.t === "sp") body = `<table class="rows"><tr><th></th><th>Pokémon</th><th>Anteil</th><th>Tageszeit</th><th>Wetter</th></tr>${p.mons.map((m) => `<tr><td>${img(m.id, "sm")}</td>
       <td><a href="#pokemon/${m.id}">${m.alpha ? `<span class="alpha">Alpha</span> ` : ""}${esc(m.name)}</a></td><td>bis ${mpct(m.max)}</td><td>${esc(m.zeit)}</td><td>${esc(m.wetter)}</td></tr>`).join("")}</table>`;
-    else if (p.t === "ob") body = p.o.items.length ? `<table class="rows">${p.o.items.map(([n, t, id]) => `<tr><td>${id ? img(id, "sm") : ""}</td><td>${id ? `<a href="#pokemon/${id}">${esc(n)}</a>` : wikiLink(n)}</td><td>${esc(t)}</td></tr>`).join("")}</table>`
-      + (p.o.menge ? `<p class="hint">${esc(p.o.menge)} Stück je Mal.</p>` : "") : `<p class="hint">${esc(MOBJHINT[p.o.art] || "")}</p>`;
-    else body = p.text ? `<div class="mgdesc">${mgMd(p.text, slug)}</div><p class="hint">Text von Map Genie, Begriffe übersetzt.</p>` : "";
+    if (p.text) body += `<div class="mgdesc">${mgMd(p.text, slug)}</div>`;
+    if (p.o) body += (p.o.items.length ? (p.text ? `<h4>Items an dieser Stelle</h4>` : "") + itemRows(p.o.items) : "")
+      + (p.o.menge ? `<p class="hint">${esc(p.o.menge)} Stück je Mal.</p>` : "") + (!p.text && !p.o.items.length && MOBJHINT[p.o.art] ? `<p class="hint">${esc(MOBJHINT[p.o.art])}</p>` : "");
+    (p.drin || []).forEach((x) => { body += `<h4 data-tip="${esc(MOBJHINT[x.art] || "")}">${x.art === "kristall" ? "Pokémon im Kristallbrocken" : "Pokémon im Baum"}</h4>${itemRows(x.items)}`; });
+    const quelle = p.t === "sp" ? "Spieldaten" : (p.q || []).join(" und ");
     $("#mapside").innerHTML = `<h3>${dot(c)} ${esc(p.t === "sp" ? (p.alpha ? "Alpha-Spawnpunkt" : "Spawnpunkt") : p.name || c.titel)}</h3>
-      <p class="hint">${esc(c.g.titel)} · ${esc(c.titel)}${p.k && own ? " · " + esc(own.gebiete[p.k] || "") : ""}</p>${gotBtn}${body}`;
+      <p class="hint">${esc(c.g.titel)} · ${esc(c.titel)}${p.k && own.gebiete[p.k] ? " · " + esc(own.gebiete[p.k]) : ""}</p>${gotBtn}${body}
+      ${quelle ? `<p class="hint" data-tip="${esc(p.q?.length > 1 ? "Map Genie und die Spieldaten haben hier dasselbe; beides ist zu einem Punkt zusammengeführt." : "")}">Quelle: ${esc(quelle)}${p.text ? " (Text von Map Genie, Begriffe übersetzt)" : ""}</p>` : ""}`;
     $("#gotbtn")?.addEventListener("click", () => toggle(i));
   };
   const listHits = () => {
     if (!q) return;
-    const hits = pts.map((p, i) => [p, i]).filter(([p]) => !hide.has(p.c) && match(p));
+    const hits = pts.map((p, i) => [p, i]).filter(([p]) => match(p));          // auch ausgeblendete Ebenen; der Sprung blendet ein
     $("#mapside").innerHTML = `<h3>${hits.length} Treffer</h3>` + (hits.length > 60 ? `<p class="hint">Zu viele für eine Liste; genauer suchen.</p>` :
       `<div class="mghits">${hits.map(([p, i]) => `<button data-jump="${i}">${dot(cats[p.c])}<span>${esc(p.t === "sp" ? "Spawnpunkt: " + p.name : p.name || cats[p.c].titel)}</span></button>`).join("")}</div>`);
     $$("[data-jump]").forEach((b) => b.addEventListener("click", () => jump(+b.dataset.jump)));
@@ -2132,8 +2155,10 @@ async function mgView(slug, want) {
   const toggle = (i) => {
     const p = pts[i], k = gkey(p);
     if (!k) return;
-    const on = !got.has(k);
+    const on = !isGot(p);
     if (on) got.add(k); else got.delete(k);
+    // früher getrennt als eigenes Symbol markiert: das fällt mit weg
+    if (!on && p.t === "mg" && p.o && got.has(okeyOf(p))) { const ok = okeyOf(p); got.delete(ok); const [ka, ob] = ok.split("|"); api("/api/gefunden", {spiel: d.spiel, karte: ka, objekt: ob, an: false}).catch(() => {}); }
     const c = $(`[data-cnt="${CSS.escape(String(p.c))}"]`);
     if (c) c.innerHTML = cnt(cats[p.c]);
     pins();
@@ -2826,7 +2851,9 @@ async function calcBox() {
   const ownKey = "calcFoes:" + S.game, own = store.get(ownKey, []);
   if (o.gegen === "smogon" && !(S.usageIds || []).length) o.gegen = "team";
   if (o.gegen === "foes" && !S.foes.length) o.gegen = "team";
-  const foes = o.gegen === "eigene" ? own : o.gegen === "team" ? t.ids : o.gegen === "foes" ? S.foes : S.usageIds.slice(0, 30);
+  const favIds = S.favs.map((f) => f.id);
+  if (o.gegen === "favs" && !favIds.length) o.gegen = "team";
+  const foes = o.gegen === "eigene" ? own : o.gegen === "team" ? t.ids : o.gegen === "favs" ? favIds : o.gegen === "foes" ? S.foes : S.usageIds.slice(0, 30);
   if (!foes.length) {
     el().innerHTML = `${CH()}<p class="hint">Noch keine eigenen Gegner gewählt.</p><div class="bar"><div class="ac"><input id="cfoeq" type="search" placeholder="Gegner hinzufügen" style="width:220px"></div>
       <button data-act="calcgegen" data-v="${champ && (S.usageIds || []).length ? "smogon" : "team"}">zurück zu ${champ && (S.usageIds || []).length ? "häufigen Gegnern" : "meinem Team"}</button></div>`;
@@ -2850,9 +2877,9 @@ async function calcBox() {
     <div class="bar"><span class="seg"><button class="${o.ansicht === "alle" ? "" : "on"}" data-cv="eins" data-tip="Eine Attacke eines Mitglieds gegen alle Gegner, mit Balken und Treffern bis K.O.">eine Attacke</button><button class="${o.ansicht === "alle" ? "on" : ""}" data-cv="alle" data-tip="Jedes Mitglied gegen jeden Gegner mit seiner stärksten gewählten Attacke">Übersicht</button></span>
       ${o.ansicht === "alle" ? "" : `<label>Angreifer <select id="cslot">${t.ids.map((id, i) => dmg(i).length ? `<option value="${i}"${i === o.slot ? " selected" : ""}>${esc(ROWS[id]?.name || id)} (Platz ${i + 1})</option>` : "").join("")}</select></label>
       <label>Attacke <select id="cmove">${dmg(o.slot).map((x) => `<option value="${x}"${x === o.move ? " selected" : ""}>${esc(A[x].name)} (${A[x].staerke})</option>`).join("")}</select></label>`}
-      <label data-tip="${champ ? "Häufige Gegner: die 30 meistgenutzten Pokémon der Nutzungsstatistik von Smogon (unten unter „Häufige Gegner“)." : "Gegner von oben: die aus „Gegen Gegner“."} Mein Team: deine eigenen sechs. Eigene Auswahl: wen du selbst hinzufügst">gegen <select id="cgegen">${champ && (S.usageIds || []).length ? `<option value="smogon"${o.gegen === "smogon" ? " selected" : ""}>häufige Gegner (Top 30)</option>` : ""}
+      <label data-tip="${champ ? "Häufige Gegner: die 30 meistgenutzten Pokémon der Nutzungsstatistik von Smogon (unten unter „Häufige Gegner“)." : "Gegner von oben: die aus „Gegen Gegner“."} Mein Team: deine eigenen sechs. Favoriten: deine Favoriten in diesem Spiel. Eigene Auswahl: wen du selbst hinzufügst">gegen <select id="cgegen">${champ && (S.usageIds || []).length ? `<option value="smogon"${o.gegen === "smogon" ? " selected" : ""}>häufige Gegner (Top 30)</option>` : ""}
         ${!champ && S.foes.length ? `<option value="foes"${o.gegen === "foes" ? " selected" : ""}>Gegner von oben (${S.foes.length})</option>` : ""}
-        <option value="team"${o.gegen === "team" ? " selected" : ""}>mein Team</option><option value="eigene"${o.gegen === "eigene" ? " selected" : ""}>eigene Auswahl (${own.length})</option></select></label>
+        <option value="team"${o.gegen === "team" ? " selected" : ""}>mein Team</option>${favIds.length ? `<option value="favs"${o.gegen === "favs" ? " selected" : ""}>Favoriten (${favIds.length})</option>` : ""}<option value="eigene"${o.gegen === "eigene" ? " selected" : ""}>eigene Auswahl (${own.length})</option></select></label>
       <label data-tip="Wie viel die Verteidiger in KP und die passende Verteidigung stecken (252 EVs)">Gegner <select id="cvert">${[["0", "nicht investiert"], ["kp", "volle KP"], ["kp_vert", "volle KP und Verteidigung"]].map(([k, n]) => `<option value="${k}"${o.vert === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       ${champ ? "" : `<label data-tip="Level deines Pokémon; leer: wie auf seiner Detailseite eingetragen, sonst 50">Level <input type="number" id="clv" min="1" max="100" value="${esc(o.level)}" placeholder="${r.level}" style="width:64px"></label>
         <label data-tip="Level der Gegner; leer: wie dein Pokémon">Level Gegner <input type="number" id="clvv" min="1" max="100" value="${esc(o.lvv)}" placeholder="${r.level_vert}" style="width:64px"></label>`}

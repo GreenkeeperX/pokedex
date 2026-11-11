@@ -87,11 +87,15 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Spiele: `GEN()`, `noAbil()` (Gen 1–2, Let's Go, Legenden: Arceus), `TERA()` (Karmesin/Purpur mit Erweiterungen, Tera-Typ je
   Platz über `#terasel`).
 - `favStar(id)`: Stern zum Favorisieren an Team-Karten und Vorschlägen, `redrawMarks` hält ihn aktuell.
-- Map Genie: eigene Ebenen „Aus den Spieldaten“ (Legenden: Arceus, `/api/mapgenie/eigene`), „Gehe zu“, Trefferliste der
-  Suche, `#karte/mg/<Karte>/<Ort>` springt zu einem Ort. Gefunden gilt auf der großen Karte und den Einzelkarten gleich.
+- Map Genie: eine Datenbank (`d.punkte` aus `mapgenie.merge`): `t` "mg" (Ort von Map Genie, vielleicht mit `o` und `drin`
+  aus den Spieldaten), "ob" (nur Spieldaten), "sp" (Spawnpunkt); Kategorien mit `art` zeigen das Symbol der Einzelkarten.
+  Gefunden: Schlüssel von Map Genie, alte Marken am eigenen Symbol gelten mit (`isGot`). Ebenen `mgEbenen:<Spiel>`, anfangs
+  aus: Materialien und Pokémon. Suche auch in ausgeblendeten Ebenen. „Gehe zu“, `#karte/mg/<Karte>/<Ort>` springt zu einem Ort.
+- Detailseite: `wissenHtml` (gepflegtes Spielwissen in der Fangchance), `partnerHtml` (Partner-Techniken, Geheime Techniken).
+- Schadensrechner: Gegner `favs` (Favoriten des Spiels).
 - Map Genie (`mgView`, `#karte/mg/<Karte>`, `/api/mapgenie`, Kacheln `/mgkachel/<Spiel>/<Karte>/<z>/<x>/<y>`): eigene
   Kachelanzeige (Web-Mercator, ganze Zoomstufen), Punkte je Kategorie in der Farbe der Gruppe, Ebenen rechts zum
-  Auf- und Zuklappen (`mgHide:<Spiel>`, `mgOpen`), Suche, Rechtsklick = gefunden (`/api/gefunden`, `mapGotHide`).
+  Auf- und Zuklappen (`mgEbenen:<Spiel>`, `mgOpen`), Suche, Rechtsklick = gefunden (`/api/gefunden`, `mapGotHide`).
   Auf der Karte von Legenden: Arceus gilt dasselbe für die Symbole (Schlüssel Art:x:z).
 - Gebiete (`areasView`, `#karte/gebiete/<Ort>`, `/api/gebiete`): links die Orte mit „noch nicht gefangen / alle“,
   rechts das Bildergitter nach Methode; Spiele ohne Karte landen unter „Karte“ direkt hier. Ort je Spiel gemerkt

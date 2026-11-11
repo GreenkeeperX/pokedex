@@ -238,3 +238,188 @@ def align(game, mg):
     ax, bx = line([p[0] for p in pairs], [p[2] for p in pairs])
     az, bz = line([p[1] for p in pairs], [p[3] for p in pairs])
     return ax, bx, az, bz
+
+
+# ------------------------------------------------------------------ eine Datenbank: Map Genie und Spieldaten in einem
+# Gruppen und Kategorien auf Deutsch; Items und Pokémon übersetzt die Datenbank (englischer Name → deutscher)
+GRUPPEN_DE = {"Locations": "Orte", "Services": "Dienste", "Collectibles": "Sammelobjekte", "Quests": "Aufträge",
+              "Other": "Sonstiges", "Special Pokémon": "Besondere Pokémon", "Pokemon": "Pokémon", "Pokémon": "Pokémon",
+              "Materials": "Materialien und Fundstellen", "Items": "Items", "Collectables": "Sammelobjekte"}
+KAT_DE = {"Area": "Gebiet", "Arena": "Arena", "Camp": "Lager", "Cave": "Höhle", "Fast Travel Point": "Schnellreise",
+          "Game": "Spiel", "Point of Interest": "Sehenswürdigkeit", "Transition": "Übergang", "Clothier": "Schneiderei",
+          "Craftworks": "Werkstatt", "General Store": "Laden", "Hairdresser": "Friseur", "Photo Studio": "Fotostudio",
+          "Quarters": "Unterkunft", "Trading Post": "Tauschbörse", "Training Grounds": "Trainingsplatz", "Vendor": "Händler",
+          "Old Verse": "Gedichte", "Wisp": "Geisterlichter", "Request": "Nebenaufträge", "Story Mission": "Hauptmissionen",
+          "Character": "Personen", "Miscellaneous": "Verschiedenes", "Alpha Pokemon": "Alpha-Pokémon",
+          "Event Pokemon": "Ereignis-Pokémon", "Noble Pokemon": "Königs-Pokémon", "Pokemon Area": "Pokémon-Gebiete",
+          "Rare Pokemon": "Seltene Pokémon", "Unown Pokemon": "Icognito", "Plant": "Pflanzen", "Apricorn": "Aprikoko-Bäume",
+          "Treasure": "Schätze", "Item": "Items", "Items": "Items", "TM": "TMs", "Shop": "Laden", "Pokemon Center": "Pokémon-Center"}
+# Eigene Arten, die bei Map Genie eine Kategorie gleicher Bedeutung haben (Titel klein geschrieben)
+GLEICH = {"irrlicht": ("wisp",), "icognito": ("unown pokemon",), "vers": ("old verse",), "alpha": ("alpha pokemon",),
+          "aprikoko": ("apricorn",), "reise": ("fast travel point",), "lager": ("camp",)}
+NACH_ITEM = ("beere", "erz", "boden")        # Kategorie = Item der Stelle (Sinelbeere ↔ Oran Berry)
+DRIN = {"kristall": ("erz",), "baumpkmn": ("aprikoko", "beere", "baum")}   # Pokémon, die in etwas stecken
+# Gruppe (Titel bei Map Genie) für eigene Ebenen ohne Gegenstück
+GRUPPE = {"sp": "Pokemon", "massen": "Special Pokémon", "verzerrung": "Special Pokémon", "alpha": "Special Pokémon",
+          "kristall": "Special Pokémon", "baumpkmn": "Special Pokémon", "irrlicht": "Collectibles", "icognito": "Special Pokémon",
+          "vers": "Collectibles", "reise": "Locations", "lager": "Locations"}
+GRUPPE_NEU = {"Pokemon": "#d95f5f", "Special Pokémon": "#c27ad6", "Collectibles": "#e0b030", "Locations": "#5a9bd5",
+              "Materials": "#5fae5f"}
+# Namen einzelner Orte: Muster (englisch) → deutsch; {de} steht für die Übersetzung des ersten Teils
+NAMEN_DE = ((r"^(.+ Berry) Tree$", "Beerenbaum ({de})"), (r"^Apricorn Tree$", "Aprikoko-Baum"), (r"^Wisp\b", "Geisterlicht"),
+            (r"^Old Verse\b", "Altes Gedicht"), (r"^Unown\b", "Icognito"), (r"^King's Leaf$", "Königsblatt"), (r"^Exit$", "Ausgang"),
+            (r"^Alpha (.+)$", "Alpha-{de}"))
+
+
+def name_de(t, de):
+    """Name eines Orts von Map Genie auf Deutsch, soweit bekannt (sonst wie dort)."""
+    if t in KAT_DE or t in de:
+        return KAT_DE.get(t) or de[t]
+    for pat, rep in NAMEN_DE:
+        m = re.match(pat, t)
+        if m:
+            first = m.group(1) if m.groups() else ""
+            return t[:m.start()] + rep.format(de=de.get(first, first)) + t[m.end():]
+    return t
+
+
+MERGE_TOL = 30.0            # so nah (Weltpixel bei Zoomstufe 14, wenige Meter) gelten zwei Punkte als dasselbe
+MERGE_WIDE = 3              # Einzelstücke (Geisterlichter, Icognito, Gedichte, Alphas …) dürfen dreimal so weit weg sein
+
+
+def merge(m, own=None, de=None):
+    """Eine Karte als eine Datenbank: Orte von Map Genie und eigene Daten (Spawnpunkte, Symbole aus den Spieldaten),
+    nach Bedeutung gruppiert. Was an derselben Stelle dasselbe ist, wird ein Punkt mit allen Angaben (Text von Map Genie,
+    Items, Pokémon darin); der Rest kommt in die passende Ebene. own: Ergebnis von abfragen.mg_overlay oder None,
+    de: {englischer Name: deutscher} für Items und Pokémon.
+    {gruppen: [{id, titel, farbe, kategorien: [{id, titel, en, n, art?}]}], punkte: [{c, la, lo, name, en?, id?, text?,
+    o?, sp?, drin?, q}], gebiete_eigen: {Karte: Gebiet}}"""
+    de = de or {}
+    tr = lambda t: KAT_DE.get(t) or de.get(t) or t
+    groups, by_en, cat = [], {}, {}
+    for g in m.get("gruppen") or []:
+        G = {"id": g["id"], "titel": GRUPPEN_DE.get(g["titel"], g["titel"]), "farbe": g["farbe"], "kategorien": []}
+        for c in g["kategorien"]:
+            C = {"id": c["id"], "titel": tr(c["titel"]), "en": c["titel"], "n": 0}
+            G["kategorien"].append(C)
+            cat[c["id"]] = C
+        groups.append(G)
+        by_en[g["titel"]] = G
+    pts = []
+    for o in m.get("orte") or []:
+        if o[1] in cat:
+            p = {"id": o[0], "c": o[1], "la": o[2], "lo": o[3], "name": name_de(o[4], de), "text": o[5], "q": ["Map Genie"]}
+            if p["name"] != o[4]:
+                p["en"] = o[4]
+            pts.append(p)
+    gebiete = {}
+    if own:
+        gebiete = dict(own.get("gebiete") or {})
+        arten = own.get("arten") or {}
+
+        def group_of(key):
+            t = GRUPPE.get(key, "Materials")
+            if t not in by_en:
+                G = {"id": "g:" + t, "titel": GRUPPEN_DE.get(t, t), "farbe": GRUPPE_NEU.get(t, "#888888"), "kategorien": []}
+                groups.append(G)
+                by_en[t] = G
+            return by_en[t]
+
+        def own_cat(art, titel=None):
+            k = "o:" + art
+            if k not in cat:
+                C = {"id": k, "titel": titel or (arten.get(art) or [art, art])[1], "en": "", "n": 0, "art": art}
+                group_of(art)["kategorien"].append(C)
+                cat[k] = C
+            return k
+        by_title = {C["titel"]: C["id"] for C in cat.values()}
+        by_low = {}
+        for C in cat.values():
+            by_low.setdefault(C["en"].lower(), C["id"])
+
+        def compatible(o, p):
+            C = cat[p["c"]]
+            if o["art"] in GLEICH:
+                return C["en"].lower() in GLEICH[o["art"]]
+            if o["art"] in NACH_ITEM:
+                return C["titel"] in {i[0] for i in o["items"]}
+            return False
+
+        grid = {}
+        for j, p in enumerate(pts):
+            X, Y = project(p["la"], p["lo"])
+            p["_xy"] = (X, Y)
+            grid.setdefault((int(X // MERGE_TOL), int(Y // MERGE_TOL)), []).append(j)
+
+        def near(x, y, r=1):
+            gx, gy = int(x // MERGE_TOL), int(y // MERGE_TOL)
+            for i in range(-r, r + 1):
+                for k in range(-r, r + 1):
+                    yield from grid.get((gx + i, gy + k), ())
+        objs = [o for o in own.get("objekte") or [] if o["art"] not in DRIN]
+        pairs = []
+        for i, o in enumerate(objs):
+            x, y = project(o["la"], o["lo"])
+            o["_xy"] = (x, y)
+            wide = MERGE_WIDE if o["art"] in GLEICH else 1
+            for j in near(x, y, wide):
+                d = math.hypot(pts[j]["_xy"][0] - x, pts[j]["_xy"][1] - y)
+                if d <= MERGE_TOL * wide and compatible(o, pts[j]):
+                    pairs.append((d, i, j))
+        pairs.sort()
+        used_o, used_p = set(), set()
+        slim = lambda o: {k: o[k] for k in ("art", "nr", "menge", "items", "k", "x", "z") if k in o}
+        for d, i, j in pairs:
+            if i in used_o or j in used_p:
+                continue
+            used_o.add(i)
+            used_p.add(j)
+            pts[j]["o"] = slim(objs[i])
+            pts[j]["q"].append("Spieldaten")
+            if objs[i]["art"] in GLEICH:
+                cat[pts[j]["c"]].setdefault("art", objs[i]["art"])      # Symbol wie auf den Einzelkarten
+        for i, o in enumerate(objs):
+            if i in used_o:
+                continue
+            c = next((by_low[t] for t in GLEICH.get(o["art"], ()) if t in by_low), None)
+            if not c and o["art"] in NACH_ITEM and o["items"]:
+                c = by_title.get(o["items"][0][0])
+            if not c:
+                c = own_cat(o["art"])
+            name = (arten.get(o["art"]) or [o["art"]])[0] + (f" {o['nr']}" if o.get("nr") else "")
+            p = {"c": c, "la": o["la"], "lo": o["lo"], "name": name, "o": slim(o), "q": ["Spieldaten"], "_xy": o["_xy"]}
+            pts.append(p)
+            grid.setdefault((int(o["_xy"][0] // MERGE_TOL), int(o["_xy"][1] // MERGE_TOL)), []).append(len(pts) - 1)
+        # Pokémon in Erzbrocken und Bäumen: an die Stelle, in der sie stecken
+        for o in own.get("objekte") or []:
+            if o["art"] not in DRIN:
+                continue
+            x, y = project(o["la"], o["lo"])
+            best = None
+            for j in near(x, y):
+                h = pts[j].get("o")
+                if h and h["art"] in DRIN[o["art"]]:
+                    d = math.hypot(pts[j]["_xy"][0] - x, pts[j]["_xy"][1] - y)
+                    if d <= MERGE_TOL and (not best or d < best[0]):
+                        best = (d, j)
+            if best:
+                p = pts[best[1]]
+                p.setdefault("drin", []).append({"art": o["art"], "items": o["items"]})
+            else:
+                pts.append({"c": own_cat(o["art"]), "la": o["la"], "lo": o["lo"], "name": (arten.get(o["art"]) or [o["art"]])[0],
+                            "o": slim(o), "q": ["Spieldaten"]})
+        if own.get("punkte"):
+            k = "sp"
+            G = group_of("sp")
+            C = {"id": k, "titel": "Spawnpunkte", "en": "", "n": 0, "art": "sp"}
+            G["kategorien"].insert(0, C)
+            cat[k] = C
+            for s in own["punkte"]:
+                pts.append({"c": k, "la": s["la"], "lo": s["lo"], "name": ", ".join(x["name"] for x in s["mons"]),
+                            "sp": {"alpha": s["alpha"], "mons": s["mons"], "k": s["k"]}, "q": ["Spieldaten"]})
+    for p in pts:
+        p.pop("_xy", None)
+        cat[p["c"]]["n"] += 1
+    for G in groups:
+        G["kategorien"] = [C for C in G["kategorien"] if C["n"]]
+    return {"gruppen": [G for G in groups if G["kategorien"]], "punkte": pts, "gebiete_eigen": gebiete}

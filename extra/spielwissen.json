@@ -1,0 +1,62 @@
+{
+  "lets-go-pikachu-lets-go-eevee": {
+    "fangen": {
+      "text": "Let’s Go fängt ohne Kampf: KP und Status zählen nicht. Die Chance steigt mit Beere, gutem Wurf, besserem Ball und kleinerem Wurfkreis; vor dem Vertania-Wald gibt es einen Anfangsbonus. Die Formel ist nicht ganz geklärt (Quellen widersprechen sich), die Faktoren sind gesichert.",
+      "faktoren": [
+        ["Himmihbeere", "× 1,5"],
+        ["Silberne Himmihbeere", "× 2,25"],
+        ["Goldene Himmihbeere", "× 4"],
+        ["Nett-Wurf", "× 1,5"],
+        ["Super-Wurf", "× 2"],
+        ["Fabelhaft-Wurf", "× 2,5"],
+        ["Superball", "× 1,5"],
+        ["Hyperball", "× 2"],
+        ["vor dem Vertania-Wald", "× 1,5"]
+      ],
+      "ringe": [
+        ["grün", "leicht"],
+        ["gelb", "mittel"],
+        ["orange", "schwer"],
+        ["rot", "sehr schwer"]
+      ],
+      "ring_text": "Die Farbe des Wurfkreises zeigt die Chance mit dem gerade gewählten Ball und der Beere; ein Wurf in den kleinen Kreis zählt als Nett-, Super- oder Fabelhaft-Wurf."
+    },
+    "kombo": {
+      "text": "Fang-Kombo: dieselbe Art mehrmals nacheinander fangen. Sie reißt ab, wenn ein Pokémon flieht, du das Spiel beendest oder eine andere Art fängst (Weglaufen vor anderen zählt nicht).",
+      "dvs": [["0–5", "0"], ["6–10", "1"], ["11–20", "2"], ["21–30", "3"], ["31 und mehr", "4"]],
+      "dvs_text": "Werte, die garantiert perfekt sind (31)",
+      "schillernd_kopf": ["Kombo", "ohne", "mit Lockparfüm", "mit Schillerpin", "Schillerpin und Lockparfüm"],
+      "schillernd": [
+        ["0–10", "1:4096", "1:2048", "1:1365", "1:1024"],
+        ["11–20", "1:1024", "1:819", "1:683", "1:585"],
+        ["21–30", "1:512", "1:455", "1:410", "1:372"],
+        ["31 und mehr", "1:341", "1:315", "1:293", "1:273"]
+      ],
+      "selten": [["0–1", "0,5 %"], ["2–5", "0,75 %"], ["6–10", "1 %"], ["11 und mehr", "50 %"]],
+      "selten_text": "Chance auf eine seltene Erscheinung (Pokémon mit Aura, groß oder klein)",
+      "ep_text": "Erfahrung: × 1,1 bis Kombo 10, ab 11 × 1,5, dann je 10 weitere + 0,5"
+    },
+    "partner": {
+      "10158": ["zippy-zap", "splishy-splash", "floaty-fall", "pika-papow"],
+      "10159": ["bouncy-bubble", "buzzy-buzz", "sizzly-slide", "glitzy-glow", "baddy-bad", "sappy-seed", "freezy-frost", "sparkly-swirl", "veevee-volley"],
+      "text": "Partner-Techniken lernt nur das Partner-Pokémon vom Spielbeginn, beim Attacken-Lehrer. Pika-Flash und Evo-Crash treffen immer; ihre Stärke wächst mit der Freundschaft (bis 102)."
+    },
+    "techniken": {
+      "text": "Geheime Techniken ersetzen die VMs; nur das Partner-Pokémon führt sie aus, sie belegen keinen Attackenplatz.",
+      "liste": [
+        ["Spaltschnitt", "kleine Bäume und Sträucher entfernen", "vom Kapitän der M.S. Anne (Orania City)"],
+        ["Lichtflut", "dunkle Höhlen erhellen", "von Eichs Assistent auf Route 2 (über den Digda-Tunnel)"],
+        ["Himmelsritt", "zu besuchten Orten fliegen", "in Prismania City, nachdem Team Rocket im Spielhallen-Versteck besiegt ist"],
+        ["Wuchtstoß", "Felsbrocken schieben", "von einem Mann in Fuchsania City, nachdem du das Goldgebiss abgegeben hast"],
+        ["Wellenspurt", "über Wasser reisen", "von einem Mann am Lapras-Gehege in Fuchsania City"]
+      ]
+    },
+    "quellen": [
+      ["Bulbapedia: Catch rate", "https://bulbapedia.bulbagarden.net/wiki/Catch_rate"],
+      ["Serebii: Catch Combo", "https://www.serebii.net/letsgopikachueevee/catchcombo.shtml"],
+      ["Serebii: Capture", "https://www.serebii.net/letsgopikachueevee/capture.shtml"],
+      ["Smogon: LGPE Shiny Hunting", "https://www.smogon.com/ingame/guides/lgpe_shiny_hunt"],
+      ["BisaFans: Geheime Techniken", "https://www.bisafans.de/spiele/editionen/pikachu-evoli/geheime-techniken.php"]
+    ]
+  }
+}

@@ -875,6 +875,44 @@ def mg_overlay(m, stamp=None):
     return out
 
 
+_MERGED = {}
+
+
+def mg_names():
+    """Englische Namen → deutsche, für die Kategorien von Map Genie: Items (Spieldaten) und Pokémon-Arten."""
+    key = _stamp()
+    if _MERGED.get("names", (None,))[0] == key:
+        return _MERGED["names"][1]
+    out = {}
+    con = db.game()
+    try:
+        for q in ("SELECT en, name FROM item WHERE en IS NOT NULL AND name IS NOT NULL",
+                  "SELECT a.name, b.name FROM pokemon_species_names a JOIN pokemon_species_names b ON b.pokemon_species_id = "
+                  "a.pokemon_species_id AND b.local_language_id = 6 WHERE a.local_language_id = 9"):
+            try:
+                out.update({e: g for e, g in con.execute(q) if e and g})
+            except Exception:
+                pass
+    finally:
+        con.close()
+    _MERGED["names"] = (key, out)
+    return out
+
+
+def mg_map(m, spiel, stamp=None):
+    """Eine Karte von Map Genie als eine Datenbank mit den eigenen Daten (mapgenie.merge): deutsche Ebenen, gleiche
+    Stellen verschmolzen. Für Legenden: Arceus kommen Spawnpunkte und Symbole aus den Spieldaten dazu."""
+    key = (spiel, m.get("id"), stamp, _stamp())
+    if _MERGED.get("map", (None,))[0] == key:
+        return _MERGED["map"][1]
+    own = mg_overlay(m, stamp) if spiel == "legends-arceus" else None
+    r = mapgenie.merge(m, own, mg_names())
+    out = {k: v for k, v in m.items() if k not in ("orte", "gruppen")}
+    out.update(r, spiel=spiel, am=stamp, bounds=mapgenie.bounds_of(m))
+    _MERGED["map"] = (key, out)
+    return out
+
+
 def _enc_pkhex(con, g, pid):
     """Fundorte aus den Spieldaten (PKHeX): je Gebiet und Art die Stellen, Level und Alpha-Level. None ohne Daten."""
     try:
@@ -1166,9 +1204,41 @@ def detail(fid, p):
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
                     wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f), optik=_optik(con, f),
                     raids=_raids(con, D, g, form=fid) if g and g["kennung"] in TERA_GAMES else [],
-                    crypto=_crypto(con, D, g, fid) if g and g["kennung"] in ("colosseum", "xd") else [])
+                    crypto=_crypto(con, D, g, fid) if g and g["kennung"] in ("colosseum", "xd") else [],
+                    spielwissen=knowledge(con, g["kennung"] if g else "", fid))
     finally:
         con.close()
+
+
+WISSEN = os.path.join(os.path.dirname(__file__), "..", "extra", "spielwissen.json")
+_WISSEN = {}
+
+
+def knowledge(con, spiel, fid=None):
+    """Gepflegtes Spielwissen (extra/spielwissen.json) für die Detailseite: Fangen und Fang-Kombo; beim Partner-Pokémon
+    dazu seine Partner-Techniken (aus der Datenbank: Name, Typ, Stärke) und die Geheimen Techniken. None ohne Eintrag."""
+    try:
+        mt = os.path.getmtime(WISSEN)
+        if _WISSEN.get("mt") != mt:
+            with open(WISSEN, encoding="utf-8") as fh:
+                _WISSEN.update(mt=mt, d=json.load(fh))
+    except (OSError, ValueError):
+        return None
+    w = (_WISSEN.get("d") or {}).get(spiel)
+    if not w:
+        return None
+    out = {k: w[k] for k in ("fangen", "kombo", "quellen") if k in w}
+    ids = ((w.get("partner") or {}).get(str(fid)) or []) if fid else []
+    if ids:
+        rows = []
+        for k in ids:
+            r = con.execute("SELECT id, name, typ, staerke, genauigkeit, klasse, kurz FROM attacke WHERE kennung = ?", (k,)).fetchone()
+            if r:
+                rows.append(dict(r))
+        out["partner"] = {"text": w["partner"].get("text", ""), "attacken": rows}
+        if w.get("techniken"):
+            out["techniken"] = w["techniken"]
+    return out
 
 
 def _optik(con, f):

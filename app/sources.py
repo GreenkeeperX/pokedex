@@ -10,11 +10,23 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.23.0"
+VERSION = "0.24.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.24.0", "11.11.2026", [
+        "Karten ganz offline: Der Server holt im Hintergrund alle Kacheln aller Zoomstufen jeder Karte und hebt sie auf; "
+        "Orte, Punkte und Texte liegen ohnehin seit dem Abgleich bei ihm. Danach braucht die Karte kein Internet mehr",
+        "Eine Datenbank statt zwei Quellen: Map Genie und die Spieldaten sind auf der großen Karte zusammengeführt. Was an derselben "
+        "Stelle dasselbe ist (Geisterlicht, Beerenbaum, Erzbrocken, Alpha …), ist ein Punkt mit allen Angaben: Text von Map Genie, "
+        "Items aus den Spieldaten, Pokémon im Baum oder Kristallbrocken. Ebenen nach Bedeutung und auf Deutsch, die Herkunft steht "
+        "nur noch klein in den Details",
+        "Schadensrechner: Favoriten als Gegner (Champions und Reiter Team)",
+        "Let’s Go: Fangen ohne Kampf (Beeren, Würfe, Bälle, Wurfkreis), Fang-Kombo (schillernd, selten, perfekte Werte) auf der "
+        "Detailseite; Partner-Pikachu und Partner-Evoli zeigen ihre Partner-Techniken und die Geheimen Techniken",
+        "Karte: die Anzeige „Kacheln laden“ zählt nicht mehr ins Minus",
+    ]),
     ("0.23.0", "11.11.2026", [
         "Karten: Der Server legt einen Vorrat an Kartenkacheln an (im Hintergrund, mit Pause, weite Stufen zuerst); beim Zoomen "
         "bleibt das alte Bild vergrößert stehen, bis die neuen Kacheln da sind, mit Anzeige „Kacheln laden … noch n“; "
