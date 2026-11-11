@@ -6,6 +6,7 @@ Abgleich eine neue pokeapi.db gebaut hat. Lernlisten, Fundorte und Entwicklungen
 import json
 import os
 import re
+import sqlite3
 import threading
 
 from . import altissimo, attacken, db, importer, mapgenie, showdown, store, team, typen
@@ -1137,7 +1138,7 @@ def detail(fid, p):
                                   "ORDER BY version_group_id DESC LIMIT 1", (aid,)).fetchone()
                 abil.append({"name": n, "versteckt": bool(hidden), "text": " ".join(str(txt[0]).split()) if txt else "",
                              "wirkt": k in typen.ABILITY_DEFENSE})
-        siblings = [{"id": x["id"], "name": x["name"]} for x in D.forms.values()
+        siblings = [{"id": x["id"], "name": x["name"], "kampf": bool(x["kampfform"])} for x in D.forms.values()
                     if x["art"] == f["art"] and x["id"] != f["id"] and (x["relevant"] or x["standard"])]
         moves = ranked_moves(con, D, f, g, gen, _int(p.get("level")))
         nr = D.in_game.get(g["id"], {}).get(fid) if g else None
@@ -1146,7 +1147,9 @@ def detail(fid, p):
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
-                    wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f), optik=_optik(con, f))
+                    wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f), optik=_optik(con, f),
+                    raids=_raids(con, D, g, form=fid) if g and g["kennung"] in TERA_GAMES else [],
+                    crypto=_crypto(con, D, g, fid) if g and g["kennung"] in ("colosseum", "xd") else [])
     finally:
         con.close()
 
@@ -1386,7 +1389,27 @@ def team_view(body):
     ev["fremde_attacken"] = foreign_moves(D, ms, details, g)
     ev["matrix"] = {str(m["id"]): {str(a): f for a, f in ctx.dvec(m).items()} for m in ms}
     ev["mitglieder"] = [row(D, D.forms[m["id"]], g, gen) for m in ms]
+    ev["tera"] = tera_effect(D, ms, details, ch) if g and g["kennung"] in TERA_GAMES else []
     return ev
+
+
+TERA_GAMES = {"scarlet-violet", "the-teal-mask", "the-indigo-disk"}
+
+
+def tera_effect(D, ms, details, ch):
+    """Je Platz mit Tera-Typ: welche Schwächen die Terakristallisierung nimmt und welche sie bringt (nur Verteidigung)."""
+    out = []
+    for m in ms:
+        t = _int((details[m["slot"]] if m["slot"] < len(details) else {}).get("tera"))
+        if t not in D.types:
+            continue
+        before = typen.defense(m["typen"], ch, m.get("faehigkeit"))
+        after = typen.defense([t], ch, m.get("faehigkeit"))
+        out.append({"slot": m["slot"], "name": m["name"], "tera": t,
+                    "weg": [a for a, f in before.items() if f > 1 and after.get(a, 1) <= 1],
+                    "neu": [a for a, f in after.items() if f > 1 and before.get(a, 1) <= 1],
+                    "eigentyp": t in m["typen"]})
+    return out
 
 
 def _pool(D, body, g, gen):
@@ -1870,3 +1893,111 @@ def team_doubles(body):
     finally:
         con.close()
     return doppel.evaluate(ms, ch, D.type_key)
+
+
+# ------------------------------------------------------------------ Schadensrechner
+
+def damage_view(body):
+    """Schaden einer Attacke eines Team-Platzes (ids, details, slot, attacke) gegen Verteidiger (verteidiger: [Form-IDs]).
+    Optionen: krit, flaeche (None = nach dem Ziel der Attacke, nur im Doppel), vert ("0", "kp", "kp_vert": Investition
+    der Verteidiger), tera_vert (Tera-Typ der Verteidiger). Level aus dem Platz, in Champions immer 50."""
+    from . import doppel, schaden
+    D = data()
+    if not D:
+        return {}
+    g, gen, ch = game_of(D, body.get("spiel"))
+    ids = _ints(body.get("ids"))[:6]
+    per = slot_details(body.get("details"), ids)
+    slot = _int(body.get("slot")) or 0
+    if slot >= len(ids) or ids[slot] not in D.forms or _int(body.get("attacke")) not in D.moves:
+        return {"rows": []}
+    f, d = D.forms[ids[slot]], per[slot]
+    mv = move_view(D, D.moves[_int(body.get("attacke"))], g)
+    level = 50 if not g or g["kennung"] == "champions" else (_int(d.get("level")) or 50)
+    P = _paste_names(D) if _int(d.get("wesen")) else None
+    mod = P["nat_mod"].get(_int(d["wesen"])) if P else None
+    ai = 1 if mv["klasse"] == 2 else 3
+    nat = 1.1 if mod and mod[0] == ai else 0.9 if mod and mod[1] == ai else 1.0
+    evs, ivs = d.get("evs"), d.get("ivs")
+    a_ev = _int(evs[ai]) if isinstance(evs, list) and len(evs) == 6 else None
+    a_iv = _int(ivs[ai]) if isinstance(ivs, list) and len(ivs) == 6 and ivs[ai] is not None else 31
+    tera = _int(d.get("tera")) if _int(d.get("tera")) in D.types else None
+    a_types = form_types(D, f, gen)
+    if getattr(D, "move_target", None) is None:
+        con = db.game()
+        try:
+            D.move_target = dict(con.execute("SELECT id, target_id FROM moves"))
+        finally:
+            con.close()
+    doubles = bool(g) and g["kennung"] == "champions"
+    spread = body.get("flaeche")
+    spread = (doubles and D.move_target.get(mv["id"]) in (doppel.ALL_OTHERS, doppel.ALL_FOES)) if spread is None else bool(spread)
+    inv = {"0": (0, 0), "kp": (schaden.EV_MAX, 0), "kp_vert": (schaden.EV_MAX, schaden.EV_MAX)}.get(str(body.get("vert") or "0"), (0, 0))
+    d_tera = _int(body.get("tera_vert")) if _int(body.get("tera_vert")) in D.types else None
+    rows = []
+    for vid in _ints(body.get("verteidiger"))[:60]:
+        v = D.forms.get(vid)
+        if not v or mv["klasse"] not in (2, 3) or not mv["staerke"]:
+            continue
+        r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], f["werte"], a_types, v["werte"], form_types(D, v, gen), ch,
+                         a_tera=tera, d_tera=d_tera, a_ev=a_ev, a_iv=a_iv, a_nat=nat, d_ev=inv, spread=spread,
+                         crit=bool(body.get("krit")))
+        rows.append(dict(r, id=vid, name=v["name"]))
+    return {"angreifer": f["name"], "attacke": mv["name"], "typ": mv["typ"], "klasse": mv["klasse"], "staerke": mv["staerke"],
+            "level": level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "rows": rows}
+
+
+# ------------------------------------------------------------------ Tera-Raids (Karmesin/Purpur)
+
+def _raids(con, D, g, form=None, stars=None):
+    """Tera-Raids aus PKHeX (Tabelle raid): je Begegnung Gebiet, Sterne, Level, Tera-Typ (None = zufällig), Attacken
+    und die Typen, die den Tera-Typ sehr effektiv treffen (der Raid-Gegner verteidigt mit ihm)."""
+    sql, args = "SELECT gebiet, sterne, form, level, tera, attacken FROM raid WHERE 1", []
+    if form is not None:
+        sql, args = sql + " AND form = ?", args + [form]
+    if stars:
+        sql, args = sql + " AND sterne = ?", args + [stars]
+    try:
+        rows = con.execute(sql + " ORDER BY sterne DESC, level DESC, form", args).fetchall()
+    except sqlite3.OperationalError:          # Datenbank vor 0.22.0
+        return []
+    _, gen, ch = game_of(D, g["kennung"] if g else None)
+    out = []
+    for gebiet, sterne, fid, level, tera, moves in rows:
+        f = D.forms.get(fid)
+        if not f:
+            continue
+        ms = []
+        for mid in json.loads(moves or "[]"):
+            if mid in D.moves:
+                v = move_view(D, D.moves[mid], g)
+                ms.append({"id": mid, "name": v["name"], "typ": v["typ"], "klasse": v["klasse"]})
+        weak = [a for a, x in typen.defense([tera], ch).items() if x > 1] if tera in D.types else []
+        out.append({"gebiet": gebiet, "sterne": sterne, "id": fid, "name": f["name"], "typen": form_types(D, f, gen),
+                    "level": level, "tera": tera if tera in D.types else None, "attacken": ms, "schwach": weak})
+    return out
+
+
+def raid_list(p):
+    """Alle Tera-Raids (optional nur sterne=N) für die Liste."""
+    D = data()
+    if not D:
+        return {"rows": []}
+    g, _, _ = game_of(D, p.get("spiel") or "scarlet-violet")
+    con = db.game()
+    try:
+        return {"rows": _raids(con, D, g, stars=_int(p.get("sterne")) or None)}
+    finally:
+        con.close()
+
+
+def _crypto(con, D, g, fid):
+    """Crypto-Pokémon (Colosseum, XD) aus PKHeX: Level, Attacken, Läuterungswert (Heart Gauge), Trainer und Orte (englisch)."""
+    try:
+        rows = con.execute("SELECT nr, level, attacken, messer, trainer, orte FROM crypto WHERE spiel = ? AND form = ? ORDER BY nr",
+                           (g["kennung"], fid)).fetchall()
+    except sqlite3.OperationalError:          # Datenbank vor 0.22.0
+        return []
+    return [{"nr": nr, "level": lv, "messer": gauge, "trainer": who, "orte": json.loads(orte or "[]"),
+             "attacken": [D.moves[m]["name"] for m in json.loads(moves or "[]") if m in D.moves]}
+            for nr, lv, moves, gauge, who, orte in rows]

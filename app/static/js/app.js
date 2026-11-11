@@ -562,6 +562,7 @@ function versionsDialog() {
 }
 function nav(tab) {
   $("#nav").innerHTML = TABS.map(([k, n]) => k === "karte" && BATTLE() ? ["kampf", "Kampf"] : [k, n])
+    .flatMap((x) => x[0] === "karte" && TERA() ? [x, ["raids", "Raids"]] : [x])
     .map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
 }
 // Zweiter Klick auf den offenen Reiter: nach oben
@@ -581,6 +582,7 @@ async function route() {
   const rid = RID;
   if (tab === "karte" && BATTLE()) { location.replace("#kampf"); return; }
   if (tab === "kampf" && !BATTLE()) { location.replace("#karte"); return; }   // Spielwechsel: Kampf gibt es nur in Champions
+  if (tab === "raids" && !TERA()) { location.replace("#karte"); return; }    // Raids nur in Karmesin/Purpur
   try {
     if (!S.meta?.has_data && tab !== "einstellungen") return noData();
     await Promise.all([loadChart(), loadFavs(), loadCaught()]);
@@ -592,6 +594,7 @@ async function route() {
     else if (tab === "vergleich") await compareView(arg, arg2);
     else if (tab === "initiative") await speedView();
     else if (tab === "kampf") await battleView();
+    else if (tab === "raids") await raidsView(arg);
     else if (tab === "items") await itemsView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
     else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);
@@ -1128,7 +1131,9 @@ async function detailView(id, slot = null) {
       <a class="btn" href="#vergleich/${d.id}/-" data-tip="Neben ein anderes Pokémon stellen: Werte, Typwirkung, Fähigkeiten, Attacken">Vergleichen</a>
       <button data-act="cmpmark" data-id="${d.id}" data-markbtn="cmp" class="mark${cmpMarked(d.id) ? " on" : ""}" data-tip="Merkt das Pokémon für den Vergleich (bis zu 8). Im Vergleich stehen gemerkte und Favoriten zur schnellen Wahl bereit">${markLabel("cmp", cmpMarked(d.id))}</button>
       <a class="btn" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Im PokéWiki öffnen</a>
-      ${d.formen.length ? `<span class="hint">Formen:</span>` + d.formen.map((f) => `<a class="btn small" href="#pokemon/${f.id}">${esc(f.name)}</a>`).join("") : ""}</div>
+      ${d.formen.length ? `<span class="hint">Formen:</span>` + d.formen.map((f) => `<a class="btn small" href="#pokemon/${f.id}">${esc(f.name)}</a>`).join("") : ""}
+      ${inTeam && d.formen.length ? `<label data-tip="Tauscht die Form auf diesem Team-Platz (etwa Mega-Entwicklung für den Kampf); Level, Attacken und Tera bleiben">Platz ${DSLOT + 1} als
+        <select id="formsel"><option value="${d.id}" selected>${esc(d.name)}</option>${d.formen.map((f) => `<option value="${f.id}">${esc(f.name)}${f.kampf ? " (Kampfform)" : ""}</option>`).join("")}</select></label>` : ""}</div>
     ${!d.im_spiel && S.game ? `<div class="note warn">In ${esc(gameName())} nicht enthalten.</div>` : ""}
     ${inTeam && S.team.ids.filter((x) => x === id).length > 1 ? `<div class="note info">${esc(d.name)} ist mehrmals im Team; hier geht es um Platz ${DSLOT + 1}.</div>` : ""}
     <div class="dgrid">
@@ -1154,6 +1159,8 @@ async function detailView(id, slot = null) {
       <div class="stack">
         <div class="box"><h2>Entwicklung</h2>${evo ? `<div class="evo">${evo}</div>` : `<p class="hint">${esc(d.name)} entwickelt sich nicht.</p>`}</div>
         ${catchHtml(d)}
+        ${raidHtml(d)}
+        ${cryptoHtml(d)}
         ${heldHtml(d)}
         ${optikHtml(d)}
       </div>
@@ -1163,6 +1170,10 @@ async function detailView(id, slot = null) {
   header();
   renderMoves(d.attacken, level);
   wireExtras(d);
+  $('details[data-store="raidOpen"]')?.addEventListener("toggle", (e) => store.set("raidOpen", e.target.open));
+  $("#formsel")?.addEventListener("change", (e) => {
+    S.team.ids[DSLOT] = +e.target.value; saveTeam(); dock(); location.hash = `#pokemon/${e.target.value}/${DSLOT}`;
+  });
   $("#terasel")?.addEventListener("change", (e) => {
     S.team.details[DSLOT] = Object.assign({}, S.team.details[DSLOT], {tera: e.target.value ? +e.target.value : null}); saveTeam(); dock();
     const y = window.scrollY; detailView(id, DSLOT).then(() => window.scrollTo(0, y));
@@ -1198,6 +1209,55 @@ function optikHtml(d) {
     <div class="optik">${xs.map((x) => `<figure>${x.id == null ? img(d.id) : x.bild ? `<img class="spr" src="formen/${x.id}" alt="" loading="lazy">` : `<img class="spr none" src="icon.svg" alt="">`}
       <figcaption>${esc(x.name)}</figcaption></figure>`).join("")}</div>
     ${xs.some((x) => !x.bild) ? `<p class="hint">Fehlende Bilder lädt der nächste Abgleich.</p>` : ""}</details>`;
+}
+/* Tera-Raids in Karmesin/Purpur (PKHeX): Sterne, Level, Tera-Typ und Attacken des Raid-Gegners */
+const stars = (n) => `<span class="stars" data-tip="${n} ${n === 1 ? "Stern" : "Sterne"}">${"★".repeat(Math.min(n, 7))}</span>`;
+const raidMoves = (r) => r.attacken.map((m) => `<span class="rm">${tchip(m.typ)} ${esc(m.name)}</span>`).join(" ");
+function raidHtml(d) {
+  const xs = d.raids || [];
+  if (!xs.length) return "";
+  return `<details class="box"${store.get("raidOpen", false) ? " open" : ""} data-store="raidOpen"><summary><h2>Tera-Raids</h2><span class="hint">${xs.length} · ${[...new Set(xs.map((r) => r.sterne))].sort().map((n) => n + "★").join(" ")}</span></summary>
+    <div class="raidl">${xs.map((r) => `<div>${stars(r.sterne)} <b>Lv ${r.level}</b> <span class="hint">${esc(r.gebiet)}</span>
+      · ${r.tera ? `Tera ${tchip(r.tera)} <span class="hint">schwach gegen</span> ${tchips(r.schwach)}` : `<span class="hint">Tera zufällig</span>`}
+      <div class="hint">${r.attacken.map((m) => esc(m.name)).join(", ")}</div></div>`).join("")}</div>
+    <p class="hint">Aus den Spieldaten von PKHeX; Events (Distribution) und 7-Sterne-Raids sind frühere oder wiederkehrende Aktionen. <a href="#raids">Alle Raids</a></p></details>`;
+}
+/* Crypto-Pokémon in Colosseum und XD (PKHeX): wer es einsetzt, wo, mit welchen Attacken */
+function cryptoHtml(d) {
+  const xs = d.crypto || [];
+  if (!xs.length) return "";
+  return `<div class="box"><h2 data-tip="Crypto-Pokémon (englisch Shadow Pokémon) setzen Gegner ein; du fängst sie im Kampf (Snag Machine) und läuterst sie danach">Crypto-Pokémon</h2>
+    <div class="raidl">${xs.map((x) => `<div><b>Lv ${x.level}</b> <span class="hint">Nr. ${x.nr} · <span data-tip="Heart Gauge: so viel Läuterung braucht es, bis es wieder normal ist">Läuterung ${x.messer.toLocaleString("de-DE")}</span></span>
+      <div>${esc(x.trainer)}${x.orte.length ? ` <span class="hint">@ ${esc(x.orte.join(", "))}</span>` : ""}</div>
+      <div class="hint">${esc(x.attacken.join(", "))}</div></div>`).join("")}</div>
+    <p class="hint">Aus den Spieldaten von PKHeX; Trainer und Orte englisch.</p></div>`;
+}
+/* Liste aller Tera-Raids mit Konter aus dem eigenen Team (wer den Tera-Typ mit einem Eigentyp sehr effektiv trifft) */
+async function raidsView(arg) {
+  const rid = RID, n = +arg || store.get("raidStars", 7);
+  main.innerHTML = `<div class="box"><div class="bar"><b>Tera-Raids in</b> <select class="gamesel"></select>
+      <span class="seg">${[7, 6, 5, 4, 3, 2, 1].map((k) => `<a class="btn${k === n ? " on" : ""}" href="#raids/${k}">${k}★</a>`).join("")}</span></div>
+    <p class="hint">Raid-Gegner aus den Spieldaten (PKHeX): Level, Tera-Typ und Attacken. Der Gegner verteidigt mit seinem Tera-Typ; „Konter“ sind Mitglieder deines Teams,
+      die ihn mit einem Eigentyp sehr effektiv treffen. „Gefahr“: Mitglieder, die eine seiner Attacken sehr effektiv trifft.</p>
+    <div id="rlist"><p class="hint">Lädt …</p></div></div>`;
+  header();
+  store.set("raidStars", n);
+  const r = await api("/api/raids?" + qs({spiel: S.game, sterne: n}));
+  if (rid !== RID) return;
+  const ev = S.team.ids.length ? await api("/api/team/bewerten", {spiel: S.game, ids: S.team.ids, details: S.team.details, kurz: 1}) : {mitglieder: []};
+  if (rid !== RID) return;
+  const team = ev.mitglieder || [];
+  const hitF = (atk, defT) => defT.reduce((f, d) => f * (S.chart?.[atk]?.[d] ?? 1), 1);
+  const names = (xs) => xs.map((m) => esc(m.name)).join(", ");
+  $("#rlist").innerHTML = r.rows.length ? `<div class="scroll sticky"><table class="rows sort raids"><thead><tr>${th("Pokémon")}${thc("Level")}${th("Tera")}${th("Attacken", "", true)}${team.length ? th("Konter", "", true) + th("Gefahr", "", true) : ""}${th("Gebiet")}</tr></thead>
+    <tbody>${r.rows.map((x) => { const def = x.tera ? [String(x.tera)] : x.typen.map(String);
+      const counter = team.filter((m) => m.typen.some((t) => hitF(String(t), def) > 1));
+      const danger = team.filter((m) => x.attacken.some((a) => a.klasse !== 1 && hitF(String(a.typ), m.typen.map(String)) > 1));
+      return `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a> ${tchips(x.typen)}</td>
+        <td class="c num">${x.level}</td><td data-s="${x.tera || 0}">${x.tera ? tchip(x.tera) : `<span class="hint">zufällig</span>`}${x.schwach.length ? `<div class="hint">schwach: ${tchips(x.schwach)}</div>` : ""}</td>
+        <td>${raidMoves(x)}</td>${team.length ? `<td class="${counter.length ? "go" : "stop"}">${names(counter) || "keiner"}</td><td class="${danger.length >= 3 ? "stop" : ""}">${names(danger) || "–"}</td>` : ""}
+        <td class="hint">${esc(x.gebiet)}</td></tr>`; }).join("")}</tbody></table></div>`
+    : `<p class="hint">Keine Raids gefunden. Der nächste Abgleich holt sie aus PKHeX.</p>`;
 }
 /* Getragene Items wilder Pokémon (PokéWiki), mit Bild und Anteil; „Elite“ nur bei Alpha-Pokémon */
 function heldHtml(d) {
@@ -1598,6 +1658,7 @@ async function teamRefresh() {
     ${ev.offen.length ? `<div class="note stop">Offene Schwächen (mehr Mitglieder schwach als resistent): ${tchips(ev.offen)}</div>` : `<div class="note go">Keine offene Schwäche.</div>`}
     ${ev.vierfach.length ? `<div class="note warn">4-fach-Schwächen: ${ev.vierfach.map(([a, n]) => `${esc(n)} gegen ${tchip(a)}`).join(", ")}</div>` : ""}
     ${ev.nicht_abgedeckt.length ? `<p class="hint">Nicht sehr effektiv getroffen (mit den gewählten Attacken, sonst Eigentypen): ${tchips(ev.nicht_abgedeckt)}</p>` : ""}
+    ${(ev.tera || []).length ? `<div class="note tera" data-tip="Nur Verteidigung: der Tera-Typ ersetzt beim Terakristallisieren die eigenen Typen. Wählen auf der Detailseite.">${ev.tera.map((x) => `<div><b>${esc(x.name)}</b> mit Tera ${tchip(x.tera)}${x.eigentyp ? ` <span class="muted">(Eigentyp, stärkere Attacken)</span>` : ""}: ${x.weg.length ? `nimmt Schwächen gegen ${tchips(x.weg)}` : "nimmt keine Schwäche"}${x.neu.length ? `, neu schwach gegen ${tchips(x.neu)}` : ""}</div>`).join("")}</div>` : ""}
     <p class="hint">${ev.physisch} physisch, ${ev.speziell} speziell · schnell: ${esc(ev.schnell.join(", ") || "keiner")}</p>
     <details><summary>Typwirkung je Mitglied</summary><div class="scroll"><table class="matrix" id="matrix"><tr><th></th>${ms.map((m, i) => `<th data-hc="${m.id}" data-c="${i}" data-pc="${i}">${img(m.id)}</th>`).join("")}</tr>
       ${Object.keys(S.types).filter((a) => ev.matrix[ms[0].id]?.[a] !== undefined).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ms.map((m, i) => { const f = ev.matrix[m.id][a]; return `<td data-c="${i}" data-tip="${esc(`${tname(a)} gegen ${m.name}: ×${fl(f)}`)}"><span class="f ${fcls(f)}">${f === 1 ? "" : fl(f)}</span></td>`; }).join("")}</tr>`).join("")}</table></div>
@@ -2586,9 +2647,11 @@ async function battleView() {
           <li><b>Tempo:</b> Wer zuerst angreift, gewinnt oft. Die Initiative-Liste zeigt, wer auf Level 50 schneller ist.</li>
           <li><b>Was fehlt</b> steht rot; darunter, wer im Team die passende Attacke lernen könnte.</li></ul></details>
       <div id="dbl"><p class="hint">Lädt …</p></div></div>
+    <div class="box" id="calc"><h2>Schadensrechner</h2><p class="hint">Lädt …</p></div>
+    <div class="box" id="log"><h2>Kampftagebuch</h2><p class="hint">Lädt …</p></div>
     <div class="box" id="usage"><h2>Häufige Gegner</h2><p class="hint">Lädt …</p></div>`;
   header();
-  usageBox();
+  usageBox().then(() => { calcBox(); logBox(); });
   $("details.dblhelp").addEventListener("toggle", (e) => store.set("dblHelp", e.target.open));
   if (!t.ids.length) { $("#dbl").innerHTML = `<p class="hint">Das Team ist leer.</p>`; return; }
   const r = await api("/api/team/doppel", {spiel: S.game, ids: t.ids, details: t.details});
@@ -2640,6 +2703,86 @@ async function usageBox() {
         ${team.length ? `<td class="${th_.length >= 2 ? "stop" : ""}">${names(th_) || "–"}</td><td class="${an.length ? "go" : "stop"}">${names(an) || "keiner"}</td>` : ""}</tr>`; }).join("")}</tbody></table></div>`;
   $("#usagen").addEventListener("change", (e) => { store.set("usageN", +e.target.value); usageBox(); });
   S.usageTop = u.rows.filter((r) => r.id).slice(0, 6).map((r) => r.id);
+  S.usageIds = u.rows.filter((r) => r.id).map((r) => r.id);
+}
+/* Kampftagebuch: Ergebnis, Gegner und Notiz je Kampf, mit Bilanz und den häufigsten Gegnern */
+let LOGPICK = [];
+async function logBox() {
+  const rid = RID, el = () => $("#log");
+  const L = await api("/api/kampftagebuch?" + qs({spiel: S.game}));
+  if (rid !== RID || !el()) return;
+  const need = [...new Set([...L.rows.flatMap((r) => [...r.gegner, ...r.team]), ...LOGPICK])].filter((id) => !ROWS[id]?.name);
+  if (need.length) (await Promise.all(need.slice(0, 40).map((id) => api(`/api/pokemon/${id}?` + qs({spiel: S.game})).catch(() => null))))
+    .forEach((d) => { if (d) ROWS[d.id] = Object.assign(ROWS[d.id] || {}, {id: d.id, name: d.name, typen: d.typen}); });
+  if (rid !== RID || !el()) return;
+  const nm = (id) => esc(ROWS[id]?.name || "#" + id);
+  const quick = (S.usageIds || []).slice(0, 24);
+  const pct = L.kaempfe ? Math.round(L.siege / L.kaempfe * 100) : 0;
+  el().innerHTML = `<div class="bar"><h2 style="margin:0">Kampftagebuch</h2>
+      ${L.kaempfe ? `<span class="hint grow">${L.kaempfe} ${L.kaempfe === 1 ? "Kampf" : "Kämpfe"} · ${L.siege} ${L.siege === 1 ? "Sieg" : "Siege"}, ${L.kaempfe - L.siege} ${L.kaempfe - L.siege === 1 ? "Niederlage" : "Niederlagen"} (${pct} % gewonnen)</span>` : `<span class="hint grow">Noch kein Kampf eingetragen.</span>`}</div>
+    <p class="hint">Nach jedem Kampf: Gegner antippen (bis sechs), Ergebnis wählen. Das aktuelle Team wird mit gespeichert. So zeigt sich mit der Zeit, gegen wen es schwer wird.</p>
+    <div class="logpick">${LOGPICK.length ? LOGPICK.map((id) => `<span class="chip on" data-act="logpick" data-id="${id}" data-tip="Entfernen">${img(id, "sm")}${nm(id)} ✕</span>`).join("") : `<span class="hint">Gegner: noch keiner gewählt</span>`}</div>
+    ${quick.length ? `<div class="logquick">${quick.filter((id) => !LOGPICK.includes(id)).map((id) => `<span class="chip" data-act="logpick" data-id="${id}" data-tip="${nm(id)}">${img(id, "sm")}</span>`).join("")}</div>` : ""}
+    <div class="bar"><div class="ac"><input id="logq" type="search" placeholder="Anderen Gegner suchen" style="width:200px"></div>
+      <input id="lognote" type="text" placeholder="Notiz (optional)" class="grow" maxlength="500">
+      <button class="primary" data-act="logadd" data-res="sieg"${LOGPICK.length ? "" : " disabled"}>Sieg</button>
+      <button data-act="logadd" data-res="niederlage"${LOGPICK.length ? "" : " disabled"}>Niederlage</button></div>
+    ${L.gegner.length ? `<h3>Häufigste Gegner</h3><div class="logfoes">${L.gegner.map((g) => `<span class="lf ${g.siege * 2 < g.kaempfe ? "stop" : "go"}" data-hc="${g.id}">${img(g.id, "sm")}<span>${nm(g.id)}<br><span class="hint">${g.kaempfe} ${g.kaempfe === 1 ? "Kampf" : "Kämpfe"}, ${g.siege} ${g.siege === 1 ? "Sieg" : "Siege"}</span></span></span>`).join("")}</div>` : ""}
+    ${L.rows.length ? `<details${store.get("logOpen", false) ? " open" : ""} id="logall"><summary>Alle Kämpfe</summary><table class="rows logrows"><tbody>${L.rows.map((r) => `<tr>
+      <td class="nw hint">${esc(r.at.slice(0, 10).split("-").reverse().join("."))}</td><td class="${r.ergebnis === "sieg" ? "go" : "stop"}">${r.ergebnis === "sieg" ? "Sieg" : "Niederlage"}</td>
+      <td>${r.gegner.map((id) => `<span data-tip="${nm(id)}">${img(id, "sm")}</span>`).join("")}</td><td class="hint">${esc(r.notiz || "")}</td>
+      <td><button class="small x" data-act="logdel" data-id="${r.id}" data-tip="Eintrag löschen">✕</button></td></tr>`).join("")}</tbody></table></details>` : ""}`;
+  autocomplete($("#logq"), (r) => { if (LOGPICK.length < 6 && !LOGPICK.includes(r.id)) LOGPICK.push(r.id); logBox(); });
+  $("#logall")?.addEventListener("toggle", (e) => store.set("logOpen", e.target.open));
+}
+/* Schadensrechner: eine gewählte Attacke eines Team-Platzes gegen die häufigsten Gegner oder das eigene Team (Level 50) */
+async function calcBox() {
+  const rid = RID, el = () => $("#calc"), t = S.team;
+  if (!el()) return;
+  if (!t.ids.length) { el().innerHTML = `<h2>Schadensrechner</h2><p class="hint">Das Team ist leer.</p>`; return; }
+  const ev = await api("/api/team/bewerten", {spiel: S.game, ids: t.ids, details: t.details, kurz: 1});
+  if (rid !== RID || !el()) return;
+  (ev.mitglieder || []).forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
+  const A = ev.attacken || {};
+  const dmg = (i) => (t.details[i]?.attacken || []).filter((x) => A[x] && A[x].klasse !== 1 && A[x].staerke);
+  const o = Object.assign({slot: 0, move: null, gegen: "smogon", vert: "0", krit: false, flaeche: "auto", tera: ""}, store.get("calc", {}));
+  if (!dmg(o.slot)?.length) o.slot = t.ids.findIndex((_, i) => dmg(i).length);
+  if (o.slot < 0) {
+    el().innerHTML = `<h2>Schadensrechner</h2><p class="hint">Wähle auf der Detailseite eines Mitglieds Schadens-Attacken, dann rechnet das hier den Schaden gegen die häufigsten Gegner aus.</p>`;
+    return;
+  }
+  if (!dmg(o.slot).includes(o.move)) o.move = dmg(o.slot)[0];
+  const foes = o.gegen === "team" || !(S.usageIds || []).length ? t.ids : S.usageIds.slice(0, 30);
+  const r = await api("/api/schaden", {spiel: S.game, ids: t.ids, details: t.details, slot: o.slot, attacke: o.move, verteidiger: foes,
+    vert: o.vert, krit: o.krit ? 1 : "", flaeche: o.flaeche === "auto" ? null : o.flaeche === "ja", tera_vert: o.tera ? +o.tera : null});
+  if (rid !== RID || !el()) return;
+  const pct = (x) => String(x).replace(".", ",");
+  const ko = (x) => !x.sicher ? "keine Wirkung" : x.sicher === 1 ? "sicher K.O." : x.moeglich === 1 ? `K.O. mit Glück, sonst ${x.sicher} Treffer` : x.sicher === x.moeglich ? `${x.sicher} Treffer` : `${x.moeglich}–${x.sicher} Treffer`;
+  const cls = (x) => x.sicher === 1 ? "go" : x.moeglich === 1 ? "warn" : x.sicher === 0 || !x.sicher ? "stop" : "";
+  el().innerHTML = `<h2>Schadensrechner</h2>
+    <div class="bar"><label>Angreifer <select id="cslot">${t.ids.map((id, i) => dmg(i).length ? `<option value="${i}"${i === o.slot ? " selected" : ""}>${esc(ROWS[id]?.name || id)} (Platz ${i + 1})</option>` : "").join("")}</select></label>
+      <label>Attacke <select id="cmove">${dmg(o.slot).map((x) => `<option value="${x}"${x === o.move ? " selected" : ""}>${esc(A[x].name)} (${A[x].staerke})</option>`).join("")}</select></label>
+      <label>gegen <select id="cgegen"><option value="smogon"${o.gegen !== "team" ? " selected" : ""}>häufige Gegner</option><option value="team"${o.gegen === "team" ? " selected" : ""}>mein Team</option></select></label>
+      <label data-tip="Wie viel die Verteidiger in KP und die passende Verteidigung stecken (252 EVs)">Gegner <select id="cvert">${[["0", "nicht investiert"], ["kp", "volle KP"], ["kp_vert", "volle KP und Verteidigung"]].map(([k, n]) => `<option value="${k}"${o.vert === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label data-tip="Tera-Typ aller Verteidiger (ersetzt ihre Typen)">Tera Gegner <select id="ctera"><option value="">–</option>${Object.entries(S.types).map(([k, n]) => `<option value="${k}"${o.tera === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
+      <label data-tip="Flächenattacken treffen im Doppel beide Gegner mit 75 % Stärke">Fläche <select id="cfl">${[["auto", "nach Attacke"], ["ja", "ja"], ["nein", "nein"]].map(([k, n]) => `<option value="${k}"${o.flaeche === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label data-tip="Volltreffer: × 1,5"><input type="checkbox" id="ckrit"${o.krit ? " checked" : ""}> Volltreffer</label></div>
+    <p class="hint">${esc(r.angreifer)}: ${esc(r.attacke)} ${tchip(r.typ)} ${r.klasse === 2 ? "physisch" : "speziell"}, Stärke ${r.staerke}, Level ${r.level},
+      ${r.ev == null ? "Angriff voll investiert (252 EVs)" : `${r.ev} EVs`}${r.wesen > 1 ? ", Wesen +10 %" : r.wesen < 1 ? ", Wesen −10 %" : ""}${r.tera ? `, Tera ${tname(r.tera)}` : ""}${r.flaeche ? ", als Flächenattacke (× 0,75)" : ""}.
+      Ohne Fähigkeiten, Items, Wetter und Felder; Zufall 85 bis 100 %.</p>
+    <div class="scroll sticky"><table class="rows sort dmg"><thead><tr>${th("Verteidiger")}${thc("Wirkung")}${thc("Schaden", "Prozent der KP, kleinster bis größter Wurf")}${thc("KP")}${th("Treffer bis K.O.", "", true)}</tr></thead>
+      <tbody>${r.rows.map((x) => `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a></td>
+        <td class="c num" data-s="${x.eff}">×${fl(x.eff)}</td>
+        <td class="num" data-s="${x.max_pct}"><span class="sbar" style="display:inline-block;width:80px;vertical-align:middle"><i style="width:${Math.min(100, x.max_pct)}%"></i></span> ${pct(x.min_pct)}–${pct(x.max_pct)} %</td>
+        <td class="c num" data-s="${x.kp}">${x.min}–${x.max} / ${x.kp}</td><td class="${cls(x)}">${ko(x)}</td></tr>`).join("")}</tbody></table></div>`;
+  const set = (k, v) => { o[k] = v; store.set("calc", o); calcBox(); };
+  $("#cslot").addEventListener("change", (e) => set("slot", +e.target.value));
+  $("#cmove").addEventListener("change", (e) => set("move", +e.target.value));
+  $("#cgegen").addEventListener("change", (e) => set("gegen", e.target.value));
+  $("#cvert").addEventListener("change", (e) => set("vert", e.target.value));
+  $("#ctera").addEventListener("change", (e) => set("tera", e.target.value));
+  $("#cfl").addEventListener("change", (e) => set("flaeche", e.target.value));
+  $("#ckrit").addEventListener("change", (e) => set("krit", e.target.checked));
 }
 async function speedView() {
   const rid = RID, gen = S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;
@@ -3112,6 +3255,9 @@ document.addEventListener("click", async (e) => {
       store.set("team", S.team); dock(); teamView();
     } else if (act === "foedel") { S.foes = S.foes.filter((x) => x !== id); store.set("foes", S.foes); matchup(); }
     else if (act === "foeclear") { S.foes = []; store.set("foes", S.foes); teamView(); }
+    else if (act === "logpick") { const id = +b.dataset.id, i = LOGPICK.indexOf(id); if (i >= 0) LOGPICK.splice(i, 1); else if (LOGPICK.length < 6) LOGPICK.push(id); logBox(); }
+    else if (act === "logadd") { await api("/api/kampftagebuch", {spiel: S.game, ergebnis: b.dataset.res, team: S.team.ids, gegner: LOGPICK, notiz: $("#lognote")?.value || ""}); LOGPICK = []; logBox(); }
+    else if (act === "logdel") { await api("/api/kampftagebuch/loeschen", {id: +b.dataset.id}); logBox(); }
     else if (act === "usagefoes") { S.foes = [...(S.usageTop || [])]; store.set("foes", S.foes); location.hash = "team"; }
     else if (act === "mvadd" || act === "mvdel" || act === "mvtake") {
       const pid = DETAIL.id, cur = ownSet(pid), mid = +b.dataset.mid;

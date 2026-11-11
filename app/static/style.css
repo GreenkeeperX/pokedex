@@ -748,3 +748,18 @@ table.items tr.odd td{opacity:.6}
 .catch{font-size:13px}
 .dblhelp{margin:6px 0 10px}.dblhelp ul{margin:6px 0;padding-left:18px;line-height:1.55;font-size:13.5px}
 .usage td{font-size:13px}.usage td.stop{color:var(--stop)}.usage td.go{color:var(--go)}
+
+.note.tera div{margin:2px 0}
+.usage .spr,.dmg .spr{width:36px;height:36px;vertical-align:middle}
+.dmg td{font-size:13px;vertical-align:middle}.dmg td.stop{color:var(--muted)}.dmg td.go{color:var(--go)}.dmg td.warn{color:var(--warn)}
+.dmg .sbar i{background:var(--info)}
+.logpick,.logquick{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.logquick .chip{padding:2px}.logpick .chip,.logquick .chip{cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.logpick .spr,.logquick .spr,.logrows .spr,.logfoes .spr{width:36px;height:36px;vertical-align:middle}
+.logfoes{display:flex;flex-wrap:wrap;gap:10px}.logfoes .lf{display:flex;align-items:center;gap:4px;font-size:13px}.logfoes .lf.stop>span{color:var(--stop)}
+.logrows td.go{color:var(--go)}.logrows td.stop{color:var(--stop)}
+.logpick .chip.on{background:var(--info-bg)}.logquick .chip:hover{filter:brightness(1.3)}
+.stars{color:#e8b931;letter-spacing:-1px;font-size:13px}
+.raids td{font-size:13px;vertical-align:middle}.raids .spr{width:36px;height:36px;vertical-align:middle}.raids td.go{color:var(--go)}.raids td.stop{color:var(--stop)}
+.raids .rm{display:inline-flex;align-items:center;gap:3px;margin-right:6px;white-space:nowrap}
+.seg .btn{border:0;border-radius:0;padding:4px 10px}.seg .btn.on{background:var(--info-bg);color:var(--ink-hi)}
+.raidl>div{padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}.raidl .t{font-size:11px}

@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, showdown
 
-VERSION = "14"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "15"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -619,6 +619,91 @@ def _derive_spawn(con, spawns):
     return n
 
 
+# Tera-Raids in Karmesin/Purpur (PKHeX, EncounterTera9/Dist9/Might9): Datei → (Gebiet, Satzlänge)
+PKHEX_RAIDS = {"gem_paldea": ("Paldea", 0x18), "gem_kitakami": ("Kitakami", 0x18), "gem_blueberry": ("Blaubeer-Akademie", 0x18),
+               "dist_paldea": ("Event", 0x3E), "might_paldea": ("7-Sterne-Event", 0x3E)}
+
+
+def pkhex_raids(data, size):
+    """Tera-Raids aus einer PKHeX-Datei: [(Art, Formnummer, Level, Sterne, Tera-Typ oder None, [Attacken], Gewicht,
+    perfekte IVs)]. Tera: 0 Standard, 1 zufällig, ab 2 Normal, Kampf … (Reihenfolge der Typen wie in der PokéAPI, also Typ = Wert - 1)."""
+    out = []
+    for i in range(0, len(data or b"") - size + 1, size):
+        r = data[i:i + size]
+        nr = int.from_bytes(r[0:2], "little")
+        if not nr:
+            continue
+        moves = [int.from_bytes(r[j:j + 2], "little") for j in (8, 10, 12, 14)]
+        gem = r[0x10]
+        out.append((nr, r[2], r[7], r[0x12], gem - 1 if gem >= 2 else None, [m for m in moves if m], r[0x13], r[5]))
+    return out
+
+
+def _derive_raid(con, pkhex):
+    """Tabelle raid aus pkhex["_raids"] ({Datei: Bytes}): gleiche Begegnungen (Art, Form, Sterne, Level, Tera, Attacken) einmal."""
+    con.execute("CREATE TABLE raid (spiel TEXT, gebiet TEXT, sterne INTEGER, form INTEGER, level INTEGER, tera INTEGER, "
+                "attacken TEXT, gewicht INTEGER, ivs INTEGER)")
+    by_form, by_art = _form_maps(con)
+    rows, seen = [], set()
+    for key, data in ((pkhex or {}).get("_raids") or {}).items():
+        if key not in PKHEX_RAIDS:
+            continue
+        gebiet, size = PKHEX_RAIDS[key]
+        for nr, form, level, stars, tera, moves, weight, ivs in pkhex_raids(data, size):
+            pid = by_form.get((nr, form)) or by_art.get(nr)
+            k = (gebiet, stars, pid, level, tera, tuple(moves))
+            if pid and k not in seen:
+                seen.add(k)
+                rows.append(("scarlet-violet", gebiet, stars, pid, level, tera, json.dumps(moves), weight, ivs))
+    con.executemany("INSERT INTO raid VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    con.execute("CREATE INDEX raid_form ON raid(form)")
+    return len(rows)
+
+
+# Crypto-Pokémon (Shadow) in Colosseum und XD: Quelltext von PKHeX, je Spiel
+PKHEX_SHADOW = {"colosseum": "Gen3/Encounters3Colo.cs", "xd": "Gen3/Encounters3XD.cs"}
+_SHADOW = re.compile(r"new\(\s*(\d+)\s*,\s*(\d+)\s*,[^)]*\)\s*\{([^}]*)\}\s*,?\s*//\s*([^\n]*)")
+
+
+def pkhex_shadow(text):
+    """Crypto-Pokémon aus Encounters3Colo.cs/Encounters3XD.cs (Liste Shadow): [(Nummer, Art, Level, [Attacken],
+    Läuterungswert (Heart Gauge), Trainer, Ort)]. Trainer und Ort stehen (englisch) im Kommentar „Art: Trainer @ Ort“."""
+    m = re.search(r"Shadow\s*=\s*\[(.*?)\n\s*\];", text or "", re.S)
+    out = []
+    for nr, gauge, body, note in _SHADOW.findall(m.group(1) if m else ""):
+        sp, lv = re.search(r"Species\s*=\s*(\d+)", body), re.search(r"Level\s*=\s*(\d+)", body)
+        if not sp or not lv:
+            continue
+        mv = re.search(r"Moves\s*=\s*new\(([\d,\s]+)\)", body)
+        moves = [int(x) for x in mv.group(1).split(",") if x.strip() and int(x)] if mv else []
+        note = note.split("--")[0].strip()
+        who, _, where = note.partition("@")
+        out.append((int(nr), int(sp.group(1)), int(lv.group(1)), moves, int(gauge), who.split(":", 1)[-1].strip(), where.strip()))
+    return out
+
+
+def _derive_crypto(con, pkhex):
+    """Tabelle crypto aus pkhex["_crypto"] ({Spiel: Quelltext}): eine Zeile je Crypto-Pokémon, Orte zusammengefasst."""
+    con.execute("CREATE TABLE crypto (spiel TEXT, nr INTEGER, form INTEGER, level INTEGER, attacken TEXT, messer INTEGER, "
+                "trainer TEXT, orte TEXT)")
+    _, by_art = _form_maps(con)
+    n = 0
+    for spiel, text in ((pkhex or {}).get("_crypto") or {}).items():
+        rows = {}
+        for nr, art, level, moves, gauge, who, where in pkhex_shadow(text):
+            pid = by_art.get(art)
+            if not pid:
+                continue
+            r = rows.setdefault((nr, pid), [spiel, nr, pid, level, json.dumps(moves), gauge, who, []])
+            if where and where not in r[7]:
+                r[7].append(where)
+        con.executemany("INSERT INTO crypto VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        [(*r[:7], json.dumps(r[7], ensure_ascii=False)) for r in rows.values()])
+        n += len(rows)
+    con.execute("CREATE INDEX crypto_form ON crypto(form)")
+    return n
+
+
 def _derive_fundort(con, pkhex):
     """pkhex: {Spielkennung: {"begegnungen": Bytes, "orte": Text, "fest": Quelltext der festen Begegnungen}}. Art und Formnummer im Spiel werden über
     pokemon_forms (form_order) zur Form der PokéAPI; ohne Treffer zählt die Standardform der Art."""
@@ -1197,6 +1282,8 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         _sd_tables(con, sd_dex, sd_moves)
         n_check = _derive_pruefung(con, sd_dex, sd_moves) if sd_dex or sd_moves else 0
         n_fund = _derive_fundort(con, pkhex)
+        n_raid = _derive_raid(con, pkhex)
+        n_crypto = _derive_crypto(con, pkhex)
         n_spawn = _derive_spawn(con, spawns)
         pkx = (pkhex or {}).get("_items")
         n_item = _derive_item(con, pkx)
@@ -1223,7 +1310,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "species": con.execute("SELECT COUNT(DISTINCT art) FROM form").fetchone()[0],
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
-                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "items": n_item, "sets": n_sets, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
+                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
                  "kartenobjekte": n_obj, "lernen": n_lernen, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez, "check": why}
     finally:
         con.close()
