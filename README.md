@@ -68,7 +68,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   eine Datenbank: Map Genie und die Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken) sind zusammengeführt,
   gleiche Stellen sind ein Punkt. Kacheln, Punkte und Texte liegen auf dem Server; die Karte braucht kein Internet.
 - **Effort Levels** (Legenden: Arceus, Detailseite): Stufe 0 bis 10 je Wert mit Wertrechnung, Ziel und Planer für
-  Leistungssand, -kies, -stein und -fels; im Team je Platz gespeichert.
+  Leistungssand, -kies, -stein und -fels; im Team je Platz gespeichert. Im Reiter Team der Stand aller Mitglieder und was dem
+  Team fehlt; die Initiative-Liste rechnet in diesem Spiel mit Effort Levels.
 - **Let’s Go**: Fangen ohne Kampf und Fang-Kombo auf der Detailseite, Partner-Techniken und Geheime Techniken beim Partner.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
   Gefangene blass, auf Wunsch nur die fehlenden.

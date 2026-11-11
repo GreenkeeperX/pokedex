@@ -1,10 +1,16 @@
 # Roadmap
 
+## 0.26.0 (11.11.2026)
+
+- Effort Levels nur in Legenden: Arceus (`LA()`): `abfragen.effort_team` (`/api/effort/team`), Kasten `#elteam` im Reiter Team
+  (`elTeam`); nicht eingetragen = Stufe 0 und markiert. Initiative-Liste mit `laStat` (wie `effort.stat`)
+- Teambewertung bleibt bei Basiswerten (vergleicht Pokémon untereinander; Effort Levels ändern daran wenig)
+
 ## 0.25.0 (Entscheidung 11.11.2026: Effort Levels mit Anzeige und Planer)
 
 - `app/effort.py` (Formel nach Bulbapedia, `FAKTOR`, `STEINE`, `cost`, `view`), `abfragen.effort_view` (`/api/effort`),
   Team-Platz speichert `el` und `el_ziel`; Oberfläche `elBox` auf der Detailseite (Legenden: Arceus)
-- Offen: Effort Levels auch in Teambewertung und Initiative-Liste einrechnen, Anfangsstufe aus eingegebenen DVs
+- Offen: Anfangsstufe aus eingegebenen DVs
 
 ## 0.24.0 (Rückmeldung zu 0.23.0, 11.11.2026)
 

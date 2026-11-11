@@ -2030,6 +2030,33 @@ def effort_view(body):
     return out
 
 
+def effort_team(body):
+    """Effort Levels des ganzen Teams (Legenden: Arceus): je Mitglied Stufen (None = nicht eingetragen, gerechnet mit 0),
+    Werte jetzt und am Ziel, fehlende Leistungs-Items; dazu die Summe für das Team."""
+    from . import effort
+    D = data()
+    if not D:
+        return {"mitglieder": [], "bonbons": [0] * len(effort.STEINE), "sorten": [s[0] for s in effort.STEINE]}
+    _, gen, _ = game_of(D, body.get("spiel"))
+    P = _paste_names(D)
+    details = slot_details(body.get("details"), _ints(body.get("ids")))
+    out, total = [], [0] * len(effort.STEINE)
+    for i, fid in enumerate(_ints(body.get("ids"))[:6]):
+        f = D.forms.get(fid)
+        if not f:
+            continue
+        d = details[i] if i < len(details) else {}
+        six = lambda v: v if isinstance(v, list) and len(v) == 6 else None
+        el = six(d.get("el"))
+        v = effort.view(form_stats(D, f, gen)[0], min(100, max(1, _int(d.get("level")) or 50)), el, six(d.get("el_ziel")) or el,
+                        P["nat_mod"].get(_int(d.get("wesen"))) if _int(d.get("wesen")) else None)
+        total = [a + b for a, b in zip(total, v["bonbons"])]
+        out.append({"id": fid, "slot": i, "name": f["name"], "eingetragen": el is not None, "level": v["level"],
+                    "el": [r["el"] for r in v["rows"]], "ziel": [r["ziel"] for r in v["rows"]],
+                    "werte": [r["wert"] for r in v["rows"]], "werte_ziel": [r["wert_ziel"] for r in v["rows"]], "bonbons": v["bonbons"]})
+    return {"mitglieder": out, "bonbons": total, "sorten": [s[0] for s in effort.STEINE]}
+
+
 def damage_matrix(body):
     """Übersicht für den Schadensrechner: je Team-Platz und Gegner die stärkste der gewählten Schadens-Attacken
     {rows: [{slot, id, name, zellen: [{gegner, attacke, min_pct, max_pct, sicher, moeglich, eff} | None]}], gegner: [{id, name}]}."""
