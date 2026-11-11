@@ -1261,14 +1261,34 @@ def _optik(con, f):
 
 
 def _held(con, g, f):
-    """Getragene Items wilder Pokémon im Spiel (PokéWiki): [{item, bild, prozent, elite}]."""
+    """Getragene Items wilder Pokémon im Spiel: aus dem PokéWiki (Legenden: Arceus), sonst aus der PokéAPI
+    (pokemon_items, Generation 3 bis 7, je Edition): [{item, id, prozent, elite, quelle, editionen}]."""
     if not g:
         return []
     try:
         rows = con.execute("SELECT item, item_id, prozent, elite FROM getragen WHERE spiel = ? AND art = ?", (g["kennung"], f["art"])).fetchall()
     except Exception:
+        rows = []
+    if rows:
+        return [{"item": r[0], "id": r[1], "prozent": r[2], "elite": bool(r[3]), "quelle": "PokéWiki"} for r in rows]
+    try:
+        q = ("SELECT pi.item_id, COALESCE(n.name, i.identifier), pi.rarity, COALESCE(vn.name, v.identifier) FROM pokemon_items pi "
+             "JOIN versions v ON v.id = pi.version_id JOIN items i ON i.id = pi.item_id "
+             "LEFT JOIN item_names n ON n.item_id = pi.item_id AND n.local_language_id = 6 "
+             "LEFT JOIN version_names vn ON vn.version_id = v.id AND vn.local_language_id = 6 "
+             "WHERE pi.pokemon_id = ? AND v.version_group_id = ? ORDER BY pi.rarity DESC, v.id")
+        rows = con.execute(q, (f["id"], g["id"])).fetchall()
+    except sqlite3.OperationalError:
         return []
-    return [{"item": r[0], "id": r[1], "prozent": r[2], "elite": bool(r[3])} for r in rows]
+    out = {}
+    for iid, name, rarity, ver in rows:
+        x = out.setdefault((iid, rarity), {"item": name, "id": iid, "prozent": f"{rarity} %", "elite": False, "quelle": "PokéAPI", "editionen": []})
+        x["editionen"].append(ver)
+    n_ver = con.execute("SELECT COUNT(*) FROM versions WHERE version_group_id = ?", (g["id"],)).fetchone()[0]
+    for x in out.values():
+        if len(x["editionen"]) >= n_ver:
+            x["editionen"] = []                 # in allen Editionen gleich: nicht eigens nennen
+    return list(out.values())
 
 
 def _pokopia(con, g, f):
@@ -2126,7 +2146,7 @@ def damage_matrix(body):
             for k, vid in enumerate(foes):
                 x = by.get(vid)
                 if x and (best[k] is None or x["max_pct"] > best[k]["max_pct"]):
-                    best[k] = dict(x, attacke=r["attacke"], typ=r["typ"])
+                    best[k] = dict(x, attacke=r["attacke"], typ=r["typ"], level=r["level"])
         if fid in D.forms:
             out.append({"slot": i, "id": fid, "name": D.forms[fid]["name"], "zellen": best})
     return {"rows": out, "gegner": [{"id": v, "name": D.forms[v]["name"]} for v in foes]}
@@ -2230,6 +2250,8 @@ def damage_view(body):
                 r["item_vert"] = f"{names['item_de'].get(v_item, v_item)}: {di_[2]}"
             if dm != 1.0:
                 r["faehigkeit_vert"] = D.abilities.get(next((a for a, h in v["faehigkeiten"] if not h), 0), ("", d_ab))[1]
+        r.update(_calc_steps(gen, art, mv, m, r, level, d_level, a_base, ai, a_iv, a_ev, a_el, a_av, nat, v, form_stats(D, v, gen)[0],
+                             inv, spread, bool(body.get("krit")), wetter, r.get("item_vert")))
         if v_item == "focus-sash" and gen >= 4 and r.get("sicher") == 1:
             r["item_vert"], r["sicher"] = names["item_de"].get(v_item, v_item) + ": übersteht den ersten Treffer aus vollen KP mit 1 KP", 2
             r["moeglich"] = 2
@@ -2244,6 +2266,55 @@ def damage_view(body):
             "krit": 2.0 if gen <= 5 else 1.5, "rows": rows, "wetter": wetter, "art": art,
             "el": a_el[ai] if art == "la" else None, "av": a_av[ai] if art == "lgpe" else None,
             "eingerechnet": [f"{label[kind](k)}: {txt}" for kind, k, txt in used]}
+
+
+def _calc_steps(gen, art, mv, m, r, level, d_level, a_base, ai, a_iv, a_ev, a_el, a_av, nat, v, vb, inv, spread, crit, wetter, d_item):
+    """Rechenweg einer Zeile für den Tooltip: woraus Angriff und Verteidigung bestehen, die Faktoren der Reihe nach."""
+    from . import schaden
+    di = (2 if mv["klasse"] == 2 else 4) if not (gen == 1 and mv["klasse"] != 2) else 3
+    fl = lambda x: f"{x:g}".replace(".", ",")
+    if gen <= 2:
+        a_info, d_extra = f"Basis {a_base[ai]}, Level {level}, DV 15, volle Stat Exp", "DV 15, " + ("volle Stat Exp" if inv[1] else "ohne Stat Exp")
+    elif art == "la":
+        a_info, d_extra = f"Basis {a_base[ai]}, Level {level}, Effort Level {a_el[ai]}", f"Effort Level {10 if inv[1] else 0}"
+    elif art == "lgpe":
+        a_info, d_extra = f"Basis {a_base[ai]}, Level {level}, IV 31, {a_av[ai]} AV", f"IV 31, {200 if inv[1] else 0} AV"
+    else:
+        a_info = f"Basis {a_base[ai]}, Level {level}, IV {a_iv}, {schaden.EV_MAX if a_ev is None else a_ev} EV"
+        d_extra = f"IV 31, {inv[1]} EV"
+    if nat != 1.0 and gen >= 3:
+        a_info += f", Wesen ×{fl(nat)}"
+    if m.get("wert", 1.0) != 1.0:
+        a_info += f", ×{fl(m['wert'])} durch Item oder Fähigkeit"
+    d_info = f"Basis {vb[di]}, Level {d_level}, {d_extra}" + (f"; {d_item}" if d_item else "")
+    fx = []
+    if gen <= 2:
+        if m.get("staerke", 1.0) != 1.0:
+            fx.append(["Typ-Item", m["staerke"]])
+        if crit:
+            fx.append(["Volltreffer (Level doppelt)" if gen == 1 else "Volltreffer", 2 if gen == 2 else None])
+        if m.get("wetter", 1.0) != 1.0:
+            fx.append([{"sonne": "Sonne", "regen": "Regen"}.get(wetter, wetter), m["wetter"]])
+        if r["stab"] > 1:
+            fx.append(["Eigentyp", r["stab"]])
+        fx.append(["Wirkung", r["eff"]])
+        fx.append(["Zufall", "217–255 / 255"])
+    else:
+        if m.get("staerke", 1.0) != 1.0:
+            fx.append([f"Stärke {mv['staerke']} → {r['staerke']}", None])
+        if spread:
+            fx.append(["Fläche", 0.75])
+        if m.get("wetter", 1.0) != 1.0:
+            fx.append([{"sonne": "Sonne", "regen": "Regen"}.get(wetter, wetter), m["wetter"]])
+        if crit:
+            fx.append(["Volltreffer", 2.0 if gen <= 5 else 1.5])
+        fx.append(["Zufall", "0,85–1"])
+        if r["stab"] > 1:
+            fx.append(["Eigentyp", r["stab"]])
+        fx.append(["Wirkung", r["eff"]])
+        if m.get("ende", 1.0) != 1.0:
+            fx.append(["Item", m["ende"]])
+    return {"a_info": a_info, "d_info": d_info, "faktoren": fx}
 
 
 def _calc_names(D):

@@ -144,10 +144,11 @@ def calc(level, power, cls, move_type, a_base, a_types, d_base, d_types, ch, a_t
     eff = effect(ch, move_type, [d_tera] if d_tera else d_types) * d_mod
     power = _round(power * mods.get("staerke", 1.0)) if power else power
     rs = rolls(level, power, atk, dfn, spread, crit, st, eff, crit_mult, mods.get("wetter", 1.0), mods.get("ende", 1.0))
+    grund = (2 * level // 5 + 2) * power * atk // max(1, dfn) // 50 + 2 if power else 0
     lo, hi = rs[0], rs[-1]
     sure, maybe = hits(hp, lo, hi)
     return {"min": lo, "max": hi, "kp": hp, "min_pct": round(lo / hp * 100, 1), "max_pct": round(hi / hp * 100, 1),
-            "sicher": sure, "moeglich": maybe, "eff": eff, "stab": st, "angriff": atk, "verteidigung": dfn}
+            "sicher": sure, "moeglich": maybe, "eff": eff, "stab": st, "angriff": atk, "verteidigung": dfn, "grund": grund, "staerke": power}
 
 
 # ------------------------------------------------------------------ Generation 1 und 2
@@ -202,13 +203,16 @@ def calc_old(gen, level, power, cls, move_type, a_base, a_types, d_base, d_types
     st = 1.5 if move_type in a_types else 1.0
     effs = [(ch.get(move_type) or {}).get(t, 1.0) for t in d_types]
     rs = rolls_old(gen, level, power, atk, dfn, crit, st, effs or [1.0], item, weather)
+    a4, d4 = (max(1, atk // 4), max(1, dfn // 4)) if atk > 255 or dfn > 255 else (atk, dfn)
+    lv = level * 2 if crit and gen == 1 else level
+    grund = min((2 * lv // 5 + 2) * power * a4 // d4 // 50, 997) + 2 if power else 0
     lo, hi = rs[0], rs[-1]
     sure, maybe = hits(hp, lo, hi)
     eff = 1.0
     for e in effs:
         eff *= e
     return {"min": lo, "max": hi, "kp": hp, "min_pct": round(lo / hp * 100, 1), "max_pct": round(hi / hp * 100, 1),
-            "sicher": sure, "moeglich": maybe, "eff": eff, "stab": st, "angriff": atk, "verteidigung": dfn}
+            "sicher": sure, "moeglich": maybe, "eff": eff, "stab": st, "angriff": atk, "verteidigung": dfn, "grund": grund, "staerke": power}
 
 
 # ------------------------------------------------------------------ Werte-Diagramm (alle Spiele außer Sonderformeln)

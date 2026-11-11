@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.33.0 (11.11.2026)
+
+- Getragene Items: `abfragen._held` nimmt das PokéWiki (Legenden: Arceus), sonst `pokemon_items` der PokéAPI je Editionsgruppe
+  (Generation 3 bis 7), mit Editionen, wenn sie sich unterscheiden. Ohne Daten: Generation 2, ab Schwert/Schild (außer
+  Legenden: Arceus), Z-A; Let's Go und Legenden: Arceus kennen keine getragenen Items im Kampf
+- Rechenweg-Tooltips: `tipRef` (HTML in `TIPM`, Element trägt `data-tip-calc`), `partsTip` (Anteile, Summe, Formel), `dmgTip`
+  (aus `grund`, `staerke`, `faktoren`, `a_info`, `d_info` von `abfragen._calc_steps`)
+- Offen: Rechenweg auch für Fangrate und Initiative-Liste
+
 ## 0.32.0 (11.11.2026)
 
 - Schadensrechner: `abfragen.damage_view` mit `art` „la“ (Werte über `effort.stat`, Team-Platz `el`, Gegner Stufe 0 oder 10)

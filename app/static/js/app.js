@@ -122,6 +122,34 @@ function radar(werte, size = 78, big = false) {
   });
   return s + "</svg>";
 }
+/* Rechenweg als Tooltip: der HTML-Text liegt in TIPM, das Element trägt nur die Nummer (data-tip-calc) */
+let TIPN = 0;
+const TIPM = new Map();
+function tipRef(html) {
+  TIPM.set(++TIPN, html);
+  if (TIPM.size > 5000) TIPM.delete(TIPM.keys().next().value);
+  return `data-tip-calc="${TIPN}"`;
+}
+/* Woraus ein Wert besteht: farbige Teile wie im Balken, Summe, darunter die Formel */
+function partsTip(title, parts, total, formulas) {
+  return `<div class="tt">${esc(title)}</div><table class="ctip">${parts.filter((p) => p[2]).map(([cls, label, v], k) => `<tr><td><span class="sw ${cls}"></span>${esc(label)}</td><td class="n">${k && v > 0 ? "+" : ""}${v}</td></tr>`).join("")}
+    <tr class="sum"><td>Wert</td><td class="n">${total}</td></tr></table>${formulas.filter(Boolean).map((f) => `<div class="muted">${esc(f)}</div>`).join("")}`;
+}
+/* Schadensrechner: Rechenweg einer Zeile (Werte, Grundschaden, Faktoren der Reihe nach, Ergebnis) */
+function dmgTip(r, x) {
+  const fx = (x.faktoren || []).map(([l, v]) => `<span class="fx">${esc(l)}${v == null ? "" : ` <b>×${typeof v === "number" ? fl(v) : esc(v)}</b>`}</span>`).join("");
+  const lv = r.gen === 1 && x.faktoren?.some((f) => String(f[0]).startsWith("Volltreffer")) ? r.level * 2 : r.level;
+  const k = Math.floor(2 * lv / 5) + 2, old = r.gen <= 2;
+  return `<div class="tt">${esc(r.angreifer)}: ${esc(r.attacke)} gegen ${esc(x.name)}</div>
+    <table class="ctip"><tr><td>Angriff</td><td class="n">${x.angriff}</td><td class="muted">${esc(x.a_info || "")}</td></tr>
+      <tr><td>Verteidigung</td><td class="n">${x.verteidigung}</td><td class="muted">${esc(x.d_info || "")}</td></tr>
+      <tr><td>KP</td><td class="n">${x.kp}</td><td></td></tr></table>
+    <div class="tt">Grundschaden</div>
+    <div>${old ? "min(" : ""}⌊⌊(2 × Level / 5 + 2) × Stärke × Angriff / Verteidigung⌋ / 50⌋${old ? ", 997)" : ""} + 2</div>
+    <div class="muted">${old ? "min(" : ""}⌊⌊${k} × ${x.staerke} × ${x.angriff} / ${x.verteidigung}⌋ / 50⌋${old ? ", 997)" : ""} + 2 = <b style="color:#fff">${x.grund}</b>${old && (x.angriff > 255 || x.verteidigung > 255) ? " (Werte über 255: beide geviertelt)" : ""}</div>
+    <div class="tt">Dann der Reihe nach</div><div class="tg">${fx}</div>
+    <div class="tt">Ergebnis</div><div><b>${x.min}–${x.max}</b> von ${x.kp} KP = ${String(x.min_pct).replace(".", ",")}–${String(x.max_pct).replace(".", ",")} %</div>`;
+}
 function radarTipHtml(werte) {
   return `<div class="tt" style="margin-top:0">Netzdiagramm</div><div class="muted">Außen = Höchstwert aller Pokémon, Ringe bei 25, 50 und 75 %</div>
     <table class="rtip"><thead><tr><th></th><th>Wert</th><th></th><th>Skala</th><th>Höchstwert</th></tr></thead><tbody>${[0, 1, 2, 3, 4, 5].map((i) => `<tr><td>${STAT[i]}</td><td class="num"><b>${werte[i]}</b></td>
@@ -312,13 +340,14 @@ function cellTip(a, v) {
 let tipTimer, cardTimer;
 document.addEventListener("mouseover", (e) => {
   if (e.pointerType === "touch") return;
-  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats]");
+  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats],[data-tip-calc]");
   if (t) {
     clearTimeout(tipTimer);
     tipTimer = setTimeout(() => {
       if (t.dataset.tipType) tip.innerHTML = typeTipHtml(t.dataset.tipType);
       else if (t.dataset.tipCell) tip.innerHTML = cellTip(...t.dataset.tipCell.split(":"));
       else if (t.dataset.tipStats) tip.innerHTML = radarTipHtml(t.dataset.tipStats.split(",").map(Number));
+      else if (t.dataset.tipCalc) tip.innerHTML = TIPM.get(+t.dataset.tipCalc) || "";
       else tip.textContent = t.dataset.tip;
       tip.classList.toggle("rich", !t.dataset.tip);
       tip.hidden = !t.isConnected || !tip.textContent.trim();
@@ -335,7 +364,7 @@ document.addEventListener("mouseover", (e) => {
 // Klick vor dem Erscheinen: keine Karte mehr (sonst blieb sie auf der nächsten Seite oben links stehen)
 document.addEventListener("pointerdown", () => { clearTimeout(cardTimer); clearTimeout(tipTimer); card.hidden = true; tip.hidden = true; }, true);
 document.addEventListener("mouseout", (e) => {
-  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats]");
+  const t = e.target.closest("[data-tip],[data-tip-type],[data-tip-cell],[data-tip-stats],[data-tip-calc]");
   if (t && !t.contains(e.relatedTarget)) { clearTimeout(tipTimer); tip.hidden = true; }
   const c = e.target.closest(".mon,[data-hc]");
   if (c && !c.contains(e.relatedTarget)) { clearTimeout(cardTimer); card.hidden = true; }
@@ -1228,7 +1257,7 @@ async function elBox(d, slot) {
     <table class="rows eltab"><tr><th>Wert</th><th class="c" data-tip="Basiswert der Art: fest, hängt nicht vom Level ab. Aus ihm, dem Level, dem Effort Level und dem Wesen rechnet das Spiel den Wert">Basis</th>
       <th class="c" data-tip="Effort Level 0 bis 10, wie im Spiel in der Übersicht des Pokémon">Stufe</th><th class="c" data-tip="Wert im Spiel mit dieser Stufe, diesem Level und Wesen">jetzt</th>
       <th class="c" data-tip="Stufe, auf die du hinarbeitest; folgt der Stufe, bis du es eigens höher setzt">Ziel</th><th class="c" data-tip="Wert, wenn das Ziel erreicht ist">am Ziel</th><th class="c" data-tip="Wert mit Stufe 10 bei diesem Level und Wesen">höchstens</th></tr>
-    ${r.rows.map((x, i) => `<tr><td>${STAT[i]}${nat(x)}</td><td class="c">${x.basis}</td><td class="c"><select data-el="${i}">${opt(x.el)}</select></td><td class="c" data-tip="${esc(elTip(x, i, lv))}"><b>${x.wert}</b></td>
+    ${r.rows.map((x, i) => `<tr><td>${STAT[i]}${nat(x)}</td><td class="c">${x.basis}</td><td class="c"><select data-el="${i}">${opt(x.el)}</select></td><td class="c" ${tipRef(elTipHtml(x, i, lv))}><b>${x.wert}</b></td>
       <td class="c"><select data-elz="${i}">${opt(x.ziel, x.el)}</select></td><td class="c">${x.ziel > x.el ? `<b style="color:var(--go)">${x.wert_ziel}</b> <span class="hint">+${x.wert_ziel - x.wert}</span>` : `<span class="hint">${x.wert_ziel}</span>`}</td><td class="c hint">${x.max}</td></tr>`).join("")}</table>
     <p class="hint">${need ? `Bis zum Ziel fehlen: ${r.bonbons.map((n, k) => n ? `<b>${n}× ${esc(r.sorten[k])}</b>` : "").filter(Boolean).join(", ")}.` : "Ziel wählen: dann steht hier, wie viele Leistungs-Items fehlen."}
       Leistungssand hebt Stufe 0–2, Leistungskies 3–5, Leistungsstein 6–8, Leistungsfels 9 auf 10, je um eins. Es gibt sie für freigelassene Pokémon, von Alphas und bei Zisu im Trainingsplatz zum Tauschen.
@@ -1260,10 +1289,12 @@ async function statBox(d, slot) {
   const tip = (x, i) => `${STAT[i]} ${x.wert}: Basiswert ${x.teile.basis}, durch Level ${lv} +${x.teile.level}, ${IV} ${x.iv}: +${x.teile.iv}, ${EV} ${x.ev}: +${x.teile.ev}${x.teile.wesen ? `, Wesen ${x.teile.wesen > 0 ? "+" : ""}${x.teile.wesen}` : ""}`
     + (old ? `\nFormel: ((Basis + DV) × 2 + √Stat Exp / 4) × Level / 100 + ${i === 0 ? "Level + 10" : "5"}` : lg ? `\nFormel: (2 × Basis + IV) × Level / 100 + ${i === 0 ? "Level + 10" : "5, dann × Wesen"}, dann + AV`
       : `\nFormel: (2 × Basis + IV + EV / 4) × Level / 100 + ${i === 0 ? "Level + 10" : "5, dann × Wesen"}`);
+  const tipH = (x, i) => partsTip(`${STAT[i]} bei Level ${lv}`, [["e-b", "Basiswert", x.teile.basis], ["e-l", "durch das Level", x.teile.level], ["e-i", `${IV} ${x.iv}`, x.teile.iv], ["e-e", `${EV} ${x.ev}`, x.teile.ev], ["e-w", "Wesen", x.teile.wesen]], x.wert,
+    [tip(x, i).split("\n")[1], x.ziel > x.ev ? `Mit ${x.ziel} ${EV}: ${x.wert_ziel}` : ""]);
   const top = Math.max(...r.rows.map((x) => x.max), 1), pc = (v) => (Math.max(0, v) / top * 100).toFixed(2);
-  const seg = (cls, v, t) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%" data-tip="${esc(t)}"></i>` : "";
+  const seg = (cls, v) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%"></i>` : "";            // Rechenweg am ganzen Balken
   const bars = r.rows.map((x, i) => { const t = x.teile, extra = x.ev_ziel_teil - t.ev;
-    return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" data-tip="${esc(tip(x, i))}">${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-i", t.iv, `${IV} ${x.iv}: +${t.iv}`)}${seg("e-e", t.ev, `${EV} ${x.ev}: +${t.ev}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%" data-tip="Wesen: ${t.wesen}"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (${x.ziel} ${EV}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
+    return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" ${tipRef(tipH(x, i))}>${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-i", t.iv, `${IV} ${x.iv}: +${t.iv}`)}${seg("e-e", t.ev, `${EV} ${x.ev}: +${t.ev}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (${x.ziel} ${EV}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
   const S0 = 150, c = S0 / 2, R = c - 24;
   const pt = (k, f) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [c + Math.cos(a) * R * f, c + Math.sin(a) * R * f]; };
   const poly = (fn, cls) => `<polygon class="${cls}" points="${RADAR_ORDER.map((i, k) => pt(k, Math.max(0.03, Math.min(1, fn(r.rows[i]) / top))).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`;
@@ -1279,7 +1310,7 @@ async function statBox(d, slot) {
     <table class="rows eltab stab"><tr><th>Wert</th><th class="c">Basis</th><th class="c" data-tip="0 bis ${r.iv_max}">${IV}</th><th class="c" data-tip="0 bis ${r.ev_max}">${EV}</th><th class="c">jetzt</th>
       <th class="c" data-tip="${EV}, auf die du hinarbeitest">Ziel</th><th class="c">am Ziel</th><th class="c" data-tip="mit vollen ${IV}s und ${EV}${old ? "" : " und passendem Wesen"}">höchstens</th></tr>
     ${r.rows.map((x, i) => `<tr><td>${STAT[i]}${nat(x)}</td><td class="c">${x.basis}</td><td class="c"><input type="number" min="0" max="${r.iv_max}" value="${x.iv}" data-stiv="${i}"></td>
-      <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old || lg ? 1 : 4}" value="${x.ev}" data-stev="${i}"></td><td class="c" data-tip="${esc(tip(x, i))}"><b>${x.wert}</b></td>
+      <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old || lg ? 1 : 4}" value="${x.ev}" data-stev="${i}"></td><td class="c" ${tipRef(tipH(x, i))}><b>${x.wert}</b></td>
       <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old || lg ? 1 : 4}" value="${x.ziel}" data-stz="${i}"></td>
       <td class="c">${x.ziel > x.ev ? `<b style="color:var(--go)">${x.wert_ziel}</b> <span class="hint">+${x.wert_ziel - x.wert}</span>` : `<span class="hint">${x.wert_ziel}</span>`}</td><td class="c hint">${x.max}</td></tr>`).join("")}</table>
     <p class="hint">${left === null ? "" : left >= 0 ? `Ziel-EVs zusammen ${r.ev_ziel_summe} von ${r.ev_gesamt}, noch ${left} frei. ` : `<span style="color:var(--stop)">Ziel-EVs zusammen ${r.ev_ziel_summe}: ${-left} mehr als erlaubt (${r.ev_gesamt}).</span> `}
@@ -1297,6 +1328,12 @@ async function statBox(d, slot) {
   $("#streach").addEventListener("click", () => { fix(); det[K.ev] = cur("ziel"); det[K.z] = cur("ziel"); save(); });
 }
 /* Woraus ein Wert in Legenden: Arceus besteht, als Text für den Tooltip */
+function elTipHtml(x, i, lv) {
+  const t = x.teile;
+  return partsTip(`${STAT[i]} bei Level ${lv}, Effort Level ${x.el}`, [["e-b", "Basiswert", t.basis], ["e-l", "durch das Level", t.level], ["e-e", "durch Effort Levels", t.el], ["e-w", "Wesen", t.wesen]], x.wert,
+    [i === 0 ? `Grundwert: (Level/100 + 1) × Basis + Level = (${lv}/100 + 1) × ${x.basis} + ${lv}` : `Grundwert: (Level/50 + 1) × Basis / 1,5${x.wesen !== 1 ? " × Wesen" : ""} = (${lv}/50 + 1) × ${x.basis} / 1,5${x.wesen !== 1 ? ` × ${fl(x.wesen)}` : ""}`,
+      `Bonus: (√Basis × Faktor + Level) / 2,5, gerundet; Faktor bei Stufe ${x.el}: ${x.faktor}, Bonus ${x.bonus}`]);
+}
 function elTip(x, i, lv) {
   const t = x.teile, n = x.wesen > 1 ? "× 1,1 (Wesen)" : x.wesen < 1 ? "× 0,9 (Wesen)" : "";
   return `${STAT[i]} ${x.wert} = Grundwert ${t.basis + t.level - (x.bonus - t.el) + t.wesen} + Bonus ${x.bonus}\n`
@@ -1310,7 +1347,7 @@ function elChart(rows, lv) {
   const top = Math.max(...rows.map((x) => x.max), 1), pc = (v) => (Math.max(0, v) / top * 100).toFixed(2);
   const seg = (cls, v, tip) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%" data-tip="${esc(tip)}"></i>` : "";
   const bars = rows.map((x, i) => { const t = x.teile, extra = x.el_ziel_teil - t.el;
-    return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" data-tip="${esc(elTip(x, i, lv))}">${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-e", t.el, `durch Effort Level ${x.el}: +${t.el}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%" data-tip="Wesen: ${t.wesen}"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (Stufe ${x.ziel}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
+    return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" ${tipRef(elTipHtml(x, i, lv))}>${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-e", t.el, `durch Effort Level ${x.el}: +${t.el}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (Stufe ${x.ziel}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
   // Netz: Schichten von außen nach innen (Ziel, jetzt, ohne Effort Levels, Basiswert)
   const S0 = 150, c = S0 / 2, R = c - 24;
   const pt = (k, f) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [c + Math.cos(a) * R * f, c + Math.sin(a) * R * f]; };
@@ -1429,7 +1466,8 @@ function heldHtml(d) {
   if (!xs.length) return "";
   return `<div class="box"><h2>Getragene Items</h2><table class="rows held"><tbody>${xs.map((x) => `<tr>
     <td>${x.id ? `<img class="ibild sm" src="itembild/${x.id}" alt="" loading="lazy" onerror="this.remove()">` : ""}</td><td><b>${wikiLink(x.item)}</b>${x.elite ? ` <span class="alpha" data-tip="Nur Elite-Pokémon (Alpha)">Elite</span>` : ""}</td>
-    <td class="c num">${esc(x.prozent)}</td></tr>`).join("")}</tbody></table><p class="hint">Beim Fangen oder Besiegen, aus dem PokéWiki.</p></div>`;
+    <td class="c num">${esc(x.prozent)}</td><td class="hint">${x.editionen?.length ? "nur " + esc(x.editionen.join(", ")) : ""}</td></tr>`).join("")}</tbody></table>
+    <p class="hint">Trägt ein wildes Pokémon mit dieser Wahrscheinlichkeit; du bekommst das Item, wenn du es fängst (oder mit Raub, Trick). Aus ${esc(xs[0].quelle || "PokéWiki")}.</p></div>`;
 }
 /* Entwicklungskette als Baum: jeder Ast eine Zeile; ein zweiter Ast beginnt unter seiner Stufe (Waumpel → Schaloko
    → Papinella, darunter → Panekon → Pudox) */
@@ -3084,14 +3122,14 @@ async function calcBox() {
       <div class="ac"><input id="cfoeq" type="search" placeholder="Gegner hinzufügen" style="width:200px"></div></div>` : ""}
     ${all ? `<div class="scroll"><table class="rows dmgx"><thead><tr><th></th>${all.gegner.map((g) => `<th class="c" data-hc="${g.id}">${img(g.id, "sm")}<div>${esc(g.name)}</div></th>`).join("")}</tr></thead>
       <tbody>${all.rows.map((m) => `<tr><th class="nw" data-hc="${m.id}">${img(m.id, "sm")} ${esc(m.name)}</th>${m.zellen.map((x, k) => !x ? `<td class="c hint">–</td>`
-        : `<td class="c ${toneOf(x)}" data-tip="${esc(`${m.name}: ${x.attacke} gegen ${all.gegner[k].name}\n${pct(x.min_pct)}–${pct(x.max_pct)} % (${ko(x)}), Wirkung ×${fl(x.eff)}`)}"><b>${pct(x.max_pct)} %</b><div class="hint">${esc(x.attacke)}</div></td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<div class="scroll sticky"><table class="rows sort dmg fixed"><colgroup><col style="width:26%"><col style="width:84px"><col style="width:180px"><col style="width:110px"><col style="width:120px"><col></colgroup>
+        : `<td class="c ${toneOf(x)}" ${tipRef(dmgTip({angreifer: m.name, attacke: x.attacke, level: x.level ?? r.level, gen: r.gen}, Object.assign({}, x, {name: all.gegner[k].name})) + `<div class="muted">${esc(ko(x))}</div>`)}><b>${pct(x.max_pct)} %</b><div class="hint">${esc(x.attacke)}</div></td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<div class="scroll sticky"><table class="rows sort dmg fixed"><colgroup><col style="width:26%"><col style="width:84px"><col style="width:180px"><col style="width:110px"><col style="width:120px"><col></colgroup>
       <thead><tr>${th("Verteidiger")}${thc("Wirkung")}${thc("Schaden", "Balken: kräftig der kleinste Wurf, blass bis zum größten; ein voller Balken ist 100 % der KP")}${thc("in %", "Prozent der KP, kleinster bis größter Wurf")}${thc("KP")}${th("Treffer bis K.O.", "", true)}</tr></thead>
       <tbody>${r.rows.map((x) => { const tone = x.min_pct >= 100 ? "go" : x.max_pct >= 100 ? "warn" : x.max_pct >= 50 ? "mid" : "low";
         return `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a>${x.faehigkeit_vert ? ` <span class="cls" data-tip="Fähigkeit des Verteidigers ändert die Wirkung dieser Attacke (gerechnet mit seiner ersten Fähigkeit)">${esc(x.faehigkeit_vert)}</span>` : ""}${x.item_vert ? ` <span class="cls" data-tip="${esc("Item des Verteidigers: " + x.item_vert)}">Item</span>` : ""}</td>
         <td class="c" data-s="${x.eff}">${x.eff === 1 ? `<span class="hint">×1</span>` : `<span class="f ${fcls(x.eff)}">×${fl(x.eff)}</span>`}</td>
-        <td data-s="${x.max_pct}"><span class="dbar ${tone}"><i class="mx" style="width:${Math.min(100, x.max_pct)}%"></i><i class="mn" style="width:${Math.min(100, x.min_pct)}%"></i></span></td>
-        <td class="c num ${tone}" data-s="${x.max_pct}">${pct(x.min_pct)}–${pct(x.max_pct)} %</td>
-        <td class="c num hint" data-s="${x.kp}">${x.min}–${x.max} / ${x.kp}</td><td class="${cls(x)}">${ko(x)}</td></tr>`; }).join("")}</tbody></table></div>`}`;
+        <td data-s="${x.max_pct}" ${tipRef(dmgTip(r, x))}><span class="dbar ${tone}"><i class="mx" style="width:${Math.min(100, x.max_pct)}%"></i><i class="mn" style="width:${Math.min(100, x.min_pct)}%"></i></span></td>
+        <td class="c num ${tone}" data-s="${x.max_pct}" ${tipRef(dmgTip(r, x))}>${pct(x.min_pct)}–${pct(x.max_pct)} %</td>
+        <td class="c num hint" data-s="${x.kp}" ${tipRef(dmgTip(r, x))}>${x.min}–${x.max} / ${x.kp}</td><td class="${cls(x)}">${ko(x)}</td></tr>`; }).join("")}</tbody></table></div>`}`;
   $$("[data-cv]", el()).forEach((b) => b.addEventListener("click", () => set("ansicht", b.dataset.cv)));
   if ($("#cfoeq")) autocomplete($("#cfoeq"), (x) => { if (!own.includes(x.id)) store.set(ownKey, [...own, x.id].slice(0, 30)); calcBox(); });
   const set = (k, v) => { o[k] = v; store.set(ck, o); calcBox(); };
