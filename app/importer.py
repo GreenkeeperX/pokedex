@@ -18,9 +18,9 @@ import os
 import re
 import sqlite3
 
-from . import altissimo, companion, pokewiki, showdown
+from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "17"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "18"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -1235,7 +1235,7 @@ def _derive_wiki(con, wiki):
     (getragen). Namen werden über die deutschen Namen der Datenbank zugeordnet; Unbekanntes bleibt weg.
     Gibt (Attacken, Items) zurück."""
     con.execute("CREATE TABLE attacke_spiel (spiel TEXT, attacke INTEGER, staerke INTEGER, kraft INTEGER, tempo INTEGER, "
-                "genauigkeit INTEGER, ap INTEGER, PRIMARY KEY (spiel, attacke))")
+                "genauigkeit INTEGER, ap INTEGER, abklingzeit INTEGER, PRIMARY KEY (spiel, attacke))")
     con.execute("CREATE TABLE getragen (spiel TEXT, art INTEGER, item TEXT, item_id INTEGER, prozent TEXT, elite INTEGER)")
     wiki = wiki or {}
     moves = {n: i for i, n in con.execute("SELECT id, name FROM attacke")}
@@ -1244,7 +1244,7 @@ def _derive_wiki(con, wiki):
         for name, v in vals.items():
             mid = moves.get(name)
             if mid and isinstance(v, dict):
-                con.execute("INSERT OR REPLACE INTO attacke_spiel VALUES (?, ?, ?, ?, ?, ?, ?)",
+                con.execute("INSERT OR REPLACE INTO attacke_spiel VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
                             (spiel, mid, v.get("staerke"), v.get("kraft"), v.get("tempo"), v.get("genauigkeit"), v.get("ap")))
                 n_moves += 1
     species = {n: k for k, n in _names(con, "pokemon_species_names", "pokemon_species_id").items()}
@@ -1260,6 +1260,41 @@ def _derive_wiki(con, wiki):
                             (spiel, art, x["item"], items.get(pokewiki.item_key(x["item"])), x.get("prozent", ""), int(bool(x.get("elite")))))
                 n_items += 1
     return n_moves, n_items
+
+
+def _derive_serebii(con, ser):
+    """Aus Serebii (abruf._serebii): Abklingzeiten in Legenden: Z-A (attacke_spiel.abklingzeit) und die Pokémon in Pokopia
+    (Tabelle pokopia, dazu spiel_form für den Haupt-Pokédex). ser = {"za": {Schlüssel: {...}}, "pokopia": {Dex: [...]}}.
+    Gibt (Attacken, Pokopia-Einträge) zurück."""
+    ser = ser or {}
+    con.execute("CREATE TABLE pokopia (dex TEXT, nr INTEGER, art INTEGER, form INTEGER, name TEXT, spezial TEXT)")
+    moves = {k.replace("-", ""): i for i, k in con.execute("SELECT id, kennung FROM attacke")}
+    n_moves = 0
+    for k, v in (ser.get("za") or {}).items():
+        mid = moves.get(serebii.key(k)) or moves.get(serebii.key(v.get("name")))
+        if mid and isinstance(v.get("abkling"), int):
+            con.execute("INSERT OR IGNORE INTO attacke_spiel (spiel, attacke) VALUES ('legends-za', ?)", (mid,))
+            con.execute("UPDATE attacke_spiel SET abklingzeit = ? WHERE spiel = 'legends-za' AND attacke = ?", (v["abkling"], mid))
+            n_moves += 1
+    pk = con.execute("SELECT id FROM spiel WHERE kennung = 'pokopia'").fetchone()
+    std = dict(con.execute("SELECT art, id FROM form WHERE standard = 1"))
+    kinds = {}
+    for fid, art, kennung in con.execute("SELECT id, art, kennung FROM form"):
+        kinds[(art, kennung.split("-", 1)[1] if "-" in kennung else "")] = fid
+    n_pk = 0
+    for dex, rows in (ser.get("pokopia") or {}).items():
+        for r in rows:
+            art = r.get("national")
+            if art not in std:
+                continue
+            suf = str(r.get("form") or "")
+            fid = kinds.get((art, suf)) or std[art]
+            con.execute("INSERT INTO pokopia VALUES (?, ?, ?, ?, ?, ?)",
+                        (dex, r.get("nr"), art, fid, str(r.get("name") or "")[:80], json.dumps(r.get("spezial") or [])))
+            if dex == "haupt" and pk:
+                con.execute("INSERT OR IGNORE INTO spiel_form VALUES (?, ?, ?)", (pk[0], fid, r.get("nr")))
+            n_pk += 1
+    return n_moves, n_pk
 
 
 def _derive_moveset(con, sets):
@@ -1322,6 +1357,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_rez = _derive_rezept(con, alt, en_de)
         n_sets = _derive_moveset(con, sets)
         n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
+        n_abkling, n_pokopia = _derive_serebii(con, (wiki or {}).get("serebii"))
         n_wiki_karte = _derive_wiki_karte(con, wiki)
         n_orte = _derive_companion(con, alt)
         con.execute("CREATE TABLE extra (name TEXT PRIMARY KEY, inhalt TEXT)")
@@ -1341,7 +1377,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
                  "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
-                 "kartenobjekte": n_obj, "lernen": n_lernen, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez, "check": why}
+                 "kartenobjekte": n_obj, "lernen": n_lernen, "abklingzeiten": n_abkling, "pokopia": n_pokopia, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez, "check": why}
     finally:
         con.close()
     return stats

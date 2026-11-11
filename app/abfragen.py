@@ -361,8 +361,11 @@ def move_view(D, m, g):
     order = g["reihenfolge"] if g else 10 ** 6
     v = attacken.in_game(m, D.changes.get(m["id"], []), order)
     w = D.game_moves.get((g["kennung"], m["id"])) if g else None
-    if w:
+    if w and w.get("abklingzeit") is not None:
+        v = dict(v, abkling=w["abklingzeit"])
+    if w and (w["kraft"] is not None or w["tempo"] is not None):
         v = dict(v, kraft=w["kraft"], tempo=w["tempo"], quelle="PokéWiki")
+    if w:
         for k in ("staerke", "genauigkeit", "ap"):
             if w[k] is not None and w[k] != v.get(k):
                 v[k], v["geaendert"] = w[k], True
@@ -1202,7 +1205,7 @@ def detail(fid, p):
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
-                    wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f), optik=_optik(con, f),
+                    wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f), optik=_optik(con, f), pokopia=_pokopia(con, g, f),
                     raids=_raids(con, D, g, form=fid) if g and g["kennung"] in TERA_GAMES else [],
                     crypto=_crypto(con, D, g, fid) if g and g["kennung"] in ("colosseum", "xd") else [],
                     spielwissen=knowledge(con, g["kennung"] if g else "", fid))
@@ -1266,6 +1269,19 @@ def _held(con, g, f):
     except Exception:
         return []
     return [{"item": r[0], "id": r[1], "prozent": r[2], "elite": bool(r[3])} for r in rows]
+
+
+def _pokopia(con, g, f):
+    """Einträge der Art in den Pokédexen von Pokopia (Serebii): [{dex, nr, name, spezial: [deutsch]}]."""
+    if not g or g["kennung"] != "pokopia":
+        return []
+    from . import serebii
+    try:
+        rows = con.execute("SELECT dex, nr, name, spezial FROM pokopia WHERE art = ? ORDER BY dex = 'haupt' DESC, nr", (f["art"],)).fetchall()
+    except Exception:
+        return []
+    return [{"dex": serebii.POKOPIA_DEX.get(r[0], r[0]), "nr": r[1], "name": r[2],
+             "spezial": [serebii.spezial_de(k) for k in json.loads(r[3] or "[]")]} for r in rows]
 
 
 def _wiki_title(D, f):
@@ -2089,7 +2105,9 @@ def damage_view(body):
     """Schaden einer Attacke eines Team-Platzes (ids, details, slot, attacke) gegen Verteidiger (verteidiger: [Form-IDs]).
     Optionen: krit, flaeche (None = nach dem Ziel der Attacke, nur im Doppel), vert ("0", "kp", "kp_vert": Investition
     der Verteidiger), tera_vert (Tera-Typ der Verteidiger), level (eigenes Level, sonst aus dem Platz oder 50),
-    level_vert (Level der Verteidiger, sonst wie der Angreifer). In Champions immer Level 50. Ab Generation 3."""
+    level_vert (Level der Verteidiger, sonst wie der Angreifer), wetter ("sonne", "regen"). In Champions immer Level 50.
+    Fähigkeit und Item des Platzes zählen, wenn sie ohne Bedingung wirken (schaden.MODS); bei den Verteidigern die erste
+    Fähigkeit, wenn sie die Typwirkung ändert. Generation 1 und 2: eigene Formel (schaden.calc_old)."""
     from . import doppel, schaden
     D = data()
     if not D:
@@ -2100,8 +2118,6 @@ def damage_view(body):
     slot = _int(body.get("slot")) or 0
     if slot >= len(ids) or ids[slot] not in D.forms or _int(body.get("attacke")) not in D.moves:
         return {"rows": []}
-    if gen <= 2:
-        return {"rows": [], "hinweis": "Generation 1 und 2 rechnen Schaden anders (DV, Stat Exp, ein Spezial-Wert); dafür gibt es noch keinen Rechner."}
     f, d = D.forms[ids[slot]], per[slot]
     mv = move_view(D, D.moves[_int(body.get("attacke"))], g)
     champ = not g or g["kennung"] == "champions"
@@ -2127,18 +2143,64 @@ def damage_view(body):
     spread = (doubles and D.move_target.get(mv["id"]) in (doppel.ALL_OTHERS, doppel.ALL_FOES)) if spread is None else bool(spread)
     inv = {"0": (0, 0), "kp": (schaden.EV_MAX, 0), "kp_vert": (schaden.EV_MAX, schaden.EV_MAX)}.get(str(body.get("vert") or "0"), (0, 0))
     d_tera = _int(body.get("tera_vert")) if _int(body.get("tera_vert")) in D.types else None
-    rows = []
+    wetter = str(body.get("wetter") or "") if gen >= 2 and str(body.get("wetter") or "") in schaden.WEATHER else ""
+    names = _calc_names(D)
+    item_id = _int(d.get("item"))
+    a_item = names["items"].get(item_id, ("", ""))[0] if item_id else ""
+    abil_id = _int(d.get("faehigkeit"))
+    a_abil = (D.abilities.get(abil_id, ("",))[0] if abil_id else "") or (ability_of(D, f, g) or "")
+    if no_abilities(g):
+        a_abil = ""
+    tkey = D.type_key.get(mv["typ"], "")
+    rows, used = [], []
     for vid in _ints(body.get("verteidiger"))[:60]:
         v = D.forms.get(vid)
         if not v or mv["klasse"] not in (2, 3) or not mv["staerke"]:
             continue
-        r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], form_stats(D, f, gen)[0], a_types, form_stats(D, v, gen)[0], form_types(D, v, gen), ch,
-                         a_tera=tera, d_tera=d_tera, a_ev=a_ev, a_iv=a_iv, a_nat=nat, d_ev=inv, spread=spread,
-                         crit=bool(body.get("krit")), crit_mult=2.0 if gen <= 5 else 1.5, d_level=d_level)
+        v_types = form_types(D, v, gen)
+        if gen <= 2:
+            exp = schaden.EXP_MAX                                    # bis Generation 2: volle DVs und Stat Exp
+            m = schaden.modifiers(mv["klasse"], mv["staerke"], tkey, 1.0, None,
+                                  a_item if gen == 2 and a_item in schaden.TYPE_ITEMS else None, wetter, gen)
+            r = schaden.calc_old(gen, level, mv["staerke"], mv["klasse"], mv["typ"], form_stats(D, f, gen)[0], a_types,
+                                 form_stats(D, v, gen)[0], v_types, ch, crit=bool(body.get("krit")),
+                                 d_inv=(inv[0] > 0, inv[1] > 0), d_level=d_level, a_exp=exp, item=m["staerke"], weather=m["wetter"])
+        else:
+            eff = schaden.effect(ch, mv["typ"], [d_tera] if d_tera else v_types)
+            m = schaden.modifiers(mv["klasse"], mv["staerke"], tkey, eff, a_abil, a_item, wetter, gen)
+            d_ab = ability_of(D, v, g)
+            dm = typen.ABILITY_DEFENSE.get(d_ab or "", {}).get(mv["typ"], 1.0)
+            r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], form_stats(D, f, gen)[0], a_types, form_stats(D, v, gen)[0], v_types, ch,
+                             a_tera=tera, d_tera=d_tera, a_ev=a_ev, a_iv=a_iv, a_nat=nat, d_ev=inv, spread=spread,
+                             crit=bool(body.get("krit")), crit_mult=2.0 if gen <= 5 else 1.5, d_level=d_level, mods=m, d_mod=dm)
+            if dm != 1.0:
+                r["faehigkeit_vert"] = D.abilities.get(next((a for a, h in v["faehigkeiten"] if not h), 0), ("", d_ab))[1]
+        for t in m["texte"]:
+            if t not in used:
+                used.append(t)
         rows.append(dict(r, id=vid, name=v["name"]))
+    label = {"faehigkeit": lambda k: names["abil"].get(k, k), "item": lambda k: names["item_de"].get(k, k),
+             "wetter": lambda k: {"sonne": "Sonne", "regen": "Regen"}.get(k, k)}
     return {"angreifer": f["name"], "attacke": mv["name"], "typ": mv["typ"], "klasse": mv["klasse"], "staerke": mv["staerke"],
             "stab": schaden.stab_of(mv["typ"], a_types, tera), "level": level, "level_vert": d_level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "gen": gen,
-            "krit": 2.0 if gen <= 5 else 1.5, "rows": rows}
+            "krit": 2.0 if gen <= 5 else 1.5, "rows": rows, "wetter": wetter,
+            "eingerechnet": [f"{label[kind](k)}: {txt}" for kind, k, txt in used]}
+
+
+def _calc_names(D):
+    """Für den Schadensrechner: {"items": {ID: (Kennung, Name)}, "item_de": {Kennung: Name}, "abil": {Kennung: Name}}."""
+    if getattr(D, "calc_names", None) is None:
+        con = db.game()
+        try:
+            de = dict(con.execute("SELECT item_id, name FROM item_names WHERE local_language_id = 6"))
+            items = {i: (k, de.get(i) or k) for i, k in con.execute("SELECT id, identifier FROM items")}
+        except sqlite3.OperationalError:
+            items = {}
+        finally:
+            con.close()
+        D.calc_names = {"items": items, "item_de": {k: n for k, n in items.values()},
+                        "abil": {k: n for k, n in D.abilities.values()}}
+    return D.calc_names
 
 
 # ------------------------------------------------------------------ Tera-Raids (Karmesin/Purpur)
