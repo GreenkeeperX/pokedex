@@ -51,6 +51,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   weitergeben, mit Item, Fähigkeit, Wesen, EVs, IVs und Tera-Typ.
 - **Initiative-Liste** (Team → Initiative-Liste): alle Pokémon des Spiels nach Initiative auf Level 50 oder 100, mit
   Rückenwind und Wahlschal; das eigene Team steht mit seinem Wert dazwischen.
+- **Kampf** (in Champions statt „Karte“, sonst über `#kampf`): Doppelkampf-Bewertung des Teams mit Rollen,
+  Flächenattacken, Gefahr für den Partner und Tempo. In Champions heißt „gefangen“ „im Kader“.
 - **Vergleich**: zwei Pokémon nebeneinander (Werte mit Unterschied, Typwirkung, Fähigkeiten, Attacken), über
   „Vergleichen“ auf der Detailseite.
 - **Typkombinationen** (Reiter Typen): alle 171 Kombinationen als Verteidiger, sortierbar.

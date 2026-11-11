@@ -64,6 +64,8 @@ a.btn.small{padding:2px 8px;font-size:13px}
 .sdbox{margin:8px 0}
 .sdbox textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:13px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:6px}
 .slotx{font-size:12px}
+table.dblroles th{text-align:left;white-space:nowrap;padding-right:12px;vertical-align:top}
+table.dblroles td{padding-bottom:6px}
 table.speed td,table.speed th{padding:2px 8px;vertical-align:middle}
 table.speed .spr{width:36px;height:36px;vertical-align:middle}
 table.speed td:first-child{white-space:nowrap}

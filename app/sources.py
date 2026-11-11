@@ -10,11 +10,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.18.0"
+VERSION = "0.19.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.19.0", "11.11.2026", [
+        "Champions: Reiter „Kampf“ statt „Karte“, „im Kader“ statt gefangen, ohne Schillernd und Fangchance",
+        "Doppelkampf-Bewertung (Reiter Kampf): Rollen wie Schutz, Tempo-Kontrolle, Störer, Umlenken und Unterstützung mit "
+        "Vorschlägen, wer sie lernen kann; Flächenattacken und ob sie den Partner treffen; Rat zu Rückenwind oder Bizarroraum",
+    ]),
     ("0.18.0", "11.11.2026", [
         "Team als Showdown-Text: übernehmen (auch PokePaste, deutsche Namen gehen ebenfalls) und weitergeben, mit Item, "
         "Fähigkeit, Wesen, EVs, IVs und Tera-Typ; die Plätze zeigen Item, Fähigkeit und Wesen",

@@ -1747,3 +1747,55 @@ def paste_export(body):
                      "wesen": P["nat_en"].get(_int(d.get("wesen")), ""),
                      "attacken": [P["move_en"][m] for m in _ints(d.get("attacken")) if m in P["move_en"]]})
     return {"text": paste.dump(sets)}
+
+
+# ------------------------------------------------------------------ Doppelkampf
+
+def team_doubles(body):
+    """Doppelkampf-Bewertung des Teams (ids, details, spiel) mit Rollen, Flächenattacken und Tempo."""
+    from . import doppel
+    D = data()
+    if not D:
+        return {}
+    g, gen, ch = game_of(D, body.get("spiel"))
+    ids = _ints(body.get("ids"))[:6]
+    per = slot_details(body.get("details"), ids)
+    if getattr(D, "move_target", None) is None:
+        con = db.game()
+        try:
+            D.move_target = dict(con.execute("SELECT id, target_id FROM moves"))
+        finally:
+            con.close()
+    role_moves = {k for _, _, _, ks in doppel.ROLES for k in ks}
+    con = db.game()
+    try:
+        ms = []
+        for i, d in zip(ids, per):
+            f = D.forms.get(i)
+            if not f:
+                continue
+            aid = _int(d.get("faehigkeit"))
+            if g and g["kennung"] in NO_ABILITIES:
+                abil = None
+            elif aid in D.abilities:
+                abil = D.abilities[aid][0]
+            else:
+                abil = ability_of(D, f, g)
+            abil_name = next((n for k, n in D.abilities.values() if k == abil), abil) if abil else None
+            moves = []
+            for mid in _ints(d.get("attacken")):
+                m = D.moves.get(mid)
+                if m:
+                    v = move_view(D, m, g)
+                    moves.append({"kennung": m["kennung"], "name": v["name"], "typ": v["typ"], "ziel": D.move_target.get(mid),
+                                  "schaden": m["klasse"] != attacken.STATUS and bool(v["staerke"])})
+            learn = {}
+            for mid, _meth, _lv, _mas in learnset(con, D, f, g)[0]:
+                m = D.moves.get(mid)
+                if m and m["kennung"] in role_moves:
+                    learn[m["kennung"]] = m["name"]
+            ms.append({"name": f["name"], "typen": form_types(D, f, gen), "init": f["init"], "faehigkeit": abil,
+                       "faehigkeit_name": abil_name, "attacken": moves, "lernbar": learn})
+    finally:
+        con.close()
+    return doppel.evaluate(ms, ch, D.type_key)

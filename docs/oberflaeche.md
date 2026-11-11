@@ -58,6 +58,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Rückfrage); `slotExtra` zeigt Item, Fähigkeit, Wesen und Tera-Typ aus `plaetze` der Bewertung.
 - Initiative-Liste (`speedView`, `#initiative`, Einstellungen in `speed`): Spalten minimal, neutral, maximal, maximal mit
   Wesen; Team-Zeilen (`tr.mine`) mit eigenem Wert an ihrer Stelle in der Liste.
+- Kampf (`battleView`, `#kampf`): Doppelkampf-Bewertung aus `/api/team/doppel`. `BATTLE()` (Champions) benennt den
+  Reiter „Karte“ in „Kampf“ um, leitet `#karte` dorthin und macht aus „gefangen“ „im Kader“ (ohne Schillernd, ohne Fangchance).
 - Vergleich (`compareView`, `#vergleich/<A>/<B>`, „-“ = leer): zwei Suchfelder, Werte mit Unterschied, Verteidigung je
   Angriffstyp (grün = steckt weniger ein), Fähigkeiten, Attacken (nur A, beide, nur B).
 - Typkombinationen (`combosHtml`, unter der Typtabelle, aufklappbar `combosOpen`): Verteidigung je Kombination, sortierbar.

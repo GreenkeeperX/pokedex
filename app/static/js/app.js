@@ -128,6 +128,8 @@ function radarTipHtml(werte) {
 
 const teamFull = () => S.team.ids.length >= 6;
 const isFav = (id) => S.favs.some((f) => f.id === id);
+/* Champions ist ein reines Kampfspiel: „im Kader“ statt gefangen, kein Schillernd, keine Fangchance, „Kampf“ statt „Karte“ */
+const BATTLE = () => S.game === "champions";
 const isCaught = (id) => S.caught.has(id);
 const isShiny = (id) => S.shiny.has(id);
 const isAlpha = (id) => S.alpha.has(id);
@@ -137,14 +139,15 @@ const alphaBtn = (id) => S.alphaOk.has(id) || isAlpha(id) ? `<span class="a alp$
 // Pokéball: gefangen, schillernd gefangen (goldener Ball mit Funkeln) oder nichts
 const ball = (id, on = isCaught(id)) => icon("ball", on).replace('class="ic ic-ball on"', `class="ic ic-ball on${isShiny(id) ? " shiny" : ""}"`)
 ;
-const ballTip = (id) => isShiny(id) ? `Schillernd in deiner Sammlung (${esc(gameName())}); Klick: doch nicht gefangen`
+const ballTip = (id) => BATTLE() ? (isCaught(id) ? "Im Kader; Klick: nicht mehr im Kader" : "In den Kader")
+  : isShiny(id) ? `Schillernd in deiner Sammlung (${esc(gameName())}); Klick: doch nicht gefangen`
   : isCaught(id) ? `In deiner Sammlung (${esc(gameName())}); Klick: schillernd` : "Als gefangen markieren";
 /* Marken (im Team, gefangen, Favorit) links oben auf der Bildecke, nur die gesetzten: so bleibt dem Namen die ganze
    Zeile. Zum Setzen erscheinen beim Hovern kleine Knöpfe unter dem Bild; nichts verschiebt sich */
 function marks(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
   return `<span class="mk">${inTeam ? `<span class="m m-team" data-tip="Im Team">${icon("team")}</span>` : ""}`
-    + `${got ? `<span class="m m-ball" data-tip="${isShiny(id) ? "Schillernd in" : "In"} deiner Sammlung (${esc(gameName())})">${ball(id)}</span>` : ""}`
+    + `${got ? `<span class="m m-ball" data-tip="${BATTLE() ? "Im Kader" : `${isShiny(id) ? "Schillernd in" : "In"} deiner Sammlung (${esc(gameName())})`}">${ball(id)}</span>` : ""}`
     + `${isAlpha(id) ? `<span class="m m-alpha" data-tip="Als Alpha gefangen">α</span>` : ""}`
     + `${fav ? `<span class="m m-fav" data-tip="Favorit">${icon("fav")}</span>` : ""}</span>`;
 }
@@ -173,6 +176,7 @@ function redrawMarks() {
 }
 const markLabel = (k, on, id) => k === "fav" ? `${icon("fav", on)} ${on ? "Favorit" : "Zu den Favoriten"}`
   : k === "alpha" ? `<span class="alpha-i">α</span> ${on ? "Als Alpha gefangen" : "Als Alpha markieren"}`
+  : BATTLE() ? `${ball(id, on)} ${on ? "Im Kader" : "In den Kader"}`
   : `${ball(id, on)} ${on ? (isShiny(id) ? "Schillernd in deiner Sammlung" : "In deiner Sammlung") : "Als gefangen markieren"}`;
 
 /* Typ-Duell (wie stark gegen einen Typ): austeilen = bester eigener Typ, einstecken = Attacken des Typs gegen beide
@@ -544,7 +548,8 @@ function versionsDialog() {
   d.showModal();
 }
 function nav(tab) {
-  $("#nav").innerHTML = TABS.map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
+  $("#nav").innerHTML = TABS.map(([k, n]) => k === "karte" && BATTLE() ? ["kampf", "Kampf"] : [k, n])
+    .map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
 }
 // Zweiter Klick auf den offenen Reiter: nach oben
 document.addEventListener("click", (e) => {
@@ -561,6 +566,7 @@ async function route() {
   const [tab, arg, arg2] = (location.hash.slice(1) || "pokemon").split("/");
   nav(tab);
   const rid = RID;
+  if (tab === "karte" && BATTLE()) { location.replace("#kampf"); return; }
   try {
     if (!S.meta?.has_data && tab !== "einstellungen") return noData();
     await Promise.all([loadChart(), loadFavs(), loadCaught()]);
@@ -571,6 +577,7 @@ async function route() {
     else if (tab === "typen") await chartView();
     else if (tab === "vergleich") await compareView(arg, arg2);
     else if (tab === "initiative") await speedView();
+    else if (tab === "kampf") await battleView();
     else if (tab === "items") await itemsView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
     else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);
@@ -605,7 +612,7 @@ async function loadCaught(force = false) {
 }
 // Klick am Pokéball: nicht gefangen → gefangen → schillernd → nicht gefangen
 async function toggleCaught(id, plain = false) {
-  if (isCaught(id) && !isShiny(id) && !plain) {
+  if (isCaught(id) && !isShiny(id) && !plain && !BATTLE()) {
     await api("/api/schillernd", {spiel: S.game, id, an: true});
     S.shiny.add(id);
   } else {
@@ -1178,7 +1185,7 @@ function heldHtml(d) {
 /* Fangchance als eigene Karte unter der Entwicklung: offen, solange das Pokémon nicht als gefangen markiert ist */
 function catchHtml(d) {
   const m = d.mehr || {};
-  if (!m.fangen) return "";
+  if (!m.fangen || BATTLE()) return "";
   const pc = (v) => `<span style="color:${ramp(v / 100)}">${String(v).replace(".", ",")} %</span>`;
   const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
   return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
@@ -2469,6 +2476,32 @@ function speedStat(base, lv, iv, ev, nat, gen) {
 function speedCols(base, lv, gen) {
   if (gen <= 2) return [speedStat(base, lv, 0, 0, 1, gen), null, speedStat(base, lv, 15, 65535, 1, gen), null];
   return [speedStat(base, lv, 0, 0, 0.9, gen), speedStat(base, lv, 31, 0, 1, gen), speedStat(base, lv, 31, 252, 1, gen), speedStat(base, lv, 31, 252, 1.1, gen)];
+}
+/* ------------------------------------------------------------------ Kampf: Doppelkampf-Bewertung (Champions, für alle Spiele erreichbar) */
+async function battleView() {
+  const rid = RID, t = S.team;
+  main.innerHTML = `<div class="box"><div class="bar"><b>Kampf in</b> <select class="gamesel"></select>
+      <a class="btn" href="#team">Team bearbeiten</a><a class="btn" href="#initiative">Initiative-Liste</a></div>
+      <p class="hint">Doppelkampf-Bewertung des aktuellen Teams (${t.ids.length} Pokémon) mit den gewählten Attacken: Rollen, Flächenattacken und
+        Tempo. Attacken wählst du je Platz auf der Detailseite oder übernimmst sie als Showdown-Text im Reiter Team.</p>
+      <div id="dbl"><p class="hint">Lädt …</p></div></div>`;
+  header();
+  if (!t.ids.length) { $("#dbl").innerHTML = `<p class="hint">Das Team ist leer.</p>`; return; }
+  const r = await api("/api/team/doppel", {spiel: S.game, ids: t.ids, details: t.details});
+  if (rid !== RID) return;
+  const who = (xs) => xs.map(([n, a]) => `<b>${esc(n)}</b> <span class="hint">(${esc(a)})</span>`).join(", ");
+  const roles = r.rollen.map((x) => `<tr><th data-tip="${esc(x.tipp)}">${esc(x.name)}</th>
+      <td>${x.wer.length ? `<span style="color:var(--go)">✓</span> ${who(x.wer)}` : `<span style="color:var(--stop)">fehlt</span>`}
+      ${x.kann.length ? `<div class="hint">Könnten lernen: ${x.kann.map(([n, a]) => `${esc(n)} (${esc(a)})`).join(", ")}</div>` : ""}</td></tr>`).join("");
+  const spread = r.flaeche.length ? r.flaeche.map(([n, a, ally]) => `<b>${esc(n)}</b>: ${esc(a)}${ally ? ` <span class="hint">(trifft auch den Partner)</span>` : ""}`).join("<br>")
+    : `<span class="hint">Keine Flächenattacke gewählt. Im Doppel treffen sie beide Gegner (mit 75 % Stärke).</span>`;
+  const partner = r.partner.map((p) => `<div class="note ${p.trifft.some(([, f]) => f > 1) ? "warn" : "info"}">${tchip(p.typ)} <b>${esc(p.attacke)}</b> von ${esc(p.wer)}:
+      ${p.immun.length ? `sicher neben ${p.immun.map(([n]) => esc(n)).join(", ")}` : "kein Partner ist immun"}${p.trifft.length ? `; trifft ${p.trifft.map(([n, f]) => `${esc(n)} ×${fl(f)}`).join(", ")}` : ""}</div>`).join("");
+  $("#dbl").innerHTML = `<div class="cols"><div><div class="score" data-tip="Rollen (70), Flächenattacken (20), keine Gefahr für den Partner (10)">${r.wertung}<span class="hint"> / 100</span></div>
+      <table class="rows dblroles"><tbody>${roles}</tbody></table></div>
+    <div><h3>Flächenattacken</h3><p>${spread}</p>${partner}
+      <h3>Tempo</h3><p class="hint">Schnell (Basis ab 95): ${esc(r.tempo.schnell.join(", ") || "keiner")} · langsam (bis 60): ${esc(r.tempo.langsam.join(", ") || "keiner")}</p>
+      ${r.tempo.rat ? `<div class="note info">${esc(r.tempo.rat)}</div>` : ""}</div></div>`;
 }
 async function speedView() {
   const rid = RID, gen = S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;

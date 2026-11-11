@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.19.0 (Champions Schritt 2: Kampfansicht, Doppelkampf-Bewertung; Entscheidung 11.11.2026)
+
+- `app/doppel.py` (rein): Rollen über Attacken-Kennungen und Fähigkeiten, Flächenattacken über das Ziel der PokéAPI
+  (9 = alle anderen, 11 = alle Gegner), Partner-Immunität auch über Fähigkeiten (Schwebe, H2O-Absorber …), Tempo-Rat.
+  `abfragen.team_doubles` (`/api/team/doppel`) liefert Mitglieder samt lernbarer Rollen-Attacken im Spiel
+- Oberfläche: `battleView` (`#kampf`); in Champions (`BATTLE()`) heißt der Reiter „Kampf“, `#karte` leitet dorthin,
+  „im Kader“ nutzt die Tabelle `gefangen`
+- Danach: Champions Schritt 3 (Regeln je Saison, Nutzungszahlen) nach den Proben, dann Schadensrechner
+
 ## 0.18.0 (Champions Schritt 1: Showdown-Text, Initiative-Liste; Entscheidung 11.11.2026)
 
 - `app/paste.py` liest und schreibt das Textformat von Showdown; `abfragen.paste_import` ordnet Namen zu (Showdown-Kennungen,
