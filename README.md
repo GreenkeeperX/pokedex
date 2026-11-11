@@ -73,6 +73,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Leistungssand, -kies, -stein und -fels; im Team je Platz gespeichert. Im Reiter Team der Stand aller Mitglieder und was dem
   Team fehlt; die Initiative-Liste rechnet in diesem Spiel mit Effort Levels. Balken und Netz zeigen live, woraus jeder Wert
   besteht (Basiswert, Level, Effort Levels, Wesen, bis zum Ziel).
+- **Werte** (übrige Spiele, Detailseite): dasselbe Diagramm mit IVs, EVs und Wesen (bis Generation 2 DVs und Stat Exp),
+  Ziel-EVs mit Rest bis 510; im Team je Platz gemerkt.
 - **Let’s Go**: Fangen ohne Kampf und Fang-Kombo auf der Detailseite, Partner-Techniken und Geheime Techniken beim Partner.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
   Gefangene blass, auf Wunsch nur die fehlenden.

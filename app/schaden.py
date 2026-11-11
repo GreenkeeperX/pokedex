@@ -199,3 +199,51 @@ def calc_old(gen, level, power, cls, move_type, a_base, a_types, d_base, d_types
         eff *= e
     return {"min": lo, "max": hi, "kp": hp, "min_pct": round(lo / hp * 100, 1), "max_pct": round(hi / hp * 100, 1),
             "sicher": sure, "moeglich": maybe, "eff": eff, "stab": st, "angriff": atk, "verteidigung": dfn}
+
+
+# ------------------------------------------------------------------ Werte-Diagramm (alle Spiele außer Sonderformeln)
+
+EV_TOTAL = 510
+
+
+def _core(base, level, iv, ev, gen):
+    """Wert vor dem Wesen ohne „+ 5“ bzw. „+ Level + 10“: ab Gen. 3 (2·Basis + IV + EV/4)·Level/100, bis Gen. 2 mit DV
+    und Stat Exp wie stat_old."""
+    if gen <= 2:
+        return ((base + iv) * 2 + min(255, math.ceil(math.sqrt(max(0, ev)))) // 4) * level // 100
+    return (2 * base + iv + ev // 4) * level // 100
+
+
+def stat_parts(base, level, iv, ev, nat, i, gen):
+    """Woraus ein Wert besteht (Summe = Wert): Basiswert (höchstens so viel, wie ohne IV und EV herauskommt), was das Level
+    dazugibt, was IV (DV) und EV (Stat Exp) dazugeben und was das Wesen ändert (±)."""
+    add = level + 10 if i == 0 else 5
+    c0, ci, ce = _core(base, level, 0, 0, gen), _core(base, level, iv, 0, gen), _core(base, level, iv, ev, gen)
+    grund = c0 + add
+    wert = ce + add if i == 0 or gen <= 2 else math.floor((ce + 5) * nat)
+    if i == 0 and base == 1:
+        return {"basis": 1, "level": 0, "iv": 0, "ev": 0, "wesen": 0}, 1
+    basis = min(base, grund)
+    return {"basis": basis, "level": grund - basis, "iv": ci - c0, "ev": ce - ci, "wesen": wert - (ce + add)}, wert
+
+
+def stat_view(werte, level, gen, ivs=None, evs=None, ziel=None, nat_mod=None):
+    """Tabelle für das Werte-Diagramm: je Wert Basis, IV/DV, EV/Stat Exp, Wert, Ziel-EVs, Wert am Ziel, höchstens.
+    Bis Generation 2 sind ivs DVs (0–15) und evs Stat Exp (0–65535), sonst IVs (0–31) und EVs (0–252, zusammen 510)."""
+    old = gen <= 2
+    iv_max, ev_max = (DV_MAX, EXP_MAX) if old else (31, EV_MAX)
+    clamp = lambda v, hi, d: [max(0, min(hi, int(x))) if isinstance(x, (int, float)) else d for x in (v or [d] * 6)][:6]
+    ivs, evs = clamp(ivs, iv_max, iv_max), clamp(evs, ev_max, 0)
+    ziel = [max(e, z) for e, z in zip(evs, clamp(ziel, ev_max, 0))] if ziel else list(evs)
+    nat = [1.0] * 6
+    if nat_mod and not old:
+        nat[nat_mod[0]], nat[nat_mod[1]] = 1.1, 0.9
+    rows = []
+    for i, b in enumerate(werte[:6]):
+        t, w = stat_parts(b, level, ivs[i], evs[i], nat[i], i, gen)
+        tz, wz = stat_parts(b, level, ivs[i], ziel[i], nat[i], i, gen)
+        _, top = stat_parts(b, level, iv_max, ev_max, max(nat[i], 1.0) if not old else 1.0, i, gen)
+        rows.append({"basis": b, "iv": ivs[i], "ev": evs[i], "wert": w, "ziel": ziel[i], "wert_ziel": wz, "max": top,
+                     "wesen": nat[i], "teile": t, "ev_ziel_teil": tz["ev"]})
+    return {"level": level, "gen": gen, "rows": rows, "iv_max": iv_max, "ev_max": ev_max,
+            "ev_summe": sum(evs), "ev_ziel_summe": sum(ziel), "ev_gesamt": None if old else EV_TOTAL}

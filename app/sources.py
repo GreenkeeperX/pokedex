@@ -10,11 +10,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.30.0"
+VERSION = "0.31.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.31.0", "11.11.2026", [
+        "Detailseite: Werte-Diagramm für alle Spiele mit IVs und EVs (bis Generation 2 DVs und Stat Exp): Balken und Netz zeigen "
+        "live, woraus jeder Wert besteht (Basiswert, Level, IV, EV, Wesen), dazu Ziel-EVs mit Rest bis 510; im Team je Platz gemerkt",
+    ]),
     ("0.30.0", "11.11.2026", [
         "Legenden: Z-A: Abklingzeit jeder Attacke (Serebii) in den Attackenlisten, mit Hinweis, wie Initiative sie verkürzt",
         "Pokopia: welche Pokémon es gibt, mit Nummer im Pokédex und ihren Spezialitäten (Serebii); die Liste filtert danach",
