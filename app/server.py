@@ -511,6 +511,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._file(f, "max-age=2592000")
                 else:
                     self._send(404, {"error": "keine Kachel"})
+            elif path == "/api/smogon":
+                self._send(200, abfragen.smogon_view(q.get("spiel")))
             elif path == "/api/mapgenie/eigene":
                 # eigene Punkte (Legenden: Arceus) auf der Karte von Map Genie
                 d = abruf.mg_maps(q.get("spiel"))

@@ -32,6 +32,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/db.py`: pokeapi.db (Spieldaten, nur lesend) und user.db (Teams, Entscheidungen), tägliche Sicherung
 - `app/importer.py`: baut pokeapi.db aus den CSV-Texten der PokéAPI, Showdown und `extra/` (ohne Netz), Selbstprüfung
 - `app/showdown.py`: liest `pokedex.ts` und `moves.ts` von Pokémon Showdown (ohne Netz)
+- `app/smogon.py`: Nutzungsstatistik von Smogon kürzen (ohne Netz), für „Häufige Gegner“
 - `app/abruf.py`: Abgleich (holen, bauen, Sprites), Zeitplan, Einstellungen, Verbindungstest; siehe `docs/abrufe.md`
 - `app/typen.py`, `app/attacken.py`, `app/team.py`: Rechenlogik ohne Datenbank (Typwirkung je Generation,
   Attacken-Wertung und Moveset, Team-Bewertung, Teamsuche, Gegner)

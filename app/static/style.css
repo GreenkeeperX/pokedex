@@ -747,3 +747,4 @@ table.items tr.odd td{opacity:.6}
 .catch td,.catch th{white-space:nowrap;padding-left:4px;padding-right:4px}
 .catch{font-size:13px}
 .dblhelp{margin:6px 0 10px}.dblhelp ul{margin:6px 0;padding-left:18px;line-height:1.55;font-size:13.5px}
+.usage td{font-size:13px}.usage td.stop{color:var(--stop)}.usage td.go{color:var(--go)}

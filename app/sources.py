@@ -10,11 +10,19 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.20.0"
+VERSION = "0.21.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.21.0", "11.11.2026", [
+        "Champions: „Häufige Gegner“ in der Kampfansicht aus der Nutzungsstatistik von Smogon (monatlich beim Abgleich): Anteil, "
+        "Attacken, Items, Fähigkeit und Tera-Typen, dazu wer im Team gefährdet ist und wer antwortet; „Top 6 als Gegner“ für den Team-Reiter",
+        "Karmesin/Purpur: Tera-Typ je Team-Platz auf der Detailseite, mit der Typwirkung nach der Terakristallisierung",
+        "Generation 1 und 2 sowie Let’s Go ohne Fähigkeiten; bis Generation 3 gilt physisch oder speziell nach dem Typ der Attacke "
+        "(auch in der Wertung)",
+        "Let’s Go: Hinweis zur eigenen Fangformel (Beeren, Wurfkreis, Fangkombo)",
+    ]),
     ("0.20.0", "11.11.2026", [
         "Abgleich parallel: Quellen an verschiedenen Servern laufen gleichzeitig (Showdown, PKHeX, PokéWiki, Altissimo …, danach "
         "Bilder, Kartenkacheln, Map Genie und große Item-Bilder); die Pause je Server gilt weiter für alle zusammen",

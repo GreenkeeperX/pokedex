@@ -1007,6 +1007,34 @@ class Server(TempData):
         server.restore(dump)
         self.assertEqual(server.marked("alpha", "pokemon-home"), [59])
 
+    def test_smogon(self):
+        from app import smogon
+        self.assertEqual(smogon.months('<a href="2026-09/">x</a><a href="2026-10/">x</a><a href="2026-10-DLC1/">x</a>')[0], "2026-10-DLC1")
+        files = smogon.chaos_files('<a href="gen9ou-1695.json"></a><a href="gen9vgc2026regf-1500.json"></a><a href="gen9vgc2026regf-1630.json"></a>'
+                                   '<a href="gen9vgc2026regg-1760.json"></a>')
+        self.assertEqual(smogon.pick(files), ("gen9vgc2026regg", 1760))      # neueste Regel, dann die verfügbare Grenze
+        files["gen9championsvgc"] = [0, 1500, 1630]
+        self.assertEqual(smogon.pick(files), ("gen9championsvgc", 1630))     # Champions zuerst
+        chaos = {"info": {"metagame": "gen9erfunden", "number of battles": 1234},
+                 "data": {"Erfundenmon": {"usage": 0.5, "Moves": {"protect": 30, "tackle": 10, "": 5}, "Items": {"leftovers": 2},
+                                          "Abilities": {"intimidate": 1}, "Tera Types": {"fairy": 3}, "Teammates": {"Zweitmon": 4}},
+                          "Zweitmon": {"usage": 0.25}, "Kaputt": "x"}}
+        d = smogon.digest(chaos, "gen9erfunden", 1630, "2026-10")
+        self.assertEqual([r["name"] for r in d["pokemon"]], ["Erfundenmon", "Zweitmon"])
+        self.assertEqual(d["pokemon"][0]["anteil"], 50.0)
+        self.assertEqual(d["pokemon"][0]["attacken"][0], ["protect", 100.0])  # vier Plätze je Pokémon, höchstens 100 %
+        self.assertEqual(d["kaempfe"], 1234)
+
+    def test_alte_generationen(self):
+        from app import abfragen
+        self.assertTrue(abfragen.no_abilities({"kennung": "crystal", "gen": 2}))
+        self.assertTrue(abfragen.no_abilities({"kennung": "lets-go-pikachu-lets-go-eevee", "gen": 7}))
+        self.assertFalse(abfragen.no_abilities({"kennung": "emerald", "gen": 3}))
+        self.assertEqual(abfragen.old_class({"klasse": 3, "typ": 1}, 3)["klasse"], 2)    # Normal ist bis Gen 3 physisch
+        self.assertEqual(abfragen.old_class({"klasse": 2, "typ": 10}, 1)["klasse"], 3)   # Feuer speziell
+        self.assertEqual(abfragen.old_class({"klasse": 2, "typ": 10}, 4)["klasse"], 2)   # ab Gen 4 je Attacke
+        self.assertEqual(abfragen.old_class({"klasse": 1, "typ": 1}, 1)["klasse"], 1)    # Status bleibt
+
     def test_abgleich_parallel(self):
         from app import abruf, sources
         # Ergebnisse und Fehler je Aufgabe
