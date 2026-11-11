@@ -1,8 +1,9 @@
-"""Schadensrechnung ab Generation 5 (ab 0.22.0), reine Funktionen ohne Datenbank.
+"""Schadensrechnung ab Generation 3 (Champions seit 0.22.0, alle Spiele seit 0.23.0), reine Funktionen ohne Datenbank.
 
 Formel wie im Spiel: Grundschaden aus Level, Stärke, Angriff und Verteidigung, dann der Reihe nach Flächenattacke
 (× 0,75 im Doppel), Volltreffer (× 1,5), Zufall (85 bis 100 %), Eigentyp (× 1,5, mit passendem Tera-Typ × 2),
-Typwirkung. Fähigkeiten, Items, Wetter und Felder rechnen wir nicht ein; die Anzeige sagt das.
+Typwirkung. Fähigkeiten, Items, Wetter und Felder rechnen wir nicht ein; die Anzeige sagt das. Bis Generation 5 zählt ein
+Volltreffer doppelt (crit_mult 2); Generation 1 und 2 rechnen anders (DV, Stat Exp, Spezial) und bleiben außen vor.
 """
 import math
 
@@ -22,7 +23,7 @@ def _round(x):
     return math.ceil(x) if x - math.floor(x) > 0.5 else math.floor(x)
 
 
-def rolls(level, power, atk, dfn, spread=False, crit=False, stab=1.0, eff=1.0):
+def rolls(level, power, atk, dfn, spread=False, crit=False, stab=1.0, eff=1.0, crit_mult=1.5):
     """Die 16 möglichen Schadenswerte (Zufall 85 bis 100 %)."""
     if not power or eff == 0:
         return [0] * 16
@@ -30,7 +31,7 @@ def rolls(level, power, atk, dfn, spread=False, crit=False, stab=1.0, eff=1.0):
     if spread:
         base = _round(base * 0.75)
     if crit:
-        base = math.floor(base * 1.5)
+        base = math.floor(base * crit_mult)
     out = []
     for r in range(85, 101):
         x = base * r // 100
@@ -62,17 +63,19 @@ def hits(hp, lo, hi):
 
 
 def calc(level, power, cls, move_type, a_base, a_types, d_base, d_types, ch, a_tera=None, d_tera=None, a_ev=None,
-         a_iv=31, a_nat=1.0, d_ev=(0, 0), d_nat=1.0, spread=False, crit=False):
+         a_iv=31, a_nat=1.0, d_ev=(0, 0), d_nat=1.0, spread=False, crit=False, crit_mult=1.5, d_level=None):
     """Ein Treffer: {min, max, kp, min_pct, max_pct, sicher, moeglich, eff, stab}. a_base/d_base: sechs Basiswerte;
     cls 2 = physisch (Angriff gegen Verteidigung), 3 = speziell (Spezial-Angriff gegen Spezial-Verteidigung).
-    a_ev: Investition in den Angriffswert (None = voll); d_ev: (KP, Verteidigungswert)."""
+    a_ev: Investition in den Angriffswert (None = voll); d_ev: (KP, Verteidigungswert); d_level: Level des Verteidigers
+    (Vorgabe: wie der Angreifer)."""
+    d_level = d_level or level
     ai, di = (1, 2) if cls == 2 else (3, 4)
     atk = stat(a_base[ai], level, a_iv, EV_MAX if a_ev is None else a_ev, a_nat)
-    dfn = stat(d_base[di], level, 31, d_ev[1], d_nat)
-    hp = stat(d_base[0], level, 31, d_ev[0], hp=True)
+    dfn = stat(d_base[di], d_level, 31, d_ev[1], d_nat)
+    hp = stat(d_base[0], d_level, 31, d_ev[0], hp=True)
     st = stab_of(move_type, a_types, a_tera)
     eff = effect(ch, move_type, [d_tera] if d_tera else d_types)
-    rs = rolls(level, power, atk, dfn, spread, crit, st, eff)
+    rs = rolls(level, power, atk, dfn, spread, crit, st, eff, crit_mult)
     lo, hi = rs[0], rs[-1]
     sure, maybe = hits(hp, lo, hi)
     return {"min": lo, "max": hi, "kp": hp, "min_pct": round(lo / hp * 100, 1), "max_pct": round(hi / hp * 100, 1),

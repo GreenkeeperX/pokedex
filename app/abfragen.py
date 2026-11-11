@@ -59,6 +59,12 @@ class Data:
             f["werte"] = [f["kp"], f["ang"], f["vert"], f["spang"], f["spvert"], f["init"]]
             f["faehigkeiten"] = json.loads(f["faehigkeiten"] or "[]")
             self.forms[f["id"]] = f
+        self.stats_past = {}           # {Form: {Generation: [sechs Basiswerte]}}, nur wo sie damals anders waren
+        try:
+            for fid, g, *vals in con.execute("SELECT form, gen, kp, ang, vert, spang, spvert, init FROM werte_alt"):
+                self.stats_past.setdefault(fid, {})[g] = vals
+        except Exception:
+            pass
         self.abilities = {r[0]: (r[1], r[2]) for r in con.execute(
             "SELECT a.id, a.identifier, COALESCE(n.name, a.identifier) FROM abilities a "
             "LEFT JOIN ability_names n ON n.ability_id = a.id AND n.local_language_id = 6")}
@@ -156,6 +162,15 @@ def form_types(D, f, gen):
     return f["typen"]
 
 
+def form_stats(D, f, gen):
+    """(Basiswerte, Summe) einer Form in einer Generation: früher teils anders (Showdown-Mods), in Generation 1
+    Sp.-Angriff = Sp.-Verteidigung = Spezial, dann zählt er in der Summe einmal."""
+    vals = (getattr(D, "stats_past", {}).get(f["id"]) or {}).get(gen)
+    if not vals:
+        return f["werte"], f["summe"]
+    return vals, sum(vals) - (vals[4] if gen == 1 else 0)
+
+
 def no_abilities(g):
     """Spiele ohne Fähigkeiten: Generation 1 und 2, Let's Go und Legenden: Arceus."""
     return bool(g) and (g["kennung"] in NO_ABILITIES or (g.get("gen") or 9) <= 2)
@@ -183,8 +198,9 @@ def ability_of(D, f, g):
 
 
 def member(D, f, g, gen, ability=None, attack_types=None):
-    return {"id": f["id"], "art": f["art"], "name": f["name"], "typen": form_types(D, f, gen), "werte": f["werte"],
-            "summe": f["summe"], "faehigkeit": ability if ability is not None else ability_of(D, f, g),
+    w, s = form_stats(D, f, gen)
+    return {"id": f["id"], "art": f["art"], "name": f["name"], "typen": form_types(D, f, gen), "werte": w,
+            "summe": s, "faehigkeit": ability if ability is not None else ability_of(D, f, g),
             "angriffstypen": attack_types}
 
 
@@ -192,8 +208,9 @@ def row(D, f, g, gen, nr=None):
     """Kurzform für Listen. nr: Nummer im Regional-Dex des Spiels, sonst die nationale."""
     if nr is None and g:
         nr = D.in_game.get(g["id"], {}).get(f["id"])
+    w, s = form_stats(D, f, gen)
     return {"id": f["id"], "art": f["art"], "nr": nr if nr is not None else f["art"], "name": f["name"],
-            "typen": form_types(D, f, gen), "werte": f["werte"], "summe": f["summe"], "gen": f["gen"],
+            "typen": form_types(D, f, gen), "werte": w, "summe": s, "gen": f["gen"], "werte_alt": w is not f["werte"],
             "legendaer": f["legendaer"] or f["mysterioes"], "endstufe": f["endstufe"], "kampfform": f["kampfform"],
             "standard": f["standard"], "relevant": f["relevant"]}
 
@@ -1478,6 +1495,8 @@ def team_caught(body):
         return best
 
     alt, pot = [], []
+    von = _evolves_from()
+    owned = {D.forms[i]["art"] for i in ids | {f["id"] for f in caught} if i in D.forms}
     # weiteste Stufe je Entwicklungskette im Team: ein gefangenes Abra bringt kein Potential, wenn Kadabra schon mitspielt
     st = _stage(D, {D.forms[i]["art"] for i in ids | {f["id"] for f in caught} if i in D.forms})
     in_team = {}
@@ -1494,8 +1513,10 @@ def team_caught(body):
                             statt=ms[k]["name"] if k is not None else ""))
         if f["endstufe"] or not f.get("kette") or in_team.get(f["kette"], -1) >= st.get(f["art"], 0):
             continue
+        # Endstufen, zu denen keine schon gefangene oder mitspielende weitere Stufe führt (gefangenes Kadabra: Abra fällt weg)
         finals = [x for x in D.forms.values() if x.get("kette") == f["kette"] and x["endstufe"] and x["relevant"] and not x["kampfform"]
-                  and x["id"] not in ids and (in_game is None or x["id"] in in_game)]
+                  and x["id"] not in ids and (in_game is None or x["id"] in in_game)
+                  and not (_between(von, f["art"], x["art"]) & owned)]
         best = None
         for x in finals:
             gain2, k2 = best_place(x)
@@ -1522,6 +1543,29 @@ def team_caught(body):
     pot = _furthest(pot, D, {f["id"] for f in caught} | {r["id"] for r in alt[:8]})
     pot.sort(key=lambda r: -r["plus"])
     return {"alternativen": alt[:8], "potential": pot[:8], "gefangen": len(caught), "wertung": base}
+
+
+def _evolves_from():
+    """{Art: Vorstufe} aus pokemon_species."""
+    try:
+        con = db.game()
+    except Exception:
+        return {}
+    try:
+        return dict(con.execute("SELECT id, evolves_from_species_id FROM pokemon_species WHERE evolves_from_species_id IS NOT NULL"))
+    except Exception:
+        return {}
+    finally:
+        con.close()
+
+
+def _between(von, lo, hi):
+    """Arten zwischen lo und hi auf dem Entwicklungsweg (ohne beide); leer, wenn hi nicht von lo abstammt."""
+    out, x, n = set(), von.get(hi), 0
+    while x and x != lo and n < 6:
+        out.add(x)
+        x, n = von.get(x), n + 1
+    return out if x == lo else set()
 
 
 def _stage(D, arten):
@@ -1897,10 +1941,37 @@ def team_doubles(body):
 
 # ------------------------------------------------------------------ Schadensrechner
 
+def damage_matrix(body):
+    """Übersicht für den Schadensrechner: je Team-Platz und Gegner die stärkste der gewählten Schadens-Attacken
+    {rows: [{slot, id, name, zellen: [{gegner, attacke, min_pct, max_pct, sicher, moeglich, eff} | None]}], gegner: [{id, name}]}."""
+    D = data()
+    if not D:
+        return {}
+    ids = _ints(body.get("ids"))[:6]
+    per = slot_details(body.get("details"), ids)
+    foes = [v for v in _ints(body.get("verteidiger"))[:30] if v in D.forms]
+    out = []
+    for i, fid in enumerate(ids):
+        best = [None] * len(foes)
+        for mid in (per[i].get("attacken") or [])[:4]:
+            r = damage_view(dict(body, slot=i, attacke=mid, verteidiger=foes))
+            if r.get("hinweis"):
+                return {"rows": [], "gegner": [], "hinweis": r["hinweis"]}
+            by = {x["id"]: x for x in r.get("rows", [])}
+            for k, vid in enumerate(foes):
+                x = by.get(vid)
+                if x and (best[k] is None or x["max_pct"] > best[k]["max_pct"]):
+                    best[k] = dict(x, attacke=r["attacke"], typ=r["typ"])
+        if fid in D.forms:
+            out.append({"slot": i, "id": fid, "name": D.forms[fid]["name"], "zellen": best})
+    return {"rows": out, "gegner": [{"id": v, "name": D.forms[v]["name"]} for v in foes]}
+
+
 def damage_view(body):
     """Schaden einer Attacke eines Team-Platzes (ids, details, slot, attacke) gegen Verteidiger (verteidiger: [Form-IDs]).
     Optionen: krit, flaeche (None = nach dem Ziel der Attacke, nur im Doppel), vert ("0", "kp", "kp_vert": Investition
-    der Verteidiger), tera_vert (Tera-Typ der Verteidiger). Level aus dem Platz, in Champions immer 50."""
+    der Verteidiger), tera_vert (Tera-Typ der Verteidiger), level (eigenes Level, sonst aus dem Platz oder 50),
+    level_vert (Level der Verteidiger, sonst wie der Angreifer). In Champions immer Level 50. Ab Generation 3."""
     from . import doppel, schaden
     D = data()
     if not D:
@@ -1911,9 +1982,13 @@ def damage_view(body):
     slot = _int(body.get("slot")) or 0
     if slot >= len(ids) or ids[slot] not in D.forms or _int(body.get("attacke")) not in D.moves:
         return {"rows": []}
+    if gen <= 2:
+        return {"rows": [], "hinweis": "Generation 1 und 2 rechnen Schaden anders (DV, Stat Exp, ein Spezial-Wert); dafür gibt es noch keinen Rechner."}
     f, d = D.forms[ids[slot]], per[slot]
     mv = move_view(D, D.moves[_int(body.get("attacke"))], g)
-    level = 50 if not g or g["kennung"] == "champions" else (_int(d.get("level")) or 50)
+    champ = not g or g["kennung"] == "champions"
+    level = 50 if champ else min(100, max(1, _int(body.get("level")) or _int(d.get("level")) or 50))
+    d_level = level if champ else min(100, max(1, _int(body.get("level_vert")) or level))
     P = _paste_names(D) if _int(d.get("wesen")) else None
     mod = P["nat_mod"].get(_int(d["wesen"])) if P else None
     ai = 1 if mv["klasse"] == 2 else 3
@@ -1939,12 +2014,13 @@ def damage_view(body):
         v = D.forms.get(vid)
         if not v or mv["klasse"] not in (2, 3) or not mv["staerke"]:
             continue
-        r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], f["werte"], a_types, v["werte"], form_types(D, v, gen), ch,
+        r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], form_stats(D, f, gen)[0], a_types, form_stats(D, v, gen)[0], form_types(D, v, gen), ch,
                          a_tera=tera, d_tera=d_tera, a_ev=a_ev, a_iv=a_iv, a_nat=nat, d_ev=inv, spread=spread,
-                         crit=bool(body.get("krit")))
+                         crit=bool(body.get("krit")), crit_mult=2.0 if gen <= 5 else 1.5, d_level=d_level)
         rows.append(dict(r, id=vid, name=v["name"]))
     return {"angreifer": f["name"], "attacke": mv["name"], "typ": mv["typ"], "klasse": mv["klasse"], "staerke": mv["staerke"],
-            "level": level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "rows": rows}
+            "level": level, "level_vert": d_level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "gen": gen,
+            "krit": 2.0 if gen <= 5 else 1.5, "rows": rows}
 
 
 # ------------------------------------------------------------------ Tera-Raids (Karmesin/Purpur)

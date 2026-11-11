@@ -1,5 +1,21 @@
 # Roadmap
 
+## 0.23.0 (Rückmeldung zu 0.22.0, 11.11.2026)
+
+- Kachelvorrat: `abruf.mg_stock` (Thread nach jedem Abgleich und beim Start), `mapgenie.tile_list`, `mapgenie.bounds_of`
+  (Grenzen aus den Orten), `tile_ok` mit getrennter Endung; einzelnes 403 einer Kachel = fehlt, erst `MG_403_MAX` nacheinander
+  oder 429 lassen Map Genie ruhen. Oberfläche: Ebene `.mgold`, Anzeige `.mgload`, Vorladen der Nachbarstufen
+- Schadensrechner: `schaden.calc` mit `crit_mult` und `d_level`, ab Gen 3; `abfragen.damage_matrix` (`/api/schaden/uebersicht`);
+  `calcBox` im Reiter Team (`calcT`) und in Champions (`calc`), eigene Gegner `calcFoes:<Spiel>`
+- Frühere Basiswerte: `showdown.mod_stats`, Mods `gen1`–`gen8` im Abgleich, Tabelle `werte_alt`, `abfragen.form_stats`
+  (Gen 1: Spezial); `importer.VERSION` 16
+- Typen: `typeFilter` je Tabelle (`chartPick`, `combosPick`, `ttPickd`, `ttPicka`), `cntTd` farbige Zählspalten
+- `team_caught`: Endstufen fallen weg, wenn eine Zwischenstufe schon gefangen ist (`_evolves_from`, `_between`)
+- Einstellungen: `details.sub` für Quellen, Verbindungstest und Protokoll im Kasten Abgleich
+- Offen: Abklingzeiten in Legenden: Z-A (Proben im Verbindungstest), Karten älterer Spiele (Proben: Serebii PokéEarth, pret,
+  Bulbapedia-Archiv), Fangformel und Partner-Techniken in Let's Go, Effort Levels in Legenden: Arceus, Fähigkeiten und Items
+  im Schadensrechner, Schadensrechner für Gen 1–2
+
 ## 0.22.0 (Sonderspiele Schritt 2, Auftrag 11.11.2026)
 
 - `abfragen.tera_effect` (Team-Bewertung, nur Verteidigung), `#formsel` tauscht die Form eines Team-Platzes

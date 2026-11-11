@@ -10,11 +10,34 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.22.0"
+VERSION = "0.23.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.23.0", "11.11.2026", [
+        "Karten: Der Server legt einen Vorrat an Kartenkacheln an (im Hintergrund, mit Pause, weite Stufen zuerst); beim Zoomen "
+        "bleibt das alte Bild vergrößert stehen, bis die neuen Kacheln da sind, mit Anzeige „Kacheln laden … noch n“; "
+        "Nachbarn und die nächste Stufe lädt der Browser still vor. Fehlende Kacheln lassen die Quelle nicht mehr gleich einen Tag ruhen",
+        "Karten: robuster bei Karten ohne Grenzen oder mit getrennt angegebener Bildendung (Legenden: Z-A); der Verbindungstest "
+        "zeigt je Karte Muster, Zoom, Grenzen und Vorrat",
+        "Schadensrechner jetzt im Reiter Team für alle Spiele ab Generation 3: gegen die Gegner aus „Gegen Gegner“, das eigene Team "
+        "oder eine eigene Auswahl, mit Level für beide Seiten; „Übersicht“ zeigt jedes Mitglied gegen jeden Gegner mit seiner "
+        "stärksten Attacke. Bis Generation 5 zählt ein Volltreffer doppelt",
+        "Champions: eigene Gegner im Schadensrechner, größere Bilder, Schadensbalken in eigener Spalte und farbig",
+        "Generation 1: Spezial-Wert statt Sp.-Angriff und Sp.-Verteidigung; ältere Spiele zeigen die Basiswerte von damals "
+        "(aus den Generations-Mods von Showdown)",
+        "Typen: eigener Filter für jede Tabelle (auch die Team-Tabellen); Zählspalten (Schwächen, ×4, Resistenzen, Immunitäten "
+        "bzw. stark, schwach, ohne Wirkung) farbig, jetzt auch in der Typtabelle und den Team-Tabellen",
+        "Vergleich: Auswahl unter dem Vergleich mit größeren Bildern, „Zum Vergleich gemerkt“ getrennt von den Favoriten, "
+        "„alle entfernen“, Verteidigung besser lesbar und mit Tooltips",
+        "Team: „Team als Text“ erklärt und über den Favoriten, ⇄ bei Favoriten tauscht ins Team, Sterne nur beim Darüberfahren; "
+        "„Langfristig mehr Potential“ zeigt keine Vorstufe mehr, wenn eine spätere Stufe schon gefangen ist",
+        "Einstellungen wie im VR-Navigator: Quellen, Verbindungstest und Protokoll aufklappbar im Abgleich, Spieldaten und "
+        "Sicherung in einem Kasten",
+        "Detailseite wieder zweispaltig; α in der Knopfreihe; breitere Spalten bei Attacken und Items, Statusfarben in den Items",
+        "Verbindungstest: neue Proben für Abklingzeiten in Legenden: Z-A und Karten älterer Spiele",
+    ]),
     ("0.22.0", "11.11.2026", [
         "Karmesin/Purpur: Tera-Typen zählen in der Team-Bewertung (welche Schwächen die Terakristallisierung nimmt und welche sie bringt)",
         "Neuer Reiter „Raids“ in Karmesin/Purpur: alle Tera-Raids aus den Spieldaten (1 bis 7 Sterne, Paldea, Kitakami, "

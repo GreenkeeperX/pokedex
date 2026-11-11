@@ -13,7 +13,7 @@ import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, sources, store
+from . import abfragen, abruf, altissimo, aufgaben, db, mapgenie, sources, store
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -575,7 +575,7 @@ class Handler(BaseHTTPRequestHandler):
                 d = abruf.mg_maps(q.get("spiel"))
                 if d and q.get("karte"):
                     m = next((m for m in d["karten"] if m["slug"] == q["karte"]), None)
-                    self._send(200 if m else 404, dict(m, spiel=d["spiel"], am=d["am"]) if m else {"error": "keine Karte"})
+                    self._send(200 if m else 404, dict(m, spiel=d["spiel"], am=d["am"], bounds=mapgenie.bounds_of(m)) if m else {"error": "keine Karte"})
                 else:
                     self._send(200, {"karten": [{"slug": m["slug"], "titel": m["titel"], "orte": len(m["orte"])} for m in (d or {}).get("karten", [])],
                                      "kacheln": abruf.mg_status()})
@@ -659,6 +659,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/team/import": abfragen.paste_import,
         "/api/team/doppel": abfragen.team_doubles,
         "/api/schaden": abfragen.damage_view,
+        "/api/schaden/uebersicht": abfragen.damage_matrix,
         "/api/kampftagebuch": add_battle,
         "/api/kampftagebuch/loeschen": delete_battle,
         "/api/team/export": abfragen.paste_export,
@@ -700,6 +701,7 @@ def main():
     threading.Thread(target=abfragen.data, daemon=True, name="vorladen").start()
     if os.environ.get("AUTO_SYNC", "1") != "0":
         threading.Thread(target=abruf.scheduler, daemon=True, name="zeitplan").start()
+        abruf.start_stock()           # Kartenkacheln im Hintergrund vervollständigen
     print(f"Pokédex {sources.VERSION} läuft auf Port {port}", flush=True)
     srv.serve_forever()
 

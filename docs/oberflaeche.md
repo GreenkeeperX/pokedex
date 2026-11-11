@@ -65,11 +65,19 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Vergleich (`compareView`, `#vergleich/<A>/<B>`, „-“ = leer): zwei Suchfelder mit Schnellwahl (gemerkte `cmpMerk`, bis 8,
   und Favoriten), Artwork und Netz wie die Hover-Karte, Werte mit Unterschied, „Kurz gesagt“ (Initiative Lv 50, bester
   Eigentyp-Faktor, physisch/speziell, Schwächen), Verteidigung je Angriffstyp, Fähigkeiten, Attacken (nur A, beide, nur B).
-- Typtabelle: Typfilter (`chartPick`, Zeilen der Tabelle, Kombinationen mit allen gewählten Typen).
+- Typtabelle: Typfilter je Tabelle (`typeFilter`; `chartPick` Zeilen der Typtabelle, `combosPick` Kombinationen mit allen
+  gewählten Typen, `ttPickd`/`ttPicka` Spalten der Team-Tabellen); Zählspalten farbig (`cntTd`, `DEFC`, `ATTC`).
+- Einstellungen: `details.sub` (Quellen, Verbindungstest, Protokoll) im Kasten Abgleich; Sicherung mit Spieldaten in einem Kasten.
+- Map Genie: Kachelebene `.mgtiles`, beim Zoomen bleibt das alte Bild in `.mgold` (skaliert), bis alle neuen Kacheln da sind;
+  `.mgload` zählt offene Kacheln; danach lädt der Browser Nachbarn und die Stufen ±1 vor (`warm`). `#mgstock` zeigt den Vorrat.
 - Typkombinationen (`combosHtml`, unter der Typtabelle, aufklappbar `combosOpen`, nicht bei „Mein Team“): Sicht `combosSicht`
   als Verteidiger (Faktoren multipliziert) oder Angreifer (bester der beiden Typen), sortierbar, Zeilen und Spalten markierbar (`CPIN`).
 - Spalten markieren (`crossTable`): Spaltensymbol `.pinc` vor dem Titel, auch für nicht sortierbare Spalten.
-- Detailseite: `.dgrid` mit drei Spalten (Stammdaten · Verteidigung und Duell · Entwicklung, Fang, Items, Optik), schmaler zwei, am Telefon eine.
+- Detailseite: `.dgrid` mit zwei Spalten (links Stammdaten, rechts der Rest gestapelt), am Telefon eine. Generation 1: Spezial
+  statt Sp.-Angriff/Sp.-Verteidigung; `werte_alt` sagt, dass es die Werte von damals sind.
+- Schadensrechner `calcBox`: in Champions im Reiter Kampf (`calc`, Gegner Smogon/Team/eigene), sonst im Reiter Team
+  (`#calcbox`, `calcT`, Gegner aus `S.foes`/Team/eigene, Level beider Seiten), eigene Gegner `calcFoes:<Spiel>`;
+  Ansicht „Übersicht“ über `/api/schaden/uebersicht` (`.dmgx`). Balken `.dbar` (kleinster Wurf kräftig, größter blass).
 - Kampf (Champions): `calcBox` (Schadensrechner, `/api/schaden`, Einstellungen in `calc`), `logBox` (Kampftagebuch,
   `/api/kampftagebuch`, Auswahl `LOGPICK`), `usageBox` (Tabelle aus `/api/smogon`, sortierbar, Anzahl `usageN`), „Gefahr für“ und
   „Antwort“ über die Typtabelle, „Top 6 als Gegner“ setzt `S.foes`.
