@@ -1,5 +1,12 @@
 # Roadmap
 
+## 0.19.1 (Karten reparieren; Rückmeldung 11.11.2026)
+
+- `mapgenie.tile_range` aus den Kartengrenzen: Server (`abruf.mg_tile`) und Oberfläche fragen nur Kacheln innerhalb an.
+  Vorher löste die erste Kachel außerhalb (403 vom Kachelspeicher) die 24-Stunden-Ruhe aus. `abruf.mg_status` und eine
+  Kachel-Probe im Verbindungstest zeigen den Zustand
+- Beschreibungen behalten ihr Markdown (`mapgenie._text`), `mgMd` setzt es sicher um und übersetzt die Feldnamen
+
 ## 0.19.0 (Champions Schritt 2: Kampfansicht, Doppelkampf-Bewertung; Entscheidung 11.11.2026)
 
 - `app/doppel.py` (rein): Rollen über Attacken-Kennungen und Fähigkeiten, Flächenattacken über das Ziel der PokéAPI

@@ -523,7 +523,8 @@ class Handler(BaseHTTPRequestHandler):
                     m = next((m for m in d["karten"] if m["slug"] == q["karte"]), None)
                     self._send(200 if m else 404, dict(m, spiel=d["spiel"], am=d["am"]) if m else {"error": "keine Karte"})
                 else:
-                    self._send(200, {"karten": [{"slug": m["slug"], "titel": m["titel"], "orte": len(m["orte"])} for m in (d or {}).get("karten", [])]})
+                    self._send(200, {"karten": [{"slug": m["slug"], "titel": m["titel"], "orte": len(m["orte"])} for m in (d or {}).get("karten", [])],
+                                     "kacheln": abruf.mg_status()})
             elif path == "/api/gebiete":
                 d = abfragen.areas(q)
                 self._send(200 if d else 404, d or {"error": "keine Gebiete"})

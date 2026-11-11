@@ -53,10 +53,10 @@ def _var(page, name):
         return None
 
 
-def _text(s, n=600):
-    """Beschreibung ohne HTML, gekürzt."""
+def _text(s, n=1500):
+    """Beschreibung ohne HTML, gekürzt; Markdown (Fett, Kursiv, Links, Listen) bleibt für die Oberfläche."""
     t = re.sub(r"<br\s*/?>|</p>", "\n", str(s or ""), flags=re.I)
-    t = _html.unescape(re.sub(r"<[^>]+>|\*\*|__", "", t))      # HTML und Fettdruck (Markdown) weg
+    t = _html.unescape(re.sub(r"<[^>]+>", "", t))
     t = re.sub(r"[ \t]+", " ", re.sub(r"\n\s*\n+", "\n", t)).strip()
     return t[:n]
 
@@ -115,6 +115,17 @@ def parse(page, data):
             "kacheln": str(ts.get("pattern") or ""), "endung": str(ts.get("extension") or "png"),
             "min_zoom": int(ts.get("min_zoom") or 0), "max_zoom": int(ts.get("tiles_max_zoom") or ts.get("max_zoom") or 0),
             "bounds": bounds, "gruppen": gruppen, "orte": orte, "gebiete": gebiete}
+
+
+def tile_range(bounds, z):
+    """Kacheln (x0, x1, y0, y1) einer Zoomstufe, die die Karte [west, süd, ost, nord] bedecken; None ohne Grenzen.
+    Außerhalb gibt es bei Map Genie keine Kacheln (der Speicher antwortet dann mit 403 statt 404)."""
+    if not (isinstance(bounds, list) and len(bounds) == 4):
+        return None
+    w, s, e, n = bounds
+    x0, y0 = project(n, w, z)
+    x1, y1 = project(s, e, z)
+    return int(x0 // 256), int((x1 - 1e-6) // 256), int(y0 // 256), int((y1 - 1e-6) // 256)
 
 
 def tile_ok(pattern, z, x, y):

@@ -566,7 +566,11 @@ a.bm:active{cursor:grabbing}
 .mgp.got{opacity:.45;filter:grayscale(.6)}
 .mgp.got::after{content:"✓";position:absolute;right:-7px;top:-8px;font-size:11px;color:#7ee08a;text-shadow:0 0 2px #000}
 .mlay .mgdot{margin-right:4px;width:16px;height:16px;font-size:9px}
-.mgdesc{white-space:pre-line;font-size:13.5px}
+.mgdesc{font-size:13.5px;line-height:1.45}
+.mgdesc p{margin:0 0 6px}
+.mgdesc ul,.mgdesc ol{margin:0 0 6px;padding-left:20px}
+.mgdesc li.sub{margin-left:16px;list-style:circle}
+.mgdesc i{color:var(--muted)}
 .mghits{display:flex;flex-direction:column;gap:2px}
 .mghits button{display:flex;align-items:center;gap:6px;text-align:left;border:0;background:none;color:var(--ink);padding:4px 6px;border-radius:6px;cursor:pointer}
 .mghits button:hover{background:var(--hov)}
