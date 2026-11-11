@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, companion, db, importer, mapgenie, pokewiki, smogon, sources, store
+from . import altissimo, companion, db, importer, mapgenie, pkcompletion, pokewiki, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -575,11 +575,12 @@ def _media_tiles(st, log, settings, at):
 
 
 def _media_mg(st, log, at):
-    if db.has_data() and not _resting(st, "mapgenie", at):
-        res = _mapgenie(log)
-        st["sources"]["mapgenie"] = res
-        if res["blocked"]:
-            st["rest"]["mapgenie"] = _iso(now() + timedelta(hours=REST_H))
+    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion)):
+        if db.has_data() and not _resting(st, key, at):
+            res = run(log)
+            st["sources"][key] = res
+            if res["blocked"]:
+                st["rest"][key] = _iso(now() + timedelta(hours=REST_H))
 
 
 def _media_itemhq(st, log, settings, at):
@@ -940,10 +941,33 @@ def _mapgenie(log):
     return src.result(dateien=found)
 
 
+def _pkcompletion(log):
+    """Karten von pokemoncompletion für die Spiele in pkcompletion.GAMES: Punkte aus den Spieldaten im Repository, in
+    derselben Form wie Map Genie nach data/mapgenie/<Spiel>.json. Kacheln holt der Vorrat (mg_stock) vom CDN."""
+    src = _Source("pkcompletion", log)
+    found = 0
+    for spiel, name in pkcompletion.GAMES.items():
+        STATE["step"] = f"pokemoncompletion: {name}"
+        text = src.get(pkcompletion.DATA.format(name), absent=(404,))
+        if src.stopped:
+            break
+        m = pkcompletion.parse(text, spiel) if text else None
+        if m:
+            os.makedirs(mg_dir(), exist_ok=True)
+            store.save_json(os.path.join("mapgenie", spiel + ".json"), {"spiel": spiel, "slug": m["slug"], "am": _iso(now()),
+                                                                        "quelle": "pokemoncompletion", "karten": [m]})
+            log(f"pokemoncompletion: {name} mit {len(m['orte'])} Punkten")
+            found += 1
+    return src.result(dateien=found)
+
+
+MAP_GAMES = (*mapgenie.GAMES, *pkcompletion.GAMES)      # Spiele mit eigener Karte (Map Genie oder pokemoncompletion)
+
+
 def mg_maps(spiel):
-    """Gespeicherte Map-Genie-Karten eines Spiels (Erweiterungen: die des Hauptspiels) oder None."""
-    spiel = mapgenie.SHARE.get(spiel, spiel)
-    if spiel not in mapgenie.GAMES:
+    """Gespeicherte Karten eines Spiels (Erweiterungen und Schwester-Editionen: die des Hauptspiels) oder None."""
+    spiel = mapgenie.SHARE.get(spiel) or pkcompletion.SHARE.get(spiel) or spiel
+    if spiel not in MAP_GAMES:
         return None
     f = mg_dir(spiel + ".json")
     try:
@@ -960,7 +984,7 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": ""}
+_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "pc_rest": ""}
 
 
 def mg_status():
@@ -983,15 +1007,16 @@ def mg_stock():
         return
     _mg["laeuft"] = True
     try:
-        jobs = [(spiel, m, top) for top in (1, 0) for spiel in mapgenie.GAMES for m in (mg_maps(spiel) or {}).get("karten", [])]
+        jobs = [(spiel, m, top) for top in (1, 0) for spiel in MAP_GAMES for m in (mg_maps(spiel) or {}).get("karten", [])]
         for spiel, m, top in jobs:
-            ts = mapgenie.tile_list(m, m["max_zoom"] - top)
+            pc = m.get("quelle") == "pokemoncompletion"
+            ts = (pkcompletion if pc else mapgenie).tile_list(m, m["max_zoom"] - top)
             key = f"{spiel}/{m['slug']}"
             have = 0
             for i, (z, x, y) in enumerate(ts):
-                if _mg["rest"] > _iso(now()):
-                    return
-                rel = mapgenie.tile_ok(m["kacheln"], z, x, y, m.get("endung", "png"))
+                if _mg["pc_rest" if pc else "rest"] > _iso(now()):
+                    break
+                rel = _tile_of(m, z, x, y)[0]
                 if rel and (os.path.isfile(mg_dir("kacheln", *rel.split("/"))) or mg_tile(spiel, m["slug"], z, x, y, pause=MG_STOCK_PAUSE)):
                     have += 1
                 if i % 50 == 0 or i == len(ts) - 1:
@@ -1022,20 +1047,32 @@ def _mg_probe():
         _mg["last"] = time.monotonic()
 
 
-def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
-    """Pfad einer Kachel im Datenordner; fehlt sie, einmal bei Map Genie holen (eine Anfrage zur Zeit, kurze Pause).
-    Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“; erst viele nacheinander oder 429 lassen die Quelle
-    24 Stunden ruhen. None, wenn es sie nicht gibt."""
-    m = _mg_map(spiel, karte)
-    rel = mapgenie.tile_ok(m["kacheln"], z, x, y, m.get("endung", "png")) if m else None
+def _tile_of(m, z, x, y):
+    """(Pfad unter kacheln/, Adresse) einer Kachel, (None, None) außerhalb der Karte."""
+    if m.get("quelle") == "pokemoncompletion":
+        return pkcompletion.tile(m, z, x, y) or (None, None)
+    rel = mapgenie.tile_ok(m["kacheln"], z, x, y, m.get("endung", "png"))
     if not rel or not (m["min_zoom"] <= z <= m["max_zoom"]):
-        return None
+        return None, None
     r = mapgenie.tile_range(mapgenie.bounds_of(m), z)
     if r and not (r[0] <= x <= r[1] and r[2] <= y <= r[3]):
-        return None                      # außerhalb der Karte gibt es keine Kachel; nicht nachfragen
+        return None, None                # außerhalb der Karte gibt es keine Kachel; nicht nachfragen
+    return rel, mapgenie.TILES + rel
+
+
+def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
+    """Pfad einer Kachel im Datenordner; fehlt sie, einmal bei der Quelle holen (eine Anfrage zur Zeit, kurze Pause).
+    Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“; erst viele nacheinander oder 429 lassen die Quelle
+    24 Stunden ruhen. pokemoncompletion ruht schon nach einem 403 oder 429. None, wenn es sie nicht gibt."""
+    m = _mg_map(spiel, karte)
+    rel, url = _tile_of(m, z, x, y) if m else (None, None)
+    if not rel:
+        return None
     f = mg_dir("kacheln", *rel.split("/"))
     if os.path.isfile(f):
         return f
+    if m.get("quelle") == "pokemoncompletion":
+        return _pc_tile(rel, url, f, pause)
     with _mg_lock:
         if os.path.isfile(f):
             return f
@@ -1061,6 +1098,36 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
         _mg["n403"] = 0
         _mg["ok"] = rel
         if not (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff" or body[8:12] == b"WEBP"):
+            _mg["miss"].add(rel)
+            return None
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        with open(f + ".neu", "wb") as fh:
+            fh.write(body)
+        os.replace(f + ".neu", f)
+        return f
+
+
+def _pc_tile(rel, url, f, pause):
+    with _mg_lock:
+        if os.path.isfile(f):
+            return f
+        if rel in _mg["miss"] or _mg["pc_rest"] > _iso(now()):
+            return None
+        wait = _mg["last"] + pause - time.monotonic()
+        if wait > 0:
+            sleep(wait)
+        try:
+            body = sources.fetch(url, timeout=30, raw=True)
+        except sources.FetchError as e:
+            _mg["fehler"] = f"pokemoncompletion: HTTP {e.status or '?'} bei {rel} ({_iso(now())[:16].replace('T', ' ')})"
+            if e.status in (403, 429):
+                _mg["pc_rest"] = _iso(now() + timedelta(hours=REST_H))
+            elif e.status:
+                _mg["miss"].add(rel)
+            return None
+        finally:
+            _mg["last"] = time.monotonic()
+        if body[:8] != b"\x89PNG\r\n\x1a\n":
             _mg["miss"].add(rel)
             return None
         os.makedirs(os.path.dirname(f), exist_ok=True)
@@ -1438,11 +1505,11 @@ def diagnose(proben=None):
     probe("Map Genie, Kachel Hisui 9/254/254", mapgenie.TILES + "pokemon-legends-arceus/hisui-region/default-v3/9/254/254.png",
           lambda b: f"{len(b)} Bytes, " + ("PNG" if b[:4] == b"\x89PNG" else "kein Bild"), raw=True)
     # je gespeicherter Karte: Kachelmuster, Zoom und Grenzen (zeigt, warum eine Karte keine Kacheln bekommt)
-    for spiel in mapgenie.GAMES:
+    for spiel in MAP_GAMES:
         for m in (mg_maps(spiel) or {}).get("karten", []):
-            rel = mapgenie.tile_ok(m["kacheln"], m["min_zoom"], 0, 0, m.get("endung", "png"))
+            rel = _tile_of(m, m["min_zoom"], 0, 0)[0]
             v = mg_status()["vorrat"].get(f"{spiel}/{m['slug']}") or {}
-            lines.append(f"Map Genie, Karte {spiel}/{m['slug']}: Muster {m['kacheln'] or '–'} ({m.get('endung', '?')}), "
+            lines.append(f"{'pokemoncompletion' if m.get('quelle') else 'Map Genie'}, Karte {spiel}/{m['slug']}: Muster {m['kacheln'] or '–'} ({m.get('endung', '?')}), "
                          f"Zoom {m['min_zoom']}–{m['max_zoom']}, Grenzen {'ja' if m.get('bounds') else 'aus den Orten' if mapgenie.bounds_of(m) else 'keine'}, "
                          f"Kachelpfad {'ok' if rel else 'unbrauchbar'}" + (f", Vorrat {v.get('da', 0)}/{v.get('alle', 0)}" if v else ""))
     st = mg_status()
@@ -1524,6 +1591,40 @@ def diagnose(proben=None):
     probe("Bulbapedia-Archiv, Kartenbilder Sinnoh BDSP", "https://archives.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
         {"action": "query", "list": "search", "srsearch": "Sinnoh BDSP map", "srnamespace": "6", "srlimit": "15", "format": "json"}), wiki_hits, keep=True)
     probe("pokemoncompletion, Let’s Go", "https://pokemoncompletion.com/completion/LetsGo", page_info, keep=200_000, headers=html)
+
+    section("Weitere Kartenquellen (Funde vom 11.11.)")
+    # interaktive Karten: ob die Punkte als JSON nachgeladen werden (Hinweise in der Seite), sonst Bilder je Gebiet
+    looks = lambda t: (page_info(t) + f", {t.count('.json')} × .json, {t.count('marker')} × marker, {t.count('tile')} × tile, "
+                       f"{t.count('drive.google')} × Google Drive, {t.count('<img')} Bilder")
+    for name, url in (("IGN, Let’s Go Kanto", "https://www.ign.com/maps/pokemon-lets-go-pikachu-eevee/kanto"),
+                      ("IGN, Schwert/Schild Galar", "https://www.ign.com/maps/pokemon-sword-shield/galar"),
+                      ("IGN, Feuerrot/Blattgrün", "https://www.ign.com/maps/pokemon-firered-leafgreen-version"),
+                      ("MewMaps, Let’s Go", "https://www.mewmaps.org/lets-go-pikachu-eevee"),
+                      ("RankedBoost, Let’s Go", "https://rankedboost.com/pokemon/location/letsgo-pikachu-eevee/"),
+                      ("RankedBoost, HG/SS Route 45", "https://rankedboost.com/pokemon/location/heartgold-soulsilver/route-45/"),
+                      ("RankedBoost, Rubin/Saphir", "https://rankedboost.com/pokemon/location/ruby-sapphire/"),
+                      ("Poké Atlas, Naturzone", "https://pokeatlas.com/maps/wild-area/"),
+                      ("FrontierNav, Sonne/Mond", "https://frontiernav.net/wiki/pokemon-sun-moon/visualisations/maps"),
+                      ("SimplyBLG, Johto", "https://simplyblgdev.github.io/Pokemon/Johto"),
+                      ("HGSS Ironmon Map", "https://kelseyyoung.github.io/HGSSIronmonMap/"),
+                      ("PokéMaps, Hoenn RSE", "https://pokemaps.net/maps/rse/hoenn"),
+                      ("PokéTools, Smaragd", "https://www.poketools.com/emerald/map"),
+                      ("PKMNMap, Smaragd", "https://pkmnmap.com/Maps/Emerald/"),
+                      ("DittoBase, Kristall", "https://www.dittobase.com/crystal/map"),
+                      ("PokémonRNG, Sinnoh", "https://www.pokemonrng.com/sinnoh-map/")):
+        probe(name, url, looks, keep=200_000, headers=html)
+    probe("Bulbapedia-Archiv, Kategorie Let’s-Go-Karten", "https://archives.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
+        {"action": "query", "list": "categorymembers", "cmtitle": "Category:Let's Go, Pikachu! and Let's Go, Eevee! maps",
+         "cmlimit": "50", "format": "json"}),
+        lambda t: (lambda ms: f"{len(ms)} Bilder: " + ", ".join(m["title"] for m in ms[:10]))(
+            (json.loads(t).get("query") or {}).get("categorymembers") or []), keep=True)
+    # GitHub-Projekte mit Kartendaten (Trainer, Items, Begegnungen)
+    for repo, words in (("kelseyyoung/HGSSIronmonMap", ("json", "map", "trainer")),
+                        ("kelseyyoung/EmeraldIronmonMap", ("json", "map", "trainer")),
+                        ("kelseyyoung/FRLGIronmonMap", ("json", "map", "trainer")),
+                        ("simplyblgdev/simplyblgdev.github.io", ("johto", "json", "map")),
+                        ("tristan-paul/Emerald_Encounters", ("db", "sql", "csv", "json"))):
+        probe(f"GitHub: {repo}", f"https://api.github.com/repos/{repo}/git/trees/HEAD?recursive=1", tree_hits(*words), keep=True)
     # pokemoncompletion (GPL-3.0): Spieldaten mit Kartenpunkten liegen als JSON im Repository, die Karten als ganzes Bild
     # und als Kacheln ({z}_{x}_{y}.png) auf einem CDN; Gelb, Kristall, Smaragd und Platin haben eine Karte
     def pc_info(text):
@@ -1535,7 +1636,7 @@ def diagnose(proben=None):
     for g in ("Yellow", "Crystal", "Emerald", "Platinum"):
         probe(f"GitHub: pokemoncompletion, Daten {g}", f"https://raw.githubusercontent.com/RainingChain/pokemoncompletion/main/src/pokemonCompletion/data/{g}.json",
               pc_info)
-        probe(f"pokemoncompletion, Kachel {g}", f"https://pokemonmap.b-cdn.net/{g.lower()}/0_0_0.png?v=1",
+        probe(f"pokemoncompletion, Kachel {g}", f"https://pokemonmap.b-cdn.net/{g.lower()}/1_0_0.png?v=1",
               lambda b: f"{len(b)} Bytes, " + ("PNG" if b[:4] == b"\x89PNG" else "kein Bild"), raw=True)
     probe("GitHub: Insektaure/pkTeraRaid (Raid-Nester SwSh mit Lage)", "https://api.github.com/repos/Insektaure/pkTeraRaid/git/trees/HEAD?recursive=1",
           tree_hits("den", "map", "swsh", "location"), keep=True)

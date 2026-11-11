@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.28.0 (11.11.2026)
+
+- `app/pkcompletion.py`: Spieldaten von pokemoncompletion (GPL-3.0) → Karte in der Form von `mapgenie.parse` (Leaflet-CRS.Simple
+  in die linke obere Ecke der Mercator-Welt, Kacheln zu 512 Pixeln, `kachel` in der Karte), gespeichert unter `mapgenie/<Spiel>.json`.
+  `abruf._pkcompletion` holt die Daten, `mg_tile`/`mg_stock` die Kacheln vom CDN (eigene Ruhezeit `pc_rest`).
+  Gelb bleibt bei Map Genie; Zusammenführen der Gelb-Punkte offen
+- Verbindungstest: Funde vom 11.11. (IGN, RankedBoost, MewMaps, Poké Atlas, FrontierNav, SimplyBLG, Ironmon-Karten, PokéMaps,
+  PokéTools, PKMNMap, DittoBase, PokémonRNG, Bulbapedia-Kategorie Let's Go, GitHub-Bäume)
+
 ## 0.27.3 (11.11.2026)
 
 - `mapgenie.GAMES` auf die Spiele, die Map Genie hat (LA, SV, Z-A, FRLG, RBY); SwSh, BDSP, Let's Go und Gen 2 bis 7 fehlen dort,

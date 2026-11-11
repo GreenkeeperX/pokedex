@@ -60,6 +60,10 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    (`abruf.file_kind`): Die Rufe der PokéAPI heißen `.ogg`, sind aber MP3.
 6. **Kartenkacheln** (Legenden: Arceus): fehlende Kacheln von Serebii (`abruf.MAP_TILES`, 5 Karten × 84 Kacheln) nach
    `karten/<Karte>/<z>-<x>-<y>.png`, eine Sekunde Pause je Kachel; fehlende (404) 30 Tage nicht erneut.
+7. **pokemoncompletion** (`app/pkcompletion.py`, Quelle „pkcompletion“): für Kristall, Smaragd und Platin die Spieldaten
+   aus dem Repository (raw.githubusercontent.com), umgerechnet in eine Karte wie bei Map Genie und unter `mapgenie/<Spiel>.json`
+   gespeichert; Gold/Silber, Rubin/Saphir und Diamant/Perl zeigen sie mit. Die Kacheln (512 Pixel, `{z}_{x}_{y}.png`) holt
+   der Kachelvorrat vom CDN; nach 403 oder 429 ruht nur diese Quelle.
 7. **Map Genie** (`app/mapgenie.py`, Quelle „mapgenie“): je Spiel in `mapgenie.GAMES` (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Feuerrot/Blattgrün, Rot/Blau/Gelb) die Spielseite, daraus die Karten
    (`/<Spiel>/maps/<Karte>`), je Karte die Seite (`window.mapData`) und `/api/v1/maps/<Nummer>/data`, 3 Sekunden Pause.
    Ergebnis kompakt in `mapgenie/<Spiel>.json` im Datenordner; Spiele, die es dort nicht gibt, melden 404 und fallen weg.

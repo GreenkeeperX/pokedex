@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.27.3"
+VERSION = "0.28.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.28.0", "11.11.2026", [
+        "Karten für Kristall, Smaragd und Platin (auch Gold/Silber, Rubin/Saphir, Diamant/Perl): Orte, Pokémon, Items, Trainer "
+        "und Sammelobjekte von pokemoncompletion, mit Ebenen, Suche und Abhaken wie bei Map Genie; die Kacheln lädt der "
+        "Server im Hintergrund, danach braucht die Karte kein Netz",
+        "Verbindungstest: weitere Kartenquellen (IGN, RankedBoost, MewMaps, Poké Atlas, FrontierNav, Ironmon-Karten u. a.)",
+    ]),
     ("0.27.3", "11.11.2026", [
         "Map Genie: der Abgleich fragt nur noch die Spiele ab, die es dort gibt (Legenden: Arceus, Karmesin/Purpur, "
         "Legenden: Z-A, Feuerrot/Blattgrün, Rot/Blau/Gelb)",
