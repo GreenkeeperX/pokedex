@@ -67,8 +67,10 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Pause), der Kachelvorrat (`abruf.mg_stock`, eigener Thread nach jedem Abgleich und beim Start) holt im Hintergrund alle
    Kacheln aller Stufen (erst für alle Karten bis eine unter der größten, dann die größte), 0,6 Sekunden Pause; was da ist,
    bleibt. Danach braucht die Karte kein Netz; ohne Vorrat holt das Ansehen eine fehlende Kachel einmal. Eine Anfrage zur
-   Zeit. Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“ (kommt außerhalb der Karte); erst 8 nacheinander oder
-   ein 429 lassen die Quelle 24 Stunden ruhen. Fehlen die Grenzen einer Karte, gelten die der Orte (`mapgenie.bounds_of`).
+   Zeit. Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“ (kommt außerhalb der Karte); nach 8 nacheinander fragt
+   der Dienst eine Kachel an, die es sicher gibt: kommt sie, fehlen nur Randkacheln; sonst (oder bei 429) ruht die Quelle 24
+   Stunden. Gefragt wird nur ab der kleinsten Zoomstufe der Karte (darunter gibt es keine Kacheln). Z-A nennt im Muster erst y,
+   dann x. Fehlen die Grenzen einer Karte, gelten die der Orte (`mapgenie.bounds_of`).
 8. **Showdown-Mods** (mit Showdown): `data/mods/gen{1,2,4,5,6,7,8}/pokedex.ts` für frühere Basiswerte (Tabelle `werte_alt`,
    Generation 1 mit Spezial-Wert); fehlende Mods (404) fallen weg.
 

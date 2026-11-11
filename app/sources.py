@@ -10,11 +10,24 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.26.0"
+VERSION = "0.27.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.27.0", "11.11.2026", [
+        "Karten: Kacheln von Karmesin/Purpur und Legenden: Z-A laden wieder (Z-A nennt erst y, dann x; keine Anfragen mehr unter der "
+        "kleinsten Zoomstufe, und viele fehlende Randkacheln lassen Map Genie nicht mehr ruhen). Menü und Details mit Hintergrund, "
+        "ohne Springen, auch in den Einzelkarten; die Oberfläche fasst bei kurzen Netzfehlern zweimal nach",
+        "Effort Levels: Balken und Netz zeigen live, woraus jeder Wert besteht (Basiswert, Level, Effort Levels, Wesen, bis zum Ziel); "
+        "Rechnung im Tooltip; das Ziel folgt der Stufe, bis du es eigens setzt",
+        "Detailseite: Entwicklungsäste untereinander (Waumpel), größeres α, „⚖ Vergleichen“ und „merken“ nebeneinander",
+        "Vergleich: Hover-Karten an der Schnellwahl, sofort neu gezeichnet, lesbare Verteidigungstabelle, „Kurz gesagt“ mit Farben und Typ",
+        "Team: Teamsuche einklappbar unter den Effort Levels, Angreifer im Schadensrechner mit Bildern, „zurück“ zur vorigen Gegnerwahl, "
+        "Spaltenwahl in „Gegen Gegner“ richtig, Löschen rot umrandet, Potential zeigt auch knappere Entwicklungen (Kadabra → Simsala)",
+        "Attacken und Items: Namensspalte markierbar; Typen: dezentere Zählspalten mit Tooltip; Einstellungen neu geordnet; "
+        "Champions: Hover-Karten im Kampftagebuch, Anteil als Balken bei den häufigen Gegnern",
+    ]),
     ("0.26.0", "11.11.2026", [
         "Legenden: Arceus: Effort Levels im Reiter Team: je Mitglied Stand und Ziel, was dem ganzen Team an Leistungs-Items "
         "fehlt; nicht eingetragene Mitglieder rechnen vorsichtig mit Stufe 0 und sind markiert",

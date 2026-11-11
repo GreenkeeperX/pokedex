@@ -642,6 +642,12 @@ class Leser(unittest.TestCase):
         self.assertEqual(effort.stat(130, 100, 10, 1), 414)
         self.assertEqual(effort.stat(130, 100, 0, 1), 260 + 40)
         self.assertEqual(effort.stat(130, 100, 0, 1, 1.1), 286 + 40)
+        # Bestandteile für das Diagramm ergeben zusammen den Wert; Wesen − zieht ab
+        for i, nat in ((0, 1.0), (1, 0.9), (3, 1.1)):
+            t = effort.parts(80, 37, 6, i, nat)
+            self.assertEqual(sum(t.values()), effort.stat(80, 37, 6, i, nat))
+        self.assertLess(effort.parts(80, 50, 0, 1, 0.9)["wesen"], 0)
+        self.assertEqual(effort.parts(80, 50, 0, 2)["el"], 0)
         self.assertEqual(effort.cost(0, 10), [3, 3, 3, 1])
         self.assertEqual(effort.cost(3, 7), [0, 3, 1, 0])
         self.assertEqual(effort.cost(5, 5), [0, 0, 0, 0])
@@ -1093,7 +1099,8 @@ class Server(TempData):
         b = mapgenie.bounds_of({"orte": [[1, 1, 0.5, -0.5, "", ""], [2, 1, 1.0, -0.2, "", ""]]})
         self.assertTrue(b[0] < -0.5 and b[1] < 0.5 and b[2] > -0.2 and b[3] > 1.0)
         ts = mapgenie.tile_list({"bounds": [-1.4, 0, 0, 1.4], "min_zoom": 9, "max_zoom": 12}, 11)
-        self.assertEqual((ts[0][0], ts[-1][0], len(ts)), (7, 11, 1 + 1 + 4 + 16 + 64))
+        self.assertEqual((ts[0][0], ts[-1][0], len(ts)), (9, 11, 4 + 16 + 64))
+        self.assertEqual(mapgenie.tile_ok("za/lumiose/day-v2/{z}/{y}/{x}.jpg", 9, 1, 2), "za/lumiose/day-v2/9/2/1.jpg")
         # ein einzelnes 403 heißt „Kachel gibt es nicht“, erst viele nacheinander lassen Map Genie ruhen
         calls = []
         def deny(url, **kw):
@@ -1106,6 +1113,17 @@ class Server(TempData):
                 abruf.mg_tile("scarlet-violet", "erfunden", 10, x, 3, pause=0)
             self.assertNotEqual(abruf.mg_status()["ruht"], "")
         abruf._mg.update(rest="", n403=0, miss=set())
+        # kommt eine bekannte Kachel noch, fehlen nur Kacheln am Rand: keine Pause
+        def edge(url, **kw):
+            if url.endswith("/ok.png"):
+                return b"\x89PNG\r\n\x1a\n"
+            raise abruf.sources.FetchError("verboten", 403)
+        abruf._mg["ok"] = "spiel/ok.png"
+        with mock.patch.object(abruf.sources, "fetch", edge):
+            for x in range(20, 20 + 2 * abruf.MG_403_MAX):
+                abruf.mg_tile("scarlet-violet", "erfunden", 10, x % 1024, 5, pause=0)
+            self.assertEqual(abruf.mg_status()["ruht"], "")
+        abruf._mg.update(rest="", n403=0, miss=set(), ok="")
         # der Vorrat holt alle Stufen: erst bis eine unter der größten, dann die größte
         abruf.store.save_json("mapgenie/scarlet-violet.json", {"spiel": "scarlet-violet", "am": "2026-11-11", "karten": [
             {"slug": "erfunden", "titel": "Erfunden", "kacheln": "spiel/erfunden/{z}/{x}/{y}.png", "min_zoom": 9, "max_zoom": 10,

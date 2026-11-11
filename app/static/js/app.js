@@ -51,7 +51,10 @@ function normTeam(t) {
 }
 async function api(path, body) {
   const opt = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)};
-  const r = await fetch(path, opt);
+  let r;
+  for (let n = 0; ; n++) {          // Netzfehler (Server kurz beschäftigt, Verbindung neu): zweimal nachfassen
+    try { r = await fetch(path, opt); break; } catch (e) { if (n >= 2) throw e; await new Promise((ok) => setTimeout(ok, 400 * (n + 1))); }
+  }
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   return d;
@@ -188,7 +191,7 @@ function cmpToggle(id) {
   if (xs.length === cmpList().length) xs.unshift(id);
   store.set("cmpMerk", xs.slice(0, 8));
 }
-const markLabel = (k, on, id) => k === "cmp" ? `⚖ ${on ? "Für den Vergleich gemerkt" : "Zum Vergleich merken"}`
+const markLabel = (k, on, id) => k === "cmp" ? `${on ? "✓ gemerkt" : "＋ merken"}`
   : k === "fav" ? `${icon("fav", on)} ${on ? "Favorit" : "Zu den Favoriten"}`
   : k === "alpha" ? `<span class="alpha-i">α</span> ${on ? "Als Alpha gefangen" : "Als Alpha markieren"}`
   : BATTLE() ? `${ball(id, on)} ${on ? "Im Kader" : "In den Kader"}`
@@ -338,12 +341,19 @@ document.addEventListener("mouseout", (e) => {
   if (c && !c.contains(e.relatedTarget)) { clearTimeout(cardTimer); card.hidden = true; }
 });
 document.addEventListener("scroll", () => { tip.hidden = true; card.hidden = true; }, {passive: true});
+const HCLOAD = new Set();
 function showCard(el) {
   if (!el.isConnected || !el.matches(":hover")) return;
   const inTeam = el.closest("#dock,#slots") && el.dataset.slot !== undefined;
   const slot = inTeam ? +el.dataset.slot : null;
-  const r = ROWS[el.dataset.hc || el.dataset.id];
-  if (!r || !r.werte) return;
+  const hid = el.dataset.hc || el.dataset.id, r = ROWS[hid];
+  if (!r || !r.werte) {               // noch nicht geladen (etwa gemerkt, aus dem Kampftagebuch): einmal nachladen
+    if (hid && !isNaN(+hid) && !HCLOAD.has(hid)) {
+      HCLOAD.add(hid);
+      api(`/api/pokemon/${hid}?` + qs({spiel: S.game})).then((x) => { ROWS[hid] = Object.assign(ROWS[hid] || {}, x); showCard(el); }).catch(() => {});
+    }
+    return;
+  }
   const d = defense(r.typen);
   const det = slot !== null ? S.team.details[slot] || {} : null;
   const mv = det ? (det.attacken || []).map((x) => MOVES[x]).filter(Boolean) : [];
@@ -1130,8 +1140,7 @@ async function detailView(id, slot = null) {
   [...d.attacken.attacken, ...d.attacken.status].forEach((m) => { MOVES[m.id] = m; });
   // Generation 1: ein Spezial-Wert statt Sp.-Angriff und Sp.-Verteidigung
   const stats = d.werte.map((v, i) => GEN() === 1 && i === 4 ? "" : `<span>${GEN() === 1 && i === 3 ? "Spezial" : STAT[i]}</span><span class="num">${v}</span><span class="sbar" data-tip="${esc(statTip(i, v))}"><i style="width:${Math.min(100, v / statMax(i) * 100)}%;background:${statColor(v)}"></i></span>`).join("");
-  const evo = d.entwicklung.length > 1 ? d.entwicklung.map((e, i) => (i && e.von ? `<span class="ar">→ ${esc(e.bedingungen.join(" oder ") || "")}</span>` : "") +
-    `<a class="st" href="#pokemon/${e.id}">${img(e.id)}${esc(e.name)}</a>`).join("") : "";
+  const evo = evoHtml(d.entwicklung, d.id);
   main.innerHTML = `
     <div class="bar">${backLink()}
       <label class="game2">Spiel <select class="gamesel"></select></label>
@@ -1140,9 +1149,9 @@ async function detailView(id, slot = null) {
       <button data-act="fav" data-id="${d.id}" data-markbtn="fav" class="mark${isFav(d.id) ? " on" : ""}">${markLabel("fav", isFav(d.id))}</button>
       <button data-act="caught" data-id="${d.id}" data-markbtn="gef" class="mark${isCaught(d.id) ? " on" : ""}" data-tip="${ballTip(d.id)}">${markLabel("gef", isCaught(d.id), d.id)}</button>
       ${S.alphaOk.has(d.id) || isAlpha(d.id) ? `<button data-act="alpha" data-id="${d.id}" data-markbtn="alpha" class="mark${isAlpha(d.id) ? " on" : ""}">${markLabel("alpha", isAlpha(d.id), d.id)}</button>` : ""}
-      <a class="btn" href="#vergleich/${d.id}/-" data-tip="Neben ein anderes Pokémon stellen: Werte, Typwirkung, Fähigkeiten, Attacken">Vergleichen</a>
-      <button data-act="cmpmark" data-id="${d.id}" data-markbtn="cmp" class="mark${cmpMarked(d.id) ? " on" : ""}" data-tip="Merkt das Pokémon für den Vergleich (bis zu 8). Im Vergleich stehen gemerkte und Favoriten zur schnellen Wahl bereit">${markLabel("cmp", cmpMarked(d.id))}</button>
-      <a class="btn" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Im PokéWiki öffnen</a>
+      <a class="btn" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer" data-tip="Seite im PokéWiki in einem neuen Tab">PokéWiki ↗</a>
+      <span class="seg"><a class="btn mark" href="#vergleich/${d.id}/-" data-tip="Neben ein anderes Pokémon stellen: Werte, Typwirkung, Fähigkeiten, Attacken">⚖ Vergleichen</a>
+      <button data-act="cmpmark" data-id="${d.id}" data-markbtn="cmp" class="mark${cmpMarked(d.id) ? " on" : ""}" data-tip="Merkt das Pokémon für den Vergleich (bis zu 8). Im Vergleich stehen gemerkte und Favoriten zur schnellen Wahl bereit">${markLabel("cmp", cmpMarked(d.id))}</button></span>
       ${d.formen.length ? `<span class="hint">Formen:</span>` + d.formen.map((f) => `<a class="btn small" href="#pokemon/${f.id}">${esc(f.name)}</a>`).join("") : ""}
       ${inTeam && d.formen.length ? `<label data-tip="Tauscht die Form auf diesem Team-Platz (etwa Mega-Entwicklung für den Kampf); Level, Attacken und Tera bleiben">Platz ${DSLOT + 1} als
         <select id="formsel"><option value="${d.id}" selected>${esc(d.name)}</option>${d.formen.map((f) => `<option value="${f.id}">${esc(f.name)}${f.kampf ? " (Kampfform)" : ""}</option>`).join("")}</select></label>` : ""}</div>
@@ -1214,8 +1223,11 @@ async function elBox(d, slot) {
       Ein frisch gefangenes Pokémon startet nach seinen DVs (31: Stufe 3, ab 26: 2, ab 20: 1).${slot === null ? " Im Team merkt sich jeder Platz seine Stufen." : ""}</p>
     <div class="bar slim"><label>Wesen <select id="elnat"><option value="">neutral</option>${r.wesen_liste.filter((w) => w.mod).map((w) => `<option value="${w.id}"${w.id === r.wesen ? " selected" : ""}>${esc(w.name)} (+${STAT[w.mod[0]]} −${STAT[w.mod[1]]})</option>`).join("")}</select></label>
       ${slot !== null ? `<span class="hint">Level wie unten bei den Attacken</span>` : `<label>Level <input type="number" id="ellv" min="1" max="100" value="${lv}" style="width:64px"></label>`}</div>
-    <table class="rows eltab"><tr><th>Wert</th><th class="c">Basis</th><th class="c">Stufe</th><th class="c">jetzt</th><th class="c">Ziel</th><th class="c">am Ziel</th><th class="c" data-tip="mit Stufe 10">höchstens</th></tr>
-    ${r.rows.map((x, i) => `<tr><td>${STAT[i]}${nat(x)}</td><td class="c">${x.basis}</td><td class="c"><select data-el="${i}">${opt(x.el)}</select></td><td class="c"><b>${x.wert}</b></td>
+    ${elChart(r.rows, lv)}
+    <table class="rows eltab"><tr><th>Wert</th><th class="c" data-tip="Basiswert der Art: fest, hängt nicht vom Level ab. Aus ihm, dem Level, dem Effort Level und dem Wesen rechnet das Spiel den Wert">Basis</th>
+      <th class="c" data-tip="Effort Level 0 bis 10, wie im Spiel in der Übersicht des Pokémon">Stufe</th><th class="c" data-tip="Wert im Spiel mit dieser Stufe, diesem Level und Wesen">jetzt</th>
+      <th class="c" data-tip="Stufe, auf die du hinarbeitest; folgt der Stufe, bis du es eigens höher setzt">Ziel</th><th class="c" data-tip="Wert, wenn das Ziel erreicht ist">am Ziel</th><th class="c" data-tip="Wert mit Stufe 10 bei diesem Level und Wesen">höchstens</th></tr>
+    ${r.rows.map((x, i) => `<tr><td>${STAT[i]}${nat(x)}</td><td class="c">${x.basis}</td><td class="c"><select data-el="${i}">${opt(x.el)}</select></td><td class="c" data-tip="${esc(elTip(x, i, lv))}"><b>${x.wert}</b></td>
       <td class="c"><select data-elz="${i}">${opt(x.ziel, x.el)}</select></td><td class="c">${x.ziel > x.el ? `<b style="color:var(--go)">${x.wert_ziel}</b> <span class="hint">+${x.wert_ziel - x.wert}</span>` : `<span class="hint">${x.wert_ziel}</span>`}</td><td class="c hint">${x.max}</td></tr>`).join("")}</table>
     <p class="hint">${need ? `Bis zum Ziel fehlen: ${r.bonbons.map((n, k) => n ? `<b>${n}× ${esc(r.sorten[k])}</b>` : "").filter(Boolean).join(", ")}.` : "Ziel wählen: dann steht hier, wie viele Leistungs-Items fehlen."}
       Leistungssand hebt Stufe 0–2, Leistungskies 3–5, Leistungsstein 6–8, Leistungsfels 9 auf 10, je um eins. Es gibt sie für freigelassene Pokémon, von Alphas und bei Zisu im Trainingsplatz zum Tauschen.
@@ -1223,12 +1235,37 @@ async function elBox(d, slot) {
   const save = () => { if (slot !== null) { S.team.details[slot] = Object.assign({}, S.team.details[slot], {el: det.el, el_ziel: det.el_ziel, wesen: det.wesen}); saveTeam(); dock(); } elBox(d, slot); };
   const cur = () => r.rows.map((x) => x.el), goal = () => r.rows.map((x) => x.ziel);
   $("#eldet").addEventListener("toggle", (e) => store.set("elOpen", e.target.open));
-  $$("[data-el]", el).forEach((s) => s.addEventListener("change", () => { const a = cur(), z = goal(); a[+s.dataset.el] = +s.value; z[+s.dataset.el] = Math.max(z[+s.dataset.el], +s.value); det.el = a; det.el_ziel = z; save(); }));
+  $$("[data-el]", el).forEach((s) => s.addEventListener("change", () => { const a = cur(), z = goal(); const i = +s.dataset.el, v = +s.value, prev = a[i]; a[i] = v; if (z[i] === prev || z[i] < v) z[i] = v; det.el = a; det.el_ziel = z; save(); }));
   $$("[data-elz]", el).forEach((s) => s.addEventListener("change", () => { const z = goal(); z[+s.dataset.elz] = +s.value; det.el = cur(); det.el_ziel = z; save(); }));
   $("#elnat").addEventListener("change", (e) => { det.wesen = e.target.value ? +e.target.value : null; det.el = cur(); det.el_ziel = goal(); save(); });
   $("#ellv")?.addEventListener("change", (e) => { det.level = Math.max(1, Math.min(100, +e.target.value || 50)); det.el = cur(); det.el_ziel = goal(); save(); });
   $("#elmax").addEventListener("click", () => { det.el = cur(); det.el_ziel = [10, 10, 10, 10, 10, 10]; save(); });
   $("#elreach").addEventListener("click", () => { det.el = goal(); det.el_ziel = goal(); save(); });
+}
+/* Woraus ein Wert in Legenden: Arceus besteht, als Text für den Tooltip */
+function elTip(x, i, lv) {
+  const t = x.teile, n = x.wesen > 1 ? "× 1,1 (Wesen)" : x.wesen < 1 ? "× 0,9 (Wesen)" : "";
+  return `${STAT[i]} ${x.wert} = Grundwert ${t.basis + t.level - (x.bonus - t.el) + t.wesen} + Bonus ${x.bonus}\n`
+    + (i === 0 ? `Grundwert: (Level/100 + 1) × Basis + Level = (${lv}/100 + 1) × ${x.basis} + ${lv}` : `Grundwert: (Level/50 + 1) × Basis / 1,5 ${n} = (${lv}/50 + 1) × ${x.basis} / 1,5 ${n}`)
+    + `\nBonus: (√Basis × Faktor + Level) / 2,5, gerundet; Faktor bei Stufe ${x.el}: ${x.faktor}`
+    + `\nDavon: Basiswert ${t.basis}, durch das Level +${t.level}, durch Effort Levels +${t.el}${t.wesen ? `, Wesen ${t.wesen > 0 ? "+" : ""}${t.wesen}` : ""}`;
+}
+/* Live-Diagramm zu den Effort Levels: je Wert ein gestapelter Balken (Basiswert, Level, Effort Levels, Wesen, bis
+   zum Ziel gestrichelt) und ein Netz mit denselben Schichten. Maßstab: der höchste Wert mit Stufe 10 */
+function elChart(rows, lv) {
+  const top = Math.max(...rows.map((x) => x.max), 1), pc = (v) => (Math.max(0, v) / top * 100).toFixed(2);
+  const seg = (cls, v, tip) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%" data-tip="${esc(tip)}"></i>` : "";
+  const bars = rows.map((x, i) => { const t = x.teile, extra = x.el_ziel_teil - t.el;
+    return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" data-tip="${esc(elTip(x, i, lv))}">${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-e", t.el, `durch Effort Level ${x.el}: +${t.el}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%" data-tip="Wesen: ${t.wesen}"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (Stufe ${x.ziel}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
+  // Netz: Schichten von außen nach innen (Ziel, jetzt, ohne Effort Levels, Basiswert)
+  const S0 = 150, c = S0 / 2, R = c - 24;
+  const pt = (k, f) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [c + Math.cos(a) * R * f, c + Math.sin(a) * R * f]; };
+  const poly = (fn, cls) => `<polygon class="${cls}" points="${RADAR_ORDER.map((i, k) => pt(k, Math.max(0.03, Math.min(1, fn(rows[i]) / top))).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`;
+  const net = `<svg class="elnet" width="${S0}" height="${S0}" viewBox="0 0 ${S0} ${S0}" aria-hidden="true">${[1, 0.5].map((f) => `<polygon class="rg${f < 1 ? "2" : ""}" points="${RADAR_ORDER.map((_, k) => pt(k, f).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`).join("")}
+    ${poly((x) => x.wert_ziel, "n-z")}${poly((x) => x.wert, "n-e")}${poly((x) => x.wert - x.teile.el, "n-l")}${poly((x) => x.teile.basis, "n-b")}
+    ${RADAR_ORDER.map((i, k) => { const [x, y] = pt(k, 1.22); return `<text x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="middle">${STAT_K[i]}</text>`; }).join("")}</svg>`;
+  return `<div class="elchart"><div class="elbars">${bars}</div><div>${net}</div></div>
+    <p class="hint ellg"><span class="e-b"></span>Basiswert <span class="e-l"></span>durch das Level <span class="e-e"></span>durch Effort Levels <span class="e-w"></span>Wesen + <span class="e-m"></span>Wesen − <span class="e-z"></span>bis zum Ziel</p>`;
 }
 /* Effort Levels des Teams (Legenden: Arceus): Übersicht; ändern auf der Detailseite. Nicht eingetragen = Stufe 0 */
 async function elTeam() {
@@ -1331,6 +1368,21 @@ function heldHtml(d) {
   return `<div class="box"><h2>Getragene Items</h2><table class="rows held"><tbody>${xs.map((x) => `<tr>
     <td>${x.id ? `<img class="ibild sm" src="itembild/${x.id}" alt="" loading="lazy" onerror="this.remove()">` : ""}</td><td><b>${wikiLink(x.item)}</b>${x.elite ? ` <span class="alpha" data-tip="Nur Elite-Pokémon (Alpha)">Elite</span>` : ""}</td>
     <td class="c num">${esc(x.prozent)}</td></tr>`).join("")}</tbody></table><p class="hint">Beim Fangen oder Besiegen, aus dem PokéWiki.</p></div>`;
+}
+/* Entwicklungskette als Baum: jeder Ast eine Zeile; ein zweiter Ast beginnt unter seiner Stufe (Waumpel → Schaloko
+   → Papinella, darunter → Panekon → Pudox) */
+function evoHtml(list, cur) {
+  if (list.length < 2) return "";
+  const kids = {}, cells = [];
+  list.forEach((e) => { (kids[e.von] ||= []).push(e); });
+  let row = 1;
+  const walk = (e, dep) => {
+    if (dep) cells.push(`<span class="ar" style="grid-area:${row}/${2 * dep}">→ ${esc(e.bedingungen.join(" oder ") || "")}</span>`);
+    cells.push(`<a class="st${e.id === cur ? " cur" : ""}" style="grid-area:${row}/${2 * dep + 1}" href="#pokemon/${e.id}"${e.id ? ` data-hc="${e.id}"` : ""}>${img(e.id)}${esc(e.name)}</a>`);
+    (kids[e.art] || []).forEach((c, i) => { if (i) row++; walk(c, dep + 1); });
+  };
+  list.filter((e) => !e.von || !list.some((x) => x.art === e.von)).forEach((r, i) => { if (i) row++; walk(r, 0); });
+  return cells.join("");
 }
 /* Fangchance als eigene Karte unter der Entwicklung: offen, solange das Pokémon nicht als gefangen markiert ist */
 function catchHtml(d) {
@@ -1574,7 +1626,7 @@ function teamBar() {
   if (!el) return;
   el.innerHTML = `<button data-act="tnew">Neues Team</button>
     ${t.tid ? `<button class="${t.dirty ? "primary" : ""}" data-act="tsave"${t.dirty ? "" : " disabled"}>Speichern</button>${t.dirty ? `<button data-act="tundo">Verwerfen</button>` : ""}
-      <button data-act="tsaveas">Speichern unter …</button><button data-act="trename">Umbenennen</button><button data-act="tdel">Löschen</button>`
+      <button data-act="tsaveas">Speichern unter …</button><button data-act="trename">Umbenennen</button><button class="dangerline" data-act="tdel" data-tip="Gespeichertes Team löschen (mit Rückfrage)">Löschen</button>`
       : `<button class="primary" data-act="tsaveas">Speichern</button>`}
     <button data-act="tclear">Leeren</button>
     <span class="hint">${t.tid ? (t.dirty ? "Geändert, noch nicht gespeichert: die Änderungen bleiben im Browser, bis du speicherst oder verwirfst." : "Gespeichert.") : "Ein gespeichertes Team behält Level und Attacken je Platz."}</span>`;
@@ -1638,12 +1690,8 @@ async function teamView() {
       <details class="favd dropmark" data-drop="fav" open><summary>${icon("fav")} Favoriten in ${esc(gameName())} <span id="favn"></span> <span class="hint">zum schnellen Tauschen auf einen Platz ziehen; hierher ziehen macht zum Favoriten</span></summary><div id="favs"></div></details></div>
     ${LA() && S.team.ids.length ? `<details class="box" id="elteam"${store.get("elTeamOpen", S.team.details.some((d) => d?.el)) ? " open" : ""}><summary><h2 style="display:inline">Effort Levels</h2>
         <span class="hint">Stand und Ziel je Mitglied, was dem Team fehlt</span></summary><div id="eltbody"><p class="hint">Lädt …</p></div></details>` : ""}
-    <div class="cols">
-      <div class="box"><h2>Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
-      <div class="box"><h2>Verbesserungen</h2><div id="imp"></div></div>
-      <div class="box dropmark" data-drop="gef"><h2>${icon("ball")} Aus deiner Sammlung</h2><div id="gef"><p class="hint">Lädt …</p></div></div>
-    </div>
-    <div class="box" style="margin-top:12px"><h2>Passende Pokémon finden</h2>
+    <details class="box" id="findbox"${store.get("findOpen", true) ? " open" : ""}><summary><h2 style="display:inline">Passende Pokémon finden</h2>
+      <span class="hint">bestes Team suchen, Vorschläge für den nächsten Platz</span></summary>
       <div class="cols"><div><h3>Ziel</h3>
         <div class="bar"><select id="preset">${Object.entries(PRESET_DE).map(([k, n]) => `<option value="${k}"${k === S.preset && !S.weights ? " selected" : ""}>${n}</option>`).join("")}
           <option value=""${S.weights ? " selected" : ""}>Eigene Gewichte</option></select>
@@ -1655,6 +1703,11 @@ async function teamView() {
         <div id="opt"></div></div>
         <div><h3>Filter für Vorschläge und Suche</h3>${filterBar(S.tfilter, "tf", {sort: false})}</div></div>
       <h3>Vorschläge für den nächsten Platz</h3><div id="sug" class="sugs"><p class="hint">Mit mindestens einem Mitglied.</p></div>
+    </details>
+    <div class="cols">
+      <div class="box"><h2>Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
+      <div class="box"><h2>Verbesserungen</h2><div id="imp"></div></div>
+      <div class="box dropmark" data-drop="gef"><h2>${icon("ball")} Aus deiner Sammlung</h2><div id="gef"><p class="hint">Lädt …</p></div></div>
     </div>
     <div class="box"><h2>Gegen Gegner</h2>
       <div class="bar"><div class="ac grow"><input id="foe" type="search" placeholder="Gegner hinzufügen (bis zu 6, etwa die Pokémon eines Arenaleiters)" style="width:100%"></div>
@@ -1708,6 +1761,7 @@ async function teamView() {
   if (S.foes.length) matchup();
   const cb = $("#calcbox");
   if (cb) { cb.addEventListener("toggle", () => { store.set("calcOpen", cb.open); if (cb.open) calcBox(); }); if (cb.open) calcBox(); }
+  $("#findbox")?.addEventListener("toggle", (e) => store.set("findOpen", e.target.open));
   if ($("#elteam")) { $("#elteam").addEventListener("toggle", (e) => store.set("elTeamOpen", e.target.open)); elTeam(); }
 }
 function loadTeam(tt) {
@@ -1756,8 +1810,8 @@ async function teamRefresh() {
     ${ev.nicht_abgedeckt.length ? `<p class="hint">Nicht sehr effektiv getroffen (mit den gewählten Attacken, sonst Eigentypen): ${tchips(ev.nicht_abgedeckt)}</p>` : ""}
     ${(ev.tera || []).length ? `<div class="note tera" data-tip="Nur Verteidigung: der Tera-Typ ersetzt beim Terakristallisieren die eigenen Typen. Wählen auf der Detailseite.">${ev.tera.map((x) => `<div><b>${esc(x.name)}</b> mit Tera ${tchip(x.tera)}${x.eigentyp ? ` <span class="muted">(Eigentyp, stärkere Attacken)</span>` : ""}: ${x.weg.length ? `nimmt Schwächen gegen ${tchips(x.weg)}` : "nimmt keine Schwäche"}${x.neu.length ? `, neu schwach gegen ${tchips(x.neu)}` : ""}</div>`).join("")}</div>` : ""}
     <p class="hint">${ev.physisch} physisch, ${ev.speziell} speziell · schnell: ${esc(ev.schnell.join(", ") || "keiner")}</p>
-    <details><summary>Typwirkung je Mitglied</summary><div class="scroll"><table class="matrix" id="matrix"><tr><th></th>${ms.map((m, i) => `<th data-hc="${m.id}" data-c="${i}" data-pc="${i}">${img(m.id)}</th>`).join("")}</tr>
-      ${Object.keys(S.types).filter((a) => ev.matrix[ms[0].id]?.[a] !== undefined).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ms.map((m, i) => { const f = ev.matrix[m.id][a]; return `<td data-c="${i}" data-tip="${esc(`${tname(a)} gegen ${m.name}: ×${fl(f)}`)}"><span class="f ${fcls(f)}">${f === 1 ? "" : fl(f)}</span></td>`; }).join("")}</tr>`).join("")}</table></div>
+    <details><summary>Typwirkung je Mitglied</summary><div class="scroll"><table class="matrix" id="matrix"><tr><th></th>${ms.map((m, i) => `<th data-hc="${m.id}" data-c="${i + 1}" data-pc="${i + 1}">${img(m.id)}</th>`).join("")}</tr>
+      ${Object.keys(S.types).filter((a) => ev.matrix[ms[0].id]?.[a] !== undefined).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ms.map((m, i) => { const f = ev.matrix[m.id][a]; return `<td data-c="${i + 1}" data-tip="${esc(`${tname(a)} gegen ${m.name}: ×${fl(f)}`)}"><span class="f ${fcls(f)}">${f === 1 ? "" : fl(f)}</span></td>`; }).join("")}</tr>`).join("")}</table></div>
       <p class="hint">Zeile: angreifender Typ, Spalte: Mitglied. Klick hält Zeile oder Spalte fest.</p></details>`;
   crossTable($("#matrix"), MPIN);
   $("#ev details").open = store.get("matrixOpen", false);
@@ -1809,9 +1863,9 @@ async function matchup() {
   const seen = new Set();
   box.innerHTML = `<div class="foes">${r.einzeln.map((x) => foeCard(x.gegner.id, ROWS[x.gegner.id])).join("")}</div>
     ${r.ohne_antwort.length ? `<div class="note warn">Niemand im Team ist klar im Vorteil gegen: ${esc(r.ohne_antwort.join(", "))}</div>` : `<div class="note go">Gegen jeden Gegner hast du mindestens einen guten Kandidaten.</div>`}
-    <div class="scroll"><table class="vs" id="vs"><thead><tr><th></th>${r.einzeln.map((x, i) => `<th class="foeh" data-c="${i}" data-pc="${i}" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
+    <div class="scroll"><table class="vs" id="vs"><thead><tr><th></th>${r.einzeln.map((x, i) => `<th class="foeh" data-c="${i + 1}" data-pc="${i + 1}" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
       ${r.uebersicht.filter((m) => !seen.has(m.id) && seen.add(m.id)).map((m, k) => `<tr data-r="${k}"><th class="r" data-pr="${k}" data-hc="${m.id}">${img(m.id)} ${esc(m.name)}</th>${r.einzeln.map((x, i) => { const v = verdict[`${m.id}:${x.gegner.id}`], u = VERDICT[v.urteil];
-        return `<td data-c="${i}" class="v-${v.urteil}" data-tip="${esc(`${m.name} gegen ${x.gegner.name}: ${u[1]}\n${v.gruende.map((g) => "· " + g).join("\n")}`)}">${u[0]}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
+        return `<td data-c="${i + 1}" class="v-${v.urteil}" data-tip="${esc(`${m.name} gegen ${x.gegner.name}: ${u[1]}\n${v.gruende.map((g) => "· " + g).join("\n")}`)}">${u[0]}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
     <p class="hint">Vorteil: teilt mehr aus, als es einsteckt (Typen und Initiative). Nachteil: steckt mehr ein, als es austeilt. Die Attacken des Gegners zählen über seine Typen, deine über die gewählten Attacken. Zelle hovern für die Rechnung; Klick hält Zeile oder Spalte fest. Gegner lassen sich oben per Ziehen umsortieren.</p>`;
   crossTable($("#vs"), VPIN);
   foeDrag(box);
@@ -1884,7 +1938,7 @@ async function movesView() {
         <td class="c num">${m.lernen || ""}</td><td class="c num">${m.gen || ""}</td><td class="kurz">${kurzHtml(m.kurz || (m.klasse === 1 ? m.text || "" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
     const tb = $("#mv table");
     // Name: Zeilenkopf (markiert nur die Zeile), die übrigen Zellen markieren Zeile und Spalte
-    $$("tbody tr", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { if (i) td.dataset.c = i; else td.dataset.pr = tr.dataset.r; }));
+    $$("tbody tr", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.c = i; if (!i) td.dataset.pr = tr.dataset.r; }));
     crossTable(tb, APIN);
   };
   const load = async () => {
@@ -2109,7 +2163,7 @@ async function mgView(slug, want) {
     tl.style.transform = pl.style.transform = `translate(${-ox}px,${-oy}px)`;
     if (oldZ !== null) old.style.transform = `translate(${-ox}px,${-oy}px) scale(${2 ** (z - oldZ)})`;
     const wantT = new Set(view(z));
-    $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) { if (im.onload) pending--; im.onload = im.onerror = null; im.remove(); } else wantT.delete(im.dataset.k); });
+    $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) { if (im.onload) pending--; im.onload = im.onerror = null; im.src = ""; im.remove(); } else wantT.delete(im.dataset.k); });
     wantT.forEach((k) => {
       const [, tx, ty] = k.split("/").map(Number), im = new Image();
       im.dataset.k = k; im.alt = ""; im.draggable = false;
@@ -2146,7 +2200,7 @@ async function mgView(slug, want) {
     if (prevZ !== undefined && prevZ !== z) {
       if (!pending || oldZ === null) { old.innerHTML = ""; $$("img", tl).forEach((im) => { if (im.complete && im.style.visibility !== "hidden") old.appendChild(im); }); oldZ = prevZ; }
     } else { old.innerHTML = ""; oldZ = null; }
-    $$("img", tl).forEach((im) => { im.onload = im.onerror = null; }); tl.innerHTML = ""; pending = 0; tiles(); pins();
+    $$("img", tl).forEach((im) => { im.onload = im.onerror = null; im.src = ""; }); tl.innerHTML = ""; pending = 0; tiles(); pins();
   };
   const zoomTo = (nz, px, py) => {
     nz = Math.max(zmin, Math.min(zmax, nz));
@@ -2323,7 +2377,8 @@ async function mapView(karte, fid) {
   const lays = [...(pts.length ? [["pokemon", "Spawnpunkte", pts.length]] : []), ...Object.entries(arten).map(([k, v]) => [k, v[1], objs.filter((o) => o.art === k).length])];
   const known = new Set(MGROUPS.flatMap((g) => g[1]));
   const groups = [...MGROUPS.map(([n, ks]) => [n, ks.map((k) => lays.find((l) => l[0] === k)).filter(Boolean)]), ["Weitere", lays.filter((l) => !known.has(l[0]))]].filter((g) => g[1].length);
-  const layerBar = groups.map(([n, ls], gi) => `<span class="mgrp"><button class="mgrp-b" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">${esc(n)}</button>${ls.map((l) => layerBtn(...l)).join("")}</span>`).join("");
+  const layerBar = groups.map(([n, ls], gi) => `<div class="mgg"><div class="mgg-h">${esc(n)} <span class="hint">${ls.reduce((a, l) => a + l[2], 0)}</span>
+    <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></div><div class="mlays">${ls.map((l) => layerBtn(...l)).join("")}</div></div>`).join("");
   const hasCond = pts.some((p) => p.mons.some((m) => m.c));
   const condSel = (key, label, names, v) => `<label class="mcond">${label} <select data-cond="${key}"><option value="-1">alle</option>${names.map((x, i) => `<option value="${i}"${i === v ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>`;
   main.innerHTML = `<div class="box mapbox">
@@ -2338,13 +2393,13 @@ async function mapView(karte, fid) {
 </div>
     ${objs.length || pts.length ? `<div class="bar mlays">${pts.length ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="heatbtn" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto wahrscheinlicher">▦ Übersicht mit Bildern</button>` : ""}${hasCond ? condSel("mapZeit", "Tageszeit", d.zeiten || [], fz) + condSel("mapWetter", "Wetter", d.wetterarten || [], fw) : ""}
       ${objs.length ? `<label class="mgot" data-tip="Symbole, die du als erledigt markiert hast (Rechtsklick auf ein Symbol oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> gefundene ausblenden</label>` : ""}
-      <span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button></span></div>
-    <div class="bar mlays mgrps">${layerBar}</div>` : ""}
+</div>` : ""}
     ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus. <a href="#karte/gebiete">Gebiete von ${esc(gameName())}</a></div>` : ""}
     ${d.kacheln || d.bild ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
     <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
-      <aside id="mapside" class="mapside"><p class="hint">${pts.length ? "Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha." : "Fahre über ein Symbol für Einzelheiten, klicke für die Liste."}${objs.length ? " Rechtsklick auf ein Symbol markiert es als gefunden." : ""}</p></aside></div>
+      <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">${pts.length ? "Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha." : "Fahre über ein Symbol für Einzelheiten, klicke für die Liste."}${objs.length ? " Rechtsklick auf ein Symbol markiert es als gefunden." : ""}</p></aside>
+      ${lays.length ? `<div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button></span></div>${layerBar}</div>` : ""}</div></div>
     <p class="hint">Kartenbild: ${d.bild ? "Altissimo" : "Serebii"}${pts.length ? "; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten" : ""}${objs.length ? "; Symbole und Sammelobjekte: Altissimo (GPL-3.0)" : ""}${objs.some((o) => MOBJMON.has(o.art) || o.art === "boden") ? "; Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas und Items am Boden: PokéWiki (CC BY-SA 3.0)" : ""}${objs.some((o) => o.art === "reise" || o.art === "lager") ? "; Schnellreise und Lager: PLA Companion (software-notion.de)" : ""}.</p></div>`;
   const pick = $("#mapmon") || document.createElement("div"), pickM = $(".pickm", pick) || document.createElement("div");
   const pickOpen = (on) => { pickM.hidden = !on; $(".pickbtn", pick).setAttribute("aria-expanded", on); if (on) { const f = $("input", pickM); f.value = ""; pickFilter(""); f.focus(); $("a.on", pickM)?.scrollIntoView({block: "center"}); } };
@@ -2673,7 +2728,7 @@ async function itemsView() {
       + (xs.length ? "" : `<tr><td colspan="${cols.length}" class="hint">Nichts gefunden.</td></tr>`)}</tbody></table>`;
     $$("#itemseg button").forEach((x) => x.classList.toggle("on", x.dataset.t === pocket));
     const tb = $("#itembox table");
-    $$("tbody tr[data-r]", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { if (i) td.dataset.c = i; else td.dataset.pr = tr.dataset.r; }));
+    $$("tbody tr[data-r]", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.c = i; if (!i) td.dataset.pr = tr.dataset.r; }));
     crossTable(tb, IPIN);
   };
   $("#itemq").addEventListener("input", (e) => { q = e.target.value.trim(); draw(); });
@@ -2688,14 +2743,14 @@ const typePick = (key, ts) => new Set(store.get(key, []).filter((t) => ts.includ
 const typeFilter = (key, ts, pick, tip) => `<div class="bar tpick" data-tip="${esc(tip)}"><span class="hint">Filter</span>${ts.map((t) =>
   `<button class="tpk${pick.has(t) ? " on" : ""}" data-tf="${key}" data-tpk="${t}">${tchip(t)}</button>`).join("")}${pick.size ? `<button class="small" data-tf="${key}" data-tpkx>alle</button>` : ""}</div>`;
 /* Zählspalte farbig: gut grün, schlecht rot, kräftiger je mehr (bezogen auf max); 0 bleibt blass */
-const cntTd = (v, good, max, c) => `<td class="c num cnt${v ? "" : " zero"}" data-c="${c}" data-s="${v}"${v ? ` style="background:color-mix(in srgb,var(${good ? "--go" : "--stop"}) ${Math.round(8 + 40 * Math.min(1, v / max))}%,transparent)"` : ""}>${v}</td>`;
+const cntTd = (v, good, max, c, tip = "") => `<td class="c num cnt${v ? (good ? " cg" : " cb") : " zero"}" data-c="${c}" data-s="${v}"${tip ? ` data-tip="${esc(`${tip}: ${v}`)}"` : ""}${v ? ` style="background:color-mix(in srgb,var(${good ? "--go" : "--stop"}) ${Math.round(4 + 14 * Math.min(1, v / max))}%,transparent)"` : ""}>${v}</td>`;
 // Zählung je Zeile aus den Faktoren: Verteidigung [Schw., ×4, Res., Imm.], Angriff [stark, schwach, ohne Wirkung]
 const defCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f >= 4).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
 const attCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
 const DEFC = [["Schw.", "Schwächen: Angriffstypen mit ×2 oder mehr", false, 8], ["×4", "4-fache Schwächen", false, 2], ["Res.", "Resistenzen: ×½ oder weniger", true, 8], ["Imm.", "Immun: keine Wirkung", true, 2]];
 const ATTC = [["Stark", "Verteidigende Typen, die sehr effektiv getroffen werden", true, 8], ["Schwach", "Typen, gegen die es nur ×½ schafft", false, 8], ["Imm.", "Typen, gegen die nichts wirkt", false, 2]];
 const cntHeads = (cs) => cs.map(([n, tip]) => `<th class="c cnth" data-tip="${esc(tip)}">${n}</th>`).join("");
-const cntCells = (cs, vs, base) => vs.map((v, i) => cntTd(v, cs[i][2], cs[i][3], typeof base === "number" ? base + i : base + i)).join("");
+const cntCells = (cs, vs, base) => vs.map((v, i) => cntTd(v, cs[i][2], cs[i][3], typeof base === "number" ? base + i : base + i, cs[i][1])).join("");
 /* Typen des Teams: je Mitglied mit seinen (Doppel-)Typen, wie viel es einsteckt (Verteidigung) und wie stark seine
    Eigentypen treffen (Angriff, der bessere der beiden). Zeilen sind die Mitglieder, Spalten die 18 Typen */
 function teamTypeHtml(ms, all) {
@@ -2848,9 +2903,9 @@ async function usageBox() {
     <tbody>${u.rows.slice(0, n).map((r, i) => { const th_ = r.typen.length ? threat(r) : [], an = r.typen.length ? answer(r) : [];
       return `<tr${r.id ? ` data-hc="${r.id}"` : ""}><td class="c num" data-s="${i + 1}">${i + 1}</td>
         <td data-s="${esc(r.name)}" class="nw">${r.id ? `${img(r.id, "sm")} <a href="#pokemon/${r.id}">${esc(r.name)}</a> ${tchips(r.typen)}` : esc(r.name)}</td>
-        <td class="c num" data-s="${r.anteil}">${String(r.anteil).replace(".", ",")} %</td>
+        <td class="c num ushare" data-s="${r.anteil}" style="--w:${Math.min(100, r.anteil / (u.rows[0].anteil || 1) * 100).toFixed(0)}%" data-tip="In ${String(r.anteil).replace(".", ",")} % der Teams; der Balken misst am häufigsten (${String(u.rows[0].anteil).replace(".", ",")} %)">${String(r.anteil).replace(".", ",")} %</td>
         <td>${top(r.attacken, 4)}</td><td>${top(r.items, 2)}</td><td>${top(r.faehigkeiten, 1)}${r.tera.length ? `<div class="hint">Tera: ${r.tera.slice(0, 2).map(([k]) => esc(k)).join(", ")}</div>` : ""}</td>
-        ${team.length ? `<td class="${th_.length >= 2 ? "stop" : ""}">${names(th_) || "–"}</td><td class="${an.length ? "go" : "stop"}">${names(an) || "keiner"}</td>` : ""}</tr>`; }).join("")}</tbody></table></div>`;
+        ${team.length ? `<td class="${th_.length >= 3 ? "stop" : th_.length === 2 ? "warn" : ""}" data-tip="${th_.length} Mitglieder trifft ein Eigentyp des Gegners sehr effektiv">${names(th_) || "–"}</td><td class="${an.length ? "go" : "stop"}">${names(an) || "keiner"}</td>` : ""}</tr>`; }).join("")}</tbody></table></div>`;
   $("#usagen").addEventListener("change", (e) => { store.set("usageN", +e.target.value); usageBox(); });
   S.usageTop = u.rows.filter((r) => r.id).slice(0, 6).map((r) => r.id);
   S.usageIds = u.rows.filter((r) => r.id).map((r) => r.id);
@@ -2871,8 +2926,8 @@ async function logBox() {
   el().innerHTML = `<div class="bar"><h2 style="margin:0">Kampftagebuch</h2>
       ${L.kaempfe ? `<span class="hint grow">${L.kaempfe} ${L.kaempfe === 1 ? "Kampf" : "Kämpfe"} · ${L.siege} ${L.siege === 1 ? "Sieg" : "Siege"}, ${L.kaempfe - L.siege} ${L.kaempfe - L.siege === 1 ? "Niederlage" : "Niederlagen"} (${pct} % gewonnen)</span>` : `<span class="hint grow">Noch kein Kampf eingetragen.</span>`}</div>
     <p class="hint">Nach jedem Kampf: Gegner antippen (bis sechs), Ergebnis wählen. Das aktuelle Team wird mit gespeichert. So zeigt sich mit der Zeit, gegen wen es schwer wird.</p>
-    <div class="logpick">${LOGPICK.length ? LOGPICK.map((id) => `<span class="chip on" data-act="logpick" data-id="${id}" data-tip="Entfernen">${img(id, "sm")}${nm(id)} ✕</span>`).join("") : `<span class="hint">Gegner: noch keiner gewählt</span>`}</div>
-    ${quick.length ? `<div class="logquick">${quick.filter((id) => !LOGPICK.includes(id)).map((id) => `<span class="chip" data-act="logpick" data-id="${id}" data-tip="${nm(id)}">${img(id, "sm")}</span>`).join("")}</div>` : ""}
+    <div class="logpick">${LOGPICK.length ? LOGPICK.map((id) => `<span class="chip on" data-act="logpick" data-id="${id}" data-hc="${id}" aria-label="Entfernen">${img(id, "sm")}${nm(id)} ✕</span>`).join("") : `<span class="hint">Gegner: noch keiner gewählt</span>`}</div>
+    ${quick.length ? `<div class="logquick">${quick.filter((id) => !LOGPICK.includes(id)).map((id) => `<span class="chip" data-act="logpick" data-id="${id}" data-hc="${id}" aria-label="${nm(id)}">${img(id, "sm")}</span>`).join("")}</div>` : ""}
     <div class="bar"><div class="ac"><input id="logq" type="search" placeholder="Anderen Gegner suchen" style="width:200px"></div>
       <input id="lognote" type="text" placeholder="Notiz (optional)" class="grow" maxlength="500">
       <button class="primary" data-act="logadd" data-res="sieg"${LOGPICK.length ? "" : " disabled"}>Sieg</button>
@@ -2880,7 +2935,7 @@ async function logBox() {
     ${L.gegner.length ? `<h3>Häufigste Gegner</h3><div class="logfoes">${L.gegner.map((g) => `<span class="lf ${g.siege * 2 < g.kaempfe ? "stop" : "go"}" data-hc="${g.id}">${img(g.id, "sm")}<span>${nm(g.id)}<br><span class="hint">${g.kaempfe} ${g.kaempfe === 1 ? "Kampf" : "Kämpfe"}, ${g.siege} ${g.siege === 1 ? "Sieg" : "Siege"}</span></span></span>`).join("")}</div>` : ""}
     ${L.rows.length ? `<details${store.get("logOpen", false) ? " open" : ""} id="logall"><summary>Alle Kämpfe</summary><table class="rows logrows"><tbody>${L.rows.map((r) => `<tr>
       <td class="nw hint">${esc(r.at.slice(0, 10).split("-").reverse().join("."))}</td><td class="${r.ergebnis === "sieg" ? "go" : "stop"}">${r.ergebnis === "sieg" ? "Sieg" : "Niederlage"}</td>
-      <td>${r.gegner.map((id) => `<span data-tip="${nm(id)}">${img(id, "sm")}</span>`).join("")}</td><td class="hint">${esc(r.notiz || "")}</td>
+      <td>${r.gegner.map((id) => `<span data-hc="${id}">${img(id, "sm")}</span>`).join("")}</td><td class="hint">${esc(r.notiz || "")}</td>
       <td><button class="small x" data-act="logdel" data-id="${r.id}" data-tip="Eintrag löschen">✕</button></td></tr>`).join("")}</tbody></table></details>` : ""}`;
   autocomplete($("#logq"), (r) => { if (LOGPICK.length < 6 && !LOGPICK.includes(r.id)) LOGPICK.push(r.id); logBox(); });
   $("#logall")?.addEventListener("toggle", (e) => store.set("logOpen", e.target.open));
@@ -2915,8 +2970,12 @@ async function calcBox() {
   if (o.gegen === "favs" && !favIds.length) o.gegen = "team";
   const foes = o.gegen === "eigene" ? own : o.gegen === "team" ? t.ids : o.gegen === "favs" ? favIds : o.gegen === "foes" ? S.foes : S.usageIds.slice(0, 30);
   if (!foes.length) {
+    // zurück zur vorigen Wahl (Gegner von oben, Favoriten …), sonst zu häufigen Gegnern oder dem Team
+    const ok = {smogon: champ && (S.usageIds || []).length, foes: !champ && S.foes.length, favs: favIds.length, team: true};
+    const back = ok[o.vorher] ? o.vorher : champ && (S.usageIds || []).length ? "smogon" : "team";
+    const NAMEN = {smogon: "häufigen Gegnern", foes: "den Gegnern von oben", favs: "den Favoriten", team: "meinem Team"};
     el().innerHTML = `${CH()}<p class="hint">Noch keine eigenen Gegner gewählt.</p><div class="bar"><div class="ac"><input id="cfoeq" type="search" placeholder="Gegner hinzufügen" style="width:220px"></div>
-      <button data-act="calcgegen" data-v="${champ && (S.usageIds || []).length ? "smogon" : "team"}">zurück zu ${champ && (S.usageIds || []).length ? "häufigen Gegnern" : "meinem Team"}</button></div>`;
+      <button data-act="calcgegen" data-v="${back}">zurück zu ${NAMEN[back]}</button></div>`;
     autocomplete($("#cfoeq"), (x) => { store.set(ownKey, [x.id]); calcBox(); });
     return;
   }
@@ -2935,7 +2994,7 @@ async function calcBox() {
   const cls = (x) => x.sicher === 1 ? "go" : x.moeglich === 1 ? "warn" : x.sicher === 0 || !x.sicher ? "stop" : "";
   el().innerHTML = `${CH()}
     <div class="bar"><span class="seg"><button class="${o.ansicht === "alle" ? "" : "on"}" data-cv="eins" data-tip="Eine Attacke eines Mitglieds gegen alle Gegner, mit Balken und Treffern bis K.O.">eine Attacke</button><button class="${o.ansicht === "alle" ? "on" : ""}" data-cv="alle" data-tip="Jedes Mitglied gegen jeden Gegner mit seiner stärksten gewählten Attacke">Übersicht</button></span>
-      ${o.ansicht === "alle" ? "" : `<label>Angreifer <select id="cslot">${t.ids.map((id, i) => dmg(i).length ? `<option value="${i}"${i === o.slot ? " selected" : ""}>${esc(ROWS[id]?.name || id)} (Platz ${i + 1})</option>` : "").join("")}</select></label>
+      ${o.ansicht === "alle" ? "" : `<span class="hint">Angreifer</span><span class="seg cslots">${t.ids.map((id, i) => dmg(i).length ? `<button class="${i === o.slot ? "on" : ""}" data-cslot="${i}" data-hc="${id}" data-slot="${i}" aria-label="${esc(ROWS[id]?.name || id)}">${img(id, "sm")}<span>${esc(ROWS[id]?.name || id)}</span></button>` : "").join("")}</span>
       <label>Attacke <select id="cmove">${dmg(o.slot).map((x) => `<option value="${x}"${x === o.move ? " selected" : ""}>${esc(A[x].name)} (${A[x].staerke})</option>`).join("")}</select></label>`}
       <label data-tip="${champ ? "Häufige Gegner: die 30 meistgenutzten Pokémon der Nutzungsstatistik von Smogon (unten unter „Häufige Gegner“)." : "Gegner von oben: die aus „Gegen Gegner“."} Mein Team: deine eigenen sechs. Favoriten: deine Favoriten in diesem Spiel. Eigene Auswahl: wen du selbst hinzufügst">gegen <select id="cgegen">${champ && (S.usageIds || []).length ? `<option value="smogon"${o.gegen === "smogon" ? " selected" : ""}>häufige Gegner (Top 30)</option>` : ""}
         ${!champ && S.foes.length ? `<option value="foes"${o.gegen === "foes" ? " selected" : ""}>Gegner von oben (${S.foes.length})</option>` : ""}
@@ -2964,9 +3023,9 @@ async function calcBox() {
   $$("[data-cv]", el()).forEach((b) => b.addEventListener("click", () => set("ansicht", b.dataset.cv)));
   if ($("#cfoeq")) autocomplete($("#cfoeq"), (x) => { if (!own.includes(x.id)) store.set(ownKey, [...own, x.id].slice(0, 30)); calcBox(); });
   const set = (k, v) => { o[k] = v; store.set(ck, o); calcBox(); };
-  $("#cslot")?.addEventListener("change", (e) => set("slot", +e.target.value));
+  $$("[data-cslot]", el()).forEach((b) => b.addEventListener("click", () => set("slot", +b.dataset.cslot)));
   $("#cmove")?.addEventListener("change", (e) => set("move", +e.target.value));
-  $("#cgegen").addEventListener("change", (e) => set("gegen", e.target.value));
+  $("#cgegen").addEventListener("change", (e) => { if (o.gegen !== "eigene") o.vorher = o.gegen; set("gegen", e.target.value); });
   $("#cvert").addEventListener("change", (e) => set("vert", e.target.value));
   $("#ctera")?.addEventListener("change", (e) => set("tera", e.target.value));
   $("#cfl")?.addEventListener("change", (e) => set("flaeche", e.target.value));
@@ -3027,17 +3086,20 @@ async function speedView() {
   $("#spq").addEventListener("input", (e) => set("q", e.target.value));
   draw();
 }
+const CMPC = new Map();
 async function compareView(a, b) {
   const rid = RID;
   const ids = [a, b].map((x) => (x && !isNaN(+x) ? +x : null));
-  const ds = await Promise.all(ids.map((id) => id == null ? null : api(`/api/pokemon/${id}?` + qs({spiel: S.game})).catch(() => null)));
+  // Merken und Schnellwahl zeichnen sofort neu: schon geladene Pokémon kommen aus dem Zwischenspeicher
+  const ck = (id) => id + "|" + S.game;
+  const ds = await Promise.all(ids.map((id) => id == null ? null : CMPC.get(ck(id)) || api(`/api/pokemon/${id}?` + qs({spiel: S.game})).then((d) => { CMPC.set(ck(id), d); return d; }).catch(() => null)));
   if (rid !== RID) return;
   ds.forEach((d) => { if (d) { ROWS[d.id] = Object.assign(ROWS[d.id] || {}, d); } });
   const [A, B] = ds;
   const go = (x, y) => { location.hash = `vergleich/${x ?? "-"}/${y ?? "-"}`; };
   // Schnellwahl unter dem Vergleich: zuerst die gemerkten (mit „alle entfernen“), darunter die Favoriten, ohne die schon gewählten
   const marked = cmpList(), favs = S.favs.map((f) => f.id).filter((id) => !marked.includes(id));
-  const qbtn = (k, id, tip) => `<button class="cq" data-cq="${k}" data-id="${id}" data-hc="${id}" data-tip="${tip}: hierher stellen">${img(id)}</button>`;
+  const qbtn = (k, id, tip) => `<button class="cq" data-cq="${k}" data-id="${id}" data-hc="${id}" aria-label="${tip}: hierher stellen">${img(id)}</button>`;
   const qrow = (k) => {
     const m = marked.filter((id) => id !== ids[k]), f = favs.filter((id) => id !== ids[k]).slice(0, 12);
     return `<div class="cmppick">${m.length ? `<div class="cqh"><b>Zum Vergleich gemerkt</b>${k === 0 ? `<button class="small" data-act="cmpclear" data-tip="Alle gemerkten Pokémon aus der Merkliste nehmen">alle entfernen</button>` : ""}</div>
@@ -3063,9 +3125,9 @@ async function compareView(a, b) {
   const ts = Object.keys(S.chart || {});
   // Verteidigung: je Angriffstyp der Faktor beider; wer weniger einsteckt, bekommt die Zelle grün hinterlegt und ein ✓
   const fword = (f) => f === 0 ? "keine Wirkung" : f >= 4 ? "4-fach schwach" : f > 1 ? "schwach" : f <= 0.25 ? "4-fach resistent" : f < 1 ? "resistent" : "neutral";
-  const dcell = (d, f, other, t) => `<td class="c${f < other ? " better" : ""}" data-tip="${esc(`${tname(t)}-Attacken gegen ${d.name}: ×${fl(f)} (${fword(f)})${f < other ? `; steckt weniger ein als ${(d === A ? B : A).name}` : f > other ? `; steckt mehr ein als ${(d === A ? B : A).name}` : ""}`)}">${f === 1 ? `<span class="hint">1</span>` : `<span class="f ${fcls(f)}">${fl(f)}</span>`}${f < other ? ` <span class="ok">✓</span>` : ""}</td>`;
+  const dcell = (d, f, other, t) => `<td class="c${f < other ? " better" : f > other ? " worse" : ""}" data-tip="${esc(`${tname(t)}-Attacken gegen ${d.name}: ×${fl(f)} (${fword(f)})${f < other ? `; steckt weniger ein als ${(d === A ? B : A).name}` : f > other ? `; steckt mehr ein als ${(d === A ? B : A).name}` : ""}`)}">${f === 1 ? `<span class="hint">1</span>` : `<span class="f ${fcls(f)}">${fl(f)}</span>`}${f < other ? ` <span class="ok">✓</span>` : ""}</td>`;
   const defRow = A && B ? ts.map((t) => { const x = A.wirkung[t] ?? 1, y = B.wirkung[t] ?? 1;
-    return `<tr data-r="${t}">${dcell(A, x, y, t)}<th class="c">${tchip(t)}</th>${dcell(B, y, x, t)}</tr>`; }).join("") : "";
+    return `<tr data-r="${t}">${dcell(A, x, y, t)}<th class="c" data-tip="${esc(`${tname(t)}-Attacken: links gegen ${A.name}, rechts gegen ${B.name}. Grün = steckt weniger ein, rot = mehr`)}">${tchip(t)}</th>${dcell(B, y, x, t)}</tr>`; }).join("") : "";
   const sum = (d) => { const v = Object.values(d.wirkung); return {s: v.filter((f) => f > 1).length, r: v.filter((f) => f < 1 && f > 0).length, i: v.filter((f) => f === 0).length}; };
   const mv = (d) => new Map([...d.attacken.attacken, ...d.attacken.status].map((m) => [m.id, m]));
   let moves = "";
@@ -3084,17 +3146,19 @@ async function compareView(a, b) {
   if (A && B) {
     const gen = S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;
     const sp = (d) => speedCols(d.werte[5], 50, gen)[2];
-    const hit = (x, y) => Math.max(...x.typen.map((t) => y.typen.reduce((f, d) => f * (S.chart?.[t]?.[d] ?? 1), 1)));
-    const ha = hit(A, B), hb = hit(B, A), sa = sp(A), sb = sp(B);
+    const fac = (t, y) => y.typen.reduce((f, d) => f * (S.chart?.[t]?.[d] ?? 1), 1);
+    const best = (x, y) => x.typen.reduce((b, t) => fac(t, y) > fac(b, y) ? t : b, x.typen[0]);
+    const ta = best(A, B), tb = best(B, A), ha = fac(ta, B), hb = fac(tb, A), sa = sp(A), sb = sp(B);
+    const win = (v, o, low) => (low ? v < o : v > o) ? `<b class="fz-g">${v}</b>` : (low ? v > o : v < o) ? `<b class="fz-r">${v}</b>` : `<b>${v}</b>`;
     const line = (txt, tip) => `<li data-tip="${esc(tip)}">${txt}</li>`;
     fazit = `<div class="box"><h2>Kurz gesagt</h2><ul class="fazit">
-      ${line(sa === sb ? `Gleich schnell (${sa} auf Level 50)` : `<b>${esc(sa > sb ? A.name : B.name)}</b> ist schneller: ${Math.max(sa, sb)} gegen ${Math.min(sa, sb)} auf Level 50`,
+      ${line(sa === sb ? `Gleich schnell (${sa} auf Level 50)` : `<b>${esc(sa > sb ? A.name : B.name)}</b> ist schneller: <b class="fz-g">${Math.max(sa, sb)}</b> gegen <b class="fz-r">${Math.min(sa, sb)}</b> auf Level 50`,
         "Initiative auf Level 50 mit 31 IV und 252 EV, neutrales Wesen. Mehr dazu in der Initiative-Liste")}
-      ${line(`${esc(A.name)} trifft ${esc(B.name)} mit dem besten Eigentyp <span class="f ${fcls(1 / (ha || 0.001))}">×${fl(ha)}</span>, umgekehrt <span class="f ${fcls(1 / (hb || 0.001))}">×${fl(hb)}</span>`,
-        "Bester Faktor einer Attacke vom eigenen Typ (mit Eigentyp-Bonus wären es noch ×1,5)")}
+      ${line(`${esc(A.name)} trifft ${esc(B.name)} mit ${tchip(ta)} <span class="f ${fcls(1 / (ha || 0.001))}">×${fl(ha)}</span>, umgekehrt ${esc(B.name)} mit ${tchip(tb)} <span class="f ${fcls(1 / (hb || 0.001))}">×${fl(hb)}</span>`,
+        "Bester Faktor einer Attacke von einem eigenen Typ (genannt ist der Typ); mit Eigentyp-Bonus kommt noch ×1,5 dazu")}
       ${line(`Physisch oder speziell: ${esc(A.name)} ${A.werte[1] >= A.werte[3] ? "eher physisch" : "eher speziell"}, ${esc(B.name)} ${B.werte[1] >= B.werte[3] ? "eher physisch" : "eher speziell"}`,
         "Aus dem höheren der Werte Angriff und Spezial-Angriff")}
-      ${line(`Schwächen: ${esc(A.name)} ${sum(A).s}, ${esc(B.name)} ${sum(B).s}; Resistenzen und Immunitäten: ${sum(A).r + sum(A).i} gegen ${sum(B).r + sum(B).i}`, "Aus der Typwirkung unten")}
+      ${line(`Schwächen: ${esc(A.name)} ${win(sum(A).s, sum(B).s, true)}, ${esc(B.name)} ${win(sum(B).s, sum(A).s, true)}; Resistenzen und Immunitäten: ${win(sum(A).r + sum(A).i, sum(B).r + sum(B).i)} gegen ${win(sum(B).r + sum(B).i, sum(A).r + sum(A).i)}`, "Aus der Typwirkung unten; grün ist besser (weniger Schwächen, mehr Resistenzen)")}
     </ul></div>`;
   }
   const abil = (d) => d.faehigkeiten.length ? d.faehigkeiten.map((x) => `<div><b>${wikiLink(x.name)}</b>${x.versteckt ? " <span class='cls'>versteckt</span>" : ""}<div class="why">${esc(x.text)}</div></div>`).join("") : `<p class="hint">keine</p>`;
@@ -3154,7 +3218,7 @@ const logLocal = (line) => { const m = /^(\d\d):(\d\d):(\d\d)( [\s\S]*)$/.exec(l
 /* Einstellungen wie im VR-Navigator: oben eine Leiste mit den Abschnitten, jeder Kasten klappt auf und zu (gemerkt) */
 function foldBoxes(root) {
   const shut = new Set(store.get("setShut", ["quellen", "lesezeichen", "spieldaten"]));
-  const boxes = $$(":scope > .box, :scope > .cols > .box, :scope > details.box", root);
+  const boxes = $$(":scope > .box, :scope > .cols > .box, :scope > .cols > .stack > .box, :scope > details.box", root);
   const slug = (t) => t.toLowerCase().replace(/[^a-zäöüß]+/g, "-").replace(/^-|-$/g, "").replace(/^seite-untersuchen.*/, "lesezeichen").replace(/^quellen.*/, "quellen");
   const jumps = [];
   boxes.forEach((b) => {
@@ -3198,7 +3262,7 @@ async function settingsView() {
       <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
         <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button>
         <button data-act="diag" data-tip="Fragt jede Quelle einmal an, auch mögliche neue (Items, Fundorte, Wikis, Kampfdaten, Karten), und beschreibt die Antwort. Speichert nichts; dauert etwa eine Minute">Verbindung testen</button></div>
-      <details class="sub" id="diagsub"><summary><b>Verbindungstest</b> <span class="hint">noch nicht gestartet</span></summary>
+      <details class="sub nosep" id="diagsub"><summary><b>Verbindungstest</b> <span class="hint">noch nicht gestartet</span></summary>
         <div class="bar slim"><span id="dlinks"></span></div><div id="diag"><p class="hint">„Verbindung testen“ fragt jede Quelle einmal an; Probe-Seiten lassen sich danach herunterladen.</p></div></details>
       <details class="sub"${st.ok === false || st.running ? " open" : ""}><summary><b>Protokoll</b> <span class="hint">${st.started ? esc(deTime(st.started)) + (st.ok === false ? ", mit Fehlern" : "") : "noch keins"}</span></summary>
         ${(st.log || []).length ? `<div class="bar slim"><button class="link" data-act="copy" data-src="#plog">kopieren</button> · <button class="link" data-act="dl" data-src="#plog" data-name="pokedex-protokoll">herunterladen</button></div>` : ""}
@@ -3208,8 +3272,18 @@ async function settingsView() {
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
       <div class="bar"><label><input type="checkbox" id="sprites"${s.sprites ? " checked" : ""}> Bilder laden (Sprites 96 × 96 und offizielle Artworks 475 × 475, zusammen gut 180 MB; dazu schillernde und animierte Sprites, Rufe und Item-Bilder, gut 45 MB)</label></div>
       <p class="hint">Ändert sich bei keiner Quelle etwas, bleibt die Datenbank. Eine neue gilt erst nach bestandener Selbstprüfung; deine Teams liegen getrennt (user.db) und werden täglich gesichert.</p>
+      <details class="sub"><summary><b>Quellen und Lizenzen</b> <span class="hint">Pokédex ${esc(S.meta?.version || "")}</span></summary>
+      <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
+        <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
+        <a href="https://github.com/kwsch/PKHeX" target="_blank" rel="noopener noreferrer">PKHeX</a> (Fundorte aus den Spieldaten, Item-Listen, GPL-3.0) ·
+        <a href="https://github.com/Lincoln-LM/PLA-Live-Map" target="_blank" rel="noopener noreferrer">PLA-Live-Map</a> und
+        <a href="https://github.com/Lincoln-LM/JS-Finder" target="_blank" rel="noopener noreferrer">JS-Finder</a> (Spawnpunkte, GPL-3.0) ·
+        <a href="https://github.com/Altissimo1/altissimo1.github.io" target="_blank" rel="noopener noreferrer">Altissimo</a> (Kartensymbole, Jubeldorf, Rezepte, GPL-3.0) ·
+        <a href="https://www.serebii.net" target="_blank" rel="noopener noreferrer">Serebii</a> (Kartenbilder, große Item-Bilder) ·
+        <a href="https://www.pokewiki.de" target="_blank" rel="noopener noreferrer">PokéWiki</a> (Links, Attackenwerte, getragene Items und Kartenebenen in Legenden: Arceus, CC BY-SA 3.0 DE).
+        Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK; dies ist ein privates Nachschlage-Tool.</p></details>
     </div>
-    <div class="box"><h2>Zu erledigen</h2>
+    <div class="stack"><div class="box"><h2>Zu erledigen</h2>
       ${open.length ? `<p class="hint">PokéAPI und Showdown sind sich hier nicht einig. Das gilt für kein einzelnes Spiel: verglichen wird der neueste Stand der Hauptspiele
           (Generation 9), so steht es auch im Auftrag. Ältere Spiele haben teils andere Werte, die zeigt die Attackenliste je Spiel. Wähle, welcher Wert stimmt; im Zweifel im PokéWiki nachsehen. Oder gib die Liste als Auftrag an eine KI und lies ihre Antwort ein.</p>
         <div class="bar slim"><button data-act="todotask" data-tip="Auftrag für einen KI-Chat: die offenen Punkte mit der Bitte, sie zu prüfen. Die Antwort fügst du unter „Antwort einlesen“ ein und siehst erst eine Vorschau.">Auftrag kopieren${open.length > 60 ? ` (60 von ${open.length})` : ""}</button>
@@ -3223,8 +3297,7 @@ async function settingsView() {
           <button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="egal">egal</button></td></tr>`).join("")}</table></div>`
         : `<div class="note go">Nichts offen${pr.length ? ` (${pr.length} Abweichungen entschieden)` : ""}.</div>`}
       ${pr.length - open.length ? `<details><summary>Entschieden (${pr.length - open.length})</summary><table class="rows">${pr.filter((r) => r.entscheidung).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.feld)}</td><td>${esc(r.entscheidung)}</td><td><button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="">zurück</button></td></tr>`).join("")}</table></details>` : ""}
-    </div></div>
-    <h2 class="sect">Deine Daten</h2>
+    </div>
     <div class="box"><h2>Sicherung</h2>
       <p class="hint">Die Sicherung enthält alles Eigene: Teams, Favoriten, deine Sammlung (als gefangen markiert), Kampftagebuch und Entscheidungen. Der Server sichert user.db außerdem täglich selbst (die letzten 14 Tage).
         Die Spieldaten sind alles, was der Abgleich gesammelt hat (Datenbank, Stand, Protokoll, „Zu erledigen“ und welche Bilder und Kacheln fehlen), zum Nachprüfen; zum Einlesen braucht es sie nicht.</p>
@@ -3232,7 +3305,8 @@ async function settingsView() {
         <a class="btn" href="/api/export" download>Sicherung herunterladen</a>
         <label class="btn filebtn">Sicherung einlesen <input type="file" id="restore" accept="application/json,.json" hidden></label></div>
       <p class="hint">Einlesen ersetzt alle eigenen Daten durch die Datei; vorher legt der Server eine Kopie an.</p>
-      <div id="restmsg"></div></div>
+      <div id="restmsg"></div></div></div></div>
+    <h2 class="sect">Deine Daten</h2>
     <div class="box"><h2>Seite untersuchen (Lesezeichen)</h2><p class="hint">Manche Seiten laden ihre Karten erst im Browser (etwa das PokéWiki),
       der Abgleich sieht dann nur eine leere Hülle. Dieses Lesezeichen liest die fertig geladene Seite in deinem Browser: welche Daten-Dateien sie nachlädt
       (mit Inhalt), Daten in Variablen, Kartenmarker und das HTML. Ergebnis ist eine Datei für den Testdaten-Ordner, aus der sich ein Leser bauen lässt.
@@ -3240,17 +3314,7 @@ async function settingsView() {
       <span class="bm-w"><a class="bm" href="${esc(probeBm())}" data-act="nobm" data-tip="In die Lesezeichenleiste ziehen">⠿ <b>Seite untersuchen</b></a>
         <button data-act="bmcopy" data-tip="Für ein von Hand angelegtes Lesezeichen">Code kopieren</button></span>
       <ul class="hint"><li>Lesezeichenleiste einblenden (Strg+Umschalt+B) und den Knopf hineinziehen, oder „Code kopieren“ und als Adresse eines neuen Lesezeichens einfügen.</li>
-        <li>Dann die Seite öffnen (etwa eine Karte im PokéWiki, bei Serebii, GamerGuides oder Pokébip), warten, bis die Karte steht, und das Lesezeichen anklicken.</li></ul></div>
-    <details class="box"><summary><h2>Quellen und Lizenzen</h2><span class="hint">7 Quellen · Pokédex ${esc(S.meta?.version || "")}</span></summary>
-      <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
-        <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
-        <a href="https://github.com/kwsch/PKHeX" target="_blank" rel="noopener noreferrer">PKHeX</a> (Fundorte aus den Spieldaten, Item-Listen, GPL-3.0) ·
-        <a href="https://github.com/Lincoln-LM/PLA-Live-Map" target="_blank" rel="noopener noreferrer">PLA-Live-Map</a> und
-        <a href="https://github.com/Lincoln-LM/JS-Finder" target="_blank" rel="noopener noreferrer">JS-Finder</a> (Spawnpunkte, GPL-3.0) ·
-        <a href="https://github.com/Altissimo1/altissimo1.github.io" target="_blank" rel="noopener noreferrer">Altissimo</a> (Kartensymbole, Jubeldorf, Rezepte, GPL-3.0) ·
-        <a href="https://www.serebii.net" target="_blank" rel="noopener noreferrer">Serebii</a> (Kartenbilder, große Item-Bilder) ·
-        <a href="https://www.pokewiki.de" target="_blank" rel="noopener noreferrer">PokéWiki</a> (Links, Attackenwerte, getragene Items und Kartenebenen in Legenden: Arceus, CC BY-SA 3.0 DE).
-        Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK; dies ist ein privates Nachschlage-Tool.</p></details>`;
+        <li>Dann die Seite öffnen (etwa eine Karte im PokéWiki, bei Serebii, GamerGuides oder Pokébip), warten, bis die Karte steht, und das Lesezeichen anklicken.</li></ul></div>`;
   $$("h2.sect", main).forEach((h) => h.remove());       // die Leiste oben ersetzt die Zwischenüberschriften
   foldBoxes(main);
   const saveSet = async () => {

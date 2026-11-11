@@ -132,9 +132,10 @@ def tile_ok(pattern, z, x, y, endung="png"):
     """Kachelpfad nach dem Muster der Karte, nur mit Zahlen; None bei unpassendem Muster. Manche Karten nennen die
     Endung nicht im Muster, sondern getrennt (endung); dann wird sie angehängt."""
     pattern = pattern or ""
-    if re.fullmatch(r"[a-z0-9][a-z0-9/_.-]{0,150}\{z\}/\{x\}/\{y\}", pattern) and endung in ("png", "jpg", "jpeg", "webp"):
+    xy = r"\{z\}/(\{x\}/\{y\}|\{y\}/\{x\})"          # Z-A nennt erst y, dann x
+    if re.fullmatch(r"[a-z0-9][a-z0-9/_.-]{0,150}" + xy, pattern) and endung in ("png", "jpg", "jpeg", "webp"):
         pattern += "." + endung
-    if not re.fullmatch(r"[a-z0-9][a-z0-9/_.-]{0,150}\{z\}/\{x\}/\{y\}(@2x)?\.(png|jpg|jpeg|webp)", pattern):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9/_.-]{0,150}" + xy + r"(@2x)?\.(png|jpg|jpeg|webp)", pattern):
         return None
     return pattern.replace("{z}", str(int(z))).replace("{x}", str(int(x))).replace("{y}", str(int(y)))
 
@@ -153,13 +154,13 @@ def bounds_of(m):
 
 
 def tile_list(m, top=None):
-    """Alle Kacheln einer Karte als (z, x, y), von der weitesten Zoomstufe bis top (Vorgabe: die größte); ohne Grenzen leer."""
+    """Alle Kacheln einer Karte als (z, x, y), von min_zoom bis top (Vorgabe: die größte); ohne Grenzen leer."""
     b = bounds_of(m)
     if not b:
         return []
     top = m["max_zoom"] if top is None else min(top, m["max_zoom"])
     out = []
-    for z in range(max(0, m["min_zoom"] - 2), top + 1):
+    for z in range(max(0, m["min_zoom"]), top + 1):       # unter min_zoom gibt es keine Kacheln (nur 403)
         x0, x1, y0, y1 = tile_range(b, z)
         out += [(z, x, y) for x in range(max(0, x0), x1 + 1) for y in range(max(0, y0), y1 + 1)]
     return out

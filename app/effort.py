@@ -26,6 +26,20 @@ def stat(base, level, el, i, nature=1.0):
     return int(math.floor((level / 50 + 1) * base / 1.5 * nature)) + bonus(base, level, el)
 
 
+def parts(base, level, el, i, nature=1.0):
+    """Woraus ein Wert besteht (Summe = stat): Basiswert (höchstens der Grundwert), was das Level dazugibt (Grundwert
+    über dem Basiswert und der Bonus bei Stufe 0), was die Effort Levels dazugeben und was das Wesen ändert (±)."""
+    el = max(0, min(10, int(el)))
+    if i == 0:
+        grund, wesen = int(math.floor((level / 100 + 1) * base + level)), 0
+    else:
+        g0 = int(math.floor((level / 50 + 1) * base / 1.5))
+        grund, wesen = g0, int(math.floor((level / 50 + 1) * base / 1.5 * nature)) - g0
+    b0 = bonus(base, level, 0)
+    basis = min(base, grund)
+    return {"basis": basis, "level": grund - basis + b0, "el": bonus(base, level, el) - b0, "wesen": wesen}
+
+
 def start_level(iv):
     return next((el for lo, el in START if iv >= lo), 0)
 
@@ -52,5 +66,6 @@ def view(werte, level, el, ziel=None, nat_mod=None):
         total = [a + x for a, x in zip(total, c)]
         rows.append({"basis": b, "el": el[i], "wert": stat(b, level, el[i], i, nat[i]), "ziel": ziel[i],
                      "wert_ziel": stat(b, level, ziel[i], i, nat[i]), "max": stat(b, level, 10, i, nat[i]),
-                     "bonbons": c, "wesen": nat[i]})
+                     "bonbons": c, "wesen": nat[i], "teile": parts(b, level, el[i], i, nat[i]),
+                     "el_ziel_teil": parts(b, level, ziel[i], i, nat[i])["el"], "faktor": FAKTOR[el[i]], "bonus": bonus(b, level, el[i])})
     return {"level": level, "rows": rows, "bonbons": total, "sorten": [s[0] for s in STEINE]}
