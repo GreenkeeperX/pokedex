@@ -509,7 +509,8 @@ class Leser(unittest.TestCase):
                          {"id": 2, "title": "Orte", "color": "3F7791", "order": 1, "categories": [{"id": 20, "title": "Lager", "order": 1}]}]}
         page = ('<a href="/spiel/maps/erfundene-region">x</a><a href="\\/spiel\\/maps\\/zweite">y</a>'
                 '<script>window.mapData = ' + json.dumps(md) + ';window.user = null;</script>')
-        data = json.dumps({"locations": [
+        regions = [{"title": "Nordwald", "order": 1, "features": [{"geometry": {"type": "Polygon", "coordinates": [[[-1, 0.5], [-0.5, 0.5], [-0.5, 1], [-1, 1]]]}}]}]
+        data = json.dumps({"regions": regions, "locations": [
             {"id": 1, "category_id": 10, "latitude": "0.5", "longitude": "-0.25", "title": "Licht 1", "description": "<p>Am <b>Felsen</b></p><p>oben</p>"},
             {"id": 2, "category_id": 20, "latitude": "0.75", "longitude": "-1", "title": "Lager"},
             {"id": 3, "category_id": 10, "latitude": "kaputt", "longitude": "0"}],
@@ -520,10 +521,28 @@ class Leser(unittest.TestCase):
         self.assertEqual([g["titel"] for g in m["gruppen"]], ["Orte", "Sammeln"])            # nach Reihenfolge, leere Kategorien fallen weg
         self.assertEqual(m["gruppen"][1]["kategorien"], [{"id": 10, "titel": "Licht", "icon": "wisp", "n": 1}])
         self.assertEqual(m["orte"][0], [1, 10, 0.5, -0.25, "Licht 1", "Am Felsen\noben"])
+        self.assertEqual(m["gebiete"], [["Nordwald", -1, 0.5, -0.5, 1]])
         self.assertEqual(len(m["orte"]), 2)
         self.assertEqual(mapgenie.tile_ok(m["kacheln"], 10, 508, 509), "spiel/erfundene-region/v1/10/508/509.png")
         self.assertIsNone(mapgenie.tile_ok("../x/{z}/{x}/{y}.png", 1, 1, 1))
         self.assertIsNone(mapgenie.parse("<html></html>", data))
+
+    def test_mapgenie_ausrichten(self):
+        import random
+        from app import mapgenie
+        rnd = random.Random(7)
+        game = [(rnd.uniform(0, 1000), rnd.uniform(0, 1000)) for _ in range(20)]
+        # erfundene Karte: Maßstab 2,03 und 1,97, verschoben, Symbole von Hand gesetzt (±8 Pixel), dazu fremde Punkte
+        mg = [(2.03 * x + 5000 + rnd.uniform(-8, 8), 1.97 * z + 9000 + rnd.uniform(-8, 8)) for x, z in game]
+        mg += [(rnd.uniform(0, 12000), rnd.uniform(0, 12000)) for _ in range(60)]
+        ax, bx, az, bz = mapgenie.align(game, mg)
+        self.assertAlmostEqual(ax, 2.03, delta=0.03)
+        self.assertAlmostEqual(az, 1.97, delta=0.03)
+        self.assertAlmostEqual(bx, 5000, delta=25)
+        self.assertIsNone(mapgenie.align(game[:3], mg))
+        lat, lng = mapgenie.unproject(*mapgenie.project(0.75, -0.5))
+        self.assertAlmostEqual(lat, 0.75, places=6)
+        self.assertAlmostEqual(lng, -0.5, places=6)
 
     def test_lernliste_erweiterung(self):
         from app import abfragen

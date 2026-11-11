@@ -54,6 +54,11 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - α (`alphaBtn`, `/api/alpha`): bündig über dem Pokéball, nur für mögliche Alphas des Spiels; setzt auch gefangen.
 - Fester Tabellenkopf: `.scroll.sticky` (Attacken, Items) mit `top: var(--stick)`; auf schmalen Bildschirmen scrollt die
   Tabelle seitlich ohne festen Kopf.
+- Vergleich (`compareView`, `#vergleich/<A>/<B>`, „-“ = leer): zwei Suchfelder, Werte mit Unterschied, Verteidigung je
+  Angriffstyp (grün = steckt weniger ein), Fähigkeiten, Attacken (nur A, beide, nur B).
+- Typkombinationen (`combosHtml`, unter der Typtabelle, aufklappbar `combosOpen`): Verteidigung je Kombination, sortierbar.
+- Map Genie: eigene Ebenen „Aus den Spieldaten“ (Legenden: Arceus, `/api/mapgenie/eigene`), „Gehe zu“, Trefferliste der
+  Suche, `#karte/mg/<Karte>/<Ort>` springt zu einem Ort. Gefunden gilt auf der großen Karte und den Einzelkarten gleich.
 - Map Genie (`mgView`, `#karte/mg/<Karte>`, `/api/mapgenie`, Kacheln `/mgkachel/<Spiel>/<Karte>/<z>/<x>/<y>`): eigene
   Kachelanzeige (Web-Mercator, ganze Zoomstufen), Punkte je Kategorie in der Farbe der Gruppe, Ebenen rechts zum
   Auf- und Zuklappen (`mgHide:<Spiel>`, `mgOpen`), Suche, Rechtsklick = gefunden (`/api/gefunden`, `mapGotHide`).

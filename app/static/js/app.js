@@ -569,9 +569,10 @@ async function route() {
     else if (tab === "team") await teamView();
     else if (tab === "attacken") await movesView();
     else if (tab === "typen") await chartView();
+    else if (tab === "vergleich") await compareView(arg, arg2);
     else if (tab === "items") await itemsView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
-    else if (tab === "karte" && (arg === "mg" || (!arg && S.game && S.game !== "legends-arceus"))) await mgView(arg2 && decodeURIComponent(arg2));
+    else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);
     else if (tab === "karte") await mapView(arg, arg2 === undefined ? null : +arg2);
     else if (tab === "einstellungen") await settingsView();
     else location.hash = "pokemon";
@@ -1076,6 +1077,7 @@ async function detailView(id, slot = null) {
       <button data-act="fav" data-id="${d.id}" data-markbtn="fav" class="mark${isFav(d.id) ? " on" : ""}">${markLabel("fav", isFav(d.id))}</button>
       <button data-act="caught" data-id="${d.id}" data-markbtn="gef" class="mark${isCaught(d.id) ? " on" : ""}" data-tip="${ballTip(d.id)}">${markLabel("gef", isCaught(d.id), d.id)}</button>
       ${S.alphaOk.has(d.id) || isAlpha(d.id) ? `<button data-act="alpha" data-id="${d.id}" data-markbtn="alpha" class="mark${isAlpha(d.id) ? " on" : ""}">${markLabel("alpha", isAlpha(d.id), d.id)}</button>` : ""}
+      <a class="btn" href="#vergleich/${d.id}/-" data-tip="Neben ein anderes Pokémon stellen: Werte, Typwirkung, Fähigkeiten, Attacken">Vergleichen</a>
       <a class="btn" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Im PokéWiki öffnen</a>
       ${d.formen.length ? `<span class="hint">Formen:</span>` + d.formen.map((f) => `<a class="btn small" href="#pokemon/${f.id}">${esc(f.name)}</a>`).join("") : ""}</div>
     ${!d.im_spiel && S.game ? `<div class="note warn">In ${esc(gameName())} nicht enthalten.</div>` : ""}
@@ -1733,11 +1735,11 @@ const mgProj = (lat, lng, z) => {
   const s = 256 * 2 ** z, r = Math.PI / 180, sy = Math.sin(lat * r);
   return [(lng + 180) / 360 * s, (0.5 - Math.log((1 + sy) / (1 - sy)) / (4 * Math.PI)) * s];
 };
-async function mgView(slug) {
+async function mgView(slug, want) {
   const rid = RID;
   const lst = await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({karten: []}));
   if (rid !== RID) return;
-  if (!lst.karten.length) return areasView();
+  if (!lst.karten.length) return S.game === "legends-arceus" ? mapView() : areasView();
   const kk = "mgKarte:" + S.game;
   if (!slug || !lst.karten.some((k) => k.slug === slug)) slug = store.get(kk, lst.karten[0].slug);
   if (!lst.karten.some((k) => k.slug === slug)) slug = lst.karten[0].slug;
@@ -1745,69 +1747,92 @@ async function mgView(slug) {
   const ck = S.game + "/" + slug;
   const d = MGDATA[ck] || (MGDATA[ck] = await api("/api/mapgenie?" + qs({spiel: S.game, karte: slug})));
   const gk = "mg-" + slug;
-  const gotRes = await api("/api/gefunden?" + qs({spiel: d.spiel, karte: gk})).catch(() => ({}));
+  // Legenden: Arceus: eigene Spawnpunkte und Symbole, an Geisterlichtern und Icognito ausgerichtet
+  const own = d.spiel === "legends-arceus" ? (MGDATA[ck + "/eigene"] ||= await api("/api/mapgenie/eigene?" + qs({spiel: S.game, karte: slug})).catch(() => null)) : null;
+  const gotRes = await api("/api/gefunden?" + qs({spiel: d.spiel})).catch(() => ({}));
   if (rid !== RID) return;
   window.scrollTo(0, 0);
-  const got = new Set(gotRes[gk] || []);
-  const cats = {}, groups = d.gruppen;
+  const got = new Set((gotRes[gk] || []).map((o) => gk + "|" + o));
+  Object.entries(gotRes).forEach(([k, os]) => { if (k !== gk) os.forEach((o) => got.add(k + "|" + o)); });
+  const cats = {}, groups = d.gruppen.map((g) => ({...g, kategorien: g.kategorien.map((c) => ({...c}))}));
   groups.forEach((g) => g.kategorien.forEach((c) => { cats[c.id] = Object.assign(c, {g}); }));
-  const orte = d.orte.filter((o) => cats[o[1]]);
+  /* alle Punkte in einer Liste: Orte von Map Genie (t "mg"), eigene Spawnpunkte ("sp") und eigene Symbole ("ob") */
+  const pts = d.orte.filter((o) => cats[o[1]]).map((o) => ({t: "mg", id: o[0], c: o[1], la: o[2], lo: o[3], name: o[4], text: o[5]}));
+  if (own && (own.punkte.length || own.objekte.length)) {
+    const arten = own.arten || {}, og = {id: "own", titel: "Aus den Spieldaten", farbe: "#3a7bd5", kategorien: []};
+    if (own.punkte.length) og.kategorien.push({id: "sp", titel: "Spawnpunkte", n: own.punkte.length, own: 1});
+    Object.keys(arten).forEach((a) => { const n = own.objekte.filter((o) => o.art === a).length; if (n) og.kategorien.push({id: "o:" + a, titel: arten[a][1], n, own: 1, art: a}); });
+    og.kategorien.forEach((c) => { cats[c.id] = Object.assign(c, {g: og}); });
+    groups.unshift(og);
+    own.punkte.forEach((p) => pts.push({t: "sp", c: "sp", la: p.la, lo: p.lo, alpha: p.alpha, mons: p.mons, k: p.k,
+      name: p.mons.map((m) => m.name).join(", ")}));
+    own.objekte.forEach((o) => pts.push({t: "ob", c: "o:" + o.art, la: o.la, lo: o.lo, o, k: o.k,
+      name: (arten[o.art]?.[0] || o.art) + (o.nr ? " " + o.nr : ""), items: o.items.map((e) => e[0]).join(", ")}));
+  }
+  const gkey = (p) => p.t === "mg" ? gk + "|mg:" + p.id : p.t === "ob" ? p.k + "|" + okey(p.o) : "";
   const hk = "mgHide:" + d.spiel;
-  const hide = new Set(store.get(hk, []));
-  let gotHide = store.get("mapGotHide", false), q = "";
-  const open = new Set(store.get("mgOpen", groups.filter((g) => g.kategorien.length <= 12).map((g) => g.id)));    // aufgeklappte Gruppen
-  const okey = (o) => "mg:" + o[0];
-  const cnt = (c) => { const f = orte.filter((o) => o[1] === c.id && got.has(okey(o))).length; return f ? `${f}/${c.n} ✓` : c.n; };
-  const catBtn = (c) => `<button class="mlay${hide.has(c.id) ? "" : " on"}" data-cat="${c.id}"><span class="mgdot" style="--c:${esc(c.g.farbe)}">${esc(c.titel[0] || "•")}</span>${esc(c.titel)} <span class="hint" data-cnt="${c.id}">${cnt(c)}</span></button>`;
+  // eigene Symbole außer den Spawnpunkten anfangs aus: Map Genie hat vieles davon selbst
+  const hide = new Set(store.get(hk, Object.keys(cats).filter((k) => k.startsWith("o:"))).map((k) => (isNaN(+k) ? k : +k)));
+  let gotHide = store.get("mapGotHide", false), q = "", sel = -1;
+  const open = new Set(store.get("mgOpen", groups.filter((g) => g.kategorien.length <= 12).map((g) => String(g.id))).map(String));
+  const cnt = (c) => { const f = pts.filter((p) => p.c === c.id && got.has(gkey(p))).length; return f ? `${f}/${c.n} ✓` : c.n; };
+  const dot = (c) => c.id === "sp" ? `<span class="mpin-l"></span>` : c.art ? `<span class="mobj o-${c.art}">${MOBJ[c.art] || "•"}</span>` : `<span class="mgdot" style="--c:${esc(c.g.farbe)}">${esc(c.titel[0] || "•")}</span>`;
+  const catBtn = (c) => `<button class="mlay${hide.has(c.id) ? "" : " on"}" data-cat="${esc(c.id)}">${dot(c)}${esc(c.titel)} <span class="hint" data-cnt="${esc(c.id)}">${cnt(c)}</span></button>`;
+  const regions = d.gebiete || [];
   main.innerHTML = `<div class="box mapbox">
     <div class="bar"><h2 style="margin:0">Karte</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       ${lst.karten.length > 1 ? `<span class="seg">${lst.karten.map((k) => `<a class="btn${k.slug === slug ? " on" : ""}" href="#karte/mg/${esc(k.slug)}">${esc(k.titel)}</a>`).join("")}</span>` : ""}
-      ${S.game === "legends-arceus" ? `<a class="btn" href="#karte/obsidianfieldlands" data-tip="Eigene Karte mit Spawnpunkten aus den Spieldaten">Spawnpunkte</a>` : ""}
+      ${regions.length ? `<select id="mggo" aria-label="Gehe zu"><option value="">Gehe zu …</option>${regions.map((r, i) => `<option value="${i}">${esc(r[0])}</option>`).join("")}</select>` : ""}
+      ${S.game === "legends-arceus" ? `<a class="btn" href="#karte/obsidianfieldlands" data-tip="Einzelkarten je Gebiet mit Tageszeit- und Wetterfilter">Einzelkarten</a>` : ""}
       <a class="btn" href="#karte/gebiete" data-tip="Alle Orte mit ihren Pokémon als Liste">Gebiete</a>
-      <input id="mgq" type="search" placeholder="Ort oder Symbol suchen" style="width:200px">
+      <input id="mgq" type="search" placeholder="Ort, Symbol oder Pokémon suchen" style="width:240px">
       <label class="mgot" data-tip="Orte, die du als gefunden markiert hast (Rechtsklick oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> gefundene ausblenden</label>
       <span class="hint grow" id="mgn"></span></div>
     <div class="mapwrap"><div class="mapcol"><div id="mgmap" class="map mgmap"><div class="mgtiles"></div><div class="mgpins"></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
-      <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für den Namen, klicke für Einzelheiten. Rechtsklick markiert ihn als gefunden.</p></aside>
+      <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für den Namen, klicke für Einzelheiten. Rechtsklick markiert ihn als gefunden. Die Suche listet die Treffer hier; ein Klick springt hin.</p></aside>
       <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button></span></div>
-        ${groups.map((g, gi) => `<details class="mgg"${open.has(g.id) ? " open" : ""} data-gid="${g.id}"><summary><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
+        ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary>${g.id === "own" ? `<span class="mpin-l"></span>` : `<span class="mgdot" style="--c:${esc(g.farbe)}"></span>`}${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
-    <p class="hint">Karte und Orte: Map Genie (mapgenie.io), Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}; Namen und Texte englisch wie dort. Kacheln lädt der Server beim ersten Ansehen und hebt sie auf.</p></div>`;
+    <p class="hint">Karte und Orte: Map Genie (mapgenie.io), Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}; Namen und Texte englisch wie dort.${own ? " „Aus den Spieldaten“: Spawnpunkte und Symbole wie auf den Einzelkarten, je Gebiet an Geisterlichtern und Icognito ausgerichtet (auf wenige Meter genau)." : ""} Kacheln lädt der Server beim ersten Ansehen und hebt sie auf.</p></div>`;
   header();
   const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box);
   const zmin = d.min_zoom, zmax = d.max_zoom;
-  const bb = d.bounds || (() => { const la = orte.map((o) => o[2]), lo = orte.map((o) => o[3]); return [Math.min(...lo), Math.min(...la), Math.max(...lo), Math.max(...la)]; })();
+  const bb = d.bounds || (() => { const la = pts.map((p) => p.la), lo = pts.map((p) => p.lo); return [Math.min(...lo), Math.min(...la), Math.max(...lo), Math.max(...la)]; })();
   let z = zmin, cx = 0, cy = 0;
-  const fit = () => {
+  const fitBox = (b) => {          // [west, süd, ost, nord] ins Bild, größte passende Zoomstufe
     const w = box.clientWidth, h = box.clientHeight;
     z = zmin;
     for (let t = zmax; t >= zmin; t--) {
-      const [x1, y1] = mgProj(bb[3], bb[0], t), [x2, y2] = mgProj(bb[1], bb[2], t);
-      if (x2 - x1 <= w && y2 - y1 <= h) { z = t; break; }
+      const [x1, y1] = mgProj(b[3], b[0], t), [x2, y2] = mgProj(b[1], b[2], t);
+      if (x2 - x1 <= w * 0.92 && y2 - y1 <= h * 0.92) { z = t; break; }
     }
-    const [x1, y1] = mgProj(bb[3], bb[0], z), [x2, y2] = mgProj(bb[1], bb[2], z);
+    const [x1, y1] = mgProj(b[3], b[0], z), [x2, y2] = mgProj(b[1], b[2], z);
     cx = (x1 + x2) / 2; cy = (y1 + y2) / 2;
   };
-  const vis = (o) => !hide.has(o[1]) && !(gotHide && got.has(okey(o))) && (!q || o[4].toLowerCase().includes(q) || cats[o[1]].titel.toLowerCase().includes(q));
+  const ql = () => q.toLowerCase();
+  const match = (p) => !q || (p.name || "").toLowerCase().includes(ql()) || cats[p.c].titel.toLowerCase().includes(ql()) || (p.items || "").toLowerCase().includes(ql());
+  const vis = (p) => !hide.has(p.c) && !(gotHide && got.has(gkey(p))) && match(p);
+  const pinHtml = (p, i) => {
+    const [x, y] = mgProj(p.la, p.lo, z), pos = `left:${x.toFixed(1)}px;top:${y.toFixed(1)}px`, g = got.has(gkey(p)) ? " got" : "", s = i === sel ? " sel" : "";
+    if (p.t === "sp") return `<button class="mpin${p.alpha ? " alpha" : ""}${s}" data-i="${i}" style="${pos}" data-tip="${esc((p.alpha ? "Alpha-Spawnpunkt\n" : "") + p.mons.map((m) => `${m.alpha ? "Alpha-" : ""}${m.name}: bis ${mpct(m.max)}`).join("\n"))}"></button>`;
+    if (p.t === "ob") return `<button class="mobj o-${p.o.art}${g}${s}" data-i="${i}" style="${pos}" data-tip="${esc(p.name + (p.items ? "\n" + p.items : ""))}">${MOBJ[p.o.art] || "•"}</button>`;
+    const c = cats[p.c];
+    return `<button class="mgp${g}${s}" data-i="${i}" style="${pos};--c:${esc(c.g.farbe)}" data-tip="${esc(p.name || c.titel)}${p.name && p.name !== c.titel ? "\n" + esc(c.titel) : ""}">${esc(c.titel[0] || "•")}</button>`;
+  };
   const pins = () => {
     let n = 0;
-    pl.innerHTML = orte.map((o, i) => {
-      if (!vis(o)) return "";
-      n++;
-      const [x, y] = mgProj(o[2], o[3], z), c = cats[o[1]];
-      return `<button class="mgp${got.has(okey(o)) ? " got" : ""}" data-i="${i}" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;--c:${esc(c.g.farbe)}" data-tip="${esc(o[4] || c.titel)}${o[4] && o[4] !== c.titel ? "\n" + esc(c.titel) : ""}">${esc(c.titel[0] || "•")}</button>`;
-    }).join("");
-    $("#mgn").textContent = `${n} von ${orte.length} Orten`;
+    pl.innerHTML = pts.map((p, i) => { if (!vis(p)) return ""; n++; return pinHtml(p, i); }).join("");
+    $("#mgn").textContent = `${n} von ${pts.length} Punkten`;
   };
   const tiles = () => {
     const w = box.clientWidth, h = box.clientHeight, ox = cx - w / 2, oy = cy - h / 2, nmax = 2 ** z;
     tl.style.transform = pl.style.transform = `translate(${-ox}px,${-oy}px)`;
-    const want = new Set();
+    const wantT = new Set();
     for (let tx = Math.max(0, Math.floor(ox / 256)); tx <= Math.min(nmax - 1, Math.floor((ox + w) / 256)); tx++)
-      for (let ty = Math.max(0, Math.floor(oy / 256)); ty <= Math.min(nmax - 1, Math.floor((oy + h) / 256)); ty++) want.add(`${z}/${tx}/${ty}`);
-    $$("img", tl).forEach((im) => { if (!want.has(im.dataset.k)) im.remove(); else want.delete(im.dataset.k); });
-    want.forEach((k) => {
+      for (let ty = Math.max(0, Math.floor(oy / 256)); ty <= Math.min(nmax - 1, Math.floor((oy + h) / 256)); ty++) wantT.add(`${z}/${tx}/${ty}`);
+    $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) im.remove(); else wantT.delete(im.dataset.k); });
+    wantT.forEach((k) => {
       const [, tx, ty] = k.split("/").map(Number), im = new Image();
       im.dataset.k = k; im.alt = ""; im.draggable = false;
       im.style.left = tx * 256 + "px"; im.style.top = ty * 256 + "px";
@@ -1816,6 +1841,7 @@ async function mgView(slug) {
       tl.appendChild(im);
     });
   };
+  const redraw = () => { tl.innerHTML = ""; tiles(); pins(); };
   const zoomTo = (nz, px, py) => {
     nz = Math.max(zmin, Math.min(zmax, nz));
     if (nz === z) return;
@@ -1823,10 +1849,17 @@ async function mgView(slug) {
     px ??= w / 2; py ??= h / 2;
     const f = 2 ** (nz - z), wx = cx - w / 2 + px, wy = cy - h / 2 + py;
     cx = wx * f - px + w / 2; cy = wy * f - py + h / 2; z = nz;
-    tl.innerHTML = "";
-    tiles(); pins();
+    redraw();
   };
-  fit(); tiles(); pins();
+  /* zu einem Punkt springen: hinzoomen, mittig, ausgewählt, Einzelheiten rechts */
+  const jump = (i) => {
+    const p = pts[i];
+    if (hide.has(p.c)) { hide.delete(p.c); saveHide(); }
+    z = Math.max(z, Math.min(zmax, zmax - 2));
+    [cx, cy] = mgProj(p.la, p.lo, z);
+    sel = i; redraw(); side(i);
+  };
+  fitBox(bb); tiles(); pins();
   let drag = null, moved = false;
   box.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; drag = {x: e.clientX, y: e.clientY, cx, cy}; moved = false; });
   box.addEventListener("pointermove", (e) => {
@@ -1841,46 +1874,65 @@ async function mgView(slug) {
   box.addEventListener("pointercancel", stop);
   box.addEventListener("wheel", (e) => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomTo(z + (e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
   box.addEventListener("dblclick", (e) => { const r = box.getBoundingClientRect(); zoomTo(z + 1, e.clientX - r.left, e.clientY - r.top); });
-  $$("[data-mz]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mz === "0") { fit(); tl.innerHTML = ""; tiles(); pins(); } else zoomTo(z + +b.dataset.mz); }));
+  $$("[data-mz]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mz === "0") { fitBox(bb); redraw(); } else zoomTo(z + +b.dataset.mz); }));
+  $("#mggo")?.addEventListener("change", (e) => { const r = regions[+e.target.value]; if (r) { fitBox(r.slice(1)); redraw(); } e.target.value = ""; });
   const side = (i) => {
-    const o = orte[i], c = cats[o[1]], on = got.has(okey(o));
-    $("#mapside").innerHTML = `<h3><span class="mgdot" style="--c:${esc(c.g.farbe)}">${esc(c.titel[0] || "•")}</span> ${esc(o[4] || c.titel)}</h3>
-      <p class="hint">${esc(c.g.titel)} · ${esc(c.titel)}</p>
-      <p><button class="btn gotbtn${on ? " on" : ""}" id="gotbtn">${on ? "✓ gefunden" : "als gefunden markieren"}</button></p>
-      ${o[5] ? `<p class="mgdesc">${esc(o[5])}</p>` : ""}`;
-    $("#gotbtn").addEventListener("click", () => toggle(i));
+    const p = pts[i], c = cats[p.c], on = got.has(gkey(p));
+    const gotBtn = p.t === "sp" ? "" : `<p><button class="btn gotbtn${on ? " on" : ""}" id="gotbtn">${on ? "✓ gefunden" : "als gefunden markieren"}</button></p>`;
+    let body = "";
+    if (p.t === "sp") body = `<table class="rows"><tr><th></th><th>Pokémon</th><th>Anteil</th><th>Tageszeit</th><th>Wetter</th></tr>${p.mons.map((m) => `<tr><td>${img(m.id, "sm")}</td>
+      <td><a href="#pokemon/${m.id}">${m.alpha ? `<span class="alpha">Alpha</span> ` : ""}${esc(m.name)}</a></td><td>bis ${mpct(m.max)}</td><td>${esc(m.zeit)}</td><td>${esc(m.wetter)}</td></tr>`).join("")}</table>`;
+    else if (p.t === "ob") body = p.o.items.length ? `<table class="rows">${p.o.items.map(([n, t, id]) => `<tr><td>${id ? img(id, "sm") : ""}</td><td>${id ? `<a href="#pokemon/${id}">${esc(n)}</a>` : wikiLink(n)}</td><td>${esc(t)}</td></tr>`).join("")}</table>`
+      + (p.o.menge ? `<p class="hint">${esc(p.o.menge)} Stück je Mal.</p>` : "") : `<p class="hint">${esc(MOBJHINT[p.o.art] || "")}</p>`;
+    else body = p.text ? `<p class="mgdesc">${esc(p.text)}</p>` : "";
+    $("#mapside").innerHTML = `<h3>${dot(c)} ${esc(p.t === "sp" ? (p.alpha ? "Alpha-Spawnpunkt" : "Spawnpunkt") : p.name || c.titel)}</h3>
+      <p class="hint">${esc(c.g.titel)} · ${esc(c.titel)}${p.k && own ? " · " + esc(own.gebiete[p.k] || "") : ""}</p>${gotBtn}${body}`;
+    $("#gotbtn")?.addEventListener("click", () => toggle(i));
   };
-  let selI = -1;
+  const listHits = () => {
+    if (!q) return;
+    const hits = pts.map((p, i) => [p, i]).filter(([p]) => !hide.has(p.c) && match(p));
+    $("#mapside").innerHTML = `<h3>${hits.length} Treffer</h3>` + (hits.length > 60 ? `<p class="hint">Zu viele für eine Liste; genauer suchen.</p>` :
+      `<div class="mghits">${hits.map(([p, i]) => `<button data-jump="${i}">${dot(cats[p.c])}<span>${esc(p.t === "sp" ? "Spawnpunkt: " + p.name : p.name || cats[p.c].titel)}</span></button>`).join("")}</div>`);
+    $$("[data-jump]").forEach((b) => b.addEventListener("click", () => jump(+b.dataset.jump)));
+  };
   const toggle = (i) => {
-    const o = orte[i], k = okey(o), on = !got.has(k);
+    const p = pts[i], k = gkey(p);
+    if (!k) return;
+    const on = !got.has(k);
     if (on) got.add(k); else got.delete(k);
-    const c = $(`[data-cnt="${o[1]}"]`);
-    if (c) c.innerHTML = cnt(cats[o[1]]);
+    const c = $(`[data-cnt="${CSS.escape(String(p.c))}"]`);
+    if (c) c.innerHTML = cnt(cats[p.c]);
     pins();
-    if (selI === i) side(i);
-    api("/api/gefunden", {spiel: d.spiel, karte: gk, objekt: k, an: on}).catch(() => { if (on) got.delete(k); else got.add(k); pins(); });
+    if (sel === i) side(i);
+    const [karte, objekt] = k.split("|");
+    api("/api/gefunden", {spiel: d.spiel, karte, objekt, an: on}).catch(() => { if (on) got.delete(k); else got.add(k); pins(); });
   };
   pl.addEventListener("click", (e) => {
     if (moved) return;
-    const b = e.target.closest(".mgp");
+    const b = e.target.closest("[data-i]");
     if (!b) return;
-    $$(".mgp.sel", pl).forEach((x) => x.classList.remove("sel"));
+    $$(".sel", pl).forEach((x) => x.classList.remove("sel"));
     b.classList.add("sel");
-    selI = +b.dataset.i; side(selI);
+    sel = +b.dataset.i; side(sel);
   });
-  pl.addEventListener("contextmenu", (e) => { const b = e.target.closest(".mgp"); if (!b) return; e.preventDefault(); toggle(+b.dataset.i); });
-  const saveHide = () => { store.set(hk, [...hide]); $$("[data-cat]").forEach((b) => b.classList.toggle("on", !hide.has(+b.dataset.cat))); pins(); };
-  $$("[data-cat]").forEach((b) => b.addEventListener("click", () => { const k = +b.dataset.cat; if (hide.has(k)) hide.delete(k); else hide.add(k); saveHide(); }));
-  $$("[data-grp]").forEach((b) => b.addEventListener("click", () => {
+  pl.addEventListener("contextmenu", (e) => { const b = e.target.closest("[data-i]"); if (!b) return; e.preventDefault(); toggle(+b.dataset.i); });
+  const catKey = (v) => (isNaN(+v) ? v : +v);
+  const saveHide = () => { store.set(hk, [...hide]); $$("[data-cat]").forEach((b) => b.classList.toggle("on", !hide.has(catKey(b.dataset.cat)))); pins(); };
+  $$("[data-cat]").forEach((b) => b.addEventListener("click", () => { const k = catKey(b.dataset.cat); if (hide.has(k)) hide.delete(k); else hide.add(k); saveHide(); }));
+  $$("summary [data-grp]").forEach((b) => b.addEventListener("click", (e) => {
+    e.preventDefault();
     const ks = groups[+b.dataset.grp].kategorien.map((c) => c.id), anyOn = ks.some((k) => !hide.has(k));
     ks.forEach((k) => { if (anyOn) hide.add(k); else hide.delete(k); });
     saveHide();
   }));
-  $$("[data-all]").forEach((b) => b.addEventListener("click", () => { Object.keys(cats).forEach((k) => { if (b.dataset.all === "1") hide.delete(+k); else hide.add(+k); }); saveHide(); }));
-  $$("details.mgg").forEach((x) => x.addEventListener("toggle", () => { if (x.open) open.add(+x.dataset.gid); else open.delete(+x.dataset.gid); store.set("mgOpen", [...open]); }));
-  $$("summary [data-grp]").forEach((b) => b.addEventListener("click", (e) => e.preventDefault()));
+  $$("[data-all]").forEach((b) => b.addEventListener("click", () => { Object.values(cats).forEach((c) => { if (b.dataset.all === "1") hide.delete(c.id); else hide.add(c.id); }); saveHide(); }));
+  $$("details.mgg").forEach((x) => x.addEventListener("toggle", () => { if (x.open) open.add(x.dataset.gid); else open.delete(x.dataset.gid); store.set("mgOpen", [...open]); }));
   $("#gothide").addEventListener("change", (e) => { gotHide = e.target.checked; store.set("mapGotHide", gotHide); pins(); });
-  $("#mgq").addEventListener("input", (e) => { q = e.target.value.trim().toLowerCase(); pins(); });
+  let qt;
+  $("#mgq").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); pins(); listHits(); }, 150); });
+  // #karte/mg/<Karte>/<Ort>: direkt dorthin
+  if (want) { const i = pts.findIndex((p) => p.t === "mg" && String(p.id) === String(want)); if (i >= 0) jump(i); }
 }
 async function areasView(want) {
   const rid = RID;
@@ -2356,14 +2408,90 @@ async function chartView() {
     <tbody>${ts.filter((a) => !mine || own.has(a)).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ts.map((v) => { const f = ch[a][v];
       return `<td data-c="${v}" data-tip-cell="${a}:${v}">${f === 1 ? "" : `<span class="f ${fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}</tr>`).join("")}</tbody>
     </table></div>${mine ? `<p class="hint">Nur die Typen deines Teams als Angreifer: ${ms.map((m) => esc(m.name)).join(", ")}.</p>` : ""}</div>
-    ${mine ? teamTypeHtml(ms, ts) : ""}`;
+    ${mine ? teamTypeHtml(ms, ts) : ""}${combosHtml(ch)}`;
   header();
+  $("details.combos").addEventListener("toggle", (e) => store.set("combosOpen", e.target.open));
+  $("#cbt").addEventListener("change", (e) => { const t = e.target.value; $$("table.cbt tbody tr").forEach((r) => { r.hidden = !!t && !r.dataset.ts.split(",").includes(t); }); });
   crossTable($(".chart"), PIN, () => { $("#unpin").hidden = PIN.r === null && PIN.c === null; });
   $("#ctm").addEventListener("change", (e) => { store.set("chartTeam", e.target.checked); chartView(); });
   $$("details.tteam").forEach((d) => {
     crossTable($("table", d), TPIN[d.dataset.tt]);
     d.addEventListener("toggle", () => store.set("ttOpen", {...store.get("ttOpen", {}), [d.dataset.tt]: d.open}));
   });
+}
+
+/* ------------------------------------------------------------------ Vergleich */
+/* Zwei Pokémon nebeneinander (#vergleich/<A>/<B>): Werte mit Unterschied, Typwirkung, Fähigkeiten, Attacken. Das jeweils
+   bessere ist grün; ein Feld ohne Pokémon bietet die Suche an */
+async function compareView(a, b) {
+  const rid = RID;
+  const ids = [a, b].map((x) => (x && !isNaN(+x) ? +x : null));
+  const ds = await Promise.all(ids.map((id) => id == null ? null : api(`/api/pokemon/${id}?` + qs({spiel: S.game})).catch(() => null)));
+  if (rid !== RID) return;
+  ds.forEach((d) => { if (d) { ROWS[d.id] = Object.assign(ROWS[d.id] || {}, d); } });
+  const [A, B] = ds;
+  const go = (x, y) => { location.hash = `vergleich/${x ?? "-"}/${y ?? "-"}`; };
+  const head = (d, k) => `<div class="box cmphead"><div class="ac"><input type="search" id="cmpq${k}" placeholder="${d ? "anderes Pokémon suchen" : "Pokémon suchen"}" aria-label="Pokémon suchen"></div>
+    ${d ? `<a class="cmpmon" href="#pokemon/${d.id}">${img(d.id, "big")}<b>${esc(d.name)}</b></a><div>${tchips(d.typen)}</div>
+      <span data-tip-stats="${d.werte.join(",")}">${radar(d.werte, 150, true)}</span>` : `<p class="hint">Noch kein Pokémon gewählt.</p>`}</div>`;
+  const better = (x, y) => x > y ? " win" : "";
+  const statRows = A && B ? [...STAT.map((n, i) => [n, A.werte[i], B.werte[i], i]), ["Summe", A.summe, B.summe, "summe"]].map(([n, x, y, i]) => {
+    const w = (v) => Math.min(100, v / (i === "summe" ? 780 : statMax(i)) * 100);
+    const diff = x - y;
+    return `<tr><td class="num${better(x, y)}">${x}</td><td><span class="sbar rev"><i style="width:${w(x)}%;background:${i === "summe" ? sumColor(x) : statColor(x)}"></i></span></td>
+      <th>${n}<div class="hint">${diff ? (diff > 0 ? "+" : "") + diff : "gleich"}</div></th>
+      <td><span class="sbar"><i style="width:${w(y)}%;background:${i === "summe" ? sumColor(y) : statColor(y)}"></i></span></td><td class="num${better(y, x)}">${y}</td></tr>`;
+  }).join("") : "";
+  const ts = Object.keys(S.chart || {});
+  const defRow = A && B ? ts.map((t) => { const x = A.wirkung[t] ?? 1, y = B.wirkung[t] ?? 1;
+    return `<tr><td class="c">${x === 1 ? "" : `<span class="f ${fcls(x)}${x < y ? " win" : ""}">${fl(x)}</span>`}</td><th class="c">${tchip(t)}</th><td class="c">${y === 1 ? "" : `<span class="f ${fcls(y)}${y < x ? " win" : ""}">${fl(y)}</span>`}</td></tr>`; }).join("") : "";
+  const sum = (d) => { const v = Object.values(d.wirkung); return {s: v.filter((f) => f > 1).length, r: v.filter((f) => f < 1 && f > 0).length, i: v.filter((f) => f === 0).length}; };
+  const mv = (d) => new Map([...d.attacken.attacken, ...d.attacken.status].map((m) => [m.id, m]));
+  let moves = "";
+  if (A && B) {
+    const ma = mv(A), mb = mv(B);
+    const only = (x, y) => [...x.values()].filter((m) => !y.has(m.id)).sort((p, q) => p.name.localeCompare(q.name, "de"));
+    const both = [...ma.values()].filter((m) => mb.has(m.id)).sort((p, q) => p.name.localeCompare(q.name, "de"));
+    const list = (xs) => xs.length ? `<div class="cmpmoves">${xs.map((m) => `<span>${tchip(m.typ)} ${esc(m.name)}</span>`).join("")}</div>` : `<p class="hint">keine</p>`;
+    moves = `<div class="box"><h2>Attacken im Spiel</h2>
+      <details><summary>Nur ${esc(A.name)} <span class="hint">${only(ma, mb).length}</span></summary>${list(only(ma, mb))}</details>
+      <details><summary>Beide <span class="hint">${both.length}</span></summary>${list(both)}</details>
+      <details><summary>Nur ${esc(B.name)} <span class="hint">${only(mb, ma).length}</span></summary>${list(only(mb, ma))}</details></div>`;
+  }
+  const abil = (d) => d.faehigkeiten.length ? d.faehigkeiten.map((x) => `<div><b>${wikiLink(x.name)}</b>${x.versteckt ? " <span class='cls'>versteckt</span>" : ""}<div class="why">${esc(x.text)}</div></div>`).join("") : `<p class="hint">keine</p>`;
+  main.innerHTML = `<div class="bar">${backLink()}<h2 style="margin:0">Vergleich</h2><label class="game2">Spiel <select class="gamesel"></select></label>
+      ${A || B ? `<button id="cmpswap" data-tip="Seiten tauschen">⇄ tauschen</button>` : ""}</div>
+    <div class="cmpgrid">${head(A, 0)}<div class="box cmpmid">${A && B ? `<table class="cmpst">${statRows}</table>` : `<p class="hint">Wähle zwei Pokémon, dann stehen hier die Werte nebeneinander.</p>`}</div>${head(B, 1)}</div>
+    ${A && B ? `<div class="cols"><div class="box"><h2 data-tip="So stark treffen Attacken eines Typs; grün = steckt weniger ein">Verteidigung</h2>
+        <p class="hint">${esc(A.name)}: ${sum(A).s} Schwächen, ${sum(A).r} Resistenzen, ${sum(A).i} Immunitäten · ${esc(B.name)}: ${sum(B).s}, ${sum(B).r}, ${sum(B).i}</p>
+        <table class="cmpdef"><thead><tr><th class="c">${esc(A.name)}</th><th class="c">Angriffstyp</th><th class="c">${esc(B.name)}</th></tr></thead><tbody>${defRow}</tbody></table></div>
+      <div class="stack"><div class="box"><h2>Fähigkeiten</h2><div class="cols2"><div><h3>${esc(A.name)}</h3>${abil(A)}</div><div><h3>${esc(B.name)}</h3>${abil(B)}</div></div></div>${moves}</div></div>` : ""}`;
+  header();
+  autocomplete($("#cmpq0"), (r) => go(r.id, B?.id));
+  autocomplete($("#cmpq1"), (r) => go(A?.id, r.id));
+  $("#cmpswap")?.addEventListener("click", () => go(B?.id, A?.id));
+  if (!A) $("#cmpq0").focus(); else if (!B) $("#cmpq1").focus();
+}
+
+/* Alle Typkombinationen (Verteidigung): je Kombination die Wirkung jedes Angriffstyps, dazu Schwächen, 4-fach,
+   Resistenzen und Immunitäten zum Sortieren; Filter auf einen enthaltenen Typ */
+function combosHtml(ch) {
+  const ts = Object.keys(ch);
+  const combos = [];
+  ts.forEach((x, i) => { combos.push([x]); ts.slice(i + 1).forEach((y) => combos.push([x, y])); });
+  const rows = combos.map((c) => {
+    const fs = ts.map((a) => c.reduce((f, d) => f * (ch[a]?.[d] ?? 1), 1));
+    const n = (p) => fs.filter(p).length;
+    return `<tr data-ts="${c.join(",")}"><th class="r" data-s="${esc(c.map(tname).join(" "))}">${tchips(c)}</th>
+      <td class="c num" data-s="${n((f) => f > 1)}">${n((f) => f > 1)}</td><td class="c num" data-s="${n((f) => f >= 4)}">${n((f) => f >= 4) || ""}</td>
+      <td class="c num" data-s="${n((f) => f < 1 && f > 0)}">${n((f) => f < 1 && f > 0)}</td><td class="c num" data-s="${n((f) => f === 0)}">${n((f) => f === 0) || ""}</td>
+      ${fs.map((f) => `<td class="c" data-s="${f}">${f === 1 ? "" : `<span class="f ${fcls(f)}">${fl(f)}</span>`}</td>`).join("")}</tr>`;
+  }).join("");
+  return `<details class="box combos"${store.get("combosOpen", false) ? " open" : ""}><summary><h2 style="display:inline">Alle Typkombinationen</h2> <span class="hint">${combos.length} Kombinationen, als Verteidiger</span></summary>
+    <div class="bar"><label>mit Typ <select id="cbt"><option value="">alle</option>${ts.map((t) => `<option value="${t}">${esc(tname(t))}</option>`).join("")}</select></label>
+      <span class="hint">Spalten: so stark treffen Attacken dieses Typs. Klick auf eine Überschrift sortiert.</span></div>
+    <div class="scroll sticky"><table class="chart sort cbt"><thead><tr>${th("Typen")}${thc("Schw.", "Schwächen: Angriffstypen mit ×2 oder mehr")}${thc("×4", "4-fache Schwächen")}${thc("Res.", "Resistenzen: ×½ oder weniger")}${thc("Imm.", "Immun: keine Wirkung")}
+      ${ts.map((t) => `<th class="v c" data-sort><span>${tchip(t)}</span></th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 
 /* ------------------------------------------------------------------ Einstellungen */

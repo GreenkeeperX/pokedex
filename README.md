@@ -47,7 +47,11 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Detailseite aus mit den Spawnpunkten des Pokémon. Die „Übersicht mit Bildern“
   zeigt je Kartenfeld die häufigsten Pokémon (je größer, desto wahrscheinlicher), die häufigsten im Gebiet und für ein
   gewähltes Pokémon den Vergleich aller Gebiete.
-- **Karte (Map Genie)**: für jedes Spiel mit Karte bei Map Genie die Orte, Sammelobjekte und Materialien als Ebenen,
+- **Vergleich**: zwei Pokémon nebeneinander (Werte mit Unterschied, Typwirkung, Fähigkeiten, Attacken), über
+  „Vergleichen“ auf der Detailseite.
+- **Typkombinationen** (Reiter Typen): alle 171 Kombinationen als Verteidiger, sortierbar.
+- **Karte (Map Genie)**: in Legenden: Arceus mit den eigenen Spawnpunkten und Symbolen auf der Karte von ganz Hisui;
+  „Gehe zu“ für Gebiete, Suche mit Trefferliste. für jedes Spiel mit Karte bei Map Genie die Orte, Sammelobjekte und Materialien als Ebenen,
   mit Suche; Symbole lassen sich als gefunden markieren (Rechtsklick), auch auf der Karte von Legenden: Arceus.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
   Gefangene blass, auf Wunsch nur die fehlenden.

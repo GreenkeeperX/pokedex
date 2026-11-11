@@ -8,7 +8,7 @@ import os
 import re
 import threading
 
-from . import altissimo, attacken, db, importer, showdown, team, typen
+from . import altissimo, attacken, db, importer, mapgenie, showdown, team, typen
 
 LA = "legends-arceus"          # Legenden: Arceus kennt keine Fähigkeiten und eigene Attackenwerte
 NO_ABILITIES = {LA}
@@ -793,6 +793,52 @@ def map_data(karte, p):
                         for r in objs],
             "arten": {k: v for k, v in importer.KARTE_ARTEN.items() if any(r["art"] == k for r in objs)},
             "zeiten": [ZEIT_DE[k] for k in importer.ZEITEN], "wetterarten": [WETTER_DE[k] for k in importer.WETTER]}
+
+
+_OVERLAY = {}
+
+
+def mg_overlay(m, stamp=None):
+    """Spawnpunkte und Kartensymbole von Legenden: Arceus auf der Karte von Map Genie m (ganz Hisui): je Gebiet an
+    Geisterlichtern und Icognito ausgerichtet (mapgenie.align). {gebiete: {Karte: Name}, punkte: [{k, la, lo, alpha, mons}],
+    objekte: [{k, la, lo, art, nr, menge, items}], arten}; Gebiete ohne Ausrichtung fehlen."""
+    key = (m.get("id"), stamp, _stamp())
+    if key in _OVERLAY:
+        return _OVERLAY[key]
+    mg = [p for ps in mapgenie.anchors(m).values() for p in ps]
+    con = db.game()
+    try:
+        try:
+            karten = [r[0] for r in con.execute("SELECT DISTINCT karte FROM kartenobjekt WHERE spiel = ? AND art IN ('irrlicht', 'icognito')",
+                                                ("legends-arceus",))]
+        except Exception:
+            karten = []
+    finally:
+        con.close()
+    out = {"gebiete": {}, "punkte": [], "objekte": [], "arten": {}}
+    for k in karten:
+        d = map_data(k, {})
+        if not d:
+            continue
+        game = [(o["x"], o["z"]) for o in d["objekte"] if o["art"] in ("irrlicht", "icognito")]
+        f = mapgenie.align(game, mg)
+        if not f:
+            continue
+        ax, bx, az, bz = f
+        ll = lambda x, z: [round(v, 6) for v in mapgenie.unproject(ax * x + bx, az * z + bz)]
+        out["gebiete"][k] = d["gebiet"]
+        out["arten"].update(d["arten"])
+        for p in d["punkte"]:
+            la, lo = ll(p["x"], p["z"])
+            out["punkte"].append({"k": k, "la": la, "lo": lo, "alpha": p["alpha"],
+                                  "mons": [{kk: v for kk, v in mon.items() if kk != "c"} for mon in p["mons"]]})
+        for o in d["objekte"]:
+            la, lo = ll(o["x"], o["z"])
+            out["objekte"].append({"k": k, "la": la, "lo": lo, "art": o["art"], "nr": o["nr"], "menge": o["menge"], "items": o["items"],
+                                   "x": o["x"], "z": o["z"]})
+    _OVERLAY.clear()
+    _OVERLAY[key] = out
+    return out
 
 
 def _enc_pkhex(con, g, pid):
