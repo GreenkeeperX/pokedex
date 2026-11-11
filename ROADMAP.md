@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.25.0 (Entscheidung 11.11.2026: Effort Levels mit Anzeige und Planer)
+
+- `app/effort.py` (Formel nach Bulbapedia, `FAKTOR`, `STEINE`, `cost`, `view`), `abfragen.effort_view` (`/api/effort`),
+  Team-Platz speichert `el` und `el_ziel`; Oberfläche `elBox` auf der Detailseite (Legenden: Arceus)
+- Offen: Effort Levels auch in Teambewertung und Initiative-Liste einrechnen, Anfangsstufe aus eingegebenen DVs
+
 ## 0.24.0 (Rückmeldung zu 0.23.0, 11.11.2026)
 
 - Offline: `abruf.mg_stock` holt alle Zoomstufen (erst bis `max_zoom − 1` für alle Karten, dann `max_zoom`), Vorrat mit `ganz`
@@ -9,7 +15,7 @@
 - Schadensrechner: Gegner „Favoriten“
 - Let's Go: `extra/spielwissen.json` (Fangen, Fang-Kombo, Partner-Techniken, Geheime Techniken, Quellen), `abfragen.knowledge`,
   auf der Detailseite `wissenHtml`, `partnerHtml`
-- Offen: Effort Levels in Legenden: Arceus (Umfang wartet auf Entscheidung), Abklingzeiten in Legenden: Z-A, Karten älterer
+- Offen: Abklingzeiten in Legenden: Z-A, Karten älterer
   Spiele, Zusammenführen auch für andere Spiele, sobald es eigene Punkte gibt, Fähigkeiten und Items im Schadensrechner
 
 ## 0.23.0 (Rückmeldung zu 0.22.0, 11.11.2026)

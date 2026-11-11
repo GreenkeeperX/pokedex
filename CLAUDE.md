@@ -34,6 +34,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/showdown.py`: liest `pokedex.ts` und `moves.ts` von Pokémon Showdown (ohne Netz)
 - `app/smogon.py`: Nutzungsstatistik von Smogon kürzen (ohne Netz), für „Häufige Gegner“
 - `app/schaden.py`: Schadensrechnung ab Generation 3 (ohne Netz)
+- `app/effort.py`: Effort Levels in Legenden: Arceus (Werte, Kosten bis zum Ziel, ohne Netz)
 - `app/abruf.py`: Abgleich (holen, bauen, Sprites), Zeitplan, Einstellungen, Verbindungstest; siehe `docs/abrufe.md`
 - `app/typen.py`, `app/attacken.py`, `app/team.py`: Rechenlogik ohne Datenbank (Typwirkung je Generation,
   Attacken-Wertung und Moveset, Team-Bewertung, Teamsuche, Gegner)
