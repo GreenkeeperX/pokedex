@@ -635,6 +635,16 @@ class Leser(unittest.TestCase):
         self.assertEqual(mapgenie.name_de("Wisp #12", {}), "Geisterlicht #12")
         self.assertEqual(mapgenie.name_de("Unbekannt", {}), "Unbekannt")
 
+    def test_matchup_eigentyp(self):
+        # mit gewählten Attacken zählt der Eigentyp-Bonus: Feuer-Attacke eines Wasser-Pokémon trifft Pflanze schwächer
+        ctx = team.Ctx(ch())
+        mk = lambda ts, at: {"id": 1, "name": "x", "typen": ts, "werte": [80] * 6, "angriffstypen": at}
+        foe = {"typen": [PFLANZE]}
+        a = team.matchup([mk([FEUER], [FEUER])], foe, ctx)[0]
+        b = team.matchup([mk([WASSER], [FEUER])], foe, ctx)[0]
+        self.assertGreater(a["austeilen"], b["austeilen"])
+        self.assertTrue(any("ohne Eigentyp-Bonus" in g for g in b["gruende"]))
+
     def test_effort_levels(self):
         from app import effort
         # Knakrack (108/130/95/80/85/102) auf Level 100: KP 316 + Bonus 144 bei Stufe 10, Angriff 260 + 154

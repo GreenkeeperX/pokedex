@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.27.1 (11.11.2026)
+
+- Potential: Endstufe zählt, wenn sie das Team um ≥ 1 hebt und besser ist als die heutige Stufe (kein Mindestabstand mehr);
+  Mitglieder ab +0,5. `team.matchup`: Eigentyp-Bonus bei gewählten Attacken (ohne Bonus × 2/3), `damage_view` liefert `stab`
+- Verbindungstest: Kartenquellen für SwSh, BDSP, Let's Go (Map-Genie-Slugs, IGN-Karten, Serebii, Bulbapedia-Archiv)
+
 ## 0.27.0 (11.11.2026)
 
 - Kacheln: `mapgenie.tile_ok` nimmt `{z}/{y}/{x}` (Z-A), `tile_list` und `mg_tile` ab `min_zoom`; nach 8 × 403 prüft

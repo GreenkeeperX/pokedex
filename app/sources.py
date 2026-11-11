@@ -10,11 +10,19 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.27.0"
+VERSION = "0.27.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.27.1", "11.11.2026", [
+        "Langfristig mehr Potential: zählt, was die Endstufe dem Team bringt, nicht der Abstand zur heutigen Stufe; "
+        "Kadabra steht damit nie schlechter da als Abra. Mitglieder im Team zeigen ihre Endstufe schon ab +0,5",
+        "Eigentyp-Bonus: „Gegen Gegner“ rechnet ihn bei gewählten Attacken ein (ohne ihn zählt eine Attacke ein Drittel weniger, "
+        "mit Hinweis); der Schadensrechner nennt ihn",
+        "Verbindungstest: Kartenquellen für Schwert/Schild, Strahlender Diamant/Leuchtende Perle und Let’s Go "
+        "(Map Genie unter anderen Namen, IGN, Serebii, Bulbapedia-Archiv, pokemoncompletion)",
+    ]),
     ("0.27.0", "11.11.2026", [
         "Karten: Kacheln von Karmesin/Purpur und Legenden: Z-A laden wieder (Z-A nennt erst y, dann x; keine Anfragen mehr unter der "
         "kleinsten Zoomstufe, und viele fehlende Randkacheln lassen Map Genie nicht mehr ruhen). Menü und Details mit Hintergrund, "
