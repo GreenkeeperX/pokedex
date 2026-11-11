@@ -12,14 +12,33 @@ import re
 
 BASE = "https://mapgenie.io/"
 TILES = "https://tiles.mapgenie.io/games/"
-# Spiel (Kennung wie in der PokéAPI) → Kennung bei Map Genie. Was es dort nicht gibt, meldet 404 und fällt weg.
+# Spiel (Kennung wie in der PokéAPI) → Kennung bei Map Genie, bei unsicherer Schreibweise mehrere zum Probieren (die erste,
+# die antwortet, gilt). Was es dort nicht gibt, meldet 404 und fällt weg. Ältere Spiele: Map Genie fasst Editionen
+# zusammen (pokemon-red-blue-yellow mit den Karten redblue und yellow)
 GAMES = {"legends-arceus": "pokemon-legends-arceus", "scarlet-violet": "pokemon-scarlet-violet",
-         "legends-za": "pokemon-legends-z-a", "sword-shield": "pokemon-sword-shield",
-         "brilliant-diamond-shining-pearl": "pokemon-brilliant-diamond-shining-pearl",
-         "lets-go-pikachu-lets-go-eevee": "pokemon-lets-go"}
-# Erweiterungen zeigen die Karten ihres Hauptspiels
+         "legends-za": "pokemon-legends-z-a", "sword-shield": ("pokemon-sword-shield", "pokemon-sword-and-shield"),
+         "brilliant-diamond-shining-pearl": ("pokemon-brilliant-diamond-shining-pearl", "pokemon-brilliant-diamond-and-shining-pearl"),
+         "lets-go-pikachu-lets-go-eevee": ("pokemon-lets-go", "pokemon-lets-go-pikachu-and-eevee", "pokemon-lets-go-pikachu-eevee"),
+         "red-blue": "pokemon-red-blue-yellow",
+         "gold-silver": ("pokemon-gold-silver-crystal", "pokemon-gold-silver"),
+         "ruby-sapphire": ("pokemon-ruby-sapphire-emerald", "pokemon-ruby-sapphire"),
+         "firered-leafgreen": "pokemon-firered-leafgreen",
+         "diamond-pearl": ("pokemon-diamond-pearl-platinum", "pokemon-diamond-pearl"),
+         "heartgold-soulsilver": "pokemon-heartgold-soulsilver",
+         "black-white": "pokemon-black-white", "black-2-white-2": "pokemon-black-2-white-2",
+         "x-y": "pokemon-x-y", "omega-ruby-alpha-sapphire": "pokemon-omega-ruby-alpha-sapphire",
+         "sun-moon": "pokemon-sun-moon", "ultra-sun-ultra-moon": "pokemon-ultra-sun-ultra-moon"}
+# Erweiterungen und Schwester-Editionen zeigen die Karten ihres Hauptspiels
 SHARE = {"the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet", "mega-dimension": "legends-za",
-         "the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield"}
+         "the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield",
+         "yellow": "red-blue", "red-green-japan": "red-blue", "blue-japan": "red-blue", "crystal": "gold-silver",
+         "emerald": "ruby-sapphire", "platinum": "diamond-pearl"}
+
+
+def slugs(spiel):
+    """Kennungen bei Map Genie zum Probieren, in Reihenfolge."""
+    s = GAMES.get(spiel) or ()
+    return (s,) if isinstance(s, str) else tuple(s)
 
 
 def game_url(slug):
