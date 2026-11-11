@@ -1119,6 +1119,38 @@ class Server(TempData):
         abruf.store.save_json("mapgenie/crystal.json", {"spiel": "crystal", "am": "2026-11-11", "quelle": "pokemoncompletion", "karten": [m]})
         self.assertEqual(abruf.mg_maps("gold-silver")["karten"][0]["quelle"], "pokemoncompletion")
         self.assertEqual(abruf._tile_of(m, 3, 0, 0)[1], "https://pokemonmap.b-cdn.net/crystal/1_0_0.png?v=1")
+        # IGN: Einheitsquadrat auf der ganzen Welt, Kacheln {z}/{x}-{y}; Punkte aus __NEXT_DATA__
+        from app import ign as _ign
+        nd = {"props": {"pageProps": {"page": {"map": {
+            "width": 0.5, "height": 1, "minZoom": 2, "maxZoom": 3, "mapName": "Erfunden",
+            "tilesets": ["https://oyster.ignimgs.com/ignmedia/wikimaps/spiel/karte/{z}/{x}-{y}.jpg"],
+            "types": [{"typeSlug": "location", "typeName": "Location", "markers": [
+                {"lat": -0.25, "lng": 0.25, "markerName": "Erfundenstadt"}]}, {"typeSlug": "gym", "typeName": "Gym", "markers": []}]}}}}}
+        page = f'<html><script id="__NEXT_DATA__" type="application/json">{json.dumps(nd)}</script></html>'
+        g = _ign.parse(page, "galar")
+        self.assertEqual((g["slug"], g["min_zoom"], g["max_zoom"], len(g["orte"])), ("ign-galar", 2, 3, 1))
+        self.assertEqual(g["gruppen"][0]["kategorien"][0]["titel"], "Orte")
+        x, y = _mg.project(g["orte"][0][2], g["orte"][0][3], 2)
+        self.assertAlmostEqual(x, 0.25 * 1024, places=1)
+        self.assertAlmostEqual(y, 0.25 * 1024, places=1)
+        self.assertEqual(_ign.tile(g, 2, 1, 3), ("ign/galar/2/1-3.jpg", "https://oyster.ignimgs.com/ignmedia/wikimaps/spiel/karte/2/1-3.jpg"))
+        self.assertIsNone(_ign.tile(g, 2, 2, 0))                 # Breite 0,5: bei Stufe 2 nur zwei Kacheln quer
+        self.assertEqual(len(_ign.tile_list(g)), 2 * 4 + 4 * 8)
+        self.assertIsNone(_ign.parse("<html></html>", "galar"))
+        # Pokopia: eigenes Spiel ohne PokéAPI-Eintrag, Karte bei Map Genie
+        import sqlite3
+        from app import importer as _imp
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE versions (id INTEGER, version_group_id INTEGER, identifier TEXT)")
+        con.execute('CREATE TABLE version_groups (id INTEGER, identifier TEXT, generation_id INTEGER, "order" INTEGER)')
+        con.execute("INSERT INTO versions VALUES (1, 1, 'red')")
+        con.execute("INSERT INTO version_groups VALUES (1, 'red-blue', 1, 1)")
+        _imp._derive_spiel(con)
+        self.assertEqual(con.execute("SELECT id, name, reihenfolge FROM spiel WHERE kennung = 'pokopia'").fetchone(), (1000, "Pokopia", 2))
+        self.assertEqual(_mg.slugs("pokopia"), ("pokopia",))
+        # mehrere Quellen je Spiel: Map Genie und IGN erscheinen zusammen
+        abruf._save_maps("sword-shield", "ign", [g])
+        self.assertEqual([k["slug"] for k in abruf.mg_maps("sword-shield")["karten"]], ["ign-galar"])
         f = os.path.join(self.dir, "mapgenie", "kacheln", "spiel", "erfunden", "10", "1", "2.png")
         os.makedirs(os.path.dirname(f))
         open(f, "wb").write(b"\x89PNG\r\n\x1a\n")

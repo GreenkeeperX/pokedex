@@ -14,10 +14,10 @@ BASE = "https://mapgenie.io/"
 TILES = "https://tiles.mapgenie.io/games/"
 # Spiel (Kennung wie in der PokéAPI) → Kennung bei Map Genie (auch mehrere zum Probieren: die erste, die antwortet, gilt).
 # Stand 11.11.2026 gibt es dort genau diese Pokémon-Spiele (Rot/Blau/Gelb in einem, mit den Karten redblue und yellow);
-# Schwert/Schild, BDSP, Let’s Go und die übrigen alten Spiele fehlen. Pokopia folgt mit dem Spiel selbst
+# Schwert/Schild, BDSP, Let’s Go und die übrigen alten Spiele fehlen. Pokopia steht dort ohne „pokemon-“ (importer.EIGENE_SPIELE)
 GAMES = {"legends-arceus": "pokemon-legends-arceus", "scarlet-violet": "pokemon-scarlet-violet",
          "legends-za": "pokemon-legends-z-a", "firered-leafgreen": "pokemon-firered-leafgreen",
-         "red-blue": "pokemon-red-blue-yellow"}
+         "red-blue": "pokemon-red-blue-yellow", "pokopia": "pokopia"}
 # Erweiterungen und Schwester-Editionen zeigen die Karten ihres Hauptspiels
 SHARE = {"the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet", "mega-dimension": "legends-za",
          "yellow": "red-blue", "red-green-japan": "red-blue", "blue-japan": "red-blue"}
