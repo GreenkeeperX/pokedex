@@ -670,6 +670,37 @@ def _cond_text(d, order, names, all_label):
     return ", ".join(f"{names[k]} {_pct(d[k])}" for k in special) + f", sonst {_pct(base)}"
 
 
+_ALPHA = {}
+
+
+def alpha_possible(spiel):
+    """Formen, die es im Spiel als Alpha gibt (Fundorte aus den Spieldaten und Spawn-Tabellen); leer in Spielen ohne Alphas."""
+    spiel = str(spiel or "")
+    try:
+        key = (spiel, os.path.getmtime(db.pokeapi_path()))
+    except OSError:
+        return []
+    if key in _ALPHA:
+        return _ALPHA[key]
+    ids = set()
+    try:
+        con = db.game()
+    except Exception:
+        return []
+    try:
+        for sql in ("SELECT DISTINCT form FROM fundort WHERE spiel = ? AND alpha > 0",
+                    "SELECT DISTINCT form FROM spawn WHERE spiel = ? AND alpha = 1"):
+            try:
+                ids |= {r[0] for r in con.execute(sql, (spiel,))}
+            except Exception:
+                pass
+    finally:
+        con.close()
+    _ALPHA.clear()
+    _ALPHA[key] = sorted(i for i in ids if i is not None)
+    return _ALPHA[key]
+
+
 def spawn_summary(con, spiel, pid):
     """Je Gebiet: höchster Anteil an Spawnpunkten je Tageszeit und je Wetter (Alpha nur, wenn es sonst nichts gibt),
     als Text, dazu Höchstwert und Zahl der Punkte."""
@@ -733,7 +764,9 @@ def map_data(karte, p):
             w[wt] = max(w.get(wt, 0), pct)
         mons.setdefault(r["name"], []).append({
             "id": r["form"], "name": f["name"] if f else str(r["form"]), "alpha": bool(r["alpha"]), "max": max(cells.values()),
-            "zeit": _cond_text(z, importer.ZEITEN, ZEIT_DE, "immer"), "wetter": _cond_text(w, importer.WETTER, WETTER_DE, "jedes")})
+            "zeit": _cond_text(z, importer.ZEITEN, ZEIT_DE, "immer"), "wetter": _cond_text(w, importer.WETTER, WETTER_DE, "jedes"),
+            # Anteil je Tageszeit und Wetter (Tageszeit × 9 + Wetter), für die Filter auf der Karte
+            "c": [round(cells.get(f"{zt}/{wt}", 0), 1) for zt in importer.ZEITEN for wt in importer.WETTER]})
     for v in mons.values():
         v.sort(key=lambda m: (m["alpha"], -m["max"]))
     folder = os.path.join(db.data_dir(), "karten", karte)
@@ -744,7 +777,8 @@ def map_data(karte, p):
                        for r in pts],
             "objekte": [{"art": r["art"], "nr": r["nr"], "x": r["x"], "z": r["z"], "menge": r["menge"], "items": json.loads(r["items"] or "[]")}
                         for r in objs],
-            "arten": {k: v for k, v in importer.KARTE_ARTEN.items() if any(r["art"] == k for r in objs)}}
+            "arten": {k: v for k, v in importer.KARTE_ARTEN.items() if any(r["art"] == k for r in objs)},
+            "zeiten": [ZEIT_DE[k] for k in importer.ZEITEN], "wetterarten": [WETTER_DE[k] for k in importer.WETTER]}
 
 
 def _enc_pkhex(con, g, pid):
@@ -1252,8 +1286,45 @@ def team_caught(body):
             pot.append(dict(row(D, f, g, gen), plus=round(gain2, 1), wird=row(D, x, g, gen),
                             slot=ms[k2]["slot"] if k2 is not None else None, statt=ms[k2]["name"] if k2 is not None else ""))
     alt.sort(key=lambda r: -r["plus"])
+    pot = _furthest(pot, D, {f["id"] for f in caught} | {r["id"] for r in alt[:8]})
     pot.sort(key=lambda r: -r["plus"])
     return {"alternativen": alt[:8], "potential": pot[:8], "gefangen": len(caught), "wertung": base}
+
+
+def _stage(D, arten):
+    """Entwicklungsstufe je Art (0 = Basis), aus pokemon_species.evolves_from_species_id."""
+    try:
+        con = db.game()
+    except Exception:
+        return {}
+    try:
+        von = dict(con.execute("SELECT id, evolves_from_species_id FROM pokemon_species"))
+    except Exception:
+        return {}
+    finally:
+        con.close()
+    out = {}
+    for a in arten:
+        n, x = 0, a
+        while von.get(x) and n < 5:
+            x, n = von[x], n + 1
+        out[a] = n
+    return out
+
+
+def _furthest(pot, D, skip):
+    """Langfristiges Potential nur einmal je Endstufe, von der weitesten gefangenen Stufe; fällt weg, wenn die Endstufe
+    schon gefangen ist oder bei den besseren Alternativen steht."""
+    st = _stage(D, {D.forms[r["id"]]["art"] for r in pot if r["id"] in D.forms})
+    best = {}
+    for r in pot:
+        w = r["wird"]["id"]
+        if w in skip:
+            continue
+        key = (st.get(D.forms[r["id"]]["art"], 0) if r["id"] in D.forms else 0, r["plus"])
+        if w not in best or key > best[w][0]:
+            best[w] = (key, r)
+    return [r for _, r in best.values()]
 
 
 def team_matchup(body):

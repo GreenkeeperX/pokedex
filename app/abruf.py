@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, db, importer, pokewiki, sources, store
+from . import altissimo, companion, db, importer, pokewiki, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -42,7 +42,7 @@ EXTRA_DIR = os.path.join(os.path.dirname(__file__), "..", "extra")
 SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
-         "altissimo": "Altissimo (Kartensymbole, Rezepte)"}
+         "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)"}
 WIKI_PAUSE = 2.0            # Sekunden zwischen zwei Anfragen an das PokéWiki (je Anfrage bis zu 50 Seiten)
 WIKI_GAMES = ("legends-arceus",)    # Spiele, deren Attacken und Pokémon im PokéWiki gelesen werden
 
@@ -226,9 +226,14 @@ EXTRAS = {"shiny": (SPRITE_RAW + "shiny/", ".png"), "shinyart": (SPRITE_RAW + "o
           "itemhq": ("https://www.serebii.net/itemdex/sprites/", ".png")}
 # Spiele, für die Serebii eigene Item-Bilder hat: Unterordner → Spielkennungen
 ITEM_HQ = {"legends": ("legends-arceus",), "sv": ("scarlet-violet", "the-teal-mask", "the-indigo-disk", "legends-za", "mega-dimension")}
-ITEM_HQ_MAX = 400           # so viele große Item-Bilder je Lauf (Serebii schonen)
+ITEM_HQ_MAX = 1500          # so viele große Item-Bilder je Lauf (eine Sekunde Pause: knapp eine halbe Stunde beim ersten Mal)
 MEDIA_LABEL = {"sprites": "Sprites", "artwork": "Artworks", "shiny": "Schillernde Sprites", "shinyart": "Schillernde Artworks",
                "anim": "Animierte Sprites", "rufe": "Rufe", "itembild": "Item-Bilder", "itemhq": "Große Item-Bilder"}
+
+
+def miss_name(kind):
+    """Datei mit den Bildern, die es nicht gibt. Große Item-Bilder ab 0.13.0 neu: es gibt jetzt mehrere Orte je Bild."""
+    return "itemhq2_fehlen.json" if kind == "itemhq" else f"{kind}_fehlen.json"
 
 
 def media_ids(kind):
@@ -245,17 +250,19 @@ def media_ids(kind):
         if kind == "itemhq":            # Ordner bei Serebii nach dem neuesten Spiel mit dem Item
             try:
                 vgs = {k: i for i, k in con.execute("SELECT id, kennung FROM spiel")}
-                rows = con.execute("SELECT id, en, spiele FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 AND en != '' "
+                rows = con.execute("SELECT id, en, spiele, kennung FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 AND en != '' "
                                    "ORDER BY id").fetchall()
             except Exception:           # Datenbank vor 0.12.0 (ohne englische Namen)
                 return {}
             out = {}
-            for iid, en, spiele in rows:
-                games = set(json.loads(spiele or "[]"))
-                for sub in ("sv", "legends"):
-                    if games & {vgs.get(k) for k in ITEM_HQ[sub]}:
-                        out[iid] = f"{sub}/{importer.en_key(en)}"
-                        break
+            big = {vgs.get(k) for ks in ITEM_HQ.values() for k in ks}
+            for iid, en, spiele, kennung in rows:
+                if not big & set(json.loads(spiele or "[]")) and not str(kennung).startswith("pkhex-"):
+                    continue            # ältere Items: das Bild der PokéAPI reicht
+                # Ordner der Spiele mit dem Item zuerst, dann der andere, zuletzt das kleine Bild (40 px) für ältere Items
+                games, key = set(json.loads(spiele or "[]")), importer.en_key(en)
+                subs = sorted(ITEM_HQ, key=lambda sub: (not games & {vgs.get(k) for k in ITEM_HQ[sub]}, sub != "sv"))
+                out[iid] = tuple(f"{sub}/{key}" for sub in subs) + (key,)
             return out
         return {r[0]: str(r[0]) for r in con.execute("SELECT id FROM form ORDER BY id")}
     finally:
@@ -269,7 +276,7 @@ def media_inventory():
         folder = os.path.join(db.data_dir(), kind)
         have = {os.path.splitext(x)[0] for x in os.listdir(folder)} if os.path.isdir(folder) else set()
         want = media_ids(kind)
-        gone = store.load_json(f"{kind}_fehlen.json", {})
+        gone = store.load_json(miss_name(kind), {})
         missing = [i for i in want if str(i) not in have]
         out[kind] = {"name": MEDIA_LABEL[kind], "erwartet": len(want), "vorhanden": len(want) - len(missing),
                      "fehlen": [i for i in missing if str(i) not in gone],
@@ -304,7 +311,7 @@ def _images(kind, log, limit=SPRITES_MAX):
     os.makedirs(folder, exist_ok=True)
     names = media_ids(kind)
     ids = list(names)
-    miss_file = f"{kind}_fehlen.json"
+    miss_file = miss_name(kind)
     miss = store.load_json(miss_file, {})
     cutoff = _iso(now() - timedelta(days=SPRITE_MISS_DAYS))
     have = {os.path.splitext(x)[0] for x in os.listdir(folder)}
@@ -313,7 +320,10 @@ def _images(kind, log, limit=SPRITES_MAX):
     label = MEDIA_LABEL[kind]
     for n, i in enumerate(todo[:limit]):
         STATE.update(step=label, done=n, total=min(len(todo), limit))
-        body = src.get(f"{prefix}{names[i]}{ext}", raw=True, absent=(404,))
+        for name in names[i] if isinstance(names[i], tuple) else (names[i],):     # mehrere Orte: der erste, den es gibt
+            body = src.get(f"{prefix}{name}{ext}", raw=True, absent=(404,))
+            if body != b"" and body != "":
+                break
         if body is None:
             if src.stopped:
                 break
@@ -486,6 +496,9 @@ def _build(st, log, force, at):
     spawns = _spawns(st, log, at)
     wiki = _pokewiki(st, log, at)
     alt = _altissimo(st, log, at)
+    comp = _companion(st, log, at)
+    if comp:
+        alt.setdefault("legends-arceus", {})["companion"] = comp
     extra = importer.load_extra(EXTRA_DIR)
     stand = {"csv": sha, "showdown": _hash(*(sd_texts.get(k, "") for k in ("pokedex", "moves"))) if len(sd_texts) == 2 else "",
              "pkhex": _hash(*(v for src in pkhex.values() for v in src.values())) if pkhex else "",
@@ -555,8 +568,10 @@ def _build(st, log, force, at):
         + (f"; {stats['fundorte']} Fundorte aus PKHeX" if pkhex else "; ohne Fundorte aus PKHeX")
         + (f"; {stats['spawns']} Spawn-Einträge mit Tageszeit und Wetter" if spawns else "")
         + (f"; {stats['sets']} bewährte Sets" if sets else "")
-        + (f"; PokéWiki: {stats['wiki_attacken']} Attackenwerte, {stats['wiki_items']} getragene Items" if wiki else "")
+        + (f"; PokéWiki: {stats['wiki_attacken']} Attackenwerte, {stats['wiki_items']} getragene Items, "
+           f"{stats.get('wiki_karte', 0)} Stellen auf der Karte" if wiki else "")
         + (f"; Altissimo: {stats['kartenobjekte']} Kartensymbole, {stats['rezepte']} Rezepte" if alt else "")
+        + (f"; PLA Companion: {stats.get('orte', 0)} Orte (Schnellreise, Lager)" if comp else "")
         + (f"; {stats['items']} Items" if stats.get("items") else ""))
     return not papi.stopped and not sd.stopped
 
@@ -698,6 +713,36 @@ def _altissimo(st, log, at):
     if not sym and not col and not rec:
         return {}
     return {"legends-arceus": {"symbole": sym, "sammeln": col, "rezepte": rec}}
+
+
+def _companion(st, log, at):
+    """Schnellreise und Lager aus dem PLA Companion (software-notion.de): {Karte: Text der Kartendaten}. Zwei Sekunden
+    Pause je Anfrage; bei Sperre ruht die Quelle wie die anderen."""
+    if _resting(st, "companion", at):
+        log(f"PLA Companion ruht bis {st['rest']['companion'][:16].replace('T', ' ')} UTC")
+        return {}
+    src = _Source("companion", log, pause=2.0)
+    out = {}
+    for karte in companion.MAPS:
+        STATE["step"] = f"PLA Companion: {altissimo.GEBIETE.get(karte, karte)}"
+        t = src.get(companion.url(karte))
+        if src.stopped:
+            break
+        if t:
+            out[karte] = t
+    kinds = {}
+    for t in out.values():
+        try:
+            for e in companion.entries(t):
+                kinds[e["t"]] = kinds.get(e["t"], 0) + 1
+        except ValueError:
+            pass
+    if kinds:          # welche Arten es gibt, damit sich weitere Ebenen planen lassen
+        log("PLA Companion: " + ", ".join(f"{k} {v}" for k, v in sorted(kinds.items())))
+    st["sources"]["companion"] = src.result(dateien=len(out))
+    if src.blocked:
+        st["rest"]["companion"] = _iso(now() + timedelta(hours=REST_H))
+    return out
 
 
 def wiki_titles(con, spiel):
@@ -1027,6 +1072,19 @@ def diagnose(proben=None):
     probe("Bulbapedia, API", "https://bulbapedia.bulbagarden.net/w/api.php?action=query&meta=siteinfo&format=json", wiki_info)
     probe("Bulbapedia, Seite Bidoof", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=Bidoof_(Pok%C3%A9mon)"
           "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
+    # 0.13.0: Fangfaktoren der Hisui-Bälle zum Gegenprüfen (Bulbapedia und PokéWiki), Kartendaten des PLA Companion
+    for page in ("Heavy_Ball_(Hisui)", "Feather_Ball", "Ultra_Ball_(Hisui)"):
+        probe(f"Bulbapedia, Seite {page}", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=" + page
+              + "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
+    for page in ("Schwerball", "Federball", "Hyperball"):
+        probe(f"PokéWiki, Seite {page}", POKEWIKI_API + "?" + urllib.parse.urlencode(
+            {"action": "parse", "page": page, "prop": "wikitext", "format": "json", "redirects": 1}), wiki_page, keep=True)
+    def kinds(t):
+        n = {}
+        for e in companion.entries(t):
+            n[e["t"]] = n.get(e["t"], 0) + 1
+        return "Einträge mit Lage: " + ", ".join(f"{k} {v}" for k, v in sorted(n.items()))
+    probe("PLA Companion, Karte Obsidian-Grasland", companion.url("obsidianfieldlands"), kinds, keep=True)
     page_info = lambda t: f"Titel „{(t.split('<title>')[1].split('</title>')[0].strip() if '<title>' in t else '?')[:80]}“"
     probe("Serebii, Legenden: Arceus Bidiza", "https://www.serebii.net/pokedex-swsh/bidoof/", page_info, keep=True, headers=html)
     probe("Serebii, Legenden: Arceus Übersicht", "https://www.serebii.net/legendsarceus/", page_info, keep=True, headers=html)

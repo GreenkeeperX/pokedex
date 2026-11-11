@@ -18,9 +18,9 @@ import os
 import re
 import sqlite3
 
-from . import altissimo, pokewiki, showdown
+from . import altissimo, companion, pokewiki, showdown
 
-VERSION = "11"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "12"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -798,7 +798,7 @@ def _derive_karte(con, alt, en_de):
 
 
 # Arten der Kartensymbole: Altissimo und dazu die Ebenen aus der Karte des PokéWiki (Schlüssel → Name, Mehrzahl)
-KARTE_ARTEN = {**altissimo.ARTEN, "kristall": ("Kristallbrocken", "Kristallbrocken"),
+KARTE_ARTEN = {**altissimo.ARTEN, **companion.NAMEN, "kristall": ("Kristallbrocken", "Kristallbrocken"),
                "verzerrung": ("Raum-Zeit-Verzerrung", "Raum-Zeit-Verzerrungen"), "massen": ("Massenauftreten", "Massenauftreten"),
                "baumpkmn": ("Pokémon im Baum", "Pokémon in Bäumen"), "alpha": ("festes Alpha-Pokémon", "feste Alphas"),
                "boden": ("Fundstelle", "Items am Boden")}
@@ -902,6 +902,27 @@ def _derive_wiki_karte(con, wiki):
     return n
 
 
+def _derive_companion(con, alt):
+    """Schnellreise und Lager aus dem PLA Companion (alt[Spiel]["companion"] = {Karte: Text}), in Spielkoordinaten
+    ausgerichtet an den Geisterlichtern und Icognito von Altissimo (companion.places). Gibt die Zahl der Orte zurück."""
+    n = 0
+    for spiel, src in (alt or {}).items():
+        for karte, text in sorted((src.get("companion") or {}).items()):
+            anchors = {}
+            for a, x, z in con.execute("SELECT art, x, z FROM kartenobjekt WHERE spiel = ? AND karte = ? AND art IN ('irrlicht', 'icognito')",
+                                       (spiel, karte)):
+                anchors.setdefault(a, []).append((x, z))
+            try:
+                ps = companion.places(text, anchors)
+            except (ValueError, TypeError, AttributeError):
+                continue
+            con.executemany("INSERT INTO kartenobjekt VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            [(spiel, karte, altissimo.GEBIETE.get(karte, karte), p["art"], None, p["x"], p["z"], "",
+                              json.dumps([[p["name"], ""]], ensure_ascii=False)) for p in ps])
+            n += len(ps)
+    return n
+
+
 def _lv(r):
     return f"{r[0]}" if r[0] == r[1] else f"{r[0]}–{r[1]}"
 
@@ -970,6 +991,27 @@ def _sd_key(text):
     return re.sub(r"[^a-z0-9]", "", str(text).lower())
 
 
+def _item_ids(con, spiel):
+    """Deutscher Item-Name (pokewiki.item_key) → ID. Gibt es einen Namen mehrfach (etwa aus PKHeX und der PokéAPI), gilt
+    das Item im Spiel, dann das der PokéAPI (kleinere ID, hat ein Bild)."""
+    try:
+        gid = (con.execute("SELECT id FROM spiel WHERE kennung = ?", (spiel,)).fetchone() or [None])[0]
+        rows = con.execute("SELECT id, name, spiele FROM item").fetchall()
+    except sqlite3.Error:
+        rows, gid = [(i, n, "[]") for i, n in con.execute("SELECT id, name FROM item")], None
+    best = {}
+    for i, n, sp in rows:
+        try:
+            inside = gid is not None and gid in json.loads(sp or "[]")
+        except (TypeError, ValueError):
+            inside = False
+        k = pokewiki.item_key(n or "")
+        rank = (not inside, i)
+        if k and (k not in best or rank < best[k][0]):
+            best[k] = (rank, i)
+    return {k: v[1] for k, v in best.items()}
+
+
 def _derive_wiki(con, wiki):
     """Aus dem PokéWiki (abruf._pokewiki): Attackenwerte je Spiel (attacke_spiel) und getragene Items wilder Pokémon
     (getragen). Namen werden über die deutschen Namen der Datenbank zugeordnet; Unbekanntes bleibt weg.
@@ -988,16 +1030,16 @@ def _derive_wiki(con, wiki):
                             (spiel, mid, v.get("staerke"), v.get("kraft"), v.get("tempo"), v.get("genauigkeit"), v.get("ap")))
                 n_moves += 1
     species = {n: k for k, n in _names(con, "pokemon_species_names", "pokemon_species_id").items()}
-    items = {n: i for i, n in con.execute("SELECT id, name FROM item")}
     n_items = 0
     for spiel, per in (wiki.get("items") or {}).items():
+        items = _item_ids(con, spiel)
         for name, xs in per.items():
             art = species.get(name)
             if not art:
                 continue
             for x in xs:
                 con.execute("INSERT INTO getragen VALUES (?, ?, ?, ?, ?, ?)",
-                            (spiel, art, x["item"], items.get(x["item"]), x.get("prozent", ""), int(bool(x.get("elite")))))
+                            (spiel, art, x["item"], items.get(pokewiki.item_key(x["item"])), x.get("prozent", ""), int(bool(x.get("elite")))))
                 n_items += 1
     return n_moves, n_items
 
@@ -1058,7 +1100,8 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_rez = _derive_rezept(con, alt, en_de)
         n_sets = _derive_moveset(con, sets)
         n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
-        n_obj += _derive_wiki_karte(con, wiki)
+        n_wiki_karte = _derive_wiki_karte(con, wiki)
+        n_orte = _derive_companion(con, alt)
         con.execute("CREATE TABLE extra (name TEXT PRIMARY KEY, inhalt TEXT)")
         con.executemany("INSERT INTO extra VALUES (?, ?)", [(k, json.dumps(v, ensure_ascii=False)) for k, v in (extra or {}).items()])
         for sql in ("CREATE INDEX pm_pokemon ON pokemon_moves(pokemon_id, version_group_id)",
@@ -1076,7 +1119,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
                  "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "spawns": n_spawn, "items": n_item, "sets": n_sets, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
-                 "kartenobjekte": n_obj, "rezepte": n_rez, "check": why}
+                 "kartenobjekte": n_obj, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez, "check": why}
     finally:
         con.close()
     return stats

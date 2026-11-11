@@ -15,7 +15,7 @@ const filter0 = (extra = {}) => Object.assign({q: "", typen: {}, modus: "und", a
 const S = {
   meta: null, types: {}, chart: null, chartGame: null,
   game: store.get("game", "legends-arceus"),
-  team: normTeam(store.get("team", {})), favs: [], favGame: null, caught: new Set(), shiny: new Set(), tsort: "",
+  team: normTeam(store.get("team", {})), favs: [], favGame: null, caught: new Set(), shiny: new Set(), alpha: new Set(), alphaOk: new Set(), tsort: "",
   weights: store.get("weights", null), preset: store.get("preset", "ausgewogen"),
   filter: filter0(store.get("filter2", {})),
   tfilter: filter0(Object.assign({endstufe: true}, store.get("tfilter", {}))),
@@ -130,6 +130,10 @@ const teamFull = () => S.team.ids.length >= 6;
 const isFav = (id) => S.favs.some((f) => f.id === id);
 const isCaught = (id) => S.caught.has(id);
 const isShiny = (id) => S.shiny.has(id);
+const isAlpha = (id) => S.alpha.has(id);
+/* Alpha: nur in Spielen mit Alphas und nur für Pokémon, die es dort als Alpha gibt (oder schon so markiert sind) */
+const alphaBtn = (id) => S.alphaOk.has(id) || isAlpha(id) ? `<span class="a alp${isAlpha(id) ? " on" : ""}" data-act="alpha" data-id="${id}"
+  data-tip="${isAlpha(id) ? "Als Alpha gefangen; Klick: kein Alpha" : "Als Alpha gefangen markieren"}">α</span>` : "";
 // Pokéball: gefangen, schillernd gefangen (goldener Ball mit Funkeln) oder nichts
 const ball = (id, on = isCaught(id)) => icon("ball", on).replace('class="ic ic-ball on"', `class="ic ic-ball on${isShiny(id) ? " shiny" : ""}"`)
 ;
@@ -141,13 +145,14 @@ function marks(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
   return `<span class="mk">${inTeam ? `<span class="m m-team" data-tip="Im Team">${icon("team")}</span>` : ""}`
     + `${got ? `<span class="m m-ball" data-tip="${isShiny(id) ? "Schillernd in" : "In"} deiner Sammlung (${esc(gameName())})">${ball(id)}</span>` : ""}`
+    + `${isAlpha(id) ? `<span class="m m-alpha" data-tip="Als Alpha gefangen">α</span>` : ""}`
     + `${fav ? `<span class="m m-fav" data-tip="Favorit">${icon("fav")}</span>` : ""}</span>`;
 }
 function acts(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
   return `<span class="acts">${inTeam ? `<span class="a team on" data-tip="Im Team">${icon("team")}</span>` : `<span class="a team ph"></span>`}`
     + `<span class="a${fav ? " on" : ""}" data-act="fav" data-id="${id}" data-tip="${fav ? "Favorit; Klick: aus den Favoriten" : "Zu den Favoriten (Kader zum schnellen Tauschen)"}">${icon("fav", fav)}</span>`
-    + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${ballTip(id)}">${ball(id, got)}</span>`
+    + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${ballTip(id)}">${ball(id, got)}</span>` + alphaBtn(id)
     + `${teamFull() ? `<span class="a ph"></span>` : `<span class="a plus" data-act="teamadd" data-id="${id}" data-tip="${inTeam ? "Noch einmal ins Team" : "Ins Team"}">${icon("plus")}</span>`}</span>`;
 }
 function monCard(r, xmode = false) {
@@ -162,11 +167,12 @@ function monCard(r, xmode = false) {
 function redrawMarks() {
   $$(".mk").forEach((el) => { const a = el.closest("[data-id]"); if (a) el.outerHTML = marks(+a.dataset.id); });
   $$(".acts").forEach((el) => { const a = el.closest("[data-id]"); if (a) el.outerHTML = acts(+a.dataset.id); });
-  $$("[data-markbtn]").forEach((b) => { const id = +b.dataset.id, k = b.dataset.markbtn, on = k === "fav" ? isFav(id) : isCaught(id);
-    b.classList.toggle("on", on); b.innerHTML = markLabel(k, on, id); if (k !== "fav") b.dataset.tip = ballTip(id); });
+  $$("[data-markbtn]").forEach((b) => { const id = +b.dataset.id, k = b.dataset.markbtn, on = k === "fav" ? isFav(id) : k === "alpha" ? isAlpha(id) : isCaught(id);
+    b.classList.toggle("on", on); b.innerHTML = markLabel(k, on, id); if (k === "gef") b.dataset.tip = ballTip(id); });
   $$(".mon[data-id]").forEach((el) => el.classList.toggle("inteam", S.team.ids.includes(+el.dataset.id)));
 }
 const markLabel = (k, on, id) => k === "fav" ? `${icon("fav", on)} ${on ? "Favorit" : "Zu den Favoriten"}`
+  : k === "alpha" ? `<span class="alpha-i">α</span> ${on ? "Als Alpha gefangen" : "Als Alpha markieren"}`
   : `${ball(id, on)} ${on ? (isShiny(id) ? "Schillernd in deiner Sammlung" : "In deiner Sammlung") : "Als gefangen markieren"}`;
 
 /* Typ-Duell (wie stark gegen einen Typ): austeilen = bester eigener Typ, einstecken = Attacken des Typs gegen beide
@@ -588,8 +594,9 @@ async function toggleFav(id, on = !isFav(id)) {
 }
 async function loadCaught(force = false) {
   if (!force && S.caughtGame === S.game) return;
-  const [c, sh] = await Promise.all([api("/api/gefangen?" + qs({spiel: S.game})), api("/api/schillernd?" + qs({spiel: S.game}))]);
-  S.caught = new Set(c); S.shiny = new Set(sh);
+  const [c, sh, al] = await Promise.all([api("/api/gefangen?" + qs({spiel: S.game})), api("/api/schillernd?" + qs({spiel: S.game})),
+    api("/api/alpha?" + qs({spiel: S.game})).catch(() => ({ids: [], moeglich: []}))]);
+  S.caught = new Set(c); S.shiny = new Set(sh); S.alpha = new Set(al.ids); S.alphaOk = new Set(al.moeglich);
   S.caughtGame = S.game;
 }
 // Klick am Pokéball: nicht gefangen → gefangen → schillernd → nicht gefangen
@@ -600,8 +607,16 @@ async function toggleCaught(id, plain = false) {
   } else {
     const on = !isCaught(id);
     await api("/api/gefangen", {spiel: S.game, id, an: on});
-    if (on) S.caught.add(id); else { S.caught.delete(id); S.shiny.delete(id); }
+    if (on) S.caught.add(id); else { S.caught.delete(id); S.shiny.delete(id); S.alpha.delete(id); }
   }
+  redrawMarks();
+  if (location.hash.startsWith("#team")) caughtBox();
+}
+// α: als Alpha gefangen an und aus (setzt auch gefangen)
+async function toggleAlpha(id) {
+  const on = !isAlpha(id);
+  await api("/api/alpha", {spiel: S.game, id, an: on});
+  if (on) { S.alpha.add(id); S.caught.add(id); } else S.alpha.delete(id);
   redrawMarks();
   if (location.hash.startsWith("#team")) caughtBox();
 }
@@ -1058,6 +1073,7 @@ async function detailView(id, slot = null) {
       ${teamFull() ? (inTeam ? "" : `<span class="hint">Team voll</span>`) : `<button class="${inTeam ? "" : "primary"}" data-act="teamadd" data-id="${d.id}">${inTeam ? "Noch einmal ins Team" : "Ins Team"}</button>`}
       <button data-act="fav" data-id="${d.id}" data-markbtn="fav" class="mark${isFav(d.id) ? " on" : ""}">${markLabel("fav", isFav(d.id))}</button>
       <button data-act="caught" data-id="${d.id}" data-markbtn="gef" class="mark${isCaught(d.id) ? " on" : ""}" data-tip="${ballTip(d.id)}">${markLabel("gef", isCaught(d.id), d.id)}</button>
+      ${S.alphaOk.has(d.id) || isAlpha(d.id) ? `<button data-act="alpha" data-id="${d.id}" data-markbtn="alpha" class="mark${isAlpha(d.id) ? " on" : ""}">${markLabel("alpha", isAlpha(d.id), d.id)}</button>` : ""}
       <a class="btn" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Im PokéWiki öffnen</a>
       ${d.formen.length ? `<span class="hint">Formen:</span>` + d.formen.map((f) => `<a class="btn small" href="#pokemon/${f.id}">${esc(f.name)}</a>`).join("") : ""}</div>
     ${!d.im_spiel && S.game ? `<div class="note warn">In ${esc(gameName())} nicht enthalten.</div>` : ""}
@@ -1612,7 +1628,7 @@ async function movesView() {
       (!f.gen || (f.genmodus === "nur" ? m.gen === +f.gen : m.gen <= +f.gen)) && (!f.team || teamMoves[m.id]));
     $("#mcnt").textContent = f.team && !Object.keys(teamMoves).length ? "Im Team sind noch keine Attacken gewählt"
       : `${xs.length} von ${rows.length} Attacken in ${gameName()}`;
-    $("#mv").innerHTML = `<div class="box scroll"><table class="sort fixed lines" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:70px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
+    $("#mv").innerHTML = `<div class="box scroll sticky"><table class="sort fixed lines" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:70px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
       ${thc("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${thc("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${thc("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${thc("Gen", "Generation, seit der es die Attacke gibt")}${th("Wirkung", "Kurz-Info aus den Spieldaten; die ganze Beschreibung beim Hovern über die Zeile", true)}</tr></thead><tbody>
       ${xs.map((m) => `<tr data-r="${m.id}"><td data-s="${esc(m.name)}"><b${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</b>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}${teamMoves[m.id] ? ` <span class="cls tm" data-tip="${esc("Im Team: " + teamMoves[m.id].join(", "))}">Team${teamMoves[m.id].length > 1 ? " ×" + teamMoves[m.id].length : ""}</span>` : ""}</td><td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
         <td class="c"><span class="cls">${CLS[m.klasse]}</span></td><td class="c num" data-s="${m.staerke || 0}">${powStil(m)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
@@ -1649,7 +1665,7 @@ async function movesView() {
 }
 
 /* ------------------------------------------------------------------ Typtabelle */
-const PIN = {r: null, c: null}, MPIN = {r: null, c: null}, VPIN = {r: null, c: null}, APIN = {r: null, c: null};
+const PIN = {r: null, c: null}, MPIN = {r: null, c: null}, VPIN = {r: null, c: null}, APIN = {r: null, c: null}, IPIN = {r: null, c: null};
 let MSORT = {k: "", dir: ""};
 /* ------------------------------------------------------------------ Karte (Legenden: Arceus)
    Spielkoordinaten 0–1024; Welt in Pixeln = Koordinate × 2 (2048 px bei Zoom 2). Kacheln 256 px von Serebii, auf dem Server
@@ -1658,21 +1674,25 @@ const WORLD = 2048;
 const mpct = (x) => String(x).replace(".", ",") + " %";
 /* Kartensymbole (Altissimo): Zeichen und Farbe je Art; Ebenen lassen sich einzeln ausblenden */
 const MOBJ = {aprikoko: "A", beere: "B", baum: "Z", erz: "E", laub: "L", heu: "H", kiste: "K", truhe: "T",
-  irrlicht: "✦", icognito: "?", vers: "V", graben: "G", kristall: "◆", verzerrung: "◎", massen: "M", baumpkmn: "P", alpha: "α", boden: "•"};
+  irrlicht: "✦", icognito: "?", vers: "V", graben: "G", kristall: "◆", verzerrung: "◎", massen: "M", baumpkmn: "P", alpha: "α", boden: "•", reise: "»", lager: "△"};
+/* Ebenen in Gruppen; was keiner Gruppe angehört, steht unter „Weitere“ */
+const MGROUPS = [["Pokémon", ["pokemon", "kristall", "verzerrung", "massen", "baumpkmn", "alpha"]], ["Bäume und Rohstoffe", ["baum", "aprikoko", "beere", "erz", "laub", "heu"]],
+  ["Items", ["kiste", "truhe", "boden", "graben"]], ["Sammeln", ["irrlicht", "icognito", "vers"]], ["Orte", ["reise", "lager"]]];
+let MAPPOS = null;          // Ausschnitt, wenn sich nur ein Filter ändert
 const MOBJMON = new Set(["kristall", "verzerrung", "massen", "baumpkmn", "alpha"]);     // Symbole mit Pokémon statt Items
 const MAPCACHE = {};        // Kartendaten je Gebiet: die Wahl eines Pokémon lädt nichts neu
 const MOBJHINT = {irrlicht: "Geisterlicht zum Einsammeln; 107 gibt es in ganz Hisui.", icognito: "Icognito zum Fangen; 28 Formen gibt es in Hisui.",
   vers: "Gedicht zum Lesen (Sammelobjekt).", graben: "Grabstelle: hier lässt sich mit Ursaluna nach Items graben.",
   kristall: "Kristallbrocken: zerschlagen, dann erscheint das Pokémon.", verzerrung: "Raum-Zeit-Verzerrung: hier erscheinen die Pokémon während einer Verzerrung.",
   massen: "Massenauftreten: hier kann es zu einem Massenauftreten kommen.", baumpkmn: "Baum schütteln oder werfen: das Pokémon fällt heraus.",
-  alpha: "Festes Alpha-Pokémon an dieser Stelle."};
+  alpha: "Festes Alpha-Pokémon an dieser Stelle.", reise: "Schnellreise: hierher bringt dich Pikas Flug.", lager: "Lager: ausruhen, herstellen, Pokémon tauschen."};
 const mobjTip = (o, arten) => `${arten[o.art]?.[0] || o.art}${o.nr ? " " + o.nr : ""}` + (o.menge ? `\n${o.menge} Stück je Mal` : "")
-  + (o.items.length ? "\n" + o.items.map(([n, p]) => `${n}: ${p}`).join("\n") : "");
+  + (o.items.length ? "\n" + o.items.map(([n, p]) => p ? `${n}: ${p}` : n).join("\n") : "");
 /* Übersicht mit Pokémon-Bildern: die Karte in Felder (64 Spieleinheiten) geteilt; je Feld die häufigsten Pokémon als
    Bild, so groß, wie sie dort wahrscheinlich sind. Gewicht je Spawnpunkt = sein Anteil (höchster Wert, 0–1), je Stelle der
    PokéWiki-Ebenen ihr Anteil oder 1. Das Bild sitzt im Schwerpunkt seiner Punkte im Feld */
 const HEAT_G = 64;
-function mapHeat(pts, objs) {
+function mapHeat(pts, objs, sh = (m) => m.max || 0) {
   const cells = {}, tot = {};
   const add = (x, z, id, name, w) => {
     if (!id) return;
@@ -1683,7 +1703,7 @@ function mapHeat(pts, objs) {
     const t = tot[id] ||= {id, name, w: 0, n: 0};
     t.w += w; t.n++;
   };
-  pts.forEach((p) => p.mons.forEach((m) => add(p.x, p.z, m.id, m.name.replace(/ \(.*\)$/, ""), (m.max || 0) / 100)));
+  pts.forEach((p) => p.mons.forEach((m) => { const v = sh(m); if (v > 0) add(p.x, p.z, m.id, m.name.replace(/ \(.*\)$/, ""), v / 100); }));
   objs.forEach((o) => { if (MOBJMON.has(o.art)) o.items.forEach(([n, t, id]) => {
     const pc = /([\d,]+) %/.exec(t || ""); add(o.x, o.z, id, n.replace(/ \(.*\)$/, ""), pc ? parseFloat(pc[1].replace(",", ".")) / 100 : o.items.length > 1 ? 1 / o.items.length : 1); }); });
   return {cells, tot};
@@ -1695,7 +1715,10 @@ async function mapView(karte, fid) {
   const d = MAPCACHE[key] || (MAPCACHE[key] = await api("/api/karte/" + encodeURIComponent(key)));
   if (rid !== RID) return;
   if (!$("#map")) window.scrollTo(0, 0);
-  const pts = d.punkte.map((p) => Object.assign(p, {hit: fid != null && p.mons.some((m) => m.id === fid)}));
+  /* Tageszeit und Wetter: -1 = alle; der Anteil eines Pokémon ist dann der höchste unter den gewählten Bedingungen */
+  const fz = store.get("mapZeit", -1), fw = store.get("mapWetter", -1), cond = fz >= 0 || fw >= 0;
+  const sh = (m) => !cond || !m.c ? m.max || 0 : Math.max(0, ...m.c.filter((v, i) => (fz < 0 || Math.floor(i / 9) === fz) && (fw < 0 || i % 9 === fw)));
+  const pts = d.punkte.map((p) => Object.assign(p, {hit: fid != null && p.mons.some((m) => m.id === fid && sh(m) > 0), off: cond && !p.mons.some((m) => sh(m) > 0)}));
   const species = {};
   pts.forEach((p) => p.mons.forEach((m) => { (species[m.id] ||= {id: m.id, name: m.name, n: 0}).n++; }));
   const hits = pts.filter((p) => p.hit).length;
@@ -1706,9 +1729,15 @@ async function mapView(karte, fid) {
   const ohits = objs.filter((o) => o.hit).length;
   const hide = new Set(store.get("mapHide", ["boden"]));      // Items am Boden sind viele: anfangs aus
   let heatOn = store.get("mapHeat", false);
-  const H = mapHeat(pts, objs);
+  const H = mapHeat(pts, objs, sh);
   const layerBtn = (k, label, n) => `<button class="mlay${hide.has(k) ? "" : " on"}" data-lay="${k}" data-tip="${hide.has(k) ? "einblenden" : "ausblenden"}">${k === "pokemon"
     ? `<span class="mpin-l"></span>` : `<span class="mobj o-${k}">${MOBJ[k] || "•"}</span>`}${esc(label)} <span class="hint">${n}</span></button>`;
+  const lays = [...(pts.length ? [["pokemon", "Spawnpunkte", pts.length]] : []), ...Object.entries(arten).map(([k, v]) => [k, v[1], objs.filter((o) => o.art === k).length])];
+  const known = new Set(MGROUPS.flatMap((g) => g[1]));
+  const groups = [...MGROUPS.map(([n, ks]) => [n, ks.map((k) => lays.find((l) => l[0] === k)).filter(Boolean)]), ["Weitere", lays.filter((l) => !known.has(l[0]))]].filter((g) => g[1].length);
+  const layerBar = groups.map(([n, ls], gi) => `<span class="mgrp"><button class="mgrp-b" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">${esc(n)}</button>${ls.map((l) => layerBtn(...l)).join("")}</span>`).join("");
+  const hasCond = pts.some((p) => p.mons.some((m) => m.c));
+  const condSel = (key, label, names, v) => `<label class="mcond">${label} <select data-cond="${key}"><option value="-1">alle</option>${names.map((x, i) => `<option value="${i}"${i === v ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>`;
   main.innerHTML = `<div class="box mapbox">
     <div class="bar"><h2 style="margin:0">Karte</h2>
       <span class="seg">${d.karten.map((k) => `<a class="btn${k.karte === d.karte ? " on" : ""}" href="#karte/${k.karte}${fid != null ? "/" + fid : ""}">${esc(k.gebiet)}</a>`).join("")}</span>
@@ -1717,14 +1746,15 @@ async function mapView(karte, fid) {
           <div class="pickl"><a href="#karte/${d.karte}" class="${fid == null ? "on" : ""}"><span class="spr none"></span><span>alle Spawnpunkte</span><span class="hint">${pts.length}</span></a>${list.map((s) => `<a href="#karte/${d.karte}/${s.id}" class="${s.id === fid ? "on" : ""}" data-n="${esc(s.name.toLowerCase())}">${img(s.id)}<span>${esc(s.name)}</span><span class="hint" data-tip="Stellen in diesem Gebiet">${s.n}</span></a>`).join("")}</div></div></div>
       <span class="hint grow">${fid != null ? (hits || ohits ? [hits && `${hits} Spawnpunkte`, ohits && `${ohits} weitere Stellen`].filter(Boolean).join(" und ") + " hervorgehoben" : "hier an keinem Spawnpunkt") : `${pts.length} Spawnpunkte, davon ${pts.filter((p) => p.alpha).length} Alpha`}</span>` : ""}
 </div>
-    ${objs.length || pts.length ? `<div class="bar mlays">${pts.length ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="heatbtn" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto wahrscheinlicher">▦ Übersicht mit Bildern</button>` : ""}${pts.length ? layerBtn("pokemon", "Spawnpunkte", pts.length) : ""}${Object.entries(arten).map(([k, v]) => layerBtn(k, v[1], objs.filter((o) => o.art === k).length)).join("")}
-      <span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button></span></div>` : ""}
+    ${objs.length || pts.length ? `<div class="bar mlays">${pts.length ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="heatbtn" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto wahrscheinlicher">▦ Übersicht mit Bildern</button>` : ""}${hasCond ? condSel("mapZeit", "Tageszeit", d.zeiten || [], fz) + condSel("mapWetter", "Wetter", d.wetterarten || [], fw) : ""}
+      <span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button></span></div>
+    <div class="bar mlays mgrps">${layerBar}</div>` : ""}
     ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus.</div>` : ""}
     ${d.kacheln || d.bild ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
     <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
       <aside id="mapside" class="mapside"><p class="hint">${pts.length ? "Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha." : "Fahre über ein Symbol für Einzelheiten, klicke für die Liste."}</p></aside></div>
-    <p class="hint">Kartenbild: ${d.bild ? "Altissimo" : "Serebii"}${pts.length ? "; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten" : ""}${objs.length ? "; Symbole und Sammelobjekte: Altissimo (GPL-3.0)" : ""}${objs.some((o) => MOBJMON.has(o.art) || o.art === "boden") ? "; Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas und Items am Boden: PokéWiki (CC BY-SA 3.0)" : ""}.</p></div>`;
+    <p class="hint">Kartenbild: ${d.bild ? "Altissimo" : "Serebii"}${pts.length ? "; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten" : ""}${objs.length ? "; Symbole und Sammelobjekte: Altissimo (GPL-3.0)" : ""}${objs.some((o) => MOBJMON.has(o.art) || o.art === "boden") ? "; Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas und Items am Boden: PokéWiki (CC BY-SA 3.0)" : ""}${objs.some((o) => o.art === "reise" || o.art === "lager") ? "; Schnellreise und Lager: PLA Companion (software-notion.de)" : ""}.</p></div>`;
   const pick = $("#mapmon") || document.createElement("div"), pickM = $(".pickm", pick) || document.createElement("div");
   const pickOpen = (on) => { pickM.hidden = !on; $(".pickbtn", pick).setAttribute("aria-expanded", on); if (on) { const f = $("input", pickM); f.value = ""; pickFilter(""); f.focus(); $("a.on", pickM)?.scrollIntoView({block: "center"}); } };
   const pickFilter = (v) => $$(".pickl a[data-n]", pick).forEach((a) => { a.hidden = !!v && !a.dataset.n.includes(v); });
@@ -1743,7 +1773,7 @@ async function mapView(karte, fid) {
     const xs = Object.values(c).filter((s) => fid == null || s.id === fid).sort((a, b) => b.w - a.w);
     const top = xs[0]?.w || 0;
     return xs.filter((s, i) => i < 3 && s.w >= top * 0.3).map((s) => { const px = Math.round(44 + 90 * Math.sqrt(s.w / wmax));
-      return `<a class="hspr" href="#karte/${d.karte}/${s.id}" style="left:${s.sx / s.sw * 2}px;top:${s.sz / s.sw * 2}px;width:${px}px;height:${px}px;margin:-${px / 2}px 0 0 -${px / 2}px" data-tip="${esc(heatTip(s))}">${img(s.id)}</a>`; }).join("");
+      return `<a class="hspr" draggable="false" href="#karte/${d.karte}/${s.id}" style="left:${s.sx / s.sw * 2}px;top:${s.sz / s.sw * 2}px;width:${px}px;height:${px}px;margin:-${px / 2}px 0 0 -${px / 2}px" data-tip="${esc(heatTip(s))}">${img(s.id)}</a>`; }).join("");
   }).join("");
   const heatSide = async () => {
     const side = $("#mapside");
@@ -1757,7 +1787,7 @@ async function mapView(karte, fid) {
     side.innerHTML = `<h3>${img(fid, "sm")} ${esc(species[fid]?.name || "")} in allen Gebieten</h3><p class="hint">Lädt …</p>`;
     const all = await Promise.all(d.karten.map(async (k) => MAPCACHE[k.karte] || (MAPCACHE[k.karte] = await api("/api/karte/" + encodeURIComponent(k.karte)))));
     if (rid !== RID || !document.body.contains(side)) return;
-    const rows = all.map((m) => { const t = mapHeat(m.punkte || [], m.objekte || []).tot[fid]; return {k: m.karte, g: m.gebiet, w: t?.w || 0, n: t?.n || 0}; }).sort((a, b) => b.w - a.w);
+    const rows = all.map((m) => { const t = mapHeat(m.punkte || [], m.objekte || [], sh).tot[fid]; return {k: m.karte, g: m.gebiet, w: t?.w || 0, n: t?.n || 0}; }).sort((a, b) => b.w - a.w);
     const m = rows[0]?.w || 1;
     side.innerHTML = `<h3>${img(fid, "sm")} ${esc(species[fid]?.name || "")} in allen Gebieten</h3><table class="rows heatl">${rows.map((r) => `<tr${r.k === d.karte ? ` class="on"` : ""}><td>${r.n
       ? `<a href="#karte/${r.k}/${fid}">${esc(r.g)}</a>` : `<span class="hint">${esc(r.g)}</span>`}<span class="hbar"><i style="width:${r.w ? Math.max(3, r.w / m * 100) : 0}%"></i></span></td><td class="num hint">${r.n || "–"}</td></tr>`).join("")}</table>
@@ -1766,9 +1796,9 @@ async function mapView(karte, fid) {
   const showHeat = () => { heatEl.hidden = !heatOn; $("#heatbtn")?.classList.toggle("on", heatOn); if (heatOn) heatSide(); };
   $("#heatbtn")?.addEventListener("click", () => { heatOn = !heatOn; store.set("mapHeat", heatOn); showHeat(); });
   showHeat();
-  const tipOf = (p) => (p.alpha ? "Alpha-Spawnpunkt\n" : "") + (p.mons.length ? p.mons.map((m) => `${m.alpha ? "Alpha-" : ""}${m.name}: bis ${mpct(m.max)}`
-    + (m.zeit !== "immer" ? ` (${m.zeit})` : "")).join("\n") : "keine Angaben");
-  pins.innerHTML = pts.map((p, i) => `<button class="mpin${p.alpha ? " alpha" : ""}${p.hit ? " hit" : ""}${fid != null && !p.hit ? " dim" : ""}" data-i="${i}"
+  const tipOf = (p) => (p.alpha ? "Alpha-Spawnpunkt\n" : "") + (p.mons.length ? p.mons.filter((m) => sh(m) > 0).map((m) => `${m.alpha ? "Alpha-" : ""}${m.name}: bis ${mpct(sh(m))}`
+    + (!cond && m.zeit !== "immer" ? ` (${m.zeit})` : "")).join("\n") || "zu dieser Zeit und bei diesem Wetter nichts" : "keine Angaben");
+  pins.innerHTML = pts.map((p, i) => `<button class="mpin${p.alpha ? " alpha" : ""}${p.hit ? " hit" : ""}${(fid != null && !p.hit) || p.off ? " dim" : ""}" data-i="${i}"
     style="left:${p.x * 2}px;top:${p.z * 2}px" data-tip="${esc(tipOf(p))}" aria-label="Spawnpunkt"></button>`).join("")
     + objs.map((o, i) => `<button class="mobj o-${o.art}${o.hit ? " hit" : ""}" data-o="${i}" style="left:${o.x * 2}px;top:${o.z * 2}px" data-tip="${esc(mobjTip(o, arten))}"
       aria-label="${esc(arten[o.art]?.[0] || o.art)}">${MOBJ[o.art] || "•"}</button>`).join("");
@@ -1777,17 +1807,28 @@ async function mapView(karte, fid) {
     $$(".mobj[data-o]", pins).forEach((b) => { b.hidden = hide.has(objs[+b.dataset.o].art); });
   };
   showLayers();
-  const layBtns = () => $$(".mlay").forEach((b) => { b.classList.toggle("on", !hide.has(b.dataset.lay)); b.dataset.tip = hide.has(b.dataset.lay) ? "einblenden" : "ausblenden"; });
-  $$(".mlay").forEach((b) => b.addEventListener("click", () => {
+  const layBtns = () => $$(".mlay[data-lay]").forEach((b) => { b.classList.toggle("on", !hide.has(b.dataset.lay)); b.dataset.tip = hide.has(b.dataset.lay) ? "einblenden" : "ausblenden"; });
+  $$(".mlay[data-lay]").forEach((b) => b.addEventListener("click", () => {
     const k = b.dataset.lay;
     if (hide.has(k)) hide.delete(k); else hide.add(k);
     store.set("mapHide", [...hide]);
     layBtns(); showLayers();
   }));
   $$("[data-layall]").forEach((b) => b.addEventListener("click", () => {
-    $$(".mlay").forEach((x) => { if (b.dataset.layall === "1") hide.delete(x.dataset.lay); else hide.add(x.dataset.lay); });
+    $$(".mlay[data-lay]").forEach((x) => { if (b.dataset.layall === "1") hide.delete(x.dataset.lay); else hide.add(x.dataset.lay); });
     store.set("mapHide", [...hide]);
     layBtns(); showLayers();
+  }));
+  $$("[data-grp]").forEach((b) => b.addEventListener("click", () => {
+    const ks = groups[+b.dataset.grp][1].map((l) => l[0]), anyOn = ks.some((k) => !hide.has(k));
+    ks.forEach((k) => { if (anyOn) hide.add(k); else hide.delete(k); });
+    store.set("mapHide", [...hide]);
+    layBtns(); showLayers();
+  }));
+  $$("[data-cond]").forEach((s) => s.addEventListener("change", () => {
+    store.set(s.dataset.cond, +s.value);
+    MAPPOS = {key, fid, scale, ox, oy};
+    mapView(karte, fid);
   }));
   let scale = 1, ox = 0, oy = 0, level = -1;
   const fit = () => {
@@ -1842,7 +1883,9 @@ async function mapView(karte, fid) {
     const ns = Math.max(0.15, Math.min(4, scale * f));
     ox = cx - (cx - ox) * ns / scale; oy = cy - (cy - oy) * ns / scale; scale = ns; draw();
   };
-  fit(); draw();
+  if (MAPPOS && MAPPOS.key === key && MAPPOS.fid === fid) ({scale, ox, oy} = MAPPOS); else fit();
+  MAPPOS = null;
+  draw();
   box.addEventListener("wheel", (e) => {
     e.preventDefault();
     const r = box.getBoundingClientRect();
@@ -1853,17 +1896,23 @@ async function mapView(karte, fid) {
     if (b.dataset.mz === "0") { fit(); draw(); return; }
     zoomAt(b.dataset.mz === "1" ? 1.4 : 1 / 1.4, r.width / 2, r.height / 2);
   }));
-  let drag = null;
+  let drag = null, moved = false;
+  box.addEventListener("dragstart", (e) => e.preventDefault());
   box.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".mpin,.mobj,.hspr")) return;
-    drag = {x: e.clientX, y: e.clientY, ox, oy};
-    box.setPointerCapture(e.pointerId);
-    box.classList.add("grab");
+    if (e.button || e.target.closest(".mapzoom")) return;
+    drag = {x: e.clientX, y: e.clientY, ox, oy, id: e.pointerId};
+    moved = false;
   });
   box.addEventListener("pointermove", (e) => {
     if (!drag) return;
-    ox = drag.ox + e.clientX - drag.x; oy = drag.oy + e.clientY - drag.y; draw();
+    if (!moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 4) {
+      moved = true;
+      box.setPointerCapture(drag.id);
+      box.classList.add("grab");
+    }
+    if (moved) { ox = drag.ox + e.clientX - drag.x; oy = drag.oy + e.clientY - drag.y; draw(); }
   });
+  box.addEventListener("click", (e) => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
   const stop = () => { drag = null; box.classList.remove("grab"); };
   box.addEventListener("pointerup", stop);
   box.addEventListener("pointercancel", stop);
@@ -1887,9 +1936,9 @@ async function mapView(karte, fid) {
     b.classList.add("sel");
     const p = pts[+b.dataset.i];
     $("#mapside").innerHTML = `<h3>${p.alpha ? "Alpha-Spawnpunkt" : "Spawnpunkt"}</h3>` + (p.mons.length ? `<table class="rows"><tr><th></th><th>Pokémon</th><th>Anteil</th><th>Tageszeit</th><th>Wetter</th></tr>
-      ${p.mons.map((m) => `<tr><td>${img(m.id, "sm")}</td><td><a href="#pokemon/${m.id}">${m.alpha ? `<span class="alpha">Alpha</span> ` : ""}${esc(m.name)}</a></td>
-        <td>bis ${mpct(m.max)}</td><td>${esc(m.zeit)}</td><td>${esc(m.wetter)}</td></tr>`).join("")}</table>` : `<p class="hint">keine Angaben</p>`)
-      + `<p class="hint">Anteil: so oft erscheint es an diesem Punkt unter den passenden Bedingungen (höchster Wert).</p>`;
+      ${p.mons.map((m) => `<tr${cond && !(sh(m) > 0) ? ` class="dim"` : ""}><td>${img(m.id, "sm")}</td><td><a href="#pokemon/${m.id}">${m.alpha ? `<span class="alpha">Alpha</span> ` : ""}${esc(m.name)}</a></td>
+        <td>${cond ? (sh(m) > 0 ? "bis " + mpct(sh(m)) : "–") : "bis " + mpct(m.max)}</td><td>${esc(m.zeit)}</td><td>${esc(m.wetter)}</td></tr>`).join("")}</table>` : `<p class="hint">keine Angaben</p>`)
+      + `<p class="hint">Anteil: so oft erscheint es an diesem Punkt unter den passenden Bedingungen (höchster Wert${cond ? ", nur zur gewählten Tageszeit und beim gewählten Wetter" : ""}).</p>`;
   });
 }
 
@@ -1958,7 +2007,7 @@ async function itemsView() {
     <div class="bar"><span class="seg" id="itemseg"><button data-t="">alle</button>${(d.taschen || []).map((t) => `<button data-t="${esc(t)}">${esc(t)}</button>`).join("")}${d.rezepte
       ? `<button data-t="${HERSTELLEN}" data-tip="Items mit Rezept: was es zum Herstellen braucht">Herstellen</button>` : ""}</span><span class="hint grow" id="itemn"></span></div>
     ${d.hinweis ? `<div class="note info">${esc(d.hinweis)}</div>` : ""}
-    <div class="scroll" id="itembox"></div>
+    <div class="scroll sticky" id="itembox"></div>
     <p class="hint">Quelle: PokéAPI; Items ohne Eintrag dort und deutsche Namen: PKHeX${d.rezepte ? "; Rezepte und Fundorte der Zutaten: Altissimo (englisch)" : ""}. Englisch, wo es keinen deutschen Text gibt. Bilder lädt der Abgleich.</p></div>`;
   header();
   const num = (v) => `<td class="c num" data-s="${v ?? -1}">${v || "–"}</td>`;
@@ -1970,7 +2019,10 @@ async function itemsView() {
   const text = (x) => x.text ? `<td class="why"${x.englisch ? ` lang="en"` : ""}>${esc(x.text)}</td>`
     : x.fundorte ? `<td class="why" lang="en"><span class="hint">Zu finden:</span> ${esc(x.fundorte.join("; "))}</td>`
     : x.rezept ? `<td class="why" lang="en">${esc(x.rezept.hinweis)}</td>` : `<td class="why hint">–</td>`;
-  const recipe = (x) => x.rezept ? `<td>${x.rezept.zutaten.map((z) => `<span class="zut">${z.n}× ${esc(z.name)}</span>`).join(" ")}</td>` : "<td></td>";
+  // Zutaten untereinander, mit Bild (fehlt es, bleibt nur der Name)
+  const recipe = (x) => x.rezept ? `<td>${x.rezept.zutaten.map((z) => `<span class="zut2">${z.id ? `<img class="ibild zi" src="itembild/${z.id}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="ibild zi none"></span>`}<b>${z.n}×</b> ${esc(z.name)}</span>`).join("")}</td>` : "<td></td>";
+  const where = (x) => { const o = x.rezept?.ort || "", k = Object.keys(AREA_COLOR).find((a) => o.startsWith(a));
+    return `<td data-s="${esc(o)}">${k ? `<span class="area" style="--ac:${AREA_COLOR[k]}">${esc(o)}</span>` : esc(o)}</td>`; };
   // Spalten je Tasche: [Kopf, Breite, Zelle]
   const COLS = {
     "": [[th("Name"), "24%", name], [thc("Preis"), "8%", price], [th("Tasche"), "11%", (x) => `<td>${esc(x.tasche)}</td>`], [th("Art"), "15%", (x) => `<td>${esc(x.art)}</td>`],
@@ -1985,7 +2037,7 @@ async function itemsView() {
                 [thc("Klasse"), "8%", (x) => `<td class="c">${esc(MKLASSE[x.attacke?.klasse] || "")}</td>`],
                 [thc("Stärke"), "6%", (x) => num(x.attacke?.staerke)], [thc("Gen."), "6%", (x) => num(x.attacke?.genauigkeit)], [thc("AP"), "5%", (x) => num(x.attacke?.ap)],
                 [th("Wirkung", "", true), "", (x) => `<td class="why">${x.attacke?.kurz ? kurzHtml(x.attacke.kurz) : esc(x.text)}</td>`]],
-    [HERSTELLEN]: [[th("Name"), "22%", name], [th("Zutaten"), "30%", recipe], [th("Wo", "Wo das Rezept zu haben ist"), "14%", (x) => `<td>${esc(x.rezept?.ort || "")}</td>`],
+    [HERSTELLEN]: [[th("Name"), "22%", name], [th("Zutaten"), "30%", recipe], [th("Wo", "Wo das Rezept zu haben ist"), "16%", where],
                    [th("Rezept bekommen", "", true), "", (x) => `<td class="why" lang="en">${esc(x.rezept?.hinweis && x.rezept.hinweis !== "N/A" ? x.rezept.hinweis : "–")}</td>`]],
   };
   const draw = () => {
@@ -2000,10 +2052,13 @@ async function itemsView() {
       : pocket === "Medizin" || pocket === "Beeren" ? "wirkung" : "";
     const cols = COLS[kind].filter((c, i) => !(pocket && !kind && i === 2));      // in einer Tasche braucht es die Spalte Tasche nicht
     $("#itemn").textContent = `${xs.length} Items`;
-    $("#itembox").innerHTML = `<table class="rows sort fixed items"><colgroup>${cols.map((c) => `<col${c[1] ? ` style="width:${c[1]}"` : ""}>`).join("")}</colgroup>
-      <thead><tr>${cols.map((c) => c[0]).join("")}</tr></thead><tbody>${xs.map((x) => `<tr${x.unfertig ? ` class="odd"` : ""}>${cols.map((c) => c[2](x)).join("")}</tr>`).join("")
+    $("#itembox").innerHTML = `<table class="rows sort fixed items lines"><colgroup>${cols.map((c) => `<col${c[1] ? ` style="width:${c[1]}"` : ""}>`).join("")}</colgroup>
+      <thead><tr>${cols.map((c) => c[0]).join("")}</tr></thead><tbody>${xs.map((x) => `<tr data-r="${x.id}"${x.unfertig ? ` class="odd"` : ""}>${cols.map((c) => c[2](x)).join("")}</tr>`).join("")
       + (xs.length ? "" : `<tr><td colspan="${cols.length}" class="hint">Nichts gefunden.</td></tr>`)}</tbody></table>`;
     $$("#itemseg button").forEach((x) => x.classList.toggle("on", x.dataset.t === pocket));
+    const tb = $("#itembox table");
+    $$("tbody tr[data-r]", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { if (i) td.dataset.c = i; else td.dataset.pr = tr.dataset.r; }));
+    crossTable(tb, IPIN);
   };
   $("#itemq").addEventListener("input", (e) => { q = e.target.value.trim(); draw(); });
   $("#itemart").addEventListener("change", (e) => { art = e.target.value; draw(); });
@@ -2023,11 +2078,12 @@ function teamTypeHtml(ms, ts) {
     return `<details class="box tteam" data-tt="${k}"${store.get("ttOpen", {})[k] === false ? "" : " open"}><summary><h2>${title}</h2><span class="hint">${hint}</span></summary>
       <div class="scroll"><table class="chart" id="tt-${k}"><thead><tr><th class="corner"></th>${ts.map((t) => `<th class="v" data-c="${t}" data-pc="${t}"><span>${tchip(t)}</span></th>`).join("")}</tr></thead>
       <tbody>${ms.map((m, i) => `<tr data-r="${i}"><th class="r tm" data-pr="${i}" data-hc="${m.id}"><span class="tmh">${img(m.id, "sm")}<span>${esc(m.name)}</span>${tchips(m.typen)}</span></th>${ts.map((t) => { const f = fn(m, t);
-        return `<td data-c="${t}" data-tip="${esc(k === "d" ? `${tname(t)} gegen ${m.name}: ×${fl(f)}` : `${m.name} (Eigentyp) gegen ${tname(t)}: ×${fl(f)}`)}">${f === 1 ? "" : `<span class="f ${fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}</tr>`).join("")}</tbody>
+        return `<td data-c="${t}" data-tip="${esc(k === "d" ? `${tname(t)} gegen ${m.name}: ×${fl(f)}` : `${m.name} (Eigentyp) gegen ${tname(t)}: ×${fl(f)}`)}">${f === 1 ? "" : `<span class="f ${k === "a" && f ? fcls(1 / f) : fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}</tr>`).join("")}</tbody>
       <tfoot><tr><th class="r">${k === "d" ? "resistent · schwach" : "stark · schwach"}</th>${sum.map(([g, b], j) => `<td data-c="${ts[j]}"><span class="go">${g || ""}</span>${g && b ? "·" : ""}<span class="stop">${b || ""}</span></td>`).join("")}</tr></tfoot></table></div></details>`;
   };
-  return one("d", "Verteidigung je Mitglied", "Spalte: angreifender Typ. So viel steckt das Mitglied mit seinen Typen ein.", def, (f) => f < 1)
-    + one("a", "Angriff je Mitglied", "Spalte: verteidigender Typ. So gut trifft der bessere Eigentyp des Mitglieds.", att, (f) => f > 1);
+  // Farben aus Sicht des Mitglieds: grün hilft ihm, rot schadet ihm. Verteidigung: ½ grün, 2 rot; Angriff umgekehrt
+  return one("d", "Verteidigung je Mitglied", "Spalte: angreifender Typ. So viel steckt das Mitglied mit seinen Typen ein; grün: steckt wenig ein, rot: viel.", def, (f) => f < 1)
+    + one("a", "Angriff je Mitglied", "Spalte: verteidigender Typ. So gut trifft der bessere Eigentyp des Mitglieds; grün: trifft stark, rot: schwach.", att, (f) => f > 1);
 }
 async function chartView() {
   const ch = S.chart, ts = Object.keys(ch);
@@ -2099,7 +2155,7 @@ async function settingsView() {
   const src = st.sources || {};
   const open = pr.filter((r) => !r.entscheidung);
   const srcRow = (k, n) => { const r = src[k]; return r ? `<tr><td>${n}</td><td>${r.ok ? "✓" : "✗"} ${esc(r.msg || "")}</td><td class="num">${r.requests}</td><td class="num">${r.errors}</td><td class="nw">${esc(deTime(r.at))}</td></tr>` : ""; };
-  const srcKeys = ["pokeapi", "showdown", "pkhex", "spawns", "karten", "sprites", "extras"].filter((k) => src[k]);
+  const srcKeys = ["pokeapi", "showdown", "pkhex", "spawns", "karten", "sprites", "extras", "pokewiki", "altissimo", "companion"].filter((k) => src[k]);
   const okN = srcKeys.filter((k) => src[k].ok).length, bad = srcKeys.filter((k) => !src[k].ok);
   main.innerHTML = `<div class="cols">
     <div class="box"><h2>Abgleich</h2>
@@ -2110,7 +2166,7 @@ async function settingsView() {
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
       <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
         <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button></div>
-      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}</table>
+      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table>
       <h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
@@ -2312,6 +2368,7 @@ document.addEventListener("click", async (e) => {
     else if (act === "fav") await toggleFav(id);
     else if (act === "favadd") { $("#pick").hidden = true; await toggleFav(id, true); }
     else if (act === "caught") await toggleCaught(id);
+    else if (act === "alpha") await toggleAlpha(id);
     else if (act === "xsel") xsel(id);
     else if (act === "xall") $$("#list .mon[data-id]").forEach((el) => xsel(+el.dataset.id, true));
     else if (act === "xnone") [...XSEL].forEach((x) => xsel(x, false));

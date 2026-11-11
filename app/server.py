@@ -146,7 +146,8 @@ def save_team(body):
     return {"id": int(tid)}
 
 
-MARKS = ("favorit", "gefangen", "schillernd")      # Tabellen gleicher Form: (spiel, form, seit)
+MARKS = ("favorit", "gefangen", "schillernd", "alpha")      # Tabellen gleicher Form: (spiel, form, seit)
+CAUGHT_EXTRA = ("schillernd", "alpha")                       # gelten zusätzlich zu gefangen
 
 
 def marked(table, spiel):
@@ -165,7 +166,7 @@ def favorites(spiel):
 
 def set_mark(table, body):
     """Marke an- oder abwählen: {spiel, id, an}; id darf auch eine Liste sein (mehrere auf einmal).
-    Schillernd setzt auch gefangen; nicht mehr gefangen nimmt auch schillernd weg."""
+    Schillernd und Alpha setzen auch gefangen; nicht mehr gefangen nimmt beides weg."""
     assert table in MARKS
     spiel = str(body.get("spiel") or "")[:60]
     raw = body.get("id")
@@ -177,10 +178,10 @@ def set_mark(table, body):
     try:
         for fid in ids:
             if body.get("an", True):
-                for t in (table, "gefangen") if table == "schillernd" else (table,):
+                for t in (table, "gefangen") if table in CAUGHT_EXTRA else (table,):
                     con.execute(f"INSERT OR IGNORE INTO {t} (spiel, form, seit) VALUES (?, ?, ?)", (spiel, fid, _now()))
             else:
-                for t in (table, "schillernd") if table == "gefangen" else (table,):
+                for t in (table, *CAUGHT_EXTRA) if table == "gefangen" else (table,):
                     con.execute(f"DELETE FROM {t} WHERE spiel = ? AND form = ?", (spiel, fid))
         con.commit()
     finally:
@@ -205,8 +206,8 @@ def transfer(body):
     con = db.user()
     try:
         for fid in ids:
-            shiny = con.execute("SELECT 1 FROM schillernd WHERE spiel = ? AND form = ?", (von, fid)).fetchone()
-            for t in ("gefangen", "schillernd") if shiny else ("gefangen",):
+            extra = [t for t in CAUGHT_EXTRA if con.execute(f"SELECT 1 FROM {t} WHERE spiel = ? AND form = ?", (von, fid)).fetchone()]
+            for t in ("gefangen", *extra):
                 if not free:
                     con.execute(f"INSERT OR IGNORE INTO {t} (spiel, form, seit) VALUES (?, ?, ?)", (nach, fid, _now()))
                 if free or not body.get("behalten"):
@@ -230,7 +231,7 @@ def export():
     finally:
         con.close()
     return {"app": "pokedex", "version": sources.VERSION, "exportiert": _now(), "teams": teams(), "favoriten": out["favorit"],
-            "gefangen": out["gefangen"], "schillernd": out["schillernd"], "entscheidungen": dec}
+            "gefangen": out["gefangen"], "schillernd": out["schillernd"], "alpha": out["alpha"], "entscheidungen": dec}
 
 
 def restore(body):
@@ -238,7 +239,7 @@ def restore(body):
     Vorher legt db.backup() eine Kopie von user.db an."""
     if body.get("app") != "pokedex" or not isinstance(body.get("teams"), list):
         raise ValueError("Keine Sicherung des Pokédex (es fehlen app und teams)")
-    rows = {"team": [], "favorit": [], "gefangen": [], "schillernd": [], "entscheidung": []}
+    rows = {"team": [], "favorit": [], "gefangen": [], "schillernd": [], "alpha": [], "entscheidung": []}
     for t in body["teams"][:500]:
         name = " ".join(str(t.get("name") or "").split())[:80] or "Team"
         members = _ids(t.get("mitglieder"))
@@ -246,7 +247,7 @@ def restore(body):
         weights = {k: float(v) for k, v in (t.get("gewichte") or {}).items() if k in abfragen.team.CRITERIA}
         rows["team"].append((name, str(t.get("spiel") or "")[:60], json.dumps(members), json.dumps(fixed), json.dumps(weights),
                              json.dumps(_details(t.get("details"), members)), str(t.get("geaendert") or _now())[:40]))
-    for table, key in (("favorit", "favoriten"), ("gefangen", "gefangen"), ("schillernd", "schillernd")):
+    for table, key in (("favorit", "favoriten"), ("gefangen", "gefangen"), ("schillernd", "schillernd"), ("alpha", "alpha")):
         for r in (body.get(key) or [])[:20000]:
             try:
                 rows[table].append((str(r.get("spiel") or "")[:60], int(r["form"]), str(r.get("seit") or _now())[:40]))
@@ -476,6 +477,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, marked("gefangen", q.get("spiel")))
             elif path == "/api/schillernd":
                 self._send(200, marked("schillernd", q.get("spiel")))
+            elif path == "/api/alpha":
+                self._send(200, {"ids": marked("alpha", q.get("spiel")), "moeglich": abfragen.alpha_possible(q.get("spiel"))})
             elif path == "/api/export":
                 day = _now()[:10]
                 self._send(200, export(), extra={"Content-Disposition": f'attachment; filename="pokedex-daten-{day}.json"'})
@@ -510,6 +513,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/favoriten": set_favorite,
         "/api/gefangen": lambda b: set_mark("gefangen", b),
         "/api/schillernd": lambda b: set_mark("schillernd", b),
+        "/api/alpha": lambda b: set_mark("alpha", b),
         "/api/team/gefangen": abfragen.team_caught,
         "/api/uebertragen": transfer,
         "/api/restore": restore,
