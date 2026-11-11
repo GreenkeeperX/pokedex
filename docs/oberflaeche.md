@@ -54,6 +54,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - α (`alphaBtn`, `/api/alpha`): bündig über dem Pokéball, nur für mögliche Alphas des Spiels; setzt auch gefangen.
 - Fester Tabellenkopf: `.scroll.sticky` (Attacken, Items) mit `top: var(--stick)`; auf schmalen Bildschirmen scrollt die
   Tabelle seitlich ohne festen Kopf.
+- Formen zum Ansehen (`optikHtml`, `detail.optik`): eingeklappt unter den getragenen Items, nur bei Pokémon mit mehreren
+  Formen gleicher Werte; die Standardform zuerst.
 - Fangchance (`catchHtml`): eigene Karte unter der Entwicklung, offen, solange das Pokémon nicht als gefangen markiert
   ist; ohne kritischen Fang und Boni, in Generation 1 und 2 und den Legenden-Spielen nur als Richtung (`fang_grob`).
 - Mehr Details (`moreHtml`, `detail.mehr`): eingeklappt; keine Eier und EVs in Legenden: Arceus.

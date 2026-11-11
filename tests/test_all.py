@@ -412,6 +412,68 @@ class Leser(unittest.TestCase):
         self.assertEqual(json.loads(con.execute("SELECT items FROM kartenobjekt WHERE art = 'reise'").fetchone()[0]), [["Erfundener Hof", ""]])
         con.close()
 
+    def test_lernlisten_za(self):
+        import struct
+        import sqlite3
+        # erfundene Daten: 4 Einträge (0 leer, Art 1, Art 2 mit zwei Formen; die zweite Form liegt bei Index 3)
+        size = importer.PERSONAL_SIZE
+        per = bytearray(size * 4)
+
+        def entry(i, fsi=0, fc=1, tms=()):
+            o = i * size
+            per[o + 0x1C] = 1
+            struct.pack_into("<H", per, o + 0x18, fsi)
+            per[o + 0x1A] = fc
+            for b in tms:
+                per[o + importer.PERSONAL_TM + (b >> 3)] |= 1 << (b & 7)
+        entry(1, tms=(0, importer.ZA_TM_BASE))
+        entry(2, fsi=3, fc=2)
+        entry(3, fsi=3, fc=2, tms=(2,))
+
+        def learn(moves):
+            b = b"".join(struct.pack("<H", m) for m, _ in moves) + bytes(lv for _, lv in moves)
+            return b + (b"\0" if len(b) % 2 else b"")
+        sets = [b"", learn([(33, 1), (22, 7)]), learn([(10, 1)]), learn([(52, 0), (53, 30)])]
+        offs, pos = [], 4 + 2 * (len(sets) + 1)
+        for x in sets:
+            offs.append(pos)
+            pos += len(x)
+        lvl = b"za" + struct.pack("<H", len(sets)) + b"".join(struct.pack("<H", o) for o in offs + [pos]) + b"".join(sets)
+        got = importer.pkhex_learnsets(lvl, bytes(per))
+        self.assertEqual(got[(1, 0)], ([(33, 1), (22, 7)], [0, importer.ZA_TM_BASE]))
+        self.assertEqual(got[(2, 1)], ([(52, 0), (53, 30)], [2]))
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE version_groups (id INTEGER, identifier TEXT)")
+        con.executemany("INSERT INTO version_groups VALUES (?, ?)", [(30, "legends-za"), (31, "mega-dimension")])
+        con.execute("CREATE TABLE pokemon (id INTEGER, species_id INTEGER, is_default INTEGER)")
+        con.executemany("INSERT INTO pokemon VALUES (?, ?, ?)", [(1, 1, 1), (2, 2, 1), (10002, 2, 0)])
+        con.execute("CREATE TABLE pokemon_forms (pokemon_id INTEGER, form_order INTEGER)")
+        con.executemany("INSERT INTO pokemon_forms VALUES (?, ?)", [(1, 1), (2, 1), (10002, 2)])
+        con.execute('CREATE TABLE pokemon_moves (pokemon_id INTEGER, version_group_id INTEGER, move_id INTEGER, '
+                    'pokemon_move_method_id INTEGER, level INTEGER, "order" INTEGER, mastery INTEGER)')
+        n = importer._derive_lernen(con, {"_lernen_za": {"lvl": lvl, "personal": bytes(per)}})
+        self.assertEqual(n, 7 + 8)
+        za = sorted(con.execute("SELECT pokemon_id, move_id, pokemon_move_method_id, level FROM pokemon_moves WHERE version_group_id = 30"))
+        self.assertEqual(za, [(1, 22, 1, 7), (1, 29, 4, 0), (1, 33, 1, 1), (2, 10, 1, 1), (10002, 52, 1, 0), (10002, 53, 1, 30),
+                              (10002, importer.ZA_TM[2], 4, 0)])                 # TM der Erweiterung nur in Mega-Dimension
+        self.assertIn((1, importer.ZA_TM[importer.ZA_TM_BASE]), list(con.execute(
+            "SELECT pokemon_id, move_id FROM pokemon_moves WHERE version_group_id = 31")))
+        self.assertEqual(importer._derive_lernen(con, {"_lernen_za": {"lvl": lvl, "personal": bytes(per)}}), 0)   # schon da
+        con.close()
+
+    def test_formen_zum_ansehen(self):
+        import sqlite3
+        from app import abfragen
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE pokemon_forms (id INTEGER, form_identifier TEXT, pokemon_id INTEGER, is_default INTEGER, form_order INTEGER)")
+        con.executemany("INSERT INTO pokemon_forms VALUES (?, ?, ?, ?, ?)", [(412, "plant", 412, 1, 1), (10034, "sandy", 412, 0, 2), (25, "", 25, 1, 1)])
+        con.execute("CREATE TABLE pokemon_form_names (pokemon_form_id INTEGER, local_language_id INTEGER, form_name TEXT)")
+        con.execute("INSERT INTO pokemon_form_names VALUES (10034, 6, 'Sandumhang')")
+        got = abfragen._optik(con, {"id": 412})
+        self.assertEqual([(x["id"], x["name"]) for x in got], [(None, "Plant"), (10034, "Sandumhang")])
+        self.assertEqual(abfragen._optik(con, {"id": 25}), [])             # nur eine Form: nichts zu zeigen
+        con.close()
+
     def test_getragen_item_im_spiel(self):
         import sqlite3
         con = sqlite3.connect(":memory:")

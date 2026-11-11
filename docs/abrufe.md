@@ -28,7 +28,9 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    `recipes.html` und einmal das Kartenbild von Jubeldorf (`karten/jubilifevillage/bild.png` im Datenordner). Die Lage
    steht in Prozent des Kartenbilds; `altissimo.FIT` rechnet sie in Spielkoordinaten um (Geraden aus den Bäumen und
    Erzbrocken, die auch JS-Finder hat). **PKHeX** liefert außerdem die Itemnamen (deutsch, englisch) und die Itemlisten
-   je Spiel (`ItemStorage<Kürzel>.cs`, `importer.ITEM_LISTS`) für Spiele ohne Liste in der PokéAPI.
+   je Spiel (`ItemStorage<Kürzel>.cs`, `importer.ITEM_LISTS`) für Spiele ohne Liste in der PokéAPI, dazu die Lernlisten
+   von Legenden: Z-A (`byte/levelup/lvlmove_za.pkl`, `byte/personal/personal_za`; `importer.PKHEX_LEARN`), solange die
+   PokéAPI dort keine hat.
    **PokéWiki**: je Spiel in `abruf.WIKI_GAMES` die Seiten der Attacken, die dort jemand lernt (nur die Infobox,
    `rvsection=0`), und der Arten im Spiel, gebündelt zu 50 Seiten je Anfrage mit 2 Sekunden Pause. `app/pokewiki.py`
    liest Attackenwerte (Legenden: Arceus mit Kraft- und Tempostil) und getragene Items, dazu je Gebiet die Kartendateien
@@ -65,6 +67,9 @@ Zeichen, `importer.en_key`), gespeichert als `itemhq/<Nummer>.png`, eine Sekunde
 im Ordner des Spiels, versucht der Abgleich den anderen Ordner und dann das kleine Bild (`itemdex/sprites/<name>.png`);
 dazu kommen die Items, die nur PKHeX kennt. Fehlende stehen in `itemhq2_fehlen.json`. `/itembild/<Nummer>` liefert zuerst
 das große Bild.
+
+Extra `formen`: Formen nur zum Ansehen (gleiche Werte, eigenes Aussehen) aus `sprites/pokemon/<Art>-<Form>.png`,
+gespeichert als `formen/<Nummer aus pokemon_forms>.png`.
 
 ## Zeitplan
 

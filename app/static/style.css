@@ -337,6 +337,10 @@ tr.off td{opacity:.55}
    kein seitliches Scrollen (clip statt auto), schmale scrollen weiter seitlich ohne festen Kopf */
 @media (min-width:1040px){.scroll.sticky{overflow-x:clip}
   .sticky thead th{position:sticky;top:var(--stick,0px);z-index:3;background:var(--card);box-shadow:0 1px 0 var(--line);transition:top .3s ease}}
+.optik{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.optik figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;font-size:12.5px}
+.optik .spr{width:72px;height:72px}
+.optik figcaption{color:var(--muted);line-height:1.25}
 .zut2{display:flex;align-items:center;gap:6px;white-space:nowrap;margin:1px 0}
 .zut2 .zi{width:32px;height:32px;image-rendering:auto}
 .zut2 .zi.none{background:none}

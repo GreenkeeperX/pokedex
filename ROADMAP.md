@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.14.0 (Lernlisten Z-A, Formen zum Ansehen; Entscheidung 11.11.2026)
+
+- `importer.pkhex_learnsets` liest `byte/levelup/lvlmove_za.pkl` (BinLinker16: n Attacken als u16, dann n Level als
+  Byte) und `byte/personal/personal_za` (0x50 Bytes je Eintrag, Formen ab FormStatsIndex, TM-Flags ab 0x2C, TMs in
+  `importer.ZA_TM`). `importer._derive_lernen` schreibt sie in `pokemon_moves` für Legenden: Z-A und Mega-Dimension
+  (TMs ab `ZA_TM_BASE` nur dort), solange die PokéAPI für das Spiel keine Lernliste hat. `importer.VERSION` 13
+- Formen zum Ansehen: Extra `formen` (`sprites/pokemon/<Art>-<Form>.png`), `/formen/<Formnummer>`, `detail.optik`
+- Verbindungstest: Dateilisten von sv-live-map und Altissimo, Tera-Raid-Höhlen von sv-live-map (300 Höhlen in
+  Spielkoordinaten, GPL-3.0) als Grundlage für eine Karte von Karmesin/Purpur
+
 ## 0.13.0 (Rückmeldung zu 0.12.0; Entscheidung 11.11.2026)
 
 - `app/companion.py` liest den PLA Companion (software-notion.de, `/apps/pla-companion/map/<Karte>/data?lang=de`):

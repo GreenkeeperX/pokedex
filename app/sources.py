@@ -10,11 +10,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.13.0"
+VERSION = "0.14.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.14.0", "11.11.2026", [
+        "Legenden: Z-A und Mega-Dimension: eigene Lernlisten (Level und TMs) aus den Spieldaten (PKHeX)",
+        "Detailseite: „Formen zum Ansehen“ für Pokémon mit Formen ohne eigene Werte (Burmy, Vivillon, Icognito …)",
+        "Verbindungstest: mögliche Kartenquellen für Karmesin/Purpur und Legenden: Z-A",
+    ]),
     ("0.13.0", "11.11.2026", [
         "Karte: Schnellreise und Lager (PLA Companion), Filter für Tageszeit und Wetter, Ebenen in Gruppen; "
         "Ziehen geht auch über Bildern und Symbolen, die Bilder der Übersicht ohne dunklen Hintergrund",

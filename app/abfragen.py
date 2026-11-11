@@ -973,9 +973,25 @@ def detail(fid, p):
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
-                    wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f))
+                    wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f), optik=_optik(con, f))
     finally:
         con.close()
+
+
+def _optik(con, f):
+    """Formen nur zum Ansehen (gleiche Werte, eigenes Aussehen: Burmy, Vivillon, Icognito …) einer Form:
+    [{id, name, bild}], die Standardform zuerst (id None: ihr Bild ist das der Form). Leer, wenn es nur eine gibt."""
+    try:
+        rows = con.execute("SELECT f.id, f.is_default, f.form_identifier, n.form_name FROM pokemon_forms f "
+                           "LEFT JOIN pokemon_form_names n ON n.pokemon_form_id = f.id AND n.local_language_id = 6 "
+                           "WHERE f.pokemon_id = ? ORDER BY f.form_order, f.id", (f["id"],)).fetchall()
+    except Exception:
+        return []
+    if len(rows) < 2:
+        return []
+    folder = os.path.join(db.data_dir(), "formen")
+    return [{"id": None if d else i, "name": n or (k or "").replace("-", " ").title() or "Standard",
+             "bild": bool(d) or os.path.isfile(os.path.join(folder, f"{i}.png"))} for i, d, k, n in rows]
 
 
 def _held(con, g, f):
