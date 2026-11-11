@@ -1590,7 +1590,7 @@ def team_caught(body):
         best = None
         for x in finals:
             gain2, k2 = best_place(x)
-            if gain2 >= 1 and gain2 > max(gain, 0) + 1 and (not best or gain2 > best[0]):
+            if gain2 >= 1 and gain2 >= max(gain, 0) + 0.5 and (not best or gain2 > best[0]):
                 best = (gain2, k2, x)
         if best:
             gain2, k2, x = best

@@ -956,7 +956,7 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False}
+_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": ""}
 
 
 def mg_status():
@@ -1004,13 +1004,27 @@ def start_stock():
         threading.Thread(target=mg_stock, daemon=True, name="kachelvorrat").start()
 
 
+def _mg_probe():
+    """Nach vielen 403 nacheinander: kommt eine Kachel, die es sicher gibt, noch? Dann sperrt Map Genie nicht, sondern
+    die Kacheln fehlen nur (Ränder, Meer). Ohne bekannte Kachel False."""
+    if not _mg.get("ok"):
+        return False
+    try:
+        sources.fetch(mapgenie.TILES + _mg["ok"], timeout=30, raw=True)
+        return True
+    except sources.FetchError:
+        return False
+    finally:
+        _mg["last"] = time.monotonic()
+
+
 def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
     """Pfad einer Kachel im Datenordner; fehlt sie, einmal bei Map Genie holen (eine Anfrage zur Zeit, kurze Pause).
     Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“; erst viele nacheinander oder 429 lassen die Quelle
     24 Stunden ruhen. None, wenn es sie nicht gibt."""
     m = _mg_map(spiel, karte)
     rel = mapgenie.tile_ok(m["kacheln"], z, x, y, m.get("endung", "png")) if m else None
-    if not rel or not (m["min_zoom"] - 2 <= z <= m["max_zoom"]):
+    if not rel or not (m["min_zoom"] <= z <= m["max_zoom"]):
         return None
     r = mapgenie.tile_range(mapgenie.bounds_of(m), z)
     if r and not (r[0] <= x <= r[1] and r[2] <= y <= r[3]):
@@ -1031,6 +1045,8 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
         except sources.FetchError as e:
             _mg["fehler"] = f"HTTP {e.status or '?'} bei {rel} ({_iso(now())[:16].replace('T', ' ')})"
             _mg["n403"] = _mg["n403"] + 1 if e.status == 403 else 0
+            if e.status == 403 and _mg["n403"] >= MG_403_MAX and _mg_probe():
+                _mg["n403"] = 0          # bekannte Kachel kommt noch: am Rand gibt es eben viele leere Kacheln
             if e.status == 429 or _mg["n403"] >= MG_403_MAX:
                 _mg["rest"] = _iso(now() + timedelta(hours=REST_H))
             elif e.status:
@@ -1039,6 +1055,7 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
         finally:
             _mg["last"] = time.monotonic()
         _mg["n403"] = 0
+        _mg["ok"] = rel
         if not (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff" or body[8:12] == b"WEBP"):
             _mg["miss"].add(rel)
             return None
@@ -1464,6 +1481,26 @@ def diagnose(proben=None):
     probe("GitHub: pret/pokered (Rot/Blau, Karten als Blöcke)", "https://api.github.com/repos/pret/pokered/git/trees/master?recursive=1", blk)
     probe("GitHub: pret/pokecrystal (Kristall)", "https://api.github.com/repos/pret/pokecrystal/git/trees/master?recursive=1", blk)
     probe("Altissimo, Orte Gold/Silber/Kristall", "https://altissimo1.github.io/Main-Series/GSC/locations.html", img_info, keep=True, headers=html)
+    # nächste Schritte aus dem letzten Test (11.11.): Seite „Cooldown“ bei Bulbapedia, Z-A-Projekte auf GitHub, Kartenbilder älterer Spiele
+    probe("Bulbapedia, Seite Cooldown (Z-A)", "https://bulbapedia.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
+        {"action": "parse", "page": "Cooldown", "prop": "wikitext", "format": "json"}),
+        lambda t: (lambda w: f"{len(w)} Zeichen Wikitext, {w.count('{{')} Vorlagen, {w.lower().count('cooldown')}× cooldown")(
+            ((json.loads(t).get("parse") or {}).get("wikitext") or {}).get("*", "")), keep=True)
+
+    def tree_hits(*words):
+        def f(text):
+            ps = [x.get("path", "") for x in json.loads(text).get("tree", [])]
+            hit = [p for p in ps if any(w in p.lower() for w in words)]
+            return f"{len(ps)} Dateien, {len(hit)} passend ({', '.join(words)}): " + ", ".join(hit[:12])
+        return f
+    for repo in ("Setmaster/ZA-Decoder", "Scotts-Thoughts/pokemon-data", "solomonjasperkim/pokehex", "NyanWinPhyo/dex-atlas"):
+        probe(f"GitHub: {repo} (Z-A)", f"https://api.github.com/repos/{repo}/git/trees/HEAD?recursive=1", tree_hits("cool", "move", "waza", "za"), keep=True)
+    probe("Bulbapedia-Archiv, Kartenbilder Johto", "https://archives.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
+        {"action": "query", "list": "search", "srsearch": "Johto Route 29 GSC", "srnamespace": "6", "srlimit": "15", "format": "json"}), wiki_hits, keep=True)
+    probe("Bulbapedia-Archiv, Kartenbilder Hoenn", "https://archives.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
+        {"action": "query", "list": "search", "srsearch": "Hoenn Route 101 RSE", "srnamespace": "6", "srlimit": "15", "format": "json"}), wiki_hits, keep=True)
+    probe("Serebii, PokéEarth Route 29 (Johto)", "https://www.serebii.net/pokearth/johto/route29.shtml", img_info, keep=True, headers=html)
+    probe("Altissimo, Orte Rot/Blau/Gelb", "https://altissimo1.github.io/Main-Series/RBY/locations.html", img_info, keep=True, headers=html)
 
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",

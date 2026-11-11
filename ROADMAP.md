@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.27.0 (11.11.2026)
+
+- Kacheln: `mapgenie.tile_ok` nimmt `{z}/{y}/{x}` (Z-A), `tile_list` und `mg_tile` ab `min_zoom`; nach 8 × 403 prüft
+  `abruf._mg_probe` eine bekannte Kachel (`_mg["ok"]`), erst wenn auch die fehlt, ruht Map Genie. `api()` fasst bei Netzfehlern nach
+- Effort Levels: `effort.parts` (Basiswert, Level, Effort Levels, Wesen), Diagramm `elChart`, Tooltip `elTip`
+- Entwicklung als Baum (`evoHtml`, Raster je Ast), Hover-Karte lädt fehlende Pokémon nach (`HCLOAD`), Vergleich mit Zwischenspeicher `CMPC`
+- Potential: Endstufe zählt ab +0,5 über der heutigen Stufe (vorher +1; Kadabra → Simsala fiel heraus)
+- Offen: Live-Werte-Diagramm auch für andere Spiele (EVs/DVs), Bonbons/Minzen; Abklingzeiten Z-A (Bulbapedia „Cooldown“, Z-A-Projekte
+  auf GitHub im Verbindungstest); Karten älterer Spiele (Bulbapedia-Archiv, PokéEarth, Altissimo im Verbindungstest)
+
 ## 0.26.0 (11.11.2026)
 
 - Effort Levels nur in Legenden: Arceus (`LA()`): `abfragen.effort_team` (`/api/effort/team`), Kasten `#elteam` im Reiter Team
