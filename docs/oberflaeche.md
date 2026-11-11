@@ -70,8 +70,12 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   als Verteidiger (Faktoren multipliziert) oder Angreifer (bester der beiden Typen), sortierbar, Zeilen und Spalten markierbar (`CPIN`).
 - Spalten markieren (`crossTable`): Spaltensymbol `.pinc` vor dem Titel, auch für nicht sortierbare Spalten.
 - Detailseite: `.dgrid` mit drei Spalten (Stammdaten · Verteidigung und Duell · Entwicklung, Fang, Items, Optik), schmaler zwei, am Telefon eine.
-- Kampf (Champions): `usageBox` unter der Bewertung, Tabelle aus `/api/smogon` (sortierbar, Anzahl `usageN`), „Gefahr für“ und
+- Kampf (Champions): `calcBox` (Schadensrechner, `/api/schaden`, Einstellungen in `calc`), `logBox` (Kampftagebuch,
+  `/api/kampftagebuch`, Auswahl `LOGPICK`), `usageBox` (Tabelle aus `/api/smogon`, sortierbar, Anzahl `usageN`), „Gefahr für“ und
   „Antwort“ über die Typtabelle, „Top 6 als Gegner“ setzt `S.foes`.
+- Raids (`raidsView`, `#raids/<Sterne>`, nur Karmesin/Purpur, Reiter neben der Karte): `/api/raids`, Konter und Gefahr aus dem
+  Team; auf der Detailseite `raidHtml` (aufklappbar `raidOpen`) und in Colosseum/XD `cryptoHtml`.
+- Team-Bewertung: Tera-Hinweis (`ev.tera`); Detailseite eines Mitglieds: `#formsel` tauscht die Form des Platzes.
 - Spiele: `GEN()`, `noAbil()` (Gen 1–2, Let's Go, Legenden: Arceus), `TERA()` (Karmesin/Purpur mit Erweiterungen, Tera-Typ je
   Platz über `#terasel`).
 - `favStar(id)`: Stern zum Favorisieren an Team-Karten und Vorschlägen, `redrawMarks` hält ihn aktuell.

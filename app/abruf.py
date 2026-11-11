@@ -770,6 +770,16 @@ def _pkhex(st, log, at):
                           "fest": (src.get(PKHEX_SRC + fixed) or "") if fixed else ""}
             if enc2:
                 out[spiel]["begegnungen2"] = src.get(PKHEX_RAW + enc2, raw=True) or b""
+    # Tera-Raids in Karmesin/Purpur (importer.PKHEX_RAIDS)
+    STATE["step"] = "PKHeX: Tera-Raids"
+    raids = {k: src.get(PKHEX_RAW + f"legality/wild/Gen9/encounter_{k}.pkl", raw=True) for k in importer.PKHEX_RAIDS}
+    if any(raids.values()):
+        out["_raids"] = {k: v for k, v in raids.items() if v}
+    # Crypto-Pokémon in Colosseum und XD (importer.PKHEX_SHADOW)
+    STATE["step"] = "PKHeX: Crypto-Pokémon"
+    shadow = {k: src.get(PKHEX_SRC + f) for k, f in importer.PKHEX_SHADOW.items()}
+    if any(shadow.values()):
+        out["_crypto"] = {k: v for k, v in shadow.items() if v}
     # Lernlisten für Spiele ohne Lernliste in der PokéAPI (importer.PKHEX_LEARN)
     for key in importer.PKHEX_LEARN:
         STATE["step"] = f"PKHeX: Lernlisten {key}"

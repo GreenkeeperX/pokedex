@@ -10,11 +10,21 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.21.0"
+VERSION = "0.22.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.22.0", "11.11.2026", [
+        "Karmesin/Purpur: Tera-Typen zählen in der Team-Bewertung (welche Schwächen die Terakristallisierung nimmt und welche sie bringt)",
+        "Neuer Reiter „Raids“ in Karmesin/Purpur: alle Tera-Raids aus den Spieldaten (1 bis 7 Sterne, Paldea, Kitakami, "
+        "Blaubeer-Akademie, Events) mit Tera-Typ, Attacken, Konter und Gefahr aus dem eigenen Team; auch auf der Detailseite",
+        "Colosseum und XD: Crypto-Pokémon auf der Detailseite (Trainer, Orte, Level, Attacken, Läuterung)",
+        "Team: Form je Platz tauschen, etwa Mega-Entwicklung für den Kampf (Detailseite eines Mitglieds, „Platz … als“)",
+        "Champions: Schadensrechner in der Kampfansicht (gewählte Attacke gegen die häufigsten Gegner oder das eigene Team, "
+        "Level 50, Fläche, Volltreffer, Tera, Investition der Gegner)",
+        "Champions: Kampftagebuch mit Ergebnis, Gegnern und Notiz, Bilanz und häufigsten Gegnern; steckt in der Sicherung",
+    ]),
     ("0.21.0", "11.11.2026", [
         "Champions: „Häufige Gegner“ in der Kampfansicht aus der Nutzungsstatistik von Smogon (monatlich beim Abgleich): Anteil, "
         "Attacken, Items, Fähigkeit und Tera-Typen, dazu wer im Team gefährdet ist und wer antwortet; „Top 6 als Gegner“ für den Team-Reiter",

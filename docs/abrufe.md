@@ -33,7 +33,10 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Erzbrocken, die auch JS-Finder hat). **PKHeX** liefert außerdem die Itemnamen (deutsch, englisch) und die Itemlisten
    je Spiel (`ItemStorage<Kürzel>.cs`, `importer.ITEM_LISTS`) für Spiele ohne Liste in der PokéAPI, dazu die Lernlisten
    von Legenden: Z-A (`byte/levelup/lvlmove_za.pkl`, `byte/personal/personal_za`; `importer.PKHEX_LEARN`), solange die
-   PokéAPI dort keine hat.
+   PokéAPI dort keine hat. Seit 0.22.0 auch die Tera-Raids von Karmesin/Purpur (`legality/wild/Gen9/encounter_<Datei>.pkl`,
+   `importer.PKHEX_RAIDS`: Sätze zu 0x18 bzw. 0x3E Bytes mit Art, Form, Level, Sternen, Tera-Typ und Attacken; Tabelle `raid`)
+   und die Crypto-Pokémon aus `Gen3/Encounters3Colo.cs` und `Encounters3XD.cs` (Liste `Shadow`, `importer.pkhex_shadow`;
+   Trainer und Ort aus dem Kommentar, englisch; Tabelle `crypto`).
    **PokéWiki**: je Spiel in `abruf.WIKI_GAMES` die Seiten der Attacken, die dort jemand lernt (nur die Infobox,
    `rvsection=0`), und der Arten im Spiel, gebündelt zu 50 Seiten je Anfrage mit 2 Sekunden Pause. `app/pokewiki.py`
    liest Attackenwerte (Legenden: Arceus mit Kraft- und Tempostil) und getragene Items, dazu je Gebiet die Kartendateien
@@ -105,8 +108,8 @@ Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen:
 - Wikis und Datenbanken: PokéWiki (API und Beispielseiten), Bulbapedia, Serebii, Pokémon Database, Map Genie,
 - mögliche Quellen zum Testen: Item-Bilder (Serebii, PokéWiki), Kartenseiten von Serebii, GamerGuides (Lager,
   Schnellreise) und Pokébip (Stichwörter und Skripte, als Probe bis 400 000 Zeichen),
-- weitere Spieldaten: feste Begegnungen aus den Quelldateien von PKHeX (`importer.pkhex_static`), Raids in
-  Karmesin/Purpur, Werte je Form in Legenden: Arceus,
+- weitere Spieldaten: feste Begegnungen aus den Quelldateien von PKHeX (`importer.pkhex_static`), Werte je Form in
+  Legenden: Arceus (Raids in Karmesin/Purpur und Crypto-Pokémon sind seit 0.22.0 eingebaut),
 - Bilder und Rufe: schillernde und animierte Sprites, Rufe (PokéAPI-Repos),
 - schon geladen, noch ungenutzt: TM, Wesen, Ei-Gruppen, Fangraten, Beeren und EV-Ausbeute in pokeapi.db,
 - Kampfdaten: Smogon-Sets (data.pkmn.cc), Smogon-Nutzungsstatistik, `learnsets.ts`, `formats-data.ts`,

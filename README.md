@@ -52,8 +52,10 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Initiative-Liste** (Team → Initiative-Liste): alle Pokémon des Spiels nach Initiative auf Level 50 oder 100, mit
   Rückenwind und Wahlschal; das eigene Team steht mit seinem Wert dazwischen.
 - **Kampf** (in Champions statt „Karte“, sonst über `#kampf`): Doppelkampf-Bewertung des Teams mit Rollen,
-  Flächenattacken, Gefahr für den Partner und Tempo, dazu häufige Gegner aus der Nutzungsstatistik von Smogon. In Champions
-  heißt „gefangen“ „im Kader“.
+  Flächenattacken, Gefahr für den Partner und Tempo, dazu häufige Gegner aus der Nutzungsstatistik von Smogon, ein
+  Schadensrechner (Level 50, gegen die häufigsten Gegner) und ein Kampftagebuch. In Champions heißt „gefangen“ „im Kader“.
+- **Raids** (Karmesin/Purpur): alle Tera-Raids aus den Spieldaten mit Tera-Typ, Attacken und Kontern aus dem eigenen Team.
+- **Crypto-Pokémon** (Colosseum, XD): auf der Detailseite, mit Trainer, Ort, Level und Attacken.
 - **Vergleich**: zwei Pokémon nebeneinander (Werte mit Unterschied, Kurzfazit, Typwirkung, Fähigkeiten, Attacken), über
   „Vergleichen“ auf der Detailseite; „Zum Vergleich merken“ und Favoriten stehen dort zur schnellen Wahl.
 - **Typkombinationen** (Reiter Typen): alle 171 Kombinationen als Verteidiger, sortierbar.

@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.22.0 (Sonderspiele Schritt 2, Auftrag 11.11.2026)
+
+- `abfragen.tera_effect` (Team-Bewertung, nur Verteidigung), `#formsel` tauscht die Form eines Team-Platzes
+- `app/schaden.py` (rein, Formel ab Gen 5), `/api/schaden`, `calcBox` in der Kampfansicht
+- user.db: neue Tabelle `kampf` (Kampftagebuch), `/api/kampftagebuch`, in Export und Sicherung
+- PKHeX: Tera-Raids (`encounter_gem_*`, `dist_paldea`, `might_paldea`; `importer.pkhex_raids`, Tabelle `raid`), Reiter `#raids`;
+  Crypto-Pokémon aus `Encounters3Colo.cs`/`Encounters3XD.cs` (`importer.pkhex_shadow`, Tabelle `crypto`); `importer.VERSION` 15
+- Offen: Effort Levels in Legenden: Arceus (Umfang noch offen), Fähigkeiten und Items im Schadensrechner, deutsche Orte für
+  Colosseum/XD, Spezial-Wert der Generation 1, Abklingzeiten in Legenden: Z-A, Karten für ältere Spiele
+
 ## 0.21.0 (Sonderspiele Schritt 1, Gegner aus Smogon; Auftrag 11.11.2026)
 
 - `app/smogon.py` (rein): Monat, Format (Champions-Doppel vor VGC Gen 9), Grenze, Kurzfassung der chaos-Datei;

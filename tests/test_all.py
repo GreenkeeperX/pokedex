@@ -1025,6 +1025,58 @@ class Server(TempData):
         self.assertEqual(d["pokemon"][0]["attacken"][0], ["protect", 100.0])  # vier Plätze je Pokémon, höchstens 100 %
         self.assertEqual(d["kaempfe"], 1234)
 
+    def test_schaden(self):
+        from app import schaden
+        self.assertEqual(schaden.stat(130, 50, 31, 252), 182)                  # Angriff 130, voll investiert, Level 50
+        self.assertEqual(schaden.stat(95, 50, 31, 0, hp=True), 170)            # KP 95 ohne Investition
+        r = schaden.rolls(50, 100, 182, 110, spread=True, stab=1.5)
+        self.assertEqual((r[0], r[-1], len(r)), (69, 82, 16))                  # Flächenattacke mit Eigentyp
+        self.assertEqual(schaden.rolls(50, 100, 182, 110, eff=0), [0] * 16)
+        self.assertEqual(schaden.stab_of(10, [10, 3], tera=10), 2.0)           # Tera-Typ gleich eigenem Typ
+        self.assertEqual(schaden.stab_of(11, [10], tera=11), 1.5)
+        self.assertEqual(schaden.stab_of(10, [10], tera=11), 1.5)
+        self.assertEqual(schaden.hits(170, 69, 82), (3, 3))
+        c = schaden.calc(50, 100, 2, WASSER, [80, 130, 95, 80, 85, 102], [WASSER], [95, 115, 90, 80, 90, 60], [FEUER], ch(),
+                         spread=True)
+        self.assertEqual((c["min"], c["max"], c["eff"]), (138, 164, 2.0))
+        c2 = schaden.calc(50, 100, 2, BODEN, [80, 130, 95, 80, 85, 102], [BODEN], [95, 115, 90, 80, 90, 60], [FEUER], ch(),
+                          d_tera=FLUG)
+        self.assertEqual((c2["max"], c2["sicher"]), (0, None))                # Tera Flug: Boden wirkt nicht
+
+    def test_raids_und_crypto_lesen(self):
+        rec = (25).to_bytes(2, "little") + bytes([0, 0, 1, 2, 0, 35]) + b"".join(m.to_bytes(2, "little") for m in (85, 609, 0, 0)) \
+            + bytes([12, 0, 3, 100]) + bytes(4)
+        self.assertEqual(len(rec), 0x18)
+        self.assertEqual(importer.pkhex_raids(rec + bytes(0x18), 0x18), [(25, 0, 35, 3, 11, [85, 609], 100, 2)])  # Tera 12 → Wasser (11)
+        text = """internal static readonly EncounterShadow3Colo[] Shadow =
+    [
+        new(01, 03000, Erfunden) { Species = 296, Level = 30, Moves = new(193,116,233,238), Location = 005 }, // Erfundenmon: Peon Erfunden @ Testdorf
+        new(02, 04000, First)    { Species = 153, Level = 30, Location = 003 }, // Zweitmon: Peon Zwei @ Testburg -- Hinweis
+    ];"""
+        self.assertEqual(importer.pkhex_shadow(text), [(1, 296, 30, [193, 116, 233, 238], 3000, "Peon Erfunden", "Testdorf"),
+                                                      (2, 153, 30, [], 4000, "Peon Zwei", "Testburg")])
+
+    def test_kampftagebuch(self):
+        db.migrate()
+        server.add_battle({"spiel": "champions", "ergebnis": "niederlage", "team": [1, 2], "gegner": [3, 4], "notiz": " erfunden "})
+        server.add_battle({"spiel": "champions", "ergebnis": "sieg", "team": [1, 2], "gegner": [3]})
+        server.add_battle({"spiel": "anderes", "ergebnis": "sieg", "gegner": [9]})
+        with self.assertRaises(ValueError):
+            server.add_battle({"spiel": "champions", "ergebnis": "unentschieden"})
+        log = server.battle_log("champions")
+        self.assertEqual((log["kaempfe"], log["siege"]), (2, 1))
+        self.assertEqual(log["gegner"][0], {"id": 3, "kaempfe": 2, "siege": 1})
+        self.assertEqual(log["rows"][-1]["notiz"], "erfunden")
+        dump = json.loads(json.dumps(server.export()))
+        self.assertEqual(len(dump["kampftagebuch"]), 3)
+        server.delete_battle({"id": log["rows"][0]["id"]})
+        self.assertEqual(server.battle_log("champions")["kaempfe"], 1)
+        server.restore(dump)
+        self.assertEqual(server.battle_log("champions")["kaempfe"], 2)
+        del dump["kampftagebuch"]                       # ältere Sicherung ohne Tagebuch lässt es stehen
+        server.restore(dump)
+        self.assertEqual(server.battle_log("champions")["kaempfe"], 2)
+
     def test_alte_generationen(self):
         from app import abfragen
         self.assertTrue(abfragen.no_abilities({"kennung": "crystal", "gen": 2}))
@@ -1199,6 +1251,24 @@ class MitDatenbank(TempData):
         via = abfragen.search({"spiel": "legends-arceus", "q": "Staravia"})["rows"][0]["id"]
         r = abfragen.team_caught({"spiel": "legends-arceus", "ids": [karp, via]})
         self.assertFalse([x for x in r["potential"] if x["id"] == star])
+
+    def test_0_22_0(self):
+        from app import abfragen
+        kn = abfragen.search({"spiel": "scarlet-violet", "q": "Knakrack"})["rows"][0]["id"]
+        ga = abfragen.search({"spiel": "scarlet-violet", "q": "Garados"})["rows"][0]["id"]
+        ev = abfragen.team_view({"spiel": "scarlet-violet", "ids": [kn, ga], "details": [{"tera": WASSER}, {}]})
+        self.assertEqual([t["slot"] for t in ev["tera"]], [0])
+        self.assertIn(EIS, ev["tera"][0]["weg"])          # Tera Wasser nimmt die 4-fache Eis-Schwäche
+        self.assertIn(ELEKTRO, ev["tera"][0]["neu"])
+        self.assertEqual(abfragen.team_view({"spiel": "legends-arceus", "ids": [kn], "details": [{"tera": WASSER}]})["tera"], [])
+        erd = next(m["id"] for m in abfragen.move_list({"q": "Erdbeben"})["rows"] if m["name"] == "Erdbeben")
+        r = abfragen.damage_view({"spiel": "champions", "ids": [kn], "details": [{"attacken": [erd]}], "slot": 0, "attacke": erd,
+                                  "verteidiger": [kn, ga]})
+        self.assertTrue(r["flaeche"])
+        self.assertEqual(r["level"], 50)
+        self.assertEqual(r["rows"][1]["max"], 0)          # Garados fliegt
+        self.assertGreater(r["rows"][0]["max"], r["rows"][0]["min"])
+        self.assertEqual(abfragen.damage_view({"spiel": "champions", "ids": [kn], "slot": 3, "attacke": erd})["rows"], [])
 
 
 if __name__ == "__main__":
