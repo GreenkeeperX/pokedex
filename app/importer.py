@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, showdown
 
-VERSION = "13"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "14"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -341,7 +341,10 @@ def _derive_pruefung(con, sd_dex, sd_moves):
 
 # Arten der Begegnung in Legenden: Arceus (SlotType8a in PKHeX)
 PKHEX_ART = {0: "frei", 1: "Raum-Zeit-Verzerrung", 2: "Baum oder Erzbrocken", 3: "Massenauftreten", 4: "Massives Massenauftreten",
-             9: "fest (Geschenk oder einmalig)"}
+             9: "fest (Geschenk oder einmalig)",
+             # Strahlender Diamant/Leuchtende Perle (SlotType8b + 100)
+             101: "Gras", 102: "Surfer", 103: "Angel", 104: "Profiangel", 105: "Superangel", 106: "Zertrümmerer", 108: "Honigbaum"}
+BDSP_ART = 100
 FEST = 9
 # Erweiterungen teilen die Begegnungen ihres Hauptspiels (PKHeX führt sie in einer Datei)
 PKHEX_SHARE = {"scarlet-violet": ("the-teal-mask", "the-indigo-disk"), "legends-za": ("mega-dimension",)}
@@ -358,7 +361,26 @@ def pkhex_areas(data):
         return _areas_sv(data)
     if kind == b"za":
         return _areas_za(data)
+    if kind == b"bs":
+        return _areas_bdsp(data)
     return _areas_la(data)
+
+
+def _areas_bdsp(data):
+    """Strahlender Diamant/Leuchtende Perle (encounter_bd.pkl, encounter_sp.pkl; BinLinker): Ort (u16), Art (Byte),
+    1 Byte frei, dann Plätze zu 4 Bytes (u16: Art in den unteren 10 Bits, Form ab Bit 11; Level von, bis)."""
+    import struct
+    out = []
+    for a in _binlinker(data):
+        if len(a) < 4:
+            continue
+        slots = []
+        for k in range(4, len(a) - 3, 4):
+            v = struct.unpack_from("<H", a, k)[0]
+            slots.append((v & 0x3FF, v >> 11, a[k + 2], a[k + 3], 0))
+        if slots:
+            out.append(([struct.unpack_from("<H", a)[0]], BDSP_ART + a[2], slots))
+    return out
 
 
 def _binlinker(data):
@@ -612,16 +634,20 @@ def _derive_fundort(con, pkhex):
         def name(i):
             lst, k = (names3, i - 30000) if i >= 30000 else (names, i)
             return lst[k] if 0 <= k < len(lst) and lst[k].strip() else f"Ort {i}"
-        rows = []
-        for locs, kind, slots in pkhex_areas(src.get("begegnungen") or b""):
-            if not locs:
-                continue
-            gebiet = name(locs[0])
-            stellen = json.dumps([name(x) for x in locs[1:] if name(x) != gebiet], ensure_ascii=False)
-            for nr, form, lo, hi, alpha in slots:
-                pid = by_form.get((nr, form)) or by_art.get(nr)
-                if pid:
-                    rows.append((spiel, pid, gebiet, locs[0], stellen, kind, lo, hi, alpha, "PKHeX"))
+        rows, seen = [], set()
+        # zwei Dateien bei Editionen mit eigenen Begegnungen (Strahlender Diamant, Leuchtende Perle); Doppeltes einmal
+        for data in (src.get("begegnungen") or b"", src.get("begegnungen2") or b""):
+            for locs, kind, slots in pkhex_areas(data):
+                if not locs:
+                    continue
+                gebiet = name(locs[0])
+                stellen = json.dumps([name(x) for x in locs[1:] if name(x) != gebiet], ensure_ascii=False)
+                for nr, form, lo, hi, alpha in slots:
+                    pid = by_form.get((nr, form)) or by_art.get(nr)
+                    row = (spiel, pid, gebiet, locs[0], stellen, kind, lo, hi, alpha, "PKHeX")
+                    if pid and row not in seen:
+                        seen.add(row)
+                        rows.append(row)
         for nr, form, level, loc in pkhex_static(src.get("fest")):
             pid = by_form.get((nr, form)) or by_art.get(nr)
             if pid:

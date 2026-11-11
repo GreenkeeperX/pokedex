@@ -54,6 +54,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - α (`alphaBtn`, `/api/alpha`): bündig über dem Pokéball, nur für mögliche Alphas des Spiels; setzt auch gefangen.
 - Fester Tabellenkopf: `.scroll.sticky` (Attacken, Items) mit `top: var(--stick)`; auf schmalen Bildschirmen scrollt die
   Tabelle seitlich ohne festen Kopf.
+- Gebiete (`areasView`, `#karte/gebiete/<Ort>`, `/api/gebiete`): links die Orte mit „noch nicht gefangen / alle“,
+  rechts das Bildergitter nach Methode; Spiele ohne Karte landen unter „Karte“ direkt hier. Ort je Spiel gemerkt
+  (`gebiet:<Spiel>`), Filter „nur noch nicht gefangene“ (`gebietFehlend`).
 - Formen zum Ansehen (`optikHtml`, `detail.optik`): eingeklappt unter den getragenen Items, nur bei Pokémon mit mehreren
   Formen gleicher Werte; die Standardform zuerst.
 - Fangchance (`catchHtml`): eigene Karte unter der Entwicklung, offen, solange das Pokémon nicht als gefangen markiert

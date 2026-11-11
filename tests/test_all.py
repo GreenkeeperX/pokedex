@@ -474,6 +474,37 @@ class Leser(unittest.TestCase):
         self.assertEqual(abfragen._optik(con, {"id": 25}), [])             # nur eine Form: nichts zu zeigen
         con.close()
 
+    def test_bdsp_fundorte(self):
+        import struct
+        import sqlite3
+
+        def area(loc, kind, slots):
+            return struct.pack("<HBB", loc, kind, 0) + b"".join(struct.pack("<HBB", sp | form << 11, lo, hi) for sp, form, lo, hi in slots)
+        # erfundene Gebiete: Ort 1 Gras (Art 25, Form 0, Art 412 Form 1), Ort 2 Surfer; leere Gebiete fallen weg
+        entries = [area(1, 1, [(25, 0, 3, 5), (412, 1, 4, 4)]), area(2, 2, [(72, 0, 20, 30)]), area(3, 1, [])]
+        offs, pos = [], 4 + 4 * (len(entries) + 1)
+        for e in entries:
+            offs.append(pos)
+            pos += len(e)
+        data = b"bs" + struct.pack("<H", len(entries)) + b"".join(struct.pack("<I", o) for o in offs + [pos]) + b"".join(entries)
+        got = importer.pkhex_areas(data)
+        self.assertEqual(got, [([1], 101, [(25, 0, 3, 5, 0), (412, 1, 4, 4, 0)]), ([2], 102, [(72, 0, 20, 30, 0)])])
+        self.assertEqual(importer.PKHEX_ART[102], "Surfer")
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE pokemon (id INTEGER, species_id INTEGER, is_default INTEGER)")
+        con.executemany("INSERT INTO pokemon VALUES (?, ?, ?)", [(25, 25, 1), (72, 72, 1), (412, 412, 1)])
+        orte = "Nirgends\nErfundener Wald\nErfundener See\n"
+        n = importer._derive_fundort(con, {"brilliant-diamond-shining-pearl": {"begegnungen": data, "begegnungen2": data, "orte": orte}})
+        self.assertEqual(n, 3)                                   # die zweite Edition bringt hier nichts Neues
+        self.assertEqual(sorted(r[0] for r in con.execute("SELECT gebiet FROM fundort")), ["Erfundener See", "Erfundener Wald", "Erfundener Wald"])
+        con.close()
+
+    def test_gebiet_namen(self):
+        from app import abfragen
+        self.assertEqual(abfragen._place("Dunkelhöhle", "Dunkelhöhle (Viola City Eingang)"), "Dunkelhöhle (Viola City Eingang)")
+        self.assertEqual(abfragen._place("Eispfad", "1.UG"), "Eispfad (1.UG)")
+        self.assertEqual(abfragen._place("Route 1", ""), "Route 1")
+
     def test_getragen_item_im_spiel(self):
         import sqlite3
         con = sqlite3.connect(":memory:")

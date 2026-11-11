@@ -20,7 +20,8 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Ortsnummern (die erste ist das Gebiet, die übrigen die Stellen),
    die Art (frei, Raum-Zeit-Verzerrung, Baum oder Erzbrocken, Massenauftreten) und Plätze mit Art, Form, Level und
    Alpha. Die Formnummer im Spiel wird über `pokemon_forms.form_order` zur Form der PokéAPI (Tabelle `fundort`).
-   Dazu die festen Begegnungen aus der Quelldatei (`Encounters8a.cs`, `importer.pkhex_static`).
+   Dazu die festen Begegnungen aus der Quelldatei (`Encounters8a.cs`, `importer.pkhex_static`). Strahlender Diamant und
+   Leuchtende Perle haben je eine Datei (`encounter_bd.pkl`, `encounter_sp.pkl`); beide zusammen ergeben die Fundorte.
    **Spawnpunkte** (Legenden: Arceus): Koordinaten je Karte von JS-Finder, die Tabellen je Punkt nach Tageszeit und
    Wetter von PLA-Live-Map (`abruf.PLA_MAPS`); `importer._derive_spawn` rechnet Gewichte in Anteile je Bedingung um.
    **Altissimo** (Legenden: Arceus, `app/altissimo.py`): je Gebiet Bäume, Erzbrocken, Haufen und Kisten
