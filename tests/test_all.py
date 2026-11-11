@@ -142,6 +142,28 @@ class TeamPlaetze(unittest.TestCase):
         self.assertEqual(paste.parse("Mr. Mime (M)\n- Psychic")[0]["name"], "Mr. Mime")
         self.assertEqual(paste.parse(""), [])
 
+    def test_doppelkampf(self):
+        from app import doppel
+        ch = {"boden": {"feuer": 2.0, "flug": 0.0}}
+        mv = lambda k, n, typ="normal", ziel=10, schaden=True: {"kennung": k, "name": n, "typ": typ, "ziel": ziel, "schaden": schaden}
+        ms = [{"name": "A", "typen": ["drache"], "init": 102, "faehigkeit": None,
+               "attacken": [mv("earthquake", "Erdbeben", "boden", 9), mv("protect", "Schutzschild", schaden=False)], "lernbar": {}},
+              {"name": "B", "typen": ["feuer"], "init": 60, "faehigkeit": "intimidate", "faehigkeit_name": "Bedroher",
+               "attacken": [mv("fake-out", "Mogelhieb")], "lernbar": {"helping-hand": "Rechte Hand"}},
+              {"name": "C", "typen": ["wasser"], "init": 86, "faehigkeit": "levitate", "attacken": [], "lernbar": {}},
+              {"name": "D", "typen": ["flug"], "init": 30, "faehigkeit": None, "attacken": [], "lernbar": {}}]
+        r = doppel.evaluate(ms, ch, {"boden": "ground"})
+        roles = {x["key"]: x for x in r["rollen"]}
+        self.assertEqual(roles["schutz"]["wer"], [["A", "Schutzschild"]])
+        self.assertEqual(roles["stoerer"]["wer"], [["B", "Mogelhieb, Bedroher"]])
+        self.assertEqual(roles["hilfe"]["kann"], [["B", "Rechte Hand"]])
+        self.assertEqual(r["flaeche"], [["A", "Erdbeben", True]])
+        p = r["partner"][0]
+        self.assertEqual(p["trifft"], [["B", 2.0]])
+        self.assertEqual(sorted(n for n, _ in p["immun"]), ["C", "D"])       # Schwebe und Flug
+        self.assertEqual(r["tempo"]["langsam"], ["B", "D"])
+        self.assertTrue(0 < r["wertung"] <= 100)
+
     def test_team_details_extras(self):
         d = server._details([{"level": 50, "attacken": [1], "item": 264, "wesen": 16, "evs": [0, 252, 0, 0, 4, 252],
                               "ivs": [31] * 5, "geschlecht": "X", "spitzname": "  A   B ", "schillernd": "ja", "fremd": 1}], [445])

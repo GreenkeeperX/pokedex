@@ -598,6 +598,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/gefunden": set_found,
         "/api/team/gefangen": abfragen.team_caught,
         "/api/team/import": abfragen.paste_import,
+        "/api/team/doppel": abfragen.team_doubles,
         "/api/team/export": abfragen.paste_export,
         "/api/uebertragen": transfer,
         "/api/restore": restore,
