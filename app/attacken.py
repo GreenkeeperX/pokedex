@@ -35,6 +35,9 @@ def in_game(move, changes, game_order):
     return out
 
 
+CD_REF = 7          # übliche Abklingzeit in Legenden: Z-A (Sekunden); kürzer zählt mehr, länger weniger (Wurzel, 0,6 bis 1,5)
+
+
 def score(move, mon, ch=None):
     """(Wertung, [Gründe]) einer Schadens-Attacke für ein Pokémon. mon: dict mit typen, ang, spang, faehigkeit.
     Ohne feste Stärke (Status, variable Stärke) → (0, [Grund])."""
@@ -72,6 +75,11 @@ def score(move, mon, ch=None):
         if cond:
             s *= fac
             why.append(text)
+    cd = move.get("abkling")
+    if cd:                                    # Legenden: Z-A: kurze Abklingzeit heißt öfter einsetzbar
+        fac = max(0.6, min(1.5, (CD_REF / cd) ** 0.5))
+        s *= fac
+        why.append(f"Abklingzeit {cd} s (× {fac:.2f})")
     drain = move.get("entzug") or 0
     if drain < 0:
         fac = 1 + drain / 200

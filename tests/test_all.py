@@ -1278,6 +1278,17 @@ class Server(TempData):
         self.assertEqual((v["rows"][0]["wert"], v["rows"][0]["wert_ziel"], v["rows"][0]["ev_ziel_teil"]), (153, 185, 32))
         v = schaden.stat_view([106, 110, 90, 154, 154, 130], 100, 1, None, [65535] * 6)
         self.assertEqual((v["rows"][0]["wert"], v["rows"][3]["wert"], v["ev_gesamt"]), (415, 406, None))
+        self.assertEqual((schaden.stat_lgpe(100, 50, 31, 200), schaden.stat_lgpe(100, 50, 31, 0, hp=True)), (320, 175))
+        v = schaden.stat_view([35, 55, 40, 50, 50, 90], 50, 7, None, [0, 0, 0, 0, 0, 200], None, None, lgpe=True)
+        self.assertEqual((v["art"], v["ev_max"], v["ev_gesamt"], v["rows"][5]["wert"], v["rows"][5]["teile"]["ev"]), ("lgpe", 200, None, 310, 200))
+        self.assertTrue(all(sum(x["teile"].values()) == x["wert"] for x in v["rows"]))
+        from app import attacken
+        fast = attacken.score({"staerke": 80, "klasse": 2, "genauigkeit": 100, "abkling": 3, "typ": WASSER}, {"typen": [], "ang": 1, "spang": 1})
+        slow = attacken.score({"staerke": 80, "klasse": 2, "genauigkeit": 100, "abkling": 14, "typ": WASSER}, {"typen": [], "ang": 1, "spang": 1})
+        self.assertGreater(fast[0], slow[0])
+        self.assertTrue(any("Abklingzeit 3 s" in w for w in fast[1]))
+        self.assertEqual(schaden.calc(50, 100, 2, WASSER, [80, 130, 95, 80, 85, 102], [WASSER], [95, 115, 90, 80, 90, 60], [FEUER], ch(),
+                                      a_stat=100, d_stats=(100, 300))["kp"], 300)
         o = schaden.calc_old(1, 50, 90, 3, PSYCHO, [106, 110, 90, 154, 154, 130], [PSYCHO], [250, 5, 5, 105, 105, 50], [NORMAL], ch())
         self.assertEqual((o["angriff"], o["verteidigung"], o["kp"]), (schaden.stat_old(154, 50), schaden.stat_old(105, 50, exp=0), schaden.stat_old(250, 50, exp=0, hp=True)))
         self.assertEqual(o["stab"], 1.5)
@@ -1559,6 +1570,24 @@ class MitDatenbank(TempData):
                                    "verteidiger": [bi]})
         self.assertEqual((rb["gen"], len(rb["rows"])), (1, 1))
         self.assertGreater(rb["rows"][0]["max"], 0)
+        # Items der Verteidiger (Gegner „mein Team“): Offensivweste, Fokusgurt
+        weste = next(i for i, (k, _) in lo.items() if k == "assault-vest")
+        sash = next(i for i, (k, _) in lo.items() if k == "focus-sash")
+        rw = abfragen.damage_view({"spiel": "scarlet-violet", "ids": [kn], "details": [{"attacken": [erd]}], "slot": 0, "attacke": erd,
+                                   "verteidiger": [kn], "verteidiger_details": [{"item": weste}]})
+        self.assertNotIn("item_vert", rw["rows"][0])                            # Offensivweste hilft nicht gegen physische Attacken
+        r3 = abfragen.damage_view({"spiel": "scarlet-violet", "ids": [kn], "details": [{"attacken": [erd]}], "slot": 0, "attacke": erd,
+                                   "verteidiger": [kn, kn], "verteidiger_details": [{}, {"item": sash}], "level": 100, "level_vert": 5})
+        self.assertEqual((r3["rows"][0]["sicher"], r3["rows"][1]["sicher"]), (1, 2))
+        self.assertIn("Fokusgurt", r3["rows"][1]["item_vert"])
+        # Legenden: Arceus rechnet mit Effort Levels, Let's Go mit AVs
+        la = abfragen.damage_view({"spiel": "legends-arceus", "ids": [kn], "details": [{"attacken": [erd], "el": [0, 10, 0, 0, 0, 0]}], "slot": 0,
+                                   "attacke": erd, "verteidiger": [kn]})
+        la0 = abfragen.damage_view({"spiel": "legends-arceus", "ids": [kn], "details": [{"attacken": [erd]}], "slot": 0, "attacke": erd, "verteidiger": [kn]})
+        self.assertEqual((la["art"], la["el"]), ("la", 10))
+        self.assertGreater(la["rows"][0]["angriff"], la0["rows"][0]["angriff"])
+        lg = abfragen.stats_view({"spiel": "lets-go-pikachu-lets-go-eevee", "id": bi, "level": 50, "evs": [200, 0, 0, 0, 0, 0]})
+        self.assertEqual((lg["art"], lg["rows"][0]["ev"]), ("lgpe", 200))
         sv = abfragen.stats_view({"spiel": "scarlet-violet", "id": kn, "level": 100, "evs": [0, 252, 0, 0, 4, 252]})
         self.assertEqual((len(sv["rows"]), sv["gen"], sv["minzen"]), (6, 9, True))
         self.assertEqual(sv["rows"][1]["wert"], 359)                            # Knakrack, Angriff 130, 252 EVs, Level 100

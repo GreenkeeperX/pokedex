@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.32.0 (11.11.2026)
+
+- Schadensrechner: `abfragen.damage_view` mit `art` „la“ (Werte über `effort.stat`, Team-Platz `el`, Gegner Stufe 0 oder 10)
+  und „lgpe“ (`schaden.stat_lgpe`, Team-Platz `avs`, Gegner 0 oder 200 AVs); `verteidiger_details` für Items der Verteidiger
+  (`schaden.DEF_ITEMS`, Fokusgurt)
+- `attacken.score`: Abklingzeit (Z-A) als Faktor, Wurzel aus 7 s / Abklingzeit, 0,6 bis 1,5
+- Offen: Werte und Schaden in Champions (eigenes Werte-System), Freundschafts-Bonus in Let's Go, Kraft- und Tempostil in
+  Legenden: Arceus, Felder
+
 ## 0.31.0 (11.11.2026)
 
 - Werte-Diagramm `statBox` (`#stbox`) für alle Spiele außer Legenden: Arceus (Effort Levels), Let's Go (AVs), Champions und
