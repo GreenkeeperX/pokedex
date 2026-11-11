@@ -1366,6 +1366,7 @@ def team_view(body):
                 v = move_view(D, D.moves[mid], g)
                 names[str(mid)] = {"name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"]}
     ev["attacken"] = names
+    ev["plaetze"] = slot_info(D, details)
     ev["fremde_attacken"] = foreign_moves(D, ms, details, g)
     ev["matrix"] = {str(m["id"]): {str(a): f for a, f in ctx.dvec(m).items()} for m in ms}
     ev["mitglieder"] = [row(D, D.forms[m["id"]], g, gen) for m in ms]
@@ -1572,3 +1573,177 @@ def pruefung():
         r["key"] = f"{r['art']}:{r['schluessel']}:{r['feld']}"
         r["entscheidung"] = dec.get(r["key"], "")
     return rows
+
+
+# ------------------------------------------------------------------ Showdown-Text (Import und Export)
+
+def _paste_names(D):
+    """Zuordnung Showdown-Namen ↔ IDs (Arten und Formen, Attacken, Items, Fähigkeiten, Wesen), einmal je Datenstand.
+    Schlüssel sind Kleinbuchstaben ohne Zeichen (wie bei Showdown); deutsche Namen gelten beim Import auch."""
+    if getattr(D, "paste", None) is not None:
+        return D.paste
+    key = importer._sd_key
+    P = {"form": {}, "form_en": {}, "move": {}, "move_en": {}, "item": {}, "item_en": {}, "abil": {}, "abil_en": {},
+         "nat": {}, "nat_en": {}, "nat_mod": {}, "typ": {}, "item_de": {}, "abil_de": {}, "nat_de": {}}
+    by_kennung = {key(f["kennung"]): i for i, f in D.forms.items()}
+    std = {}
+    for i, f in sorted(D.forms.items()):
+        if f["standard"] and f["art"] not in std:
+            std[f["art"]] = i
+    for i, f in D.forms.items():
+        P["form"].setdefault(key(f["name"]), i)
+    con = db.game()
+    try:
+        for art, lang, n in con.execute("SELECT pokemon_species_id, local_language_id, name FROM pokemon_species_names "
+                                        "WHERE local_language_id IN (6, 9)"):
+            if art in std:
+                P["form"].setdefault(key(n), std[art])
+                if lang == 9:
+                    P["form_en"].setdefault(std[art], n)
+        try:
+            sd = list(con.execute("SELECT id, num, name FROM sd_pokemon"))
+        except Exception:
+            sd = []
+        for sid, num, name in sd:
+            fid = by_kennung.get(sid)
+            if fid is None and "-" not in str(name):
+                fid = std.get(num)
+            if fid is not None:
+                P["form"][sid] = fid
+                if fid not in P["form_en"] or "-" in name:
+                    P["form_en"][fid] = name
+        for k, fid in by_kennung.items():
+            P["form"].setdefault(k, fid)
+        try:
+            sd_moves = {r[0]: r[1] for r in con.execute("SELECT id, name FROM sd_attacke")}
+        except Exception:
+            sd_moves = {}
+        for mid, m in D.moves.items():
+            k = key(m["kennung"])
+            P["move"][k] = mid
+            P["move"].setdefault(key(m["name"]), mid)
+            P["move_en"][mid] = sd_moves.get(k) or m["kennung"].replace("-", " ").title()
+        for table, idcol, p in (("item_names", "item_id", "item"), ("ability_names", "ability_id", "abil"), ("nature_names", "nature_id", "nat")):
+            try:
+                for i, lang, n in con.execute(f"SELECT {idcol}, local_language_id, name FROM {table} WHERE local_language_id IN (6, 9)"):
+                    P[p].setdefault(key(n), i)
+                    if lang == 9:
+                        P[p + "_en"][i] = n
+                    else:
+                        P[p + "_de"][i] = n
+            except Exception:
+                pass
+        for i, ident in con.execute("SELECT id, identifier FROM items"):
+            P["item"].setdefault(key(ident), i)
+        for i, dec, inc in con.execute("SELECT id, decreased_stat_id, increased_stat_id FROM natures"):
+            P["nat_mod"][i] = (inc - 1, dec - 1) if inc != dec else None     # Werte-Index (0 = KP): erhöht, gesenkt
+    finally:
+        con.close()
+    for t, k in D.type_key.items():
+        P["typ"][key(k)] = t
+        P["typ"][key(D.types.get(t, ""))] = t
+    D.paste = P
+    return P
+
+
+def slot_info(D, details):
+    """Item, Fähigkeit, Wesen (mit Wirkung) und Tera-Typ je Platz, deutsch, für die Anzeige im Team."""
+    if not any(any(d.get(k) for k in ("item", "faehigkeit", "wesen", "tera")) for d in details):
+        return [{} for _ in details]
+    P = _paste_names(D)
+    out = []
+    for d in details:
+        x = {}
+        for k, p in (("item", "item"), ("faehigkeit", "abil"), ("wesen", "nat")):
+            i = _int(d.get(k))
+            if i:
+                x[k] = P[p + "_de"].get(i) or P[p + "_en"].get(i) or str(i)
+        if _int(d.get("wesen")):
+            x["wesen_mod"] = P["nat_mod"].get(_int(d["wesen"]))
+        if _int(d.get("tera")) in D.types:
+            x["tera"] = _int(d["tera"])
+        out.append(x)
+    return out
+
+
+def paste_import(body):
+    """Showdown-Text → {ids, details, hinweise}. details je Platz: level, attacken, item, faehigkeit, wesen, evs, ivs, tera,
+    spitzname, schillernd (nur, was im Text steht)."""
+    from . import paste
+    D = data()
+    if not D:
+        return {"ids": [], "details": [], "hinweise": ["Noch keine Spieldaten."]}
+    P = _paste_names(D)
+    key = importer._sd_key
+    ids, details, notes = [], [], []
+    for s in paste.parse(body.get("text")):
+        fid = P["form"].get(key(s["name"]))
+        if fid is None:
+            notes.append(f"„{s['name']}“ nicht gefunden")
+            continue
+        d = {}
+        if s["level"]:
+            d["level"] = s["level"]
+        moves = []
+        for mv in s["attacken"]:
+            k = key(mv)
+            mid = P["move"].get(k) or (P["move"].get("hiddenpower") if k.startswith("hiddenpower") else None)
+            if mid:
+                moves.append(mid)
+            else:
+                notes.append(f"{s['name']}: Attacke „{mv}“ nicht gefunden")
+        if moves:
+            d["attacken"] = moves
+        for field, p in (("item", "item"), ("faehigkeit", "abil"), ("wesen", "nat")):
+            if s[field]:
+                i = P[p].get(key(s[field]))
+                if i:
+                    d[field] = i
+                else:
+                    notes.append(f"{s['name']}: „{s[field]}“ nicht gefunden")
+        if s["tera"] and P["typ"].get(key(s["tera"])):
+            d["tera"] = P["typ"][key(s["tera"])]
+        for field in ("evs", "ivs"):
+            if s[field]:
+                d[field] = s[field]
+        if s["spitzname"]:
+            d["spitzname"] = s["spitzname"]
+        if s["schillernd"]:
+            d["schillernd"] = True
+        if s["geschlecht"]:
+            d["geschlecht"] = s["geschlecht"]
+        ids.append(fid)
+        details.append(d)
+    if len(ids) > 6:
+        notes.append(f"{len(ids)} Pokémon im Text, übernommen werden die ersten sechs")
+        ids, details = ids[:6], details[:6]
+    return {"ids": ids, "details": details, "hinweise": notes}
+
+
+def paste_export(body):
+    """Team (ids, details) → {text} im Showdown-Format mit englischen Namen."""
+    from . import paste
+    D = data()
+    if not D:
+        return {"text": ""}
+    P = _paste_names(D)
+    ids = _ints(body.get("ids"))
+    per = slot_details(body.get("details"), ids)
+    g = D.game_by.get(body.get("spiel") or "")
+    sets = []
+    for i, d in zip(ids, per):
+        f = D.forms.get(i)
+        if not f:
+            continue
+        abil = _int(d.get("faehigkeit"))
+        if not abil and not (g and g["kennung"] in NO_ABILITIES):
+            abil = next((a for a, hidden in f["faehigkeiten"] if not hidden), None)
+        tera = _int(d.get("tera"))
+        sets.append({"name": P["form_en"].get(i) or f["kennung"].title(), "spitzname": str(d.get("spitzname") or "")[:30], "geschlecht": d.get("geschlecht"),
+                     "item": P["item_en"].get(_int(d.get("item")), ""), "faehigkeit": P["abil_en"].get(abil, "") if abil else "",
+                     "level": _int(d.get("level")), "schillernd": bool(d.get("schillernd")),
+                     "tera": D.type_key.get(tera, "").title() if tera else "",
+                     "evs": _ints(d.get("evs"))[:6] or None, "ivs": _ints(d.get("ivs"))[:6] or None,
+                     "wesen": P["nat_en"].get(_int(d.get("wesen")), ""),
+                     "attacken": [P["move_en"][m] for m in _ints(d.get("attacken")) if m in P["move_en"]]})
+    return {"text": paste.dump(sets)}

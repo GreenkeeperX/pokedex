@@ -127,6 +127,26 @@ class TeamPlaetze(unittest.TestCase):
         self.assertEqual(abfragen.slot_details([{"level": 9}], [25, 6]), [{"level": 9}, {}])
         self.assertEqual(abfragen.slot_details(None, [1]), [{}])
 
+    def test_showdown_text(self):
+        from app import paste
+        txt = ("Flitzer (Garchomp) (F) @ Choice Scarf\r\nAbility: Rough Skin\nLevel: 50\nShiny: Yes\nTera Type: Fire\n"
+               "EVs: 252 Atk / 4 SpD / 252 Spe\nJolly Nature\nIVs: 0 SpA\n- Earthquake\n- Outrage\n\n\n"
+               "=== [gen9] Team ===\n\nPikachu\n- Thunderbolt\n- Quick Attack\n- Iron Tail\n- Volt Tackle\n- Surf\n")
+        a, b = paste.parse(txt)
+        self.assertEqual((a["spitzname"], a["name"], a["geschlecht"], a["item"]), ("Flitzer", "Garchomp", "F", "Choice Scarf"))
+        self.assertEqual((a["faehigkeit"], a["level"], a["schillernd"], a["tera"], a["wesen"]), ("Rough Skin", 50, True, "Fire", "Jolly"))
+        self.assertEqual(a["evs"], [0, 252, 0, 0, 4, 252])
+        self.assertEqual(a["ivs"], [31, 31, 31, 0, 31, 31])
+        self.assertEqual(len(b["attacken"]), 4)                  # höchstens vier Attacken
+        self.assertEqual(paste.parse(paste.dump([a, b])), [a, b])  # Hin und zurück ohne Verlust
+        self.assertEqual(paste.parse("Mr. Mime (M)\n- Psychic")[0]["name"], "Mr. Mime")
+        self.assertEqual(paste.parse(""), [])
+
+    def test_team_details_extras(self):
+        d = server._details([{"level": 50, "attacken": [1], "item": 264, "wesen": 16, "evs": [0, 252, 0, 0, 4, 252],
+                              "ivs": [31] * 5, "geschlecht": "X", "spitzname": "  A   B ", "schillernd": "ja", "fremd": 1}], [445])
+        self.assertEqual(d, [{"level": 50, "attacken": [1], "item": 264, "wesen": 16, "evs": [0, 252, 0, 0, 4, 252], "spitzname": "A B"}])
+
     def test_stark_gegen(self):
         from app import abfragen
         ch = {10: {12: 2, 11: 0.5}, 11: {10: 2, 12: 0.5}, 12: {11: 2, 10: 0.5}}     # Feuer, Wasser, Pflanze
@@ -1010,6 +1030,19 @@ class MitDatenbank(TempData):
         super().setUp()
         os.symlink(os.environ["POKEAPI_DB"], db.pokeapi_path())
         db.migrate()
+
+    def test_showdown_import_export(self):
+        from app import abfragen
+        r = abfragen.paste_import({"text": "Rotom-Wash @ Sitrus Berry\nAbility: Levitate\nModest Nature\n- Hydro Pump\n\n"
+                                           "Knakrack\n- Erdbeben\n\nGiratina-Origin\n\nGibtsnicht\n"})
+        self.assertEqual(len(r["ids"]), 3)
+        self.assertEqual(r["hinweise"], ["„Gibtsnicht“ nicht gefunden"])
+        text = abfragen.paste_export({"ids": r["ids"], "details": r["details"]})["text"]
+        self.assertIn("Rotom-Wash @ Sitrus Berry", text)
+        self.assertIn("Modest Nature", text)
+        self.assertIn("Garchomp", text)
+        self.assertIn("- Earthquake", text)
+        self.assertIn("Giratina-Origin", text)
 
     def test_hisui(self):
         from app import abfragen

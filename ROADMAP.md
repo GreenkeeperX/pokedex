@@ -1,5 +1,16 @@
 # Roadmap
 
+## 0.18.0 (Champions Schritt 1: Showdown-Text, Initiative-Liste; Entscheidung 11.11.2026)
+
+- `app/paste.py` liest und schreibt das Textformat von Showdown; `abfragen.paste_import` ordnet Namen zu (Showdown-Kennungen,
+  englische und deutsche Namen aus der PokéAPI), `abfragen.paste_export` schreibt englische Namen
+  (`/api/team/import`, `/api/team/export`). Team-Plätze tragen dazu `item`, `faehigkeit`, `wesen`, `tera`, `evs`, `ivs`,
+  `geschlecht`, `schillernd`, `spitzname` (JSON in `team.details`, keine neue Spalte)
+- Initiative-Liste (`speedView`, `#initiative`): Werte im Browser gerechnet, bis Generation 2 mit DV und Stat Exp
+- Quellenprotokoll (Pokémon Database, Dittobase) und Kurzkonzept Sonderspiele liegen als Dokumente vor; Übernahme-Plan:
+  Werte-Spanne Level 50/100, Moveset-Suche, Editionsexklusive, Abdeckungs-Prüfer, Vergleich bis 4, Wesen/Item/EVs im Team
+- Danach: Champions Schritt 2 (Kampfansicht, Doppelkampf-Bewertung)
+
 ## 0.17.0 (große Karte, Vergleich, Typkombinationen; Entscheidung 11.11.2026)
 
 - Eigene Punkte auf Map Genie (`abfragen.mg_overlay`, `/api/mapgenie/eigene`): je Gebiet von Legenden: Arceus richtet
