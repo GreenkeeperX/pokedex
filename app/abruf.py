@@ -1508,11 +1508,7 @@ def diagnose(proben=None):
     probe("Altissimo, Orte Rot/Blau/Gelb", "https://altissimo1.github.io/Main-Series/RBY/locations.html", img_info, keep=True, headers=html)
 
     section("Karten für Schwert/Schild, Strahlender Diamant/Leuchtende Perle und Let’s Go")
-    # Map Genie unter anderen Namen; IGN hat interaktive Karten (Leaflet-artig, Punkte als JSON); Serebii und Bulbapedia als Bild
-    for slug in ("pokemon-sword-and-shield", "pokemon-brilliant-diamond-and-shining-pearl", "pokemon-brilliant-diamond",
-                 "pokemon-lets-go-pikachu-and-eevee", "pokemon-lets-go-pikachu"):
-        probe(f"Map Genie, {slug}", mapgenie.game_url(slug),
-              lambda t, s=slug: page_info(t) + ", Karten: " + (", ".join(mapgenie.map_slugs(t, s)) or "keine"), headers=html)
+    # Map Genie hat sie nicht; IGN hat interaktive Karten (Leaflet-artig, Punkte als JSON); Serebii und Bulbapedia als Bild
     for g, k in (("pokemon-sword-and-shield", "galar"), ("pokemon-sword-and-shield", "isle-of-armor"),
                  ("pokemon-sword-and-shield", "crown-tundra"), ("pokemon-brilliant-diamond-and-shining-pearl", "sinnoh"),
                  ("pokemon-brilliant-diamond-and-shining-pearl", "grand-underground"), ("pokemon-lets-go-pikachu-and-eevee", "kanto")):

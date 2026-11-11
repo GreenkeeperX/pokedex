@@ -1099,7 +1099,7 @@ class Server(TempData):
         self.assertIsNone(abruf.mg_maps("red-blue"))                                              # noch nicht geladen
         from app import mapgenie as _mg
         self.assertEqual(_mg.slugs("red-blue"), ("pokemon-red-blue-yellow",))
-        self.assertIn("pokemon-sword-and-shield", _mg.slugs("sword-shield"))
+        self.assertEqual(_mg.slugs("sword-shield"), ())                                          # gibt es dort nicht
         self.assertEqual(_mg.SHARE["yellow"], "red-blue")
         f = os.path.join(self.dir, "mapgenie", "kacheln", "spiel", "erfunden", "10", "1", "2.png")
         os.makedirs(os.path.dirname(f))

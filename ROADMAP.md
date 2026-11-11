@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.27.3 (11.11.2026)
+
+- `mapgenie.GAMES` auf die Spiele, die Map Genie hat (LA, SV, Z-A, FRLG, RBY); SwSh, BDSP, Let's Go und Gen 2 bis 7 fehlen dort,
+  dafür bleiben pokemoncompletion, IGN, Serebii und Bulbapedia im Verbindungstest
+
 ## 0.27.2 (11.11.2026)
 
 - `mapgenie.GAMES` mit allen Hauptspielen ab Generation 1, mehrere Schreibweisen je Spiel (`mapgenie.slugs`), `SHARE` für
