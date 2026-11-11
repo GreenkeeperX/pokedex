@@ -205,13 +205,21 @@ def matchup(team, enemy, ctx, tname=str):
     for m in team:
         d = ctx.dvec(m)
         taken = max(d[t] for t in atk_types) if atk_types else 1.0
+        # Mit gewählten Attacken zählt der Eigentyp-Bonus: eine Attacke ohne ihn trifft ein Drittel schwächer
+        # (× 1,5 gegen × 1). Maßstab bleibt der Eigentyp, damit die Urteile für Pokémon ohne Attacken gleich bleiben
         own = m.get("angriffstypen") or m["typen"]
-        dealt, best_t = max(((typen.attack(t, enemy["typen"], ctx.ch), t) for t in own), default=(1.0, None))
+        stab = lambda t: 1.0 if t in m["typen"] or not m.get("angriffstypen") else 1 / 1.5
+        dealt, best_t = max(((typen.attack(t, enemy["typen"], ctx.ch) * stab(t), t) for t in own), default=(1.0, None))
         faster = None if enemy.get("init") is None else (m["werte"][5] > enemy["init"])
         sc = dealt / max(taken, 0.125) * (1.15 if faster else 1.0)
         why = []
-        if dealt > 1:
-            why.append(f"trifft sehr effektiv mit {tname(best_t)} (× {typen.label(dealt)})")
+        raw = typen.attack(best_t, enemy["typen"], ctx.ch) if best_t is not None else 1.0
+        no_stab = best_t is not None and stab(best_t) < 1
+        if raw > 1:
+            why.append(f"trifft sehr effektiv mit {tname(best_t)} (× {typen.label(raw)}"
+                       + (", ohne Eigentyp-Bonus" if no_stab else "") + ")")
+        elif no_stab and raw == 1:
+            why.append(f"trifft neutral mit {tname(best_t)}, ohne Eigentyp-Bonus")
         elif dealt < 1:
             why.append(f"trifft nur schwach (× {typen.label(dealt)})")
         if taken == 0:

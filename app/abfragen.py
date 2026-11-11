@@ -1590,7 +1590,9 @@ def team_caught(body):
         best = None
         for x in finals:
             gain2, k2 = best_place(x)
-            if gain2 >= 1 and gain2 >= max(gain, 0) + 0.5 and (not best or gain2 > best[0]):
+            # Potential misst die Endstufe am Team, nicht am Abstand zur heutigen Stufe: sonst fiele Kadabra heraus,
+            # während Abra (weiter weg, heute schwächer) drin wäre. Nur: die Endstufe muss besser sein als heute
+            if gain2 >= 1 and gain2 > gain and (not best or gain2 > best[0]):
                 best = (gain2, k2, x)
         if best:
             gain2, k2, x = best
@@ -1607,7 +1609,7 @@ def team_caught(body):
                     or (in_game is not None and x["id"] not in in_game):
                 continue
             gain2 = team.evaluate(ms[:k] + [member(D, x, g, gen)] + ms[k + 1:], ctx, w)["wertung"] - base
-            if gain2 >= 1:
+            if gain2 >= 0.5:          # schon im Team: jede spürbare Verbesserung durch die Endstufe
                 pot.append(dict(row(D, f, g, gen), plus=round(gain2, 1), wird=row(D, x, g, gen), slot=m["slot"], statt=m["name"], im_team=True))
     alt.sort(key=lambda r: -r["plus"])
     pot = _furthest(pot, D, {f["id"] for f in caught} | {r["id"] for r in alt[:8]})
@@ -2135,7 +2137,7 @@ def damage_view(body):
                          crit=bool(body.get("krit")), crit_mult=2.0 if gen <= 5 else 1.5, d_level=d_level)
         rows.append(dict(r, id=vid, name=v["name"]))
     return {"angreifer": f["name"], "attacke": mv["name"], "typ": mv["typ"], "klasse": mv["klasse"], "staerke": mv["staerke"],
-            "level": level, "level_vert": d_level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "gen": gen,
+            "stab": schaden.stab_of(mv["typ"], a_types, tera), "level": level, "level_vert": d_level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "gen": gen,
             "krit": 2.0 if gen <= 5 else 1.5, "rows": rows}
 
 

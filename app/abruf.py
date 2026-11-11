@@ -1502,6 +1502,30 @@ def diagnose(proben=None):
     probe("Serebii, PokéEarth Route 29 (Johto)", "https://www.serebii.net/pokearth/johto/route29.shtml", img_info, keep=True, headers=html)
     probe("Altissimo, Orte Rot/Blau/Gelb", "https://altissimo1.github.io/Main-Series/RBY/locations.html", img_info, keep=True, headers=html)
 
+    section("Karten für Schwert/Schild, Strahlender Diamant/Leuchtende Perle und Let’s Go")
+    # Map Genie unter anderen Namen; IGN hat interaktive Karten (Leaflet-artig, Punkte als JSON); Serebii und Bulbapedia als Bild
+    for slug in ("pokemon-sword-and-shield", "pokemon-brilliant-diamond-and-shining-pearl", "pokemon-brilliant-diamond",
+                 "pokemon-lets-go-pikachu-and-eevee", "pokemon-lets-go-pikachu"):
+        probe(f"Map Genie, {slug}", mapgenie.game_url(slug),
+              lambda t, s=slug: page_info(t) + ", Karten: " + (", ".join(mapgenie.map_slugs(t, s)) or "keine"), headers=html)
+    for g, k in (("pokemon-sword-and-shield", "galar"), ("pokemon-sword-and-shield", "isle-of-armor"),
+                 ("pokemon-sword-and-shield", "crown-tundra"), ("pokemon-brilliant-diamond-and-shining-pearl", "sinnoh"),
+                 ("pokemon-brilliant-diamond-and-shining-pearl", "grand-underground"), ("pokemon-lets-go-pikachu-and-eevee", "kanto")):
+        probe(f"IGN, Karte {g}/{k}", f"https://www.ign.com/maps/{g}/{k}",
+              lambda t: page_info(t) + f", {t.count('tile')} × tile, {t.count('marker')} × marker, {t.count('.json')} JSON-Verweise",
+              keep=200_000, headers=html)
+    for reg in ("galar", "sinnoh"):
+        probe(f"Serebii, PokéEarth {reg.title()}", f"https://www.serebii.net/pokearth/{reg}/", img_info, keep=True, headers=html)
+    probe("Serebii, Naturzone (Schwert/Schild)", "https://www.serebii.net/swordshield/wildarea.shtml", img_info, keep=True, headers=html)
+    probe("Serebii, Untergrund (BDSP)", "https://www.serebii.net/brilliantdiamondshiningpearl/grandunderground.shtml", img_info, keep=True, headers=html)
+    probe("Bulbapedia-Archiv, Kartenbilder Galar", "https://archives.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
+        {"action": "query", "list": "search", "srsearch": "Galar map", "srnamespace": "6", "srlimit": "15", "format": "json"}), wiki_hits, keep=True)
+    probe("Bulbapedia-Archiv, Kartenbilder Sinnoh BDSP", "https://archives.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
+        {"action": "query", "list": "search", "srsearch": "Sinnoh BDSP map", "srnamespace": "6", "srlimit": "15", "format": "json"}), wiki_hits, keep=True)
+    probe("pokemoncompletion, Let’s Go", "https://pokemoncompletion.com/completion/LetsGo", page_info, keep=200_000, headers=html)
+    probe("GitHub: Insektaure/pkTeraRaid (Raid-Nester SwSh mit Lage)", "https://api.github.com/repos/Insektaure/pkTeraRaid/git/trees/HEAD?recursive=1",
+          tree_hits("den", "map", "swsh", "location"), keep=True)
+
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",
           lambda t: f"{len(json.loads(t))} Pokémon mit Sets")
