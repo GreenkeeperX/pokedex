@@ -1230,6 +1230,21 @@ async function elBox(d, slot) {
   $("#elmax").addEventListener("click", () => { det.el = cur(); det.el_ziel = [10, 10, 10, 10, 10, 10]; save(); });
   $("#elreach").addEventListener("click", () => { det.el = goal(); det.el_ziel = goal(); save(); });
 }
+/* Effort Levels des Teams (Legenden: Arceus): Übersicht; ändern auf der Detailseite. Nicht eingetragen = Stufe 0 */
+async function elTeam() {
+  const rid = RID, r = await api("/api/effort/team", {spiel: S.game, ids: S.team.ids, details: S.team.details}).catch(() => null);
+  const el = $("#eltbody");
+  if (!r || !el || rid !== RID) return;
+  const miss = r.mitglieder.filter((m) => !m.eingetragen).length, need = r.bonbons.some((n) => n);
+  const items = (b) => b.map((n, k) => n ? `${n}× ${esc(r.sorten[k])}` : "").filter(Boolean).join(", ");
+  el.innerHTML = `${miss ? `<p class="hint">${miss === r.mitglieder.length ? "Noch für kein Mitglied eingetragen" : `Für ${miss} Mitglied${miss > 1 ? "er" : ""} nicht eingetragen`}: dann rechnet das Tool mit Stufe 0, also vorsichtig.
+      Im Spiel zeigt die Übersicht des Pokémon bei den Werten seine Effort Levels; auf der Detailseite eintragen, dann zählen sie hier und in der Initiative-Liste.</p>` : ""}
+    <table class="rows eltab"><tr><th>Mitglied</th>${STAT.map((s) => `<th class="c">${esc(s.replace("Verteidigung", "Vert.").replace("Sp.-Angriff", "Sp.-Ang."))}</th>`).join("")}<th>fehlt bis zum Ziel</th></tr>
+    ${r.mitglieder.map((m) => `<tr data-hc="${m.id}"><td class="nw">${img(m.id, "sm")} <a href="#pokemon/${m.id}/${m.slot}">${esc(m.name)}</a>${m.eingetragen ? "" : ` <span class="cls" data-tip="Stufen nicht eingetragen; gerechnet mit 0">offen</span>`}</td>
+      ${m.el.map((e, i) => `<td class="c" data-tip="${esc(`${STAT[i]}: Stufe ${e}, Wert ${m.werte[i]}${m.ziel[i] > e ? `\nZiel ${m.ziel[i]}: Wert ${m.werte_ziel[i]}` : ""}`)}">${m.eingetragen ? `<b>${e}</b>` : `<span class="hint">0</span>`}${m.ziel[i] > e ? `<span class="hint">→${m.ziel[i]}</span>` : ""}</td>`).join("")}
+      <td class="hint">${items(m.bonbons) || (m.eingetragen ? "Ziel erreicht" : "")}</td></tr>`).join("")}</table>
+    <p class="hint">${need ? `Dem ganzen Team fehlen: <b>${items(r.bonbons)}</b>.` : "Ziele setzt du auf der Detailseite jedes Mitglieds; dann steht hier, was dem Team fehlt."} Werte mit Level und Wesen des Platzes (sonst Level 50).</p>`;
+}
 // Sprite-Umschalter (Artwork, schillernd, animiert) und Ruf, nur für schon geladene Extras
 function extrasHtml(d) {
   const x = d.extras || {}, b = [];
@@ -1621,6 +1636,8 @@ async function teamView() {
           <button class="primary" data-act="sdimp" data-tip="Ersetzt das aktuelle Team">Als Team übernehmen</button>
           <button data-act="sdcopy">Kopieren</button><span id="sdnote" class="hint"></span></div></details>
       <details class="favd dropmark" data-drop="fav" open><summary>${icon("fav")} Favoriten in ${esc(gameName())} <span id="favn"></span> <span class="hint">zum schnellen Tauschen auf einen Platz ziehen; hierher ziehen macht zum Favoriten</span></summary><div id="favs"></div></details></div>
+    ${LA() && S.team.ids.length ? `<details class="box" id="elteam"${store.get("elTeamOpen", S.team.details.some((d) => d?.el)) ? " open" : ""}><summary><h2 style="display:inline">Effort Levels</h2>
+        <span class="hint">Stand und Ziel je Mitglied, was dem Team fehlt</span></summary><div id="eltbody"><p class="hint">Lädt …</p></div></details>` : ""}
     <div class="cols">
       <div class="box"><h2>Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
       <div class="box"><h2>Verbesserungen</h2><div id="imp"></div></div>
@@ -1691,6 +1708,7 @@ async function teamView() {
   if (S.foes.length) matchup();
   const cb = $("#calcbox");
   if (cb) { cb.addEventListener("toggle", () => { store.set("calcOpen", cb.open); if (cb.open) calcBox(); }); if (cb.open) calcBox(); }
+  if ($("#elteam")) { $("#elteam").addEventListener("toggle", (e) => store.set("elTeamOpen", e.target.open)); elTeam(); }
 }
 function loadTeam(tt) {
   S.team = normTeam({ids: tt.mitglieder, fest: tt.fest, tid: tt.id, name: tt.name, spiel: tt.spiel, details: tt.details});
@@ -2755,7 +2773,12 @@ function speedStat(base, lv, iv, ev, nat, gen) {
   if (gen <= 2) return Math.floor(((base + iv) * 2 + Math.floor(Math.ceil(Math.sqrt(ev)) / 4)) * lv / 100) + 5;
   return Math.floor((Math.floor((2 * base + iv + Math.floor(ev / 4)) * lv / 100) + 5) * nat);
 }
+/* Legenden: Arceus: andere Formel, Effort Level 0–10 statt EVs und DVs (wie app/effort.py) */
+const EL_FAKTOR = [0, 2, 3, 4, 7, 8, 9, 14, 15, 16, 25];
+const laStat = (base, lv, el, nat = 1) => Math.floor((lv / 50 + 1) * base / 1.5 * nat) + Math.floor((Math.sqrt(base) * EL_FAKTOR[el] + lv) / 2.5 + 0.5);
+const LA = () => S.game === "legends-arceus";
 function speedCols(base, lv, gen) {
+  if (LA()) return [laStat(base, lv, 0, 0.9), laStat(base, lv, 0), laStat(base, lv, 10), laStat(base, lv, 10, 1.1)];
   if (gen <= 2) return [speedStat(base, lv, 0, 0, 1, gen), null, speedStat(base, lv, 15, 65535, 1, gen), null];
   return [speedStat(base, lv, 0, 0, 0.9, gen), speedStat(base, lv, 31, 0, 1, gen), speedStat(base, lv, 31, 252, 1, gen), speedStat(base, lv, 31, 252, 1.1, gen)];
 }
@@ -2960,7 +2983,7 @@ async function speedView() {
       <label data-tip="Wahlschal: Initiative ×1,5"><input type="checkbox" id="spschal"${o.schal ? " checked" : ""}> Wahlschal</label>
       <label><input type="checkbox" id="spteam"${o.team ? " checked" : ""}> nur mein Team</label>
       <input id="spq" type="search" placeholder="Pokémon suchen" value="${esc(o.q)}" class="grow"></div>
-      <p class="hint">${gen <= 2 ? "Bis Generation 2: ohne und mit vollen DVs und Stat Exp." : "Spalten: minimal (0 IV, 0 EV, senkendes Wesen), neutral (31 IV, 0 EV), maximal (31 IV, 252 EV), maximal mit Wesen (+10 %)."}
+      <p class="hint">${LA() ? "Legenden: Arceus rechnet mit Effort Levels statt EVs und DVs. Spalten: Effort Level 0 mit senkendem Wesen, 0 neutral, 10 neutral, 10 mit Wesen (+10 %). Dein Team mit seinen eingetragenen Stufen (Detailseite), sonst Stufe 0." : gen <= 2 ? "Bis Generation 2: ohne und mit vollen DVs und Stat Exp." : "Spalten: minimal (0 IV, 0 EV, senkendes Wesen), neutral (31 IV, 0 EV), maximal (31 IV, 252 EV), maximal mit Wesen (+10 %)."}
         Dein Team ist hervorgehoben, mit dem Wert aus Level, EVs, IVs und Wesen, soweit eingetragen (sonst neutral). Unter Bizarroraum gilt die Liste umgekehrt.</p>
       <div id="splist"><p class="hint">Lädt …</p></div></div>`;
   header();
@@ -2977,13 +3000,13 @@ async function speedView() {
       if (!r) return null;
       const iv = det.ivs ? det.ivs[5] : (gen <= 2 ? 15 : 31), evv = det.evs ? det.evs[5] : 0;
       const nat = x.wesen_mod ? (x.wesen_mod[0] === 5 ? 1.1 : x.wesen_mod[1] === 5 ? 0.9 : 1) : 1;
-      const own = speedStat(r.werte[5], det.level || lv, iv, evv, nat, gen) * (x.item === "Wahlschal" && !o.schal ? 1.5 : 1);
+      const own = (LA() ? laStat(r.werte[5], det.level || lv, det.el?.[5] || 0, nat) : speedStat(r.werte[5], det.level || lv, iv, evv, nat, gen)) * (x.item === "Wahlschal" && !o.schal ? 1.5 : 1);
       return {r, own: Math.floor(own * (o.wind ? 2 : 1) * (o.schal ? 1.5 : 1)), det, x, slot: i};
     }).filter(Boolean);
     let rows = d.rows.map((r) => ({r, cols: speedCols(r.werte[5], lv, gen).map((v) => v == null ? null : Math.floor(v * mult))}));
     if (q) rows = rows.filter(({r}) => r.name.toLowerCase().includes(q));
     if (o.team) rows = [];
-    const mrow = (m) => `<tr class="mine" data-hc="${m.r.id}"><td>${img(m.r.id)} <a href="#pokemon/${m.r.id}/${m.slot}">${esc(m.r.name)}</a> <span class="hint">dein Team${m.det.level ? ", Level " + m.det.level : ""}${m.x.wesen ? ", " + esc(m.x.wesen) : ""}${m.x.item ? ", " + esc(m.x.item) : ""}</span></td>
+    const mrow = (m) => `<tr class="mine" data-hc="${m.r.id}"><td>${img(m.r.id)} <a href="#pokemon/${m.r.id}/${m.slot}">${esc(m.r.name)}</a> <span class="hint">dein Team${m.det.level ? ", Level " + m.det.level : ""}${LA() ? (m.det.el ? ", Effort Level " + m.det.el[5] : ", Effort Level nicht eingetragen (0)") : ""}${m.x.wesen ? ", " + esc(m.x.wesen) : ""}${m.x.item ? ", " + esc(m.x.item) : ""}</span></td>
       <td class="num">${m.r.werte[5]}</td><td class="num" colspan="4"><b>${m.own}</b></td></tr>`;
     // Team-Zeilen stehen dort, wo ihr eigener Wert in die Liste fällt
     const out = [], todo = [...mine].sort((a, b) => b.own - a.own);

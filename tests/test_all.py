@@ -650,6 +650,10 @@ class Leser(unittest.TestCase):
         self.assertEqual(v["bonbons"], [15, 18, 18, 6])
         self.assertEqual((v["rows"][1]["wesen"], v["rows"][3]["wesen"]), (1.1, 0.9))
         self.assertEqual(effort.view([50] * 6, 50, [5] * 6, [2] * 6)["rows"][0]["ziel"], 5)      # Ziel nie unter der Stufe
+        from app import server
+        d = server._details([{"el": [0, 1, 2, 3, 4, 10], "el_ziel": [0, 1, 2, 3, 4, 11]}], [445])
+        self.assertEqual(d[0]["el"], [0, 1, 2, 3, 4, 10])
+        self.assertNotIn("el_ziel", d[0])                                        # Stufe 11 gibt es nicht
 
     def test_spielwissen(self):
         import json

@@ -94,7 +94,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Detailseite: `wissenHtml` (gepflegtes Spielwissen in der Fangchance), `partnerHtml` (Partner-Techniken, Geheime Techniken).
 - Schadensrechner: Gegner `favs` (Favoriten des Spiels).
 - Effort Levels `elBox` (`#elbox`, Legenden: Arceus): `/api/effort`, Team-Platz `el`, `el_ziel`, `wesen`; ohne Team ein
-  Zwischenstand nur für die Seite (`elBox.tmp`), aufgeklappt `elOpen`.
+  Zwischenstand nur für die Seite (`elBox.tmp`), aufgeklappt `elOpen`. Team: `elTeam` (`#elteam`, `/api/effort/team`,
+  `elTeamOpen`); Initiative: `laStat`, `EL_FAKTOR`, nur wenn `LA()`.
 - Map Genie (`mgView`, `#karte/mg/<Karte>`, `/api/mapgenie`, Kacheln `/mgkachel/<Spiel>/<Karte>/<z>/<x>/<y>`): eigene
   Kachelanzeige (Web-Mercator, ganze Zoomstufen), Punkte je Kategorie in der Farbe der Gruppe, Ebenen rechts zum
   Auf- und Zuklappen (`mgEbenen:<Spiel>`, `mgOpen`), Suche, Rechtsklick = gefunden (`/api/gefunden`, `mapGotHide`).

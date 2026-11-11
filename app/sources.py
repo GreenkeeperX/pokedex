@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.25.0"
+VERSION = "0.26.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.26.0", "11.11.2026", [
+        "Legenden: Arceus: Effort Levels im Reiter Team: je Mitglied Stand und Ziel, was dem ganzen Team an Leistungs-Items "
+        "fehlt; nicht eingetragene Mitglieder rechnen vorsichtig mit Stufe 0 und sind markiert",
+        "Legenden: Arceus: Initiative-Liste mit der Formel des Spiels (Effort Level 0 und 10 statt EVs und DVs); dein Team mit seinen Stufen. "
+        "Andere Spiele bleiben, wie sie waren",
+    ]),
     ("0.25.0", "11.11.2026", [
         "Legenden: Arceus: Effort Levels auf der Detailseite. Je Wert die Stufe 0 bis 10 und ein Ziel, dazu Wesen und Level; "
         "die Werte rechnen sich mit (jetzt, am Ziel, höchstens), und der Planer sagt, wie viel Leistungssand, -kies, -stein und "
