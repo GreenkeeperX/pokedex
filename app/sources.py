@@ -10,11 +10,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.28.1"
+VERSION = "0.28.2"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.28.2", "11.11.2026", [
+        "Verbindungstest: Kachelpfad der Map-Genie-Karten wieder richtig angezeigt; Kartenseiten melden eingebettete Daten "
+        "(Next.js, JSON-Blöcke, Marker mit Koordinaten)",
+    ]),
     ("0.28.1", "11.11.2026", [
         "Verbindungstest: richtige Adressen für Serebii (Naturzone, Insel der Rüstung, Kronen-Schneelande, Untergrund), "
         "Bulbapedia-Kategorie aller Spielkarten; IGN-Pfade, die es nicht gibt, sind raus",

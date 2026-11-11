@@ -1507,7 +1507,8 @@ def diagnose(proben=None):
     # je gespeicherter Karte: Kachelmuster, Zoom und Grenzen (zeigt, warum eine Karte keine Kacheln bekommt)
     for spiel in MAP_GAMES:
         for m in (mg_maps(spiel) or {}).get("karten", []):
-            rel = _tile_of(m, m["min_zoom"], 0, 0)[0]
+            rel = (_tile_of(m, m["min_zoom"], 0, 0)[0] if m.get("quelle")
+                   else mapgenie.tile_ok(m["kacheln"], m["min_zoom"], 0, 0, m.get("endung", "png")))
             v = mg_status()["vorrat"].get(f"{spiel}/{m['slug']}") or {}
             lines.append(f"{'pokemoncompletion' if m.get('quelle') else 'Map Genie'}, Karte {spiel}/{m['slug']}: Muster {m['kacheln'] or '–'} ({m.get('endung', '?')}), "
                          f"Zoom {m['min_zoom']}–{m['max_zoom']}, Grenzen {'ja' if m.get('bounds') else 'aus den Orten' if mapgenie.bounds_of(m) else 'keine'}, "
@@ -1595,7 +1596,9 @@ def diagnose(proben=None):
     section("Weitere Kartenquellen (Funde vom 11.11.)")
     # interaktive Karten: ob die Punkte als JSON nachgeladen werden (Hinweise in der Seite), sonst Bilder je Gebiet
     looks = lambda t: (page_info(t) + f", {t.count('.json')} × .json, {t.count('marker')} × marker, {t.count('tile')} × tile, "
-                       f"{t.count('drive.google')} × Google Drive, {t.count('<img')} Bilder")
+                       f"{t.count('drive.google')} × Google Drive, {t.count('<img')} Bilder, eingebettete Daten: "
+                       + (", ".join(k for k in ("__NEXT_DATA__", "__NUXT__", "window.__", "application/json", "mapData", "markers\"", "\"lat\"")
+                                    if k in t) or "keine"))
     for name, url in (("IGN, Let’s Go Kanto", "https://www.ign.com/maps/pokemon-lets-go-pikachu-eevee/kanto"),
                       ("IGN, Schwert/Schild Galar", "https://www.ign.com/maps/pokemon-sword-shield/galar"),
                       ("IGN, Feuerrot/Blattgrün", "https://www.ign.com/maps/pokemon-firered-leafgreen-version"),
