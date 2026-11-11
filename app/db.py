@@ -27,6 +27,8 @@ USER_SCHEMA = (
     """CREATE TABLE IF NOT EXISTS schillernd (spiel TEXT, form INTEGER, seit TEXT, PRIMARY KEY (spiel, form))""",
     # 0.13.0: als Alpha gefangen (Legenden-Spiele); gilt zusätzlich zu gefangen
     """CREATE TABLE IF NOT EXISTS alpha (spiel TEXT, form INTEGER, seit TEXT, PRIMARY KEY (spiel, form))""",
+    # 0.16.0: gefundene Kartensymbole (Geisterlichter, Icognito, Kisten …): objekt = Art:x:z (gerundet) oder Nummer der Quelle
+    """CREATE TABLE IF NOT EXISTS gefunden (spiel TEXT, karte TEXT, objekt TEXT, seit TEXT, PRIMARY KEY (spiel, karte, objekt))""",
 )
 # Spalten, die später dazukamen: (Tabelle, Spalte, Typ). Alte Dateien bekommen sie beim Start
 USER_COLUMNS = (

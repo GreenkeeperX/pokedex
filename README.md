@@ -47,6 +47,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Detailseite aus mit den Spawnpunkten des Pokémon. Die „Übersicht mit Bildern“
   zeigt je Kartenfeld die häufigsten Pokémon (je größer, desto wahrscheinlicher), die häufigsten im Gebiet und für ein
   gewähltes Pokémon den Vergleich aller Gebiete.
+- **Karte (Map Genie)**: für jedes Spiel mit Karte bei Map Genie die Orte, Sammelobjekte und Materialien als Ebenen,
+  mit Suche; Symbole lassen sich als gefunden markieren (Rechtsklick), auch auf der Karte von Legenden: Arceus.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
   Gefangene blass, auf Wunsch nur die fehlenden.
 - **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen): Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
@@ -68,6 +70,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
 | [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln) und große Item-Bilder, nur im Datenordner auf dem Server | Bilder von Serebii, Spielgrafik von Nintendo |
 | [PLA Companion](https://software-notion.de/apps/pla-companion/) | Legenden: Arceus: Schnellreise und Lager | Daten von software-notion.de |
+| [Map Genie](https://mapgenie.io) | Interaktive Karten (Orte, Sammelobjekte, Materialien) für jedes Spiel, das es dort gibt; nur im Datenordner, für den privaten Gebrauch | Daten und Kacheln von Map Genie |
 | [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items, Karte (Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas, Items am Boden und in Grabstellen); geplant: Edelhorden | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.

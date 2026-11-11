@@ -520,6 +520,31 @@ a.bm:active{cursor:grabbing}
 .o-baumpkmn{background:#9ccc65}.o-alpha{background:#e53935;color:#fff}.o-boden{background:#d7ccc8;width:12px;height:12px;font-size:8px}
 .pins .mobj.o-boden{margin:-6px 0 0 -6px}
 .pins .mobj.hit{outline:3px solid #fff;z-index:4}
+/* Map Genie: Kacheln und Punkte in Weltpixeln, verschoben über transform */
+.mgmap .mgtiles,.mgmap .mgpins{position:absolute;left:0;top:0;width:0;height:0}
+.mgmap .mgtiles img{position:absolute;width:256px;height:256px;user-select:none;pointer-events:none}
+.mgp,.mgdot{display:inline-grid;place-items:center;width:18px;height:18px;padding:0;border-radius:50%;border:1.5px solid rgba(255,255,255,.85);
+  background:var(--c,#888);color:#fff;font-size:10px;font-weight:700;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.mgp{position:absolute;margin:-9px 0 0 -9px;cursor:pointer}
+.mgp:hover{z-index:2;transform:scale(1.25)}
+.mgp.sel{outline:3px solid var(--accent);z-index:3}
+.mgp.got{opacity:.45;filter:grayscale(.6)}
+.mgp.got::after{content:"✓";position:absolute;right:-7px;top:-8px;font-size:11px;color:#7ee08a;text-shadow:0 0 2px #000}
+.mlay .mgdot{margin-right:4px;width:16px;height:16px;font-size:9px}
+.mgdesc{white-space:pre-line;font-size:13.5px}
+.mgside{display:flex;flex-direction:column;gap:10px;min-width:0;max-height:74vh}
+.mgside .mapside{max-height:none;flex:0 0 auto}
+.mgcats{border:1px solid var(--line);border-radius:10px;padding:8px 10px;overflow:auto;flex:1 1 auto;min-height:0}
+.mgcats .bar{justify-content:space-between;margin-bottom:4px}
+.mgg summary{cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px}
+.mgg summary .link{margin-left:auto;font-size:12.5px}
+.mgg .mlays{display:flex;flex-wrap:wrap;gap:4px;padding:2px 0 8px}
+.mgg .mlay{font-size:12.5px;padding:2px 7px}
+/* gefunden: blass mit Haken */
+.pins .mobj.got{opacity:.45;filter:grayscale(.6)}
+.pins .mobj.got::after{content:"✓";position:absolute;right:-7px;top:-8px;font-size:11px;font-weight:700;color:#7ee08a;text-shadow:0 0 2px #000}
+.mgot{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--muted)}
+.gotbtn.on{border-color:#3d8b4a;color:#7ee08a}
 .mlay-all{margin-left:auto;white-space:nowrap}
 .o-reise{background:#4fc3f7;font-size:12px}.o-lager{background:#ffb74d;border-radius:4px}
 .mgrps{gap:8px 14px;margin-top:-4px}

@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, companion, db, importer, pokewiki, sources, store
+from . import altissimo, companion, db, importer, mapgenie, pokewiki, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -42,7 +42,10 @@ EXTRA_DIR = os.path.join(os.path.dirname(__file__), "..", "extra")
 SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
-         "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)"}
+         "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
+         "mapgenie": "Map Genie (Karten)"}
+MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
+MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 WIKI_PAUSE = 2.0            # Sekunden zwischen zwei Anfragen an das PokéWiki (je Anfrage bis zu 50 Seiten)
 WIKI_GAMES = ("legends-arceus",)    # Spiele, deren Attacken und Pokémon im PokéWiki gelesen werden
 
@@ -461,6 +464,12 @@ def _run(by_hand, force):
             st["sources"]["karten"] = res
             if res["blocked"]:
                 st["rest"]["karten"] = _iso(now() + timedelta(hours=REST_H))
+        if db.has_data() and not _resting(st, "mapgenie", at):
+            STATE["step"] = "Map Genie"
+            res = _mapgenie(log)
+            st["sources"]["mapgenie"] = res
+            if res["blocked"]:
+                st["rest"]["mapgenie"] = _iso(now() + timedelta(hours=REST_H))
         if db.has_data() and settings["sprites"] and not _resting(st, "extras", at):
             total = None
             for kind in EXTRAS:
@@ -765,6 +774,103 @@ def _companion(st, log, at):
     if src.blocked:
         st["rest"]["companion"] = _iso(now() + timedelta(hours=REST_H))
     return out
+
+
+def mg_dir(*parts):
+    return os.path.join(db.data_dir(), "mapgenie", *parts)
+
+
+def _mapgenie(log):
+    """Karten von Map Genie für alle Spiele in mapgenie.GAMES: je Spiel die Kartenseiten und die Orte, kompakt nach
+    data/mapgenie/<Spiel>.json. Kacheln holt erst die Oberfläche (mg_tile). Spiele ohne Karte dort melden 404."""
+    src = _Source("mapgenie", log, pause=MG_PAUSE)
+    found = 0
+    for spiel, slug in mapgenie.GAMES.items():
+        STATE["step"] = f"Map Genie: {slug}"
+        page = src.get(mapgenie.game_url(slug), absent=(404,))
+        if src.stopped:
+            break
+        if not page:
+            continue
+        maps = []
+        for k in mapgenie.map_slugs(page, slug)[:12]:
+            p = src.get(mapgenie.map_url(slug, k), absent=(404,))
+            md = (mapgenie._var(p, "mapData") or {}).get("map") or {} if p else {}
+            d = src.get(mapgenie.data_url(md["id"]), absent=(404,)) if md.get("id") else None
+            m = mapgenie.parse(p, d) if p and d else None
+            if m:
+                m["slug"] = m["slug"] or k
+                maps.append(m)
+            if src.stopped:
+                break
+        if maps:
+            os.makedirs(mg_dir(), exist_ok=True)
+            store.save_json(os.path.join("mapgenie", spiel + ".json"), {"spiel": spiel, "slug": slug, "am": _iso(now()), "karten": maps})
+            log(f"Map Genie: {slug} mit {len(maps)} Karten, {sum(len(m['orte']) for m in maps)} Orten")
+            found += 1
+    return src.result(dateien=found)
+
+
+def mg_maps(spiel):
+    """Gespeicherte Map-Genie-Karten eines Spiels (Erweiterungen: die des Hauptspiels) oder None."""
+    spiel = mapgenie.SHARE.get(spiel, spiel)
+    if spiel not in mapgenie.GAMES:
+        return None
+    f = mg_dir(spiel + ".json")
+    try:
+        mt = os.path.getmtime(f)
+    except OSError:
+        return None
+    hit = _mg_cache.get(spiel)
+    if not hit or hit[0] != mt:
+        hit = _mg_cache[spiel] = (mt, store.load_json(os.path.join("mapgenie", spiel + ".json"), {}) or None)
+    return hit[1]
+
+
+_mg_cache = {}
+
+
+_mg_lock = threading.Lock()
+_mg = {"last": 0.0, "rest": "", "miss": set()}
+
+
+def mg_tile(spiel, karte, z, x, y):
+    """Pfad einer Kachel im Datenordner; fehlt sie, einmal bei Map Genie holen (eine Anfrage zur Zeit, kurze Pause,
+    bei 403/429 ruht die Quelle 24 Stunden). None, wenn es sie nicht gibt."""
+    d = mg_maps(spiel)
+    m = next((m for m in (d or {}).get("karten", []) if m["slug"] == karte), None)
+    rel = mapgenie.tile_ok(m["kacheln"], z, x, y) if m else None
+    if not rel or not (m["min_zoom"] - 2 <= z <= m["max_zoom"]):
+        return None
+    f = mg_dir("kacheln", *rel.split("/"))
+    if os.path.isfile(f):
+        return f
+    with _mg_lock:
+        if os.path.isfile(f):
+            return f
+        if rel in _mg["miss"] or _mg["rest"] > _iso(now()):
+            return None
+        wait = _mg["last"] + MG_TILE_PAUSE - time.monotonic()
+        if wait > 0:
+            sleep(wait)
+        try:
+            body = sources.fetch(mapgenie.TILES + rel, timeout=30, raw=True)
+        except sources.FetchError as e:
+            if e.status in sources.BLOCKED:
+                _mg["rest"] = _iso(now() + timedelta(hours=REST_H))
+            elif e.status:
+                _mg["miss"].add(rel)
+            return None
+        finally:
+            _mg["last"] = time.monotonic()
+        if not (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff" or body[8:12] == b"WEBP"):
+            _mg["miss"].add(rel)
+            return None
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        with open(f + ".neu", "wb") as fh:
+            fh.write(body)
+        os.replace(f + ".neu", f)
+        return f
 
 
 def wiki_titles(con, spiel):
@@ -1127,7 +1233,12 @@ def diagnose(proben=None):
     probe("Serebii, Legenden: Arceus Bidiza", "https://www.serebii.net/pokedex-swsh/bidoof/", page_info, keep=True, headers=html)
     probe("Serebii, Legenden: Arceus Übersicht", "https://www.serebii.net/legendsarceus/", page_info, keep=True, headers=html)
     probe("Pokémon Database, Legenden: Arceus", "https://pokemondb.net/pokedex/game/legends-arceus", page_info, keep=True, headers=html)
-    probe("Map Genie, Karte Legenden: Arceus", "https://mapgenie.io/pokemon-legends-arceus/maps/hisui", page_info, headers=html)
+    for spiel, slug in mapgenie.GAMES.items():
+        probe(f"Map Genie, {slug}", mapgenie.game_url(slug),
+              lambda t, s=slug: page_info(t) + ", Karten: " + (", ".join(mapgenie.map_slugs(t, s)) or "keine"), headers=html)
+    # ältere Spiele: interaktive Karten mit Symbolen (Items, Trainer, Pokémon) zum Abhaken
+    for g in ("Yellow", "Crystal", "Emerald", "Platinum", "Red", "Gold", "FireRed", "HeartGold", "Black", "X", "Sun"):
+        probe(f"pokemoncompletion, {g}", f"https://pokemoncompletion.com/completion/{g}", page_info, keep=200_000, headers=html)
 
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",
