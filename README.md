@@ -40,8 +40,10 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten, jede Tabelle hat ihren eigenen
   Typfilter, farbige Zählspalten (stark, schwach, ohne Wirkung bzw. Schwächen, ×4, Resistenzen, Immunitäten). „Mein Team“
   zeigt nur die Typen des Teams und dazu Verteidigung und Angriff je Mitglied.
-- **Schadensrechner** (Reiter Team, alle Spiele ab Generation 3): eine Attacke gegen die Gegner aus „Gegen Gegner“, das
+- **Schadensrechner** (Reiter Team, alle Spiele): eine Attacke gegen die Gegner aus „Gegen Gegner“, das
   eigene Team oder eine eigene Auswahl, mit Level beider Seiten; „Übersicht“ zeigt jedes Mitglied gegen jeden Gegner.
+  Item und Fähigkeit des Mitglieds zählen, wo sie immer wirken, dazu Sonne oder Regen; Generation 1 und 2 mit eigener Formel.
+- **Legenden: Z-A**: Abklingzeit jeder Attacke. **Pokopia**: die Pokémon des Spiels mit ihren Spezialitäten.
 - **Frühere Basiswerte**: ältere Spiele zeigen die Werte von damals, Generation 1 den Spezial-Wert (Showdown-Mods).
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
 - **Karte** (Legenden: Arceus): Jubeldorf und die fünf Gebiete zum Ziehen und Zoomen; Spawnpunkte (Alpha hervorgehoben,
@@ -91,7 +93,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Strahlender Diamant/Leuchtende Perle, Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Mega-Dimension: Gebiet, Level, Alpha, feste Begegnungen); Item-Listen und Itemnamen je Spiel; Lernlisten von Legenden: Z-A | GPL-3.0 |
 | [Altissimo](https://github.com/Altissimo1/altissimo1.github.io) | Legenden: Arceus: Kartensymbole, Geisterlichter, Icognito, Gedichte, Grabstellen, Kartenbild Jubeldorf, Rezepte | GPL-3.0 (Kartenbild nur im Datenordner) |
 | [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
-| [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln) und große Item-Bilder, nur im Datenordner auf dem Server | Bilder von Serebii, Spielgrafik von Nintendo |
+| [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln) und große Item-Bilder, nur im Datenordner auf dem Server; Abklingzeiten in Legenden: Z-A, Pokémon und Spezialitäten in Pokopia | Bilder von Serebii, Spielgrafik von Nintendo |
 | [PLA Companion](https://software-notion.de/apps/pla-companion/) | Legenden: Arceus: Schnellreise und Lager | Daten von software-notion.de |
 | [Map Genie](https://mapgenie.io) | Interaktive Karten (Orte, Sammelobjekte, Materialien) für jedes Spiel, das es dort gibt; nur im Datenordner, für den privaten Gebrauch | Daten und Kacheln von Map Genie |
 | [IGN Maps](https://www.ign.com/maps) | Kachelkarten für Schwert/Schild und Let’s Go mit den Punkten, die die Seite mitbringt; nur im Datenordner, für den privaten Gebrauch | Karten von IGN |

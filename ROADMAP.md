@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.30.0 (11.11.2026)
+
+- `app/serebii.py`: Z-A-Attackenliste (`legendsz-a/attacks.shtml`) → `attacke_spiel.abklingzeit`; Pokédexe von Pokopia
+  (`pokemonpokopia/availablepokemon.shtml`, Sprudelbecken, Event) → Tabelle `pokopia` und `spiel_form`. Der Leser schneidet an
+  Links und Bildern, nicht an der Tabellenform; der Verbindungstest prüft ihn an den echten Seiten
+- Schadensrechner: `schaden.calc_old` für Generation 1 und 2, `schaden.modifiers` für Item, Fähigkeit und Wetter,
+  Fähigkeit der Verteidiger über `typen.ABILITY_DEFENSE`; `importer.VERSION` 18
+- Offen: Abklingzeit in der Attacken-Wertung von Z-A (Stärke je Sekunde), Plus-Attacken, deutsche Namen der
+  Pokopia-Spezialitäten, Felder und Fähigkeiten mit Bedingung im Schadensrechner
+
 ## 0.29.0 (11.11.2026)
 
 - `app/ign.py`: Kartenseite von IGN → Karte wie `mapgenie.parse` (Einheitsquadrat auf der ganzen Mercator-Welt, Kacheln

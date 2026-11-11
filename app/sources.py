@@ -10,11 +10,19 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.29.0"
+VERSION = "0.30.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.30.0", "11.11.2026", [
+        "Legenden: Z-A: Abklingzeit jeder Attacke (Serebii) in den Attackenlisten, mit Hinweis, wie Initiative sie verkürzt",
+        "Pokopia: welche Pokémon es gibt, mit Nummer im Pokédex und ihren Spezialitäten (Serebii); die Liste filtert danach",
+        "Schadensrechner auch für Generation 1 und 2 (DVs, Stat Exp, Spezial-Wert, Zufall 217 bis 255)",
+        "Schadensrechner: Item und Fähigkeit des Team-Platzes zählen, wo sie ohne Bedingung wirken (Leben-Orb, Wahlband, "
+        "Wahlglas, Expertengurt, Typ-Items und Platten, Kraftkoloss, Anpassung, Techniker …), dazu Sonne und Regen; "
+        "Fähigkeiten der Gegner wie Schwebe oder Speckschicht",
+    ]),
     ("0.29.0", "11.11.2026", [
         "Karten für Schwert/Schild (Galar) und Let’s Go (Kanto) von IGN: Kachelkarte zum Zoomen, bei Galar mit den Orten; "
         "die Kacheln lädt der Server im Hintergrund, danach braucht die Karte kein Netz",

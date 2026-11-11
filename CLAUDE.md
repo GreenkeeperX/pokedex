@@ -43,4 +43,6 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/static/`: Oberfläche (`index.html`, `style.css`, `js/app.js`); siehe `docs/oberflaeche.md`
 - `extra/`: gepflegte Ergänzungen als JSON (`spielwissen.json`: Spielwissen für die Detailseite, liest der Server direkt)
 - `app/mapgenie.py`: Karten von Map Genie lesen, eigene Punkte ausrichten und mit ihnen zu einer Datenbank zusammenführen
+- `app/pkcompletion.py`, `app/ign.py`: weitere Kartenquellen in derselben Form wie Map Genie
+- `app/serebii.py`: Seiten von Serebii lesen (Abklingzeiten in Legenden: Z-A, Pokédexe von Pokopia), ohne Netz
 - `tests/test_all.py`: Tests ohne Netz; mit `POKEAPI_DB=/pfad/pokeapi.db` auch gegen eine gebaute Datenbank

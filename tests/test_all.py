@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from app import abruf, attacken, aufgaben, db, importer, server, showdown, sources, store, team, typen
-from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, STAHL, UNLICHT, WASSER
+from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
 EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
@@ -1246,6 +1246,71 @@ class Server(TempData):
         c2 = schaden.calc(50, 100, 2, BODEN, [80, 130, 95, 80, 85, 102], [BODEN], [95, 115, 90, 80, 90, 60], [FEUER], ch(),
                           d_tera=FLUG)
         self.assertEqual((c2["max"], c2["sicher"]), (0, None))                # Tera Flug: Boden wirkt nicht
+        # Fähigkeiten, Items, Wetter (0.30.0)
+        m = schaden.modifiers(2, 100, "water", 2.0, "huge-power", "life-orb", "regen")
+        self.assertEqual((m["wert"], m["ende"], m["wetter"], len(m["texte"])), (2.0, 1.3, 1.5, 3))
+        self.assertEqual(schaden.modifiers(3, 100, "water", 1.0, "huge-power", "expert-belt")["texte"], [])   # Kraftkoloss nur physisch, Gurt nur sehr effektiv
+        self.assertEqual(schaden.modifiers(2, 60, "normal", 1.0, "technician", "silk-scarf")["staerke"], 1.5 * 1.2)
+        self.assertEqual(schaden.modifiers(2, 60, "normal", 1.0, "technician", "silk-scarf", gen=3)["staerke"], 1.1)  # Techniker ab Gen. 4
+        self.assertEqual(schaden.modifiers(2, 90, "fire", 1.0, "adaptability")["stab"], 2.0)
+        c3 = schaden.calc(50, 100, 2, WASSER, [80, 130, 95, 80, 85, 102], [WASSER], [95, 115, 90, 80, 90, 60], [FEUER], ch(),
+                          spread=True, mods=schaden.modifiers(2, 100, "water", 2.0, None, "life-orb", "regen"))
+        self.assertGreater(c3["min"], c["min"] * 1.9)
+        self.assertEqual(schaden.calc(50, 100, 2, BODEN, [80, 130, 95, 80, 85, 102], [BODEN], [95, 115, 90, 80, 90, 60], [FEUER], ch(),
+                                      d_mod=0)["max"], 0)                     # Schwebe
+        # Generation 1 und 2: DV, Stat Exp (Wurzel bei 255 gekappt), Zufall 217 bis 255
+        self.assertEqual((schaden.stat_old(106, 100, hp=True), schaden.stat_old(154, 100), schaden.stat_old(250, 100, hp=True)), (415, 406, 703))
+        self.assertEqual(schaden.stat_old(100, 50, 0, 0), 105)
+        r1 = schaden.rolls_old(1, 50, 100, 150, 100)
+        self.assertEqual((len(r1), r1[-1], r1[0]), (39, 68, 57))             # (22 · 100 · 150 / 100) / 50 + 2 = 68
+        self.assertEqual(schaden.rolls_old(1, 50, 100, 150, 100, stab=1.5)[-1], 102)
+        self.assertEqual(schaden.rolls_old(1, 50, 100, 150, 100, crit=True)[-1], 128)   # Gen. 1: Level doppelt (42 · 100 · 150 / 100) / 50 + 2
+        self.assertEqual(schaden.rolls_old(2, 50, 100, 150, 100, crit=True)[-1], 134)   # Gen. 2: Schaden doppelt (66 · 2 + 2)
+        self.assertEqual(schaden.rolls_old(1, 50, 100, 600, 400)[-1], 68)    # über 255: beide geviertelt
+        self.assertEqual(schaden.rolls_old(1, 50, 100, 150, 100, effs=(2.0, 0.5))[-1], 68)
+        self.assertEqual(schaden.rolls_old(1, 50, 100, 150, 100, effs=(0,)), [0] * 39)
+        o = schaden.calc_old(1, 50, 90, 3, PSYCHO, [106, 110, 90, 154, 154, 130], [PSYCHO], [250, 5, 5, 105, 105, 50], [NORMAL], ch())
+        self.assertEqual((o["angriff"], o["verteidigung"], o["kp"]), (schaden.stat_old(154, 50), schaden.stat_old(105, 50, exp=0), schaden.stat_old(250, 50, exp=0, hp=True)))
+        self.assertEqual(o["stab"], 1.5)
+
+    def test_serebii(self):
+        import sqlite3
+        from app import importer as _imp, serebii
+        za = ('<table><tr><td>Name</td><td>Type</td><td>Cat</td><td>Cooldown</td><td>Base Power</td><td>Effect</td></tr>'
+              '<tr><td class="fooinfo"><a href="/attackdex-sv/aquajet.shtml">Aqua Jet</a></td><td><img src="/pokedex-bw/type/water.gif"></td>'
+              '<td><img src="/pokedex-bw/type/physical.png"></td><td>3</td><td>30</td><td>Hits 2 times in 10 seconds.</td></tr>'
+              '<tr><td><a href="https://www.serebii.net/attackdex-sv/acidarmor.shtml">Acid Armor</a></td><td><img src="/pokedex-bw/type/poison.gif"></td>'
+              '<td><img src="/pokedex-bw/type/other.png"></td><td>9</td><td>--</td><td>Raises Defense.</td></tr></table>'
+              '<a href="/attackdex-sv/">Gen 9 Attackdex</a>')
+        m = serebii.za_cooldowns(za)
+        self.assertEqual(m["aquajet"], {"name": "Aqua Jet", "abkling": 3, "staerke": 30, "typ": "water", "klasse": "physical"})
+        self.assertEqual((m["acidarmor"]["abkling"], m["acidarmor"]["staerke"]), (9, None))
+        self.assertEqual(len(m), 2)
+        pk = ('<style>a{color:#507C36}</style><table><tr><td>No.</td><td>Pic</td><td>Name</td><td>Specialty</td></tr>'
+              '<tr><td class="cen">#001</td><td><a href="/pokemonpokopia/pokedex/bulbasaur.shtml"><img src="/pokemonpokopia/pokemon/small/001.png"></a></td>'
+              '<td><a href="/pokemonpokopia/pokedex/bulbasaur.shtml">Bulbasaur</a></td><td><table><tr><td><img src="/pokemonpokopia/pokedex/specialty/grow.png"></td>'
+              '<td><a href="/pokemonpokopia/pokedex/specialty/grow.shtml">Grow</a></td></tr></table></td></tr>'
+              '<tr><td class="cen">#079</td><td><img src="/pokemonpokopia/pokemon/small/025-peakychu.png"></td>'
+              '<td><a href="/pokemonpokopia/pokedex/peakychu.shtml">Peakychu</a></td><td><a href="/pokemonpokopia/pokedex/specialty/generate.shtml">Generate</a>'
+              '<a href="/pokemonpokopia/pokedex/specialty/litter.shtml">Litter</a></td></tr></table>')
+        rows = serebii.pokopia_dex(pk)
+        self.assertEqual([(r["nr"], r["national"], r["form"], r["name"], r["spezial"]) for r in rows],
+                         [(1, 1, "", "Bulbasaur", ["grow"]), (79, 25, "peakychu", "Peakychu", ["generate", "litter"])])
+        self.assertEqual((serebii.spezial_de("grow"), serebii.spezial_de("neu-art")), ("Wachsen lassen", "Neu Art"))
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE attacke (id INTEGER, kennung TEXT)")
+        con.execute("INSERT INTO attacke VALUES (453, 'aqua-jet'), (151, 'acid-armor')")
+        con.execute("CREATE TABLE spiel (id INTEGER, kennung TEXT)")
+        con.execute("INSERT INTO spiel VALUES (1000, 'pokopia')")
+        con.execute("CREATE TABLE form (id INTEGER, art INTEGER, kennung TEXT, standard INTEGER)")
+        con.execute("INSERT INTO form VALUES (1, 1, 'bulbasaur', 1), (25, 25, 'pikachu', 1)")
+        con.execute("CREATE TABLE spiel_form (spiel INTEGER, form INTEGER, nr INTEGER, PRIMARY KEY (spiel, form))")
+        con.execute("CREATE TABLE attacke_spiel (spiel TEXT, attacke INTEGER, staerke INTEGER, kraft INTEGER, tempo INTEGER, "
+                    "genauigkeit INTEGER, ap INTEGER, abklingzeit INTEGER, PRIMARY KEY (spiel, attacke))")
+        self.assertEqual(_imp._derive_serebii(con, {"za": m, "pokopia": {"haupt": rows}}), (2, 2))
+        self.assertEqual(con.execute("SELECT attacke, abklingzeit FROM attacke_spiel ORDER BY attacke").fetchall(), [(151, 9), (453, 3)])
+        self.assertEqual(con.execute("SELECT form, nr FROM spiel_form ORDER BY nr").fetchall(), [(1, 1), (25, 79)])
+        self.assertEqual(con.execute("SELECT name, spezial FROM pokopia WHERE nr = 79").fetchone(), ("Peakychu", '["generate", "litter"]'))
 
     def test_raids_und_crypto_lesen(self):
         rec = (25).to_bytes(2, "little") + bytes([0, 0, 1, 2, 0, 35]) + b"".join(m.to_bytes(2, "little") for m in (85, 609, 0, 0)) \
@@ -1473,6 +1538,18 @@ class MitDatenbank(TempData):
         self.assertEqual(r["rows"][1]["max"], 0)          # Garados fliegt
         self.assertGreater(r["rows"][0]["max"], r["rows"][0]["min"])
         self.assertEqual(abfragen.damage_view({"spiel": "champions", "ids": [kn], "slot": 3, "attacke": erd})["rows"], [])
+        # 0.30.0: Item des Platzes und Wetter zählen; Generation 1 rechnet mit eigener Formel
+        lo = abfragen._calc_names(abfragen.data())["items"]
+        orb = next(i for i, (k, _) in lo.items() if k == "life-orb")
+        r2 = abfragen.damage_view({"spiel": "champions", "ids": [kn], "details": [{"attacken": [erd], "item": orb}], "slot": 0,
+                                   "attacke": erd, "verteidiger": [kn]})
+        self.assertGreater(r2["rows"][0]["max"], r["rows"][0]["max"])
+        self.assertTrue(any("1,3" in x for x in r2["eingerechnet"]))
+        bi = abfragen.search({"spiel": "red-blue", "q": "Bisaflor"})["rows"][0]["id"]
+        rb = abfragen.damage_view({"spiel": "red-blue", "ids": [kn], "details": [{"attacken": [erd]}], "slot": 0, "attacke": erd,
+                                   "verteidiger": [bi]})
+        self.assertEqual((rb["gen"], len(rb["rows"])), (1, 1))
+        self.assertGreater(rb["rows"][0]["max"], 0)
 
 
 if __name__ == "__main__":

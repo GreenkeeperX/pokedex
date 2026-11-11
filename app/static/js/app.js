@@ -1184,7 +1184,7 @@ async function detailView(id, slot = null) {
         ${catchHtml(d)}${partnerHtml(d)}
         ${raidHtml(d)}
         ${cryptoHtml(d)}
-        ${heldHtml(d)}
+        ${heldHtml(d)}${pokopiaHtml(d)}
         ${optikHtml(d)}
       </div>
     </div>
@@ -1361,6 +1361,14 @@ async function raidsView(arg) {
         <td class="hint">${esc(x.gebiet)}</td></tr>`; }).join("")}</tbody></table></div>`
     : `<p class="hint">Keine Raids gefunden. Der nächste Abgleich holt sie aus PKHeX.</p>`;
 }
+/* Pokopia (Serebii): Nummer im Pokédex und Spezialitäten */
+function pokopiaHtml(d) {
+  const xs = d.pokopia || [];
+  if (!xs.length) return "";
+  return `<div class="box"><h2>In Pokopia</h2><table class="rows"><tbody>${xs.map((x) => `<tr><td class="hint nw">${esc(x.dex)} #${String(x.nr).padStart(3, "0")}</td>
+    <td><b>${esc(x.name)}</b></td><td>${x.spezial.map((s) => `<span class="cls">${esc(s)}</span>`).join(" ") || `<span class="hint">keine Spezialität</span>`}</td></tr>`).join("")}</tbody></table>
+    <p class="hint">Spezialitäten: was das Pokémon in Pokopia für dich erledigt. Aus Serebii, Namen eigene Übersetzung.</p></div>`;
+}
 /* Getragene Items wilder Pokémon (PokéWiki), mit Bild und Anteil; „Elite“ nur bei Alpha-Pokémon */
 function heldHtml(d) {
   const xs = d.getragen || [];
@@ -1438,7 +1446,7 @@ function moreHtml(d) {
 const ramp = (x) => `hsl(${Math.max(0, Math.min(1, x)) * 125} 62% 40%)`;
 const powCell = (v) => v ? `<span style="color:${ramp((v - 30) / 100)}">${v}</span>` : "–";
 // Stärke, in Legenden: Arceus darunter Kraftstil / Tempostil (aus dem PokéWiki)
-const powStil = (m) => powCell(m.staerke) + (m.kraft != null || m.tempo != null
+const powStil = (m) => powCell(m.staerke) + (m.abkling != null ? ` <span class="stil" data-tip="${esc(`Abklingzeit in Legenden: Z-A: ${m.abkling} Sekunden, bis die Attacke wieder einsetzbar ist (Serebii).\nHohe Initiative verkürzt sie, etwa 3 Sekunden je 100 Punkte über 25, nie unter 3; Müdigkeit verdoppelt sie.`)}">${m.abkling} s</span>` : "") + (m.kraft != null || m.tempo != null
   ? `<span class="stil" data-tip="${esc(`Kraftstil: Stärke ${m.kraft ?? "–"} (langsamer, oft mit Zusatzwirkung)\nTempostil: Stärke ${m.tempo ?? "–"} (schneller, oft öfter am Zug)`)}">${m.kraft ?? "–"} / ${m.tempo ?? "–"}</span>` : "");
 const accCell = (v) => v ? `<span style="color:${ramp((v - 60) / 40)}">${v}</span>` : `<span data-tip="Trifft immer">–</span>`;
 const scoreColor = (v) => ramp((v - 20) / 120);
@@ -2829,7 +2837,7 @@ async function chartView() {
 /* ------------------------------------------------------------------ Initiative-Liste */
 // Initiative-Wert ab Generation 3: ((2·Basis + DV + EV/4) · Level/100 + 5) · Wesen; bis Generation 2 mit DV (0–15) und Stat Exp
 function speedStat(base, lv, iv, ev, nat, gen) {
-  if (gen <= 2) return Math.floor(((base + iv) * 2 + Math.floor(Math.ceil(Math.sqrt(ev)) / 4)) * lv / 100) + 5;
+  if (gen <= 2) return Math.floor(((base + iv) * 2 + Math.floor(Math.min(255, Math.ceil(Math.sqrt(ev))) / 4)) * lv / 100) + 5;
   return Math.floor((Math.floor((2 * base + iv + Math.floor(ev / 4)) * lv / 100) + 5) * nat);
 }
 /* Legenden: Arceus: andere Formel, Effort Level 0–10 statt EVs und DVs (wie app/effort.py) */
@@ -2945,7 +2953,7 @@ async function logBox() {
   $("#logall")?.addEventListener("toggle", (e) => store.set("logOpen", e.target.open));
 }
 /* Schadensrechner: eine gewählte Attacke eines Team-Platzes gegen Gegner. Champions (Reiter Kampf, Level 50): die
-   häufigsten aus der Nutzungsstatistik; sonst (Reiter Team, ab Generation 3): die Gegner aus „Gegen Gegner“ mit Level.
+   häufigsten aus der Nutzungsstatistik; sonst (Reiter Team, alle Generationen): die Gegner aus „Gegen Gegner“ mit Level.
    Dazu immer das eigene Team oder eine eigene Auswahl */
 async function calcBox() {
   const CH = () => BATTLE() ? "<h2>Schadensrechner</h2>" : "";
@@ -2985,17 +2993,20 @@ async function calcBox() {
   }
   const r = await api("/api/schaden", {spiel: S.game, ids: t.ids, details: t.details, slot: o.slot, attacke: o.move, verteidiger: foes,
     vert: o.vert, krit: o.krit ? 1 : "", flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null,
-    level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv});
+    level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv, wetter: o.wetter || ""});
   if (rid !== RID || !el()) return;
   if (r.hinweis) { el().innerHTML = `${CH()}<p class="hint">${esc(r.hinweis)}</p>`; return; }
   // Übersicht: je Mitglied gegen jeden Gegner die stärkste seiner gewählten Attacken
   const all = o.ansicht === "alle" ? await api("/api/schaden/uebersicht", {spiel: S.game, ids: t.ids, details: t.details, verteidiger: foes, vert: o.vert, krit: o.krit ? 1 : "",
-    flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null, level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv}) : null;
+    flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null, level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv, wetter: o.wetter || ""}) : null;
   if (rid !== RID || !el()) return;
   const pct = (x) => String(x).replace(".", ",");
   const toneOf = (x) => x.min_pct >= 100 ? "go" : x.max_pct >= 100 ? "warn" : x.max_pct >= 50 ? "mid" : "low";
   const ko = (x) => !x.sicher ? "keine Wirkung" : x.sicher === 1 ? "sicher K.O." : x.moeglich === 1 ? `K.O. mit Glück, sonst ${x.sicher} Treffer` : x.sicher === x.moeglich ? `${x.sicher} Treffer` : `${x.moeglich}–${x.sicher} Treffer`;
   const cls = (x) => x.sicher === 1 ? "go" : x.moeglich === 1 ? "warn" : x.sicher === 0 || !x.sicher ? "stop" : "";
+  const old = r.gen <= 2, inc = (r.eingerechnet || []).length ? `Eingerechnet: ${esc(r.eingerechnet.join(", "))}. ` : "";
+  const rest = old ? `${inc}Bis Generation 2: volle DVs und Stat Exp, Zufall 217 bis 255 von 255${r.gen === 1 ? ", ein Spezial-Wert für Angriff und Verteidigung" : ""}.`
+    : `${inc}Ohne Felder und Fähigkeiten mit Bedingung (wenig KP, Kontakt …); Zufall 85 bis 100 %.`;
   el().innerHTML = `${CH()}
     <div class="bar"><span class="seg"><button class="${o.ansicht === "alle" ? "" : "on"}" data-cv="eins" data-tip="Eine Attacke eines Mitglieds gegen alle Gegner, mit Balken und Treffern bis K.O.">eine Attacke</button><button class="${o.ansicht === "alle" ? "on" : ""}" data-cv="alle" data-tip="Jedes Mitglied gegen jeden Gegner mit seiner stärksten gewählten Attacke">Übersicht</button></span>
       ${o.ansicht === "alle" ? "" : `<span class="hint">Angreifer</span><span class="seg cslots">${t.ids.map((id, i) => dmg(i).length ? `<button class="${i === o.slot ? "on" : ""}" data-cslot="${i}" data-hc="${id}" data-slot="${i}" aria-label="${esc(ROWS[id]?.name || id)}">${img(id, "sm")}<span>${esc(ROWS[id]?.name || id)}</span></button>` : "").join("")}</span>
@@ -3003,15 +3014,16 @@ async function calcBox() {
       <label data-tip="${champ ? "Häufige Gegner: die 30 meistgenutzten Pokémon der Nutzungsstatistik von Smogon (unten unter „Häufige Gegner“)." : "Gegner von oben: die aus „Gegen Gegner“."} Mein Team: deine eigenen sechs. Favoriten: deine Favoriten in diesem Spiel. Eigene Auswahl: wen du selbst hinzufügst">gegen <select id="cgegen">${champ && (S.usageIds || []).length ? `<option value="smogon"${o.gegen === "smogon" ? " selected" : ""}>häufige Gegner (Top 30)</option>` : ""}
         ${!champ && S.foes.length ? `<option value="foes"${o.gegen === "foes" ? " selected" : ""}>Gegner von oben (${S.foes.length})</option>` : ""}
         <option value="team"${o.gegen === "team" ? " selected" : ""}>mein Team</option>${favIds.length ? `<option value="favs"${o.gegen === "favs" ? " selected" : ""}>Favoriten (${favIds.length})</option>` : ""}<option value="eigene"${o.gegen === "eigene" ? " selected" : ""}>eigene Auswahl (${own.length})</option></select></label>
-      <label data-tip="Wie viel die Verteidiger in KP und die passende Verteidigung stecken (252 EVs)">Gegner <select id="cvert">${[["0", "nicht investiert"], ["kp", "volle KP"], ["kp_vert", "volle KP und Verteidigung"]].map(([k, n]) => `<option value="${k}"${o.vert === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label data-tip="${old ? "Ob die Verteidiger volle Stat Exp in KP und der passenden Verteidigung haben (DVs immer 15)" : "Wie viel die Verteidiger in KP und die passende Verteidigung stecken (252 EVs)"}">Gegner <select id="cvert">${[["0", "nicht investiert"], ["kp", "volle KP"], ["kp_vert", "volle KP und Verteidigung"]].map(([k, n]) => `<option value="${k}"${o.vert === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       ${champ ? "" : `<label data-tip="Level deines Pokémon; leer: wie auf seiner Detailseite eingetragen, sonst 50">Level <input type="number" id="clv" min="1" max="100" value="${esc(o.level)}" placeholder="${r.level}" style="width:64px"></label>
         <label data-tip="Level der Gegner; leer: wie dein Pokémon">Level Gegner <input type="number" id="clvv" min="1" max="100" value="${esc(o.lvv)}" placeholder="${r.level_vert}" style="width:64px"></label>`}
       ${champ || TERA() ? `<label data-tip="Tera-Typ aller Verteidiger (ersetzt ihre Typen)">Tera Gegner <select id="ctera"><option value="">–</option>${Object.entries(S.types).map(([k, n]) => `<option value="${k}"${o.tera === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label>` : ""}
       ${champ ? `<label data-tip="Flächenattacken treffen im Doppel beide Gegner mit 75 % Stärke">Fläche <select id="cfl">${[["auto", "nach Attacke"], ["ja", "ja"], ["nein", "nein"]].map(([k, n]) => `<option value="${k}"${o.flaeche === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
-      <label data-tip="Volltreffer: × ${r.krit === 2 ? "2 (bis Generation 5)" : "1,5"}"><input type="checkbox" id="ckrit"${o.krit ? " checked" : ""}> Volltreffer</label></div>
-    ${all ? `<p class="hint">Je Zelle die stärkste gewählte Attacke des Mitglieds gegen den Gegner, Schaden in Prozent seiner KP (größter Wurf, Einzelheiten beim Darüberfahren); grün: sicher K.O., gelb: K.O. mit Glück. Level ${r.level}${r.level_vert !== r.level ? `, Gegner Level ${r.level_vert}` : ""}; ohne Fähigkeiten, Items, Wetter und Felder.</p>` : `<p class="hint">${esc(r.angreifer)}: ${esc(r.attacke)} ${tchip(r.typ)} ${r.klasse === 2 ? "physisch" : "speziell"}, Stärke ${r.staerke}${r.stab > 1 ? `, <span data-tip="Eigentyp-Bonus: Attacke vom eigenen Typ ×1,5${r.stab === 2 ? "; Tera-Typ gleich eigenem Typ: ×2" : ""}">Eigentyp ×${fl(r.stab)}</span>` : `, <span data-tip="Kein eigener Typ: ohne Eigentyp-Bonus (sonst ×1,5)">ohne Eigentyp-Bonus</span>`}, Level ${r.level},
-      ${r.ev == null ? "Angriff voll investiert (252 EVs)" : `${r.ev} EVs`}${r.wesen > 1 ? ", Wesen +10 %" : r.wesen < 1 ? ", Wesen −10 %" : ""}${r.tera ? `, Tera ${tname(r.tera)}` : ""}${r.flaeche ? ", als Flächenattacke (× 0,75)" : ""}${r.level_vert !== r.level ? `; Gegner Level ${r.level_vert}` : ""}.
-      Ohne Fähigkeiten, Items, Wetter und Felder; Zufall 85 bis 100 %.</p>`}
+      ${r.gen >= 2 ? `<label data-tip="Sonne: Feuer ×1,5, Wasser ×0,5; Regen umgekehrt">Wetter <select id="cwet">${[["", "keins"], ["sonne", "Sonne"], ["regen", "Regen"]].map(([k, n]) => `<option value="${k}"${(o.wetter || "") === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
+      <label data-tip="Volltreffer: ${r.gen === 1 ? "das Level zählt doppelt" : r.krit === 2 ? "× 2 (bis Generation 5)" : "× 1,5"}"><input type="checkbox" id="ckrit"${o.krit ? " checked" : ""}> Volltreffer</label></div>
+    ${all ? `<p class="hint">Je Zelle die stärkste gewählte Attacke des Mitglieds gegen den Gegner, Schaden in Prozent seiner KP (größter Wurf, Einzelheiten beim Darüberfahren); grün: sicher K.O., gelb: K.O. mit Glück. Level ${r.level}${r.level_vert !== r.level ? `, Gegner Level ${r.level_vert}` : ""}. ${rest}</p>` : `<p class="hint">${esc(r.angreifer)}: ${esc(r.attacke)} ${tchip(r.typ)} ${r.klasse === 2 ? "physisch" : "speziell"}, Stärke ${r.staerke}${r.stab > 1 ? `, <span data-tip="Eigentyp-Bonus: Attacke vom eigenen Typ ×1,5${r.stab === 2 ? "; Tera-Typ gleich eigenem Typ: ×2" : ""}">Eigentyp ×${fl(r.stab)}</span>` : `, <span data-tip="Kein eigener Typ: ohne Eigentyp-Bonus (sonst ×1,5)">ohne Eigentyp-Bonus</span>`}, Level ${r.level},
+      ${old ? "volle DVs und Stat Exp" : r.ev == null ? "Angriff voll investiert (252 EVs)" : `${r.ev} EVs`}${r.wesen > 1 ? ", Wesen +10 %" : r.wesen < 1 ? ", Wesen −10 %" : ""}${r.tera ? `, Tera ${tname(r.tera)}` : ""}${r.flaeche ? ", als Flächenattacke (× 0,75)" : ""}${r.level_vert !== r.level ? `; Gegner Level ${r.level_vert}` : ""}.
+      ${rest}</p>`}
     ${o.gegen === "eigene" ? `<div class="bar logpick">${own.map((id) => `<span class="chip on" data-act="calcfoe" data-id="${id}" data-tip="Entfernen">${img(id, "sm")}${esc(ROWS[id]?.name || "#" + id)} ✕</span>`).join("")}
       <div class="ac"><input id="cfoeq" type="search" placeholder="Gegner hinzufügen" style="width:200px"></div></div>` : ""}
     ${all ? `<div class="scroll"><table class="rows dmgx"><thead><tr><th></th>${all.gegner.map((g) => `<th class="c" data-hc="${g.id}">${img(g.id, "sm")}<div>${esc(g.name)}</div></th>`).join("")}</tr></thead>
@@ -3019,7 +3031,7 @@ async function calcBox() {
         : `<td class="c ${toneOf(x)}" data-tip="${esc(`${m.name}: ${x.attacke} gegen ${all.gegner[k].name}\n${pct(x.min_pct)}–${pct(x.max_pct)} % (${ko(x)}), Wirkung ×${fl(x.eff)}`)}"><b>${pct(x.max_pct)} %</b><div class="hint">${esc(x.attacke)}</div></td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<div class="scroll sticky"><table class="rows sort dmg fixed"><colgroup><col style="width:26%"><col style="width:84px"><col style="width:180px"><col style="width:110px"><col style="width:120px"><col></colgroup>
       <thead><tr>${th("Verteidiger")}${thc("Wirkung")}${thc("Schaden", "Balken: kräftig der kleinste Wurf, blass bis zum größten; ein voller Balken ist 100 % der KP")}${thc("in %", "Prozent der KP, kleinster bis größter Wurf")}${thc("KP")}${th("Treffer bis K.O.", "", true)}</tr></thead>
       <tbody>${r.rows.map((x) => { const tone = x.min_pct >= 100 ? "go" : x.max_pct >= 100 ? "warn" : x.max_pct >= 50 ? "mid" : "low";
-        return `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a></td>
+        return `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a>${x.faehigkeit_vert ? ` <span class="cls" data-tip="Fähigkeit des Verteidigers ändert die Wirkung dieser Attacke (gerechnet mit seiner ersten Fähigkeit)">${esc(x.faehigkeit_vert)}</span>` : ""}</td>
         <td class="c" data-s="${x.eff}">${x.eff === 1 ? `<span class="hint">×1</span>` : `<span class="f ${fcls(x.eff)}">×${fl(x.eff)}</span>`}</td>
         <td data-s="${x.max_pct}"><span class="dbar ${tone}"><i class="mx" style="width:${Math.min(100, x.max_pct)}%"></i><i class="mn" style="width:${Math.min(100, x.min_pct)}%"></i></span></td>
         <td class="c num ${tone}" data-s="${x.max_pct}">${pct(x.min_pct)}–${pct(x.max_pct)} %</td>
@@ -3036,6 +3048,7 @@ async function calcBox() {
   $("#clv")?.addEventListener("change", (e) => set("level", e.target.value));
   $("#clvv")?.addEventListener("change", (e) => set("lvv", e.target.value));
   $("#ckrit").addEventListener("change", (e) => set("krit", e.target.checked));
+  $("#cwet")?.addEventListener("change", (e) => set("wetter", e.target.value));
 }
 async function speedView() {
   const rid = RID, gen = S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;

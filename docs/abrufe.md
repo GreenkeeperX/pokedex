@@ -49,6 +49,10 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    (`companion.fit`, `importer._derive_companion`). Das Protokoll zählt alle Arten von Einträgen.
    Das Ergebnis liegt in
    `pokewiki.json` im Datenordner und gilt weiter, wenn das Wiki ruht. Die Namen stammen aus der bisherigen Datenbank.
+   **Serebii** (`abruf._serebii`, `app/serebii.py`, 2 Sekunden Pause): die Attackenliste von Legenden: Z-A
+   (`serebii.za_cooldowns`: Abklingzeit, Stärke, Typ) und die drei Pokédexe von Pokopia (`serebii.pokopia_dex`: Nummer,
+   nationale Nummer aus dem Bild, Name, Spezialitäten). Ergebnis in `serebii.json`; was ein Lauf nicht bekommt, gilt vom
+   letzten weiter. Beim Bauen läuft es mit dem PokéWiki zusammen (`importer._derive_serebii`).
 4. Hat sich nichts geändert (Commit, Prüfsumme von Showdown, PKHeX, PokéWiki, Altissimo und `extra/`, `importer.VERSION`), bleibt die
    Datenbank. Sonst alle CSV-Dateien holen (raw.githubusercontent.com; bei unverändertem Commit aus
    `pokeapi-csv.json.gz` im Datenordner), in `pokeapi.db.neu` bauen und nach

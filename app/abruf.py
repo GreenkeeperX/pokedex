@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, companion, db, ign, importer, mapgenie, pkcompletion, pokewiki, smogon, sources, store
+from . import altissimo, companion, db, ign, importer, mapgenie, pkcompletion, pokewiki, serebii, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -622,15 +622,17 @@ def _build(st, log, force, at):
         if sd.blocked:
             st["rest"]["showdown"] = _iso(now() + timedelta(hours=REST_H))
     # Quellen ohne gegenseitige Abhängigkeit gleichzeitig; die Pause je Server gilt weiter für alle zusammen
-    STATE["step"] = "Showdown, PKHeX, Spawnpunkte, PokéWiki, Altissimo, PLA Companion (parallel)"
+    STATE["step"] = "Showdown, PKHeX, Spawnpunkte, PokéWiki, Serebii, Altissimo, PLA Companion (parallel)"
     got = _parallel({"showdown": showdown_all, "pkhex": lambda: _pkhex(st, log, at), "spawns": lambda: _spawns(st, log, at),
-                     "pokewiki": lambda: _pokewiki(st, log, at), "altissimo": lambda: _altissimo(st, log, at),
-                     "companion": lambda: _companion(st, log, at)})
+                     "pokewiki": lambda: _pokewiki(st, log, at), "serebii": lambda: _serebii(st, log, at),
+                     "altissimo": lambda: _altissimo(st, log, at), "companion": lambda: _companion(st, log, at)})
     for k, v in got.items():
         if isinstance(v, Exception):
             log(f"{NAMES.get(k, k)}: abgebrochen: {type(v).__name__}: {v}")
             got[k] = None
     pkhex, spawns, wiki = got["pkhex"] or {}, got["spawns"] or {}, got["pokewiki"] or {}
+    if got["serebii"]:
+        wiki = dict(wiki, serebii=got["serebii"])           # Serebii läuft beim Bauen mit dem PokéWiki zusammen
     alt, comp = got["altissimo"] or {}, got["companion"]
     if comp:
         alt.setdefault("legends-arceus", {})["companion"] = comp
@@ -707,6 +709,8 @@ def _build(st, log, force, at):
         + (f"; {stats['werte_alt']} frühere Basiswerte (Showdown-Mods)" if stats.get('werte_alt') else "")
         + (f"; PokéWiki: {stats['wiki_attacken']} Attackenwerte, {stats['wiki_items']} getragene Items, "
            f"{stats.get('wiki_karte', 0)} Stellen auf der Karte" if wiki else "")
+        + (f"; Serebii: {stats.get('abklingzeiten', 0)} Abklingzeiten (Z-A), {stats.get('pokopia', 0)} Pokémon in Pokopia"
+           if (wiki or {}).get("serebii") else "")
         + (f"; Altissimo: {stats['kartenobjekte']} Kartensymbole, {stats['rezepte']} Rezepte" if alt else "")
         + (f"; PLA Companion: {stats.get('orte', 0)} Orte (Schnellreise, Lager)" if comp else "")
         + (f"; {stats['items']} Items" if stats.get("items") else ""))
@@ -1252,6 +1256,39 @@ def _pokewiki(st, log, at):
     return out
 
 
+SEREBII_PAUSE = 2.0         # Sekunden zwischen zwei Seiten bei Serebii
+
+
+def _serebii(st, log, at):
+    """Seiten von Serebii: Abklingzeiten in Legenden: Z-A und die Pokédexe von Pokopia, {"za": {...}, "pokopia": {Dex: [...]}}.
+    Fehlt etwas (Sperre, Fehler, Seite ohne Treffer), gilt dafür der letzte Lauf (serebii.json im Datenordner)."""
+    old = store.load_json("serebii.json", {})
+    if _resting(st, "serebii", at):
+        log(f"Serebii ruht bis {st['rest']['serebii'][:16].replace('T', ' ')} UTC")
+        return old
+    src = _Source("serebii", log, pause=SEREBII_PAUSE)
+    STATE["step"] = "Serebii: Attacken in Legenden: Z-A"
+    za = serebii.za_cooldowns(src.get(serebii.ZA_ATTACKS) or "")
+    pk = {}
+    for dex, url in serebii.POKOPIA.items():
+        if src.stopped:
+            break
+        STATE["step"] = f"Serebii: Pokopia, {serebii.POKOPIA_DEX[dex]}"
+        rows = serebii.pokopia_dex(src.get(url, absent=(404,)) or "")
+        if rows:
+            pk[dex] = rows
+    out = {"za": za or old.get("za") or {}, "pokopia": {**(old.get("pokopia") or {}), **pk}}
+    st["sources"]["serebii"] = src.result(abklingzeiten=len(za), pokopia=sum(len(v) for v in pk.values()))
+    if src.blocked:
+        st["rest"]["serebii"] = _iso(now() + timedelta(hours=REST_H))
+    log(f"Serebii: {len(za)} Abklingzeiten in Z-A, Pokopia " + (", ".join(f"{serebii.POKOPIA_DEX[k]} {len(v)}" for k, v in pk.items()) or "ohne Treffer"))
+    if out["za"] or out["pokopia"]:
+        if za or pk:
+            store.save_json("serebii.json", out)
+        return out
+    return old
+
+
 def start(force=False):
     """Lauf im Hintergrund. False, wenn schon einer läuft."""
     if _running.locked():
@@ -1582,6 +1619,14 @@ def diagnose(proben=None):
         {"action": "query", "list": "search", "srsearch": "cooldown Legends Z-A move", "srlimit": "15", "format": "json"}), wiki_hits, keep=True)
     probe("Serebii, Legenden: Z-A Übersicht", "https://www.serebii.net/legendsz-a/", img_info, keep=True, headers=html)
     probe("Serebii, Attackdex Z-A", "https://www.serebii.net/attackdex-za/", img_info, keep=True, headers=html)
+    # Leser seit 0.30.0: die ganzen Seiten, damit sich der Leser an der echten Seite prüfen lässt
+    probe("Serebii, Z-A Attacken (Leser)", serebii.ZA_ATTACKS,
+          lambda t: f"{len(serebii.za_cooldowns(t))} Abklingzeiten gelesen, z. B. " + ", ".join(
+              f"{v['name']} {v['abkling']} s" for v in list(serebii.za_cooldowns(t).values())[:5]), keep=600_000, headers=html)
+    for dex, url in serebii.POKOPIA.items():
+        probe(f"Serebii, Pokopia {serebii.POKOPIA_DEX[dex]} (Leser)", url,
+              lambda t: f"{len(serebii.pokopia_dex(t))} Pokémon gelesen, z. B. " + ", ".join(
+                  f"#{r['nr']} {r['name']} ({', '.join(r['spezial'])})" for r in serebii.pokopia_dex(t)[:5]), keep=600_000, headers=html)
     probe("GitHub, Projekte zu Legenden: Z-A", "https://api.github.com/search/repositories?" + urllib.parse.urlencode(
         {"q": "legends z-a pokemon data", "sort": "updated", "per_page": "15"}),
         lambda t: f"{json.loads(t).get('total_count', 0)} Projekte: " + ", ".join(r.get("full_name", "") for r in json.loads(t).get("items", [])[:15]), keep=True)
