@@ -63,8 +63,13 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 7. **Map Genie** (`app/mapgenie.py`, Quelle „mapgenie“): je Spiel in `mapgenie.GAMES` die Spielseite, daraus die Karten
    (`/<Spiel>/maps/<Karte>`), je Karte die Seite (`window.mapData`) und `/api/v1/maps/<Nummer>/data`, 3 Sekunden Pause.
    Ergebnis kompakt in `mapgenie/<Spiel>.json` im Datenordner; Spiele, die es dort nicht gibt, melden 404 und fallen weg.
-   Die Kacheln holt erst die Oberfläche über `/mgkachel/…` (`abruf.mg_tile`): eine Anfrage zur Zeit, 0,3 Sekunden
-   Pause, abgelegt unter `mapgenie/kacheln/`; bei 403 oder 429 ruht das 24 Stunden.
+   Kacheln (`abruf.mg_tile`) liegen unter `mapgenie/kacheln/`: Die Oberfläche fragt sie über `/mgkachel/…` an (0,3 Sekunden
+   Pause), der Kachelvorrat (`abruf.mg_stock`, eigener Thread nach jedem Abgleich und beim Start) holt im Hintergrund alle
+   Kacheln bis eine Stufe unter der größten, weite Stufen zuerst, 0,6 Sekunden Pause; was da ist, bleibt. Eine Anfrage zur
+   Zeit. Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“ (kommt außerhalb der Karte); erst 8 nacheinander oder
+   ein 429 lassen die Quelle 24 Stunden ruhen. Fehlen die Grenzen einer Karte, gelten die der Orte (`mapgenie.bounds_of`).
+8. **Showdown-Mods** (mit Showdown): `data/mods/gen{1,2,4,5,6,7,8}/pokedex.ts` für frühere Basiswerte (Tabelle `werte_alt`,
+   Generation 1 mit Spezial-Wert); fehlende Mods (404) fallen weg.
 
 ## Nutzungsstatistik (Smogon)
 

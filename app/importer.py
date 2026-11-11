@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, showdown
 
-VERSION = "15"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "16"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -299,6 +299,29 @@ def _sd_tables(con, sd_dex, sd_moves):
 
 
 SD_STATS = ("hp", "atk", "def", "spa", "spd", "spe")
+
+
+def _derive_werte_alt(con, mods):
+    """Basiswerte früherer Generationen (Tabelle werte_alt: form, gen, sechs Werte), nur wo sie von heute abweichen.
+    mods: {Generation: {Showdown-Kennung: baseStats}}; Generation N gilt der erste Mod ab N, der den Wert ändert.
+    In Generation 1 ist Sp.-Angriff = Sp.-Verteidigung = Spezial."""
+    con.execute("CREATE TABLE werte_alt (form INTEGER, gen INTEGER, kp INTEGER, ang INTEGER, vert INTEGER, spang INTEGER, "
+                "spvert INTEGER, init INTEGER, PRIMARY KEY (form, gen))")
+    gens = sorted(mods)
+    rows = []
+    for fid, ident, *now in con.execute("SELECT id, kennung, kp, ang, vert, spang, spvert, init FROM form"):
+        key = showdown.sd_id(ident)
+        for g in range(1, 9):
+            bs = next((mods[m][key] for m in gens if m >= g and key in mods[m]), None)
+            if not bs:
+                continue
+            vals = [bs.get(k, now[i]) for i, k in enumerate(SD_STATS)]
+            if vals != list(now) and all(isinstance(v, int) for v in vals):
+                rows.append((fid, g, *vals))
+    con.executemany("INSERT INTO werte_alt VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    return len(rows)
+
+
 STAT_DE = ("KP", "Angriff", "Verteidigung", "Sp.-Angriff", "Sp.-Verteidigung", "Initiative")
 
 
@@ -1280,6 +1303,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         _derive_spiel_form(con)
         _derive_attacke(con, sd_moves, (extra or {}).get("attacken_kurz"))
         _sd_tables(con, sd_dex, sd_moves)
+        n_alt = _derive_werte_alt(con, {n: showdown.mod_stats(sd_texts.get(f"gen{n}", "")) for n in showdown.MOD_GENS})
         n_check = _derive_pruefung(con, sd_dex, sd_moves) if sd_dex or sd_moves else 0
         n_fund = _derive_fundort(con, pkhex)
         n_raid = _derive_raid(con, pkhex)
@@ -1310,7 +1334,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "species": con.execute("SELECT COUNT(DISTINCT art) FROM form").fetchone()[0],
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
-                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
+                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
                  "kartenobjekte": n_obj, "lernen": n_lernen, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez, "check": why}
     finally:
         con.close()

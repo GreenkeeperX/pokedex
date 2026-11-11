@@ -37,8 +37,12 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Spalten (KP, AP, EP und Statusprobleme bei Medizin und Beeren, Fangfaktor bei Bällen, die Attacke bei Maschinen), Suche und Filter nach Art. Spiele ohne Liste in
   der PokéAPI (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, SDLP) nach PKHeX; in Legenden: Arceus „Herstellen“
   mit Rezepten und Zutaten.
-- **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten. „Mein Team“ zeigt nur die Typen
-  des Teams und dazu Verteidigung und Angriff je Mitglied.
+- **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten, jede Tabelle hat ihren eigenen
+  Typfilter, farbige Zählspalten (stark, schwach, ohne Wirkung bzw. Schwächen, ×4, Resistenzen, Immunitäten). „Mein Team“
+  zeigt nur die Typen des Teams und dazu Verteidigung und Angriff je Mitglied.
+- **Schadensrechner** (Reiter Team, alle Spiele ab Generation 3): eine Attacke gegen die Gegner aus „Gegen Gegner“, das
+  eigene Team oder eine eigene Auswahl, mit Level beider Seiten; „Übersicht“ zeigt jedes Mitglied gegen jeden Gegner.
+- **Frühere Basiswerte**: ältere Spiele zeigen die Werte von damals, Generation 1 den Spezial-Wert (Showdown-Mods).
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
 - **Karte** (Legenden: Arceus): Jubeldorf und die fünf Gebiete zum Ziehen und Zoomen; Spawnpunkte (Alpha hervorgehoben,
   wer dort wann erscheint), Bäume, Erzbrocken, Haufen, Kisten, Geisterlichter, Icognito, Gedichte und Grabstellen,
@@ -53,7 +57,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Rückenwind und Wahlschal; das eigene Team steht mit seinem Wert dazwischen.
 - **Kampf** (in Champions statt „Karte“, sonst über `#kampf`): Doppelkampf-Bewertung des Teams mit Rollen,
   Flächenattacken, Gefahr für den Partner und Tempo, dazu häufige Gegner aus der Nutzungsstatistik von Smogon, ein
-  Schadensrechner (Level 50, gegen die häufigsten Gegner) und ein Kampftagebuch. In Champions heißt „gefangen“ „im Kader“.
+  Schadensrechner (Level 50, gegen die häufigsten Gegner, das eigene Team oder eigene Gegner) und ein Kampftagebuch. In Champions heißt „gefangen“ „im Kader“.
 - **Raids** (Karmesin/Purpur): alle Tera-Raids aus den Spieldaten mit Tera-Typ, Attacken und Kontern aus dem eigenen Team.
 - **Crypto-Pokémon** (Colosseum, XD): auf der Detailseite, mit Trainer, Ort, Level und Attacken.
 - **Vergleich**: zwei Pokémon nebeneinander (Werte mit Unterschied, Kurzfazit, Typwirkung, Fähigkeiten, Attacken), über
@@ -64,7 +68,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   mit Suche; Symbole lassen sich als gefunden markieren (Rechtsklick), auch auf der Karte von Legenden: Arceus.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
   Gefangene blass, auf Wunsch nur die fehlenden.
-- **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen): Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
+- **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen, wie im VR-Navigator): Abgleich mit Quellen, Protokoll und Verbindungstest zum Aufklappen, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
   zum Herunterladen), Lesezeichen „Seite untersuchen“ für Seiten, deren Karten erst im Browser laden (liest geladene
   Daten-Dateien, Variablen und Kartenmarker in eine Datei; nichts geht an einen Server), „Zu erledigen“ (Abweichungen zwischen
   PokéAPI und Showdown zum Entscheiden), Kopieren und Herunterladen von Protokoll und Test, Sicherung der eigenen

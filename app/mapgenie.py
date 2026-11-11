@@ -128,11 +128,41 @@ def tile_range(bounds, z):
     return int(x0 // 256), int((x1 - 1e-6) // 256), int(y0 // 256), int((y1 - 1e-6) // 256)
 
 
-def tile_ok(pattern, z, x, y):
-    """Kachelpfad nach dem Muster der Karte, nur mit Zahlen; None bei unpassendem Muster."""
-    if not re.fullmatch(r"[a-z0-9][a-z0-9/_.-]{0,150}\{z\}/\{x\}/\{y\}\.(png|jpg|webp)", pattern or ""):
+def tile_ok(pattern, z, x, y, endung="png"):
+    """Kachelpfad nach dem Muster der Karte, nur mit Zahlen; None bei unpassendem Muster. Manche Karten nennen die
+    Endung nicht im Muster, sondern getrennt (endung); dann wird sie angehängt."""
+    pattern = pattern or ""
+    if re.fullmatch(r"[a-z0-9][a-z0-9/_.-]{0,150}\{z\}/\{x\}/\{y\}", pattern) and endung in ("png", "jpg", "jpeg", "webp"):
+        pattern += "." + endung
+    if not re.fullmatch(r"[a-z0-9][a-z0-9/_.-]{0,150}\{z\}/\{x\}/\{y\}(@2x)?\.(png|jpg|jpeg|webp)", pattern):
         return None
     return pattern.replace("{z}", str(int(z))).replace("{x}", str(int(x))).replace("{y}", str(int(y)))
+
+
+def bounds_of(m):
+    """Grenzen einer Karte [west, süd, ost, nord]; fehlen sie bei Map Genie, aus den Orten mit etwas Rand."""
+    b = m.get("bounds")
+    if isinstance(b, list) and len(b) == 4:
+        return b
+    la = [o[2] for o in m.get("orte") or []]
+    lo = [o[3] for o in m.get("orte") or []]
+    if not la:
+        return None
+    pa, po = (max(la) - min(la)) * 0.08 or 0.05, (max(lo) - min(lo)) * 0.08 or 0.05
+    return [round(min(lo) - po, 6), round(min(la) - pa, 6), round(max(lo) + po, 6), round(max(la) + pa, 6)]
+
+
+def tile_list(m, top=None):
+    """Alle Kacheln einer Karte als (z, x, y), von der weitesten Zoomstufe bis top (Vorgabe: die größte); ohne Grenzen leer."""
+    b = bounds_of(m)
+    if not b:
+        return []
+    top = m["max_zoom"] if top is None else min(top, m["max_zoom"])
+    out = []
+    for z in range(max(0, m["min_zoom"] - 2), top + 1):
+        x0, x1, y0, y1 = tile_range(b, z)
+        out += [(z, x, y) for x in range(max(0, x0), x1 + 1) for y in range(max(0, y0), y1 + 1)]
+    return out
 
 
 # ------------------------------------------------------------------ eigene Punkte auf der Karte von Map Genie

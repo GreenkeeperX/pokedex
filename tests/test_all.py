@@ -981,6 +981,27 @@ class Server(TempData):
         server.restore(dump)
         self.assertEqual(server.found("x"), {})
 
+    def test_werte_alt(self):
+        # frühere Basiswerte aus den Showdown-Mods: Gen 1 mit Spezial, Gen 5 erbt den Wert aus Gen 5, Gen 6 ist heute
+        import sqlite3
+        from app import abfragen, importer, showdown
+        gen1 = "export const Pokedex = {\n\terfundon: {\n\t\tinherit: true,\n\t\tbaseStats: { hp: 40, atk: 50, def: 60, spa: 70, spd: 70, spe: 80 },\n\t},\n};"
+        gen5 = "export const Pokedex = {\n\terfundon: {\n\t\tinherit: true,\n\t\tbaseStats: { hp: 40, atk: 50, def: 60, spa: 65, spd: 75, spe: 80 },\n\t},\n};"
+        self.assertEqual(showdown.mod_stats(gen1)["erfundon"]["spa"], 70)
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE form (id INTEGER, kennung TEXT, kp INTEGER, ang INTEGER, vert INTEGER, spang INTEGER, spvert INTEGER, init INTEGER)")
+        con.execute("INSERT INTO form VALUES (1, 'erfundon', 40, 50, 60, 85, 75, 80)")
+        n = importer._derive_werte_alt(con, {1: showdown.mod_stats(gen1), 2: {}, 5: showdown.mod_stats(gen5)})
+        got = {g: v for _, g, *v in con.execute("SELECT * FROM werte_alt")}
+        self.assertEqual(n, 5)                                   # Gen 1, 2, 3, 4, 5; Gen 6 bis 8 wie heute
+        self.assertEqual(got[1], [40, 50, 60, 70, 70, 80])
+        self.assertEqual(got[3], [40, 50, 60, 65, 75, 80])
+        D = type("D", (), {"stats_past": {1: got}})()
+        f = {"id": 1, "werte": [40, 50, 60, 85, 75, 80], "summe": 390}
+        self.assertEqual(abfragen.form_stats(D, f, 1), ([40, 50, 60, 70, 70, 80], 300))     # Spezial zählt einmal
+        self.assertEqual(abfragen.form_stats(D, f, 9), (f["werte"], 390))
+        con.close()
+
     def test_mapgenie_karte(self):
         os.makedirs(os.path.join(self.dir, "mapgenie"))
         abruf.store.save_json("mapgenie/scarlet-violet.json", {"spiel": "scarlet-violet", "am": "2026-11-11", "karten": [
@@ -993,6 +1014,25 @@ class Server(TempData):
         self.assertEqual(abruf.mg_tile("scarlet-violet", "erfunden", 10, 1, 2), f)
         self.assertIsNone(abruf.mg_tile("scarlet-violet", "erfunden", 3, 1, 2))                   # Zoom außerhalb
         self.assertIsNone(abruf.mg_tile("scarlet-violet", "andere", 10, 1, 2))
+        from app import mapgenie
+        # Endung getrennt angegeben; Grenzen fehlen: aus den Orten; Kachelliste weite Stufen zuerst
+        self.assertEqual(mapgenie.tile_ok("spiel/k/{z}/{x}/{y}", 9, 1, 2, "webp"), "spiel/k/9/1/2.webp")
+        b = mapgenie.bounds_of({"orte": [[1, 1, 0.5, -0.5, "", ""], [2, 1, 1.0, -0.2, "", ""]]})
+        self.assertTrue(b[0] < -0.5 and b[1] < 0.5 and b[2] > -0.2 and b[3] > 1.0)
+        ts = mapgenie.tile_list({"bounds": [-1.4, 0, 0, 1.4], "min_zoom": 9, "max_zoom": 12}, 11)
+        self.assertEqual((ts[0][0], ts[-1][0], len(ts)), (7, 11, 1 + 1 + 4 + 16 + 64))
+        # ein einzelnes 403 heißt „Kachel gibt es nicht“, erst viele nacheinander lassen Map Genie ruhen
+        calls = []
+        def deny(url, **kw):
+            calls.append(url)
+            raise abruf.sources.FetchError("verboten", 403)
+        with mock.patch.object(abruf.sources, "fetch", deny), mock.patch.object(abruf, "MG_TILE_PAUSE", 0):
+            self.assertIsNone(abruf.mg_tile("scarlet-violet", "erfunden", 10, 3, 3, pause=0))
+            self.assertEqual(abruf.mg_status()["ruht"], "")
+            for x in range(4, 4 + abruf.MG_403_MAX):
+                abruf.mg_tile("scarlet-violet", "erfunden", 10, x, 3, pause=0)
+            self.assertNotEqual(abruf.mg_status()["ruht"], "")
+        abruf._mg.update(rest="", n403=0, miss=set())
 
     def test_alpha(self):
         db.migrate()

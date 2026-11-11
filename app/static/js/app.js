@@ -161,10 +161,12 @@ function acts(id) {
     + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${ballTip(id)}">${ball(id, got)}</span>` + alphaBtn(id)
     + `${teamFull() ? `<span class="a ph"></span>` : `<span class="a plus" data-act="teamadd" data-id="${id}" data-tip="${inTeam ? "Noch einmal ins Team" : "Ins Team"}">${icon("plus")}</span>`}</span>`;
 }
-function monCard(r, xmode = false) {
-  const inTeam = S.team.ids.includes(r.id), xs = xmode && XSEL.has(r.id);
+// mode: true = Sammlung (⇄ wählt zum Übertragen aus), "swap" = Favoriten im Team (⇄ nimmt ins Team oder tauscht)
+function monCard(r, mode = false) {
+  const xmode = mode === true, inTeam = S.team.ids.includes(r.id), xs = xmode && XSEL.has(r.id);
   return `<a class="mon${inTeam ? " inteam" : ""}${xs ? " xon" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="nr">#${r.nr ?? r.art}</span>${xmode
-    ? `<span class="xs${xs ? " on" : ""}" data-act="xsel" data-id="${r.id}" data-tip="${xs ? "Ausgewählt zum Übertragen; Klick: abwählen" : "Zum Übertragen auswählen"}">⇄</span>` : ""}<span class="sp">${img(r.id)}${acts(r.id)}</span>
+    ? `<span class="xs${xs ? " on" : ""}" data-act="xsel" data-id="${r.id}" data-tip="${xs ? "Ausgewählt zum Übertragen; Klick: abwählen" : "Zum Übertragen auswählen"}">⇄</span>`
+    : mode === "swap" ? `<span class="xs" data-act="favswap" data-id="${r.id}" data-tip="${teamFull() ? "Ins Team tauschen: wähle, wen es ersetzt" : "Ins Team aufnehmen"}">⇄</span>` : ""}<span class="sp">${img(r.id)}${acts(r.id)}</span>
     <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span></span><span class="ty">${tchips(r.typen)}</span>
     ${r.legendaer ? `<span class="s">legendär</span>` : ""}<span class="s">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b></span></span>
     ${radar(r.werte, 100)}</a>`;
@@ -424,7 +426,7 @@ document.addEventListener("click", (e) => {
 const th = (label, tipText = "", noSort = false, cls = "") => `<th${noSort ? "" : " data-sort"}${cls ? ` class="${cls}"` : ""}${tipText ? ` data-tip="${esc(tipText)}"` : ""}>${label}</th>`;
 const thc = (label, tipText = "") => th(label, tipText, false, "c");
 // Schadens- und Status-Attacken der Detailseite: dieselben Spalten
-const MVCOLS = `<colgroup><col style="width:20%"><col style="width:86px"><col style="width:78px"><col style="width:58px"><col style="width:50px"><col style="width:64px"><col style="width:160px"><col><col style="width:44px"></colgroup>`;
+const MVCOLS = `<colgroup><col style="width:20%"><col style="width:86px"><col style="width:92px"><col style="width:76px"><col style="width:66px"><col style="width:82px"><col style="width:160px"><col><col style="width:44px"></colgroup>`;
 // Statuswörter in Kurztexten farbig (schläfert ein, friert ein, paralysiert …)
 const STATUSW = [[/(schläfert ein|schläft|Schlaf\w*)/g, "st-slp"], [/(friert ein|friert|Einfrieren)/g, "st-frz"], [/(paralysiert|Paralyse)/g, "st-par"],
   [/(verbrennt|Verbrennung)/g, "st-brn"], [/(schwer vergiftet|vergiftet|Vergiftung)/g, "st-psn"], [/(verwirrt|Verwirrung)/g, "st-cnf"], [/(zurückschrecken|schreckt zurück)/g, "st-fln"]];
@@ -1031,7 +1033,16 @@ function picker(anchor, slot) {
   el.hidden = false;
   place(el, anchor);
 }
-document.addEventListener("click", (e) => { const p = $("#pick"); if (p && !p.hidden && !p.contains(e.target) && !e.target.closest('[data-act="pick"],.ac .menu')) p.hidden = true; });
+/* Favorit ins volle Team tauschen: Auswahl, wen er ersetzt */
+function swapPicker(anchor, id) {
+  let el = $("#pick");
+  if (!el) { el = document.createElement("div"); el.id = "pick"; document.body.appendChild(el); }
+  el.innerHTML = `<div class="hint">${esc(ROWS[id]?.name || "")} ersetzt …</div>`
+    + S.team.ids.map((x, i) => `<button data-act="pickfav" data-id="${id}" data-slot="${i}" data-hc="${x}">${img(x)}<span>${esc(ROWS[x]?.name || "")}</span>${tchips(ROWS[x]?.typen)}</button>`).join("");
+  el.hidden = false;
+  place(el, anchor);
+}
+document.addEventListener("click", (e) => { const p = $("#pick"); if (p && !p.hidden && !p.contains(e.target) && !e.target.closest('[data-act="pick"],[data-act="favswap"],.ac .menu')) p.hidden = true; });
 /* Ziehen und Ablegen: Karten (auch aus der Suche) in die Leiste oder auf einen Platz (ersetzt ihn), Plätze
    untereinander verschieben, Pokémon auf die Favoriten oder Gefangenen ziehen (markiert sie) */
 document.addEventListener("dragstart", (e) => {
@@ -1117,7 +1128,8 @@ async function detailView(id, slot = null) {
   DETAIL = d;
   ROWS[d.id] = Object.assign(ROWS[d.id] || {}, d);
   [...d.attacken.attacken, ...d.attacken.status].forEach((m) => { MOVES[m.id] = m; });
-  const stats = d.werte.map((v, i) => `<span>${STAT[i]}</span><span class="num">${v}</span><span class="sbar" data-tip="${esc(statTip(i, v))}"><i style="width:${Math.min(100, v / statMax(i) * 100)}%;background:${statColor(v)}"></i></span>`).join("");
+  // Generation 1: ein Spezial-Wert statt Sp.-Angriff und Sp.-Verteidigung
+  const stats = d.werte.map((v, i) => GEN() === 1 && i === 4 ? "" : `<span>${GEN() === 1 && i === 3 ? "Spezial" : STAT[i]}</span><span class="num">${v}</span><span class="sbar" data-tip="${esc(statTip(i, v))}"><i style="width:${Math.min(100, v / statMax(i) * 100)}%;background:${statColor(v)}"></i></span>`).join("");
   const evo = d.entwicklung.length > 1 ? d.entwicklung.map((e, i) => (i && e.von ? `<span class="ar">→ ${esc(e.bedingungen.join(" oder ") || "")}</span>` : "") +
     `<a class="st" href="#pokemon/${e.id}">${img(e.id)}${esc(e.name)}</a>`).join("") : "";
   main.innerHTML = `
@@ -1140,10 +1152,11 @@ async function detailView(id, slot = null) {
       <div class="box"><div class="head"><div class="pic">${img(d.id, "big", true)}${extrasHtml(d)}</div><div><h2>${esc(d.name)}</h2><div class="muted">#${d.nr ?? d.art} · ${esc(d.kategorie)}</div>
         <div style="margin-top:4px">${tchips(d.typen)}</div><span data-tip-stats="${d.werte.join(",")}">${radar(d.werte, 220, true)}</span></div></div>
         <p>${esc(d.text)}</p><div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
+        ${d.werte_alt ? `<p class="hint">Basiswerte wie in Generation ${GEN()}; später wurden sie geändert (Quelle: Pokémon Showdown).</p>` : ""}
         ${moreHtml(d)}
         ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${wikiLink(a.name)}</b>${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
           : noAbil() ? `<p class="hint">In ${esc(gameName())} gibt es keine Fähigkeiten${GEN() <= 2 ? " (erst ab Generation 3)" : ""}.</p>` : ""}
-        ${GEN() <= 3 ? `<p class="hint">Bis Generation 3 hängt physisch oder speziell am Typ der Attacke: Normal, Kampf, Flug, Gift, Boden, Gestein, Käfer, Geist und Stahl sind physisch, die übrigen speziell.${GEN() === 1 ? " In Generation 1 gab es statt Sp.-Angriff und Sp.-Verteidigung einen gemeinsamen Spezial-Wert; gezeigt sind die heutigen Werte." : ""}</p>` : ""}
+        ${GEN() <= 3 ? `<p class="hint">Bis Generation 3 hängt physisch oder speziell am Typ der Attacke: Normal, Kampf, Flug, Gift, Boden, Gestein, Käfer, Geist und Stahl sind physisch, die übrigen speziell.${GEN() === 1 ? " In Generation 1 gab es statt Sp.-Angriff und Sp.-Verteidigung einen gemeinsamen Spezial-Wert." : ""}</p>` : ""}
       </div>
       <div class="stack">
         <div class="box"><h2 data-tip="Verteidigung: so stark treffen Attacken eines Typs ${esc(d.name)}">Verteidigung: Typwirkung gegen ${esc(d.name)}</h2>
@@ -1496,7 +1509,7 @@ function favBox() {
   const el = $("#favs");
   if (!el) return;
   $("#favn").textContent = S.favs.length ? `(${S.favs.length})` : "";
-  el.innerHTML = S.favs.length ? `<div class="list favlist">${S.favs.map(monCard).join("")}</div>`
+  el.innerHTML = S.favs.length ? `<div class="list favlist">${S.favs.map((r) => monCard(r, "swap")).join("")}</div>`
     : `<p class="hint">Markiere Pokémon mit dem Stern (in der Liste oder auf der Detailseite) oder ziehe sie hierher. Sie stehen dann hier und beim Klick auf einen leeren Platz bereit.</p>`;
 }
 /* Gefangene: Empfehlungen daraus (bessere Alternative jetzt, langfristig mehr Potential nach der Entwicklung) */
@@ -1537,8 +1550,7 @@ async function teamView() {
       <div class="bar"><div class="ac grow"><input id="add" type="search" placeholder="Pokémon hinzufügen: Name oder Nummer" style="width:100%"></div>
         <a class="btn" href="#initiative" data-tip="Wer ist schneller: alle Pokémon des Spiels nach Initiative, mit deinem Team">Initiative-Liste</a></div>
       <div class="tslots" id="slots"><p class="hint">Lädt …</p></div>
-      <details class="favd dropmark" data-drop="fav" open><summary>${icon("fav")} Favoriten in ${esc(gameName())} <span id="favn"></span> <span class="hint">zum schnellen Tauschen auf einen Platz ziehen; hierher ziehen macht zum Favoriten</span></summary><div id="favs"></div></details>
-      <details class="sdbox" id="sdbox"><summary>Team als Text <span class="hint">im Format von Pokémon Showdown</span>
+      <details class="sdbox" id="sdbox"><summary>Team als Text <span class="hint" data-tip="Das übliche Format, um Teams weiterzugeben: Pokémon Showdown (Kampf-Simulator im Browser), PokePaste-Links, Smogon und Foren lesen es">zum Weitergeben oder Einlesen, im Format von Pokémon Showdown</span>
           <button class="small" data-act="sdcopy2" data-tip="Das aktuelle Team als Text in die Zwischenablage, etwa für Showdown, PokePaste oder eine Nachricht">Team kopieren</button></summary>
         <p class="hint">Pokémon Showdown ist der bekannte Kampf-Simulator im Browser. Sein Textformat ist der übliche Weg, Teams weiterzugeben:
           Smogon-Analysen, PokePaste-Links und Foren nutzen es, und Showdown liest es über „Import/Export“ ein. Hier holst du ein Team aus so einem Text
@@ -1546,7 +1558,8 @@ async function teamView() {
         <textarea id="sdtext" rows="12" spellcheck="false" placeholder="Garchomp @ Choice Scarf&#10;Ability: Rough Skin&#10;EVs: 252 Atk / 4 SpD / 252 Spe&#10;Jolly Nature&#10;- Earthquake"></textarea>
         <div class="bar"><button data-act="sdexp" data-tip="Das aktuelle Team als Text">Aus dem Team</button>
           <button class="primary" data-act="sdimp" data-tip="Ersetzt das aktuelle Team">Als Team übernehmen</button>
-          <button data-act="sdcopy">Kopieren</button><span id="sdnote" class="hint"></span></div></details></div>
+          <button data-act="sdcopy">Kopieren</button><span id="sdnote" class="hint"></span></div></details>
+      <details class="favd dropmark" data-drop="fav" open><summary>${icon("fav")} Favoriten in ${esc(gameName())} <span id="favn"></span> <span class="hint">zum schnellen Tauschen auf einen Platz ziehen; hierher ziehen macht zum Favoriten</span></summary><div id="favs"></div></details></div>
     <div class="cols">
       <div class="box"><h2>Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
       <div class="box"><h2>Verbesserungen</h2><div id="imp"></div></div>
@@ -1568,7 +1581,9 @@ async function teamView() {
     <div class="box"><h2>Gegen Gegner</h2>
       <div class="bar"><div class="ac grow"><input id="foe" type="search" placeholder="Gegner hinzufügen (bis zu 6, etwa die Pokémon eines Arenaleiters)" style="width:100%"></div>
         ${S.foes.length ? `<button data-act="foeclear">Gegner leeren</button>` : ""}</div>
-      <div id="mu"><p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p></div></div>`;
+      <div id="mu"><p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p></div></div>
+    ${!BATTLE() && GEN() >= 3 ? `<details class="box" id="calcbox"${store.get("calcOpen", false) ? " open" : ""}><summary><h2 style="display:inline">Schadensrechner</h2>
+      <span class="hint">wie viel eine Attacke deines Teams den Gegnern abzieht</span></summary><div id="calc"><p class="hint">Lädt …</p></div></details>` : ""}`;
   header();
   teamBar();
   favBox();
@@ -1613,6 +1628,8 @@ async function teamView() {
   });
   await Promise.all([teamsP, teamRefresh()]);
   if (S.foes.length) matchup();
+  const cb = $("#calcbox");
+  if (cb) { cb.addEventListener("toggle", () => { store.set("calcOpen", cb.open); if (cb.open) calcBox(); }); if (cb.open) calcBox(); }
 }
 function loadTeam(tt) {
   S.team = normTeam({ids: tt.mitglieder, fest: tt.fest, tid: tt.id, name: tt.name, spiel: tt.spiel, details: tt.details});
@@ -1779,7 +1796,7 @@ async function movesView() {
       (!f.gen || (f.genmodus === "nur" ? m.gen === +f.gen : m.gen <= +f.gen)) && (!f.team || teamMoves[m.id]));
     $("#mcnt").textContent = f.team && !Object.keys(teamMoves).length ? "Im Team sind noch keine Attacken gewählt"
       : `${xs.length} von ${rows.length} Attacken in ${gameName()}`;
-    $("#mv").innerHTML = `<div class="box scroll sticky"><table class="sort fixed lines" style="min-width:980px"><colgroup><col style="width:23%"><col style="width:86px"><col style="width:74px"><col style="width:70px"><col style="width:54px"><col style="width:46px"><col style="width:70px"><col style="width:70px"><col style="width:66px"><col style="width:46px"><col></colgroup><thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
+    $("#mv").innerHTML = `<div class="box scroll sticky"><table class="sort fixed lines" style="min-width:1100px"><colgroup><col style="width:21%"><col style="width:84px"><col style="width:88px"><col style="width:84px"><col style="width:68px"><col style="width:58px"><col style="width:90px"><col style="width:90px"><col style="width:82px"><col style="width:60px"><col></colgroup><thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("AP", "Angriffspunkte: so oft lässt sich die Attacke einsetzen")}
       ${thc("Vorrang", "Vorrang (Priorität): positive Werte kommen vor normalen Attacken dran, negative danach")}${thc("Wertung", "Stärke × Genauigkeit mit Zu- und Abschlägen, ohne Eigentyp-Bonus")}${thc("Lernen", "So viele Pokémon (und Formen) lernen sie im Spiel")}${thc("Gen", "Generation, seit der es die Attacke gibt")}${th("Wirkung", "Kurz-Info aus den Spieldaten; die ganze Beschreibung beim Hovern über die Zeile", true)}</tr></thead><tbody>
       ${xs.map((m) => `<tr data-r="${m.id}"><td data-s="${esc(m.name)}"><b${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</b>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.merkmale.includes("contact") ? ' <span class="cls" data-tip="Kontakt: berührt das Ziel (löst etwa Rauhaut oder Statik aus)">Kontakt</span>' : ""}${teamMoves[m.id] ? ` <span class="cls tm" data-tip="${esc("Im Team: " + teamMoves[m.id].join(", "))}">Team${teamMoves[m.id].length > 1 ? " ×" + teamMoves[m.id].length : ""}</span>` : ""}</td><td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td>
         <td class="c"><span class="cls">${CLS[m.klasse]}</span></td><td class="c num" data-s="${m.staerke || 0}">${powStil(m)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
@@ -1959,15 +1976,17 @@ async function mgView(slug, want) {
       <label class="mgot" data-tip="Was du als erledigt markiert hast (Rechtsklick oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> erledigte ausblenden</label>
       <span class="hint grow" id="mgn"></span></div>
     <div id="mgwarn"></div>
-    <div class="mapwrap"><div class="mapcol"><div id="mgmap" class="map mgmap"><div class="mgtiles"></div><div class="mgpins"></div></div>
+    <div class="mapwrap"><div class="mapcol"><div id="mgmap" class="map mgmap"><div class="mgold"></div><div class="mgtiles"></div><div class="mgpins"></div><div class="mgload" hidden></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
       <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für den Namen, klicke für Einzelheiten. Rechtsklick markiert ihn als erledigt. Die Suche listet die Treffer hier; ein Klick springt hin.</p></aside>
       <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button></span></div>
         ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
-    <p class="hint">Karte und Orte: Map Genie (mapgenie.io), Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}; Namen und Texte englisch wie dort.${own ? " „Aus den Spieldaten“: Spawnpunkte und Symbole wie auf den Einzelkarten, je Gebiet an Geisterlichtern und Icognito ausgerichtet (auf wenige Meter genau)." : ""} Kacheln lädt der Server beim ersten Ansehen und hebt sie auf.</p></div>`;
+    <p class="hint">Karte und Orte: Map Genie (mapgenie.io), Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}; Namen und Texte englisch wie dort.${own ? " „Aus den Spieldaten“: Spawnpunkte und Symbole wie auf den Einzelkarten, je Gebiet an Geisterlichtern und Icognito ausgerichtet (auf wenige Meter genau)." : ""} Kacheln hebt der Server auf; was noch fehlt, holt er im Hintergrund nach (<span id="mgstock"></span>).</p></div>`;
   header();
-  const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box);
+  const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box), old = $(".mgold", box), ld = $(".mgload", box);
+  const tileUrl = (k) => `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
+  let oldZ = null, pending = 0, warm = new Set();
   const zmin = d.min_zoom, zmax = d.max_zoom;
   const bb = d.bounds || (() => { const la = pts.map((p) => p.la), lo = pts.map((p) => p.lo); return [Math.min(...lo), Math.min(...la), Math.max(...lo), Math.max(...la)]; })();
   let z = zmin, cx = 0, cy = 0;
@@ -1996,24 +2015,47 @@ async function mgView(slug, want) {
     pl.innerHTML = pts.map((p, i) => { if (!vis(p)) return ""; n++; return pinHtml(p, i); }).join("");
     $("#mgn").textContent = `${n} von ${pts.length} Punkten`;
   };
+  // Kacheln im Bild bei Zoomstufe zz (mit Rand von pad Kacheln); nur innerhalb der Karte, außerhalb gibt es keine
+  const view = (zz, pad = 0) => {
+    const f = 2 ** (zz - z), w = box.clientWidth, h = box.clientHeight, ox = (cx - w / 2) * f, oy = (cy - h / 2) * f;
+    const [gx0, gy0] = mgProj(bb[3], bb[0], zz), [gx1, gy1] = mgProj(bb[1], bb[2], zz), out = [];
+    for (let tx = Math.max(Math.floor(gx0 / 256), Math.floor(ox / 256) - pad); tx <= Math.min(Math.floor((gx1 - 1e-6) / 256), Math.floor((ox + w * f) / 256) + pad); tx++)
+      for (let ty = Math.max(Math.floor(gy0 / 256), Math.floor(oy / 256) - pad); ty <= Math.min(Math.floor((gy1 - 1e-6) / 256), Math.floor((oy + h * f) / 256) + pad); ty++) out.push(`${zz}/${tx}/${ty}`);
+    return out;
+  };
+  const progress = () => {
+    ld.hidden = !pending; ld.textContent = pending ? `Kacheln laden … noch ${pending}` : "";
+    if (pending) return;
+    old.innerHTML = ""; oldZ = null;           // alles da: das vergrößerte alte Bild weg
+    // danach still vorladen: Nachbarschaft und die nächste Stufe hinein und hinaus (der Browser hebt sie auf)
+    [...view(z, 1), ...(z < zmax ? view(z + 1) : []), ...(z > zmin ? view(z - 1) : [])].slice(0, 120)
+      .forEach((k) => { if (!warm.has(k)) { warm.add(k); new Image().src = tileUrl(k); } });
+  };
   const tiles = () => {
     const w = box.clientWidth, h = box.clientHeight, ox = cx - w / 2, oy = cy - h / 2;
     tl.style.transform = pl.style.transform = `translate(${-ox}px,${-oy}px)`;
-    // nur Kacheln innerhalb der Karte: außerhalb gibt es keine (Map Genie antwortet dort mit 403)
-    const [gx0, gy0] = mgProj(bb[3], bb[0], z), [gx1, gy1] = mgProj(bb[1], bb[2], z);
-    const wantT = new Set();
-    for (let tx = Math.max(Math.floor(gx0 / 256), Math.floor(ox / 256)); tx <= Math.min(Math.floor((gx1 - 1e-6) / 256), Math.floor((ox + w) / 256)); tx++)
-      for (let ty = Math.max(Math.floor(gy0 / 256), Math.floor(oy / 256)); ty <= Math.min(Math.floor((gy1 - 1e-6) / 256), Math.floor((oy + h) / 256)); ty++) wantT.add(`${z}/${tx}/${ty}`);
-    $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) im.remove(); else wantT.delete(im.dataset.k); });
+    if (oldZ !== null) old.style.transform = `translate(${-ox}px,${-oy}px) scale(${2 ** (z - oldZ)})`;
+    const wantT = new Set(view(z));
+    $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) { if (!im.complete) pending--; im.remove(); } else wantT.delete(im.dataset.k); });
     wantT.forEach((k) => {
       const [, tx, ty] = k.split("/").map(Number), im = new Image();
       im.dataset.k = k; im.alt = ""; im.draggable = false;
       im.style.left = tx * 256 + "px"; im.style.top = ty * 256 + "px";
-      im.onerror = () => { im.style.visibility = "hidden"; tileTrouble(); };
-      im.src = `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
+      pending++;
+      im.onload = () => { pending--; progress(); };
+      im.onerror = () => { pending--; im.style.visibility = "hidden"; tileTrouble(); progress(); };
+      im.src = tileUrl(k); warm.add(k);
       tl.appendChild(im);
     });
+    progress();
   };
+  // Vorrat des Servers: wie viel der Karte schon im Datenordner liegt
+  api("/api/mapgenie?" + qs({spiel: S.game})).then((r) => {
+    const v = r.kacheln?.vorrat?.[`${d.spiel}/${slug}`], el = $("#mgstock");
+    if (!el || rid !== RID) return;
+    el.textContent = !v ? (r.kacheln?.laedt ? "läuft gerade" : "startet nach dem nächsten Abgleich")
+      : v.fertig && v.da >= v.alle ? `alle ${v.alle} Kacheln bis Stufe ${v.bis} da` : `${v.da} von ${v.alle} Kacheln bis Stufe ${v.bis} da`;
+  }).catch(() => {});
   // fehlen Kacheln, sagt die Karte warum (Map Genie ruht nach 403/429 einen Tag; ein Neustart des Dienstes hebt das auf)
   let troubleT = 0;
   const tileTrouble = () => {
@@ -2025,15 +2067,22 @@ async function mgView(slug, want) {
         : st.fehler ? `<div class="note warn">Einige Kacheln fehlen (zuletzt ${esc(st.fehler)}).</div>` : "";
     }, 1500);
   };
-  const redraw = () => { tl.innerHTML = ""; tiles(); pins(); };
+  /* neue Zoomstufe: das bisherige Bild bleibt vergrößert stehen, bis die neuen Kacheln da sind (kein schwarzes Bild) */
+  const redraw = (prevZ) => {
+    if (prevZ !== undefined && prevZ !== z) {
+      if (!pending || oldZ === null) { old.innerHTML = ""; $$("img", tl).forEach((im) => { if (im.complete && im.style.visibility !== "hidden") old.appendChild(im); }); oldZ = prevZ; }
+    } else { old.innerHTML = ""; oldZ = null; }
+    tl.innerHTML = ""; pending = 0; tiles(); pins();
+  };
   const zoomTo = (nz, px, py) => {
     nz = Math.max(zmin, Math.min(zmax, nz));
     if (nz === z) return;
+    const pz = z;
     const w = box.clientWidth, h = box.clientHeight;
     px ??= w / 2; py ??= h / 2;
     const f = 2 ** (nz - z), wx = cx - w / 2 + px, wy = cy - h / 2 + py;
     cx = wx * f - px + w / 2; cy = wy * f - py + h / 2; z = nz;
-    redraw();
+    redraw(pz);
   };
   /* zu einem Punkt springen: hinzoomen, mittig, ausgewählt, Einzelheiten rechts */
   const jump = (i) => {
@@ -2058,8 +2107,8 @@ async function mgView(slug, want) {
   box.addEventListener("pointercancel", stop);
   box.addEventListener("wheel", (e) => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomTo(z + (e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
   box.addEventListener("dblclick", (e) => { const r = box.getBoundingClientRect(); zoomTo(z + 1, e.clientX - r.left, e.clientY - r.top); });
-  $$("[data-mz]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mz === "0") { fitBox(bb); redraw(); } else zoomTo(z + +b.dataset.mz); }));
-  $("#mggo")?.addEventListener("change", (e) => { const r = regions[+e.target.value]; if (r) { fitBox(r.slice(1)); redraw(); } e.target.value = ""; });
+  $$("[data-mz]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mz === "0") { const pz = z; fitBox(bb); redraw(pz); } else zoomTo(z + +b.dataset.mz); }));
+  $("#mggo")?.addEventListener("change", (e) => { const r = regions[+e.target.value]; if (r) { const pz = z; fitBox(r.slice(1)); redraw(pz); } e.target.value = ""; });
   const side = (i) => {
     const p = pts[i], c = cats[p.c], on = got.has(gkey(p));
     const gotBtn = p.t === "sp" ? "" : `<p><button class="btn gotbtn${on ? " on" : ""}" id="gotbtn">${on ? "✓ erledigt" : "als erledigt markieren"}</button></p>`;
@@ -2515,7 +2564,7 @@ async function itemsView() {
     "": [[th("Name"), "24%", name], [thc("Preis"), "8%", price], [th("Tasche"), "11%", (x) => `<td>${esc(x.tasche)}</td>`], [th("Art"), "15%", (x) => `<td>${esc(x.art)}</td>`],
          [th("Beschreibung", "", true), "", text]],
     wirkung: [[th("Name"), "20%", name], [thc("Preis"), "7%", price], [th("Art"), "11%", (x) => `<td>${esc(x.art)}</td>`],
-              ...FXCOLS.map(([k, n, tip]) => [thc(n, tip), "52px", fxCell(k)]),
+              ...FXCOLS.map(([k, n, tip]) => [thc(["kp", "ap", "ep"].includes(k) ? n : `<span class="st-${k}">${n}</span>`, tip), "64px", fxCell(k)]),
               [th("Beschreibung", "", true), "", text]],
     Bälle: [[th("Name"), "22%", name], [thc("Preis"), "7%", price], [thc("Fang", "Fangfaktor des Balls; „immer“ fängt sicher. In Legenden: Arceus Richtwerte"), "70px", ballCell],
             [th("Bedingung", "Wann der Ball besser fängt"), "26%", (x) => `<td>${esc(ballOf(x)?.[1] || "")}</td>`], [th("Beschreibung", "", true), "", text]],
@@ -2554,19 +2603,35 @@ async function itemsView() {
   draw();
 }
 const CPIN = {r: null, c: null}, TPIN = {d: {r: null, c: null}, a: {r: null, c: null}};
+/* Typfilter je Tabelle: eine Knopfreihe mit allen Typen, gemerkt unter key */
+const typePick = (key, ts) => new Set(store.get(key, []).filter((t) => ts.includes(t)));
+const typeFilter = (key, ts, pick, tip) => `<div class="bar tpick" data-tip="${esc(tip)}"><span class="hint">Filter</span>${ts.map((t) =>
+  `<button class="tpk${pick.has(t) ? " on" : ""}" data-tf="${key}" data-tpk="${t}">${tchip(t)}</button>`).join("")}${pick.size ? `<button class="small" data-tf="${key}" data-tpkx>alle</button>` : ""}</div>`;
+/* Zählspalte farbig: gut grün, schlecht rot, kräftiger je mehr (bezogen auf max); 0 bleibt blass */
+const cntTd = (v, good, max, c) => `<td class="c num cnt${v ? "" : " zero"}" data-c="${c}" data-s="${v}"${v ? ` style="background:color-mix(in srgb,var(${good ? "--go" : "--stop"}) ${Math.round(8 + 40 * Math.min(1, v / max))}%,transparent)"` : ""}>${v}</td>`;
+// Zählung je Zeile aus den Faktoren: Verteidigung [Schw., ×4, Res., Imm.], Angriff [stark, schwach, ohne Wirkung]
+const defCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f >= 4).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
+const attCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
+const DEFC = [["Schw.", "Schwächen: Angriffstypen mit ×2 oder mehr", false, 8], ["×4", "4-fache Schwächen", false, 2], ["Res.", "Resistenzen: ×½ oder weniger", true, 8], ["Imm.", "Immun: keine Wirkung", true, 2]];
+const ATTC = [["Stark", "Verteidigende Typen, die sehr effektiv getroffen werden", true, 8], ["Schwach", "Typen, gegen die es nur ×½ schafft", false, 8], ["Imm.", "Typen, gegen die nichts wirkt", false, 2]];
+const cntHeads = (cs) => cs.map(([n, tip]) => `<th class="c cnth" data-tip="${esc(tip)}">${n}</th>`).join("");
+const cntCells = (cs, vs, base) => vs.map((v, i) => cntTd(v, cs[i][2], cs[i][3], typeof base === "number" ? base + i : base + i)).join("");
 /* Typen des Teams: je Mitglied mit seinen (Doppel-)Typen, wie viel es einsteckt (Verteidigung) und wie stark seine
    Eigentypen treffen (Angriff, der bessere der beiden). Zeilen sind die Mitglieder, Spalten die 18 Typen */
-function teamTypeHtml(ms, ts) {
+function teamTypeHtml(ms, all) {
   const ch = S.chart;
   const def = (m, a) => m.typen.reduce((f, t) => f * (ch[a]?.[t] ?? 1), 1);
   const att = (m, v) => Math.max(...m.typen.map((t) => ch[t]?.[v] ?? 1));
   const one = (k, title, hint, fn, good) => {
+    const tp = typePick(`ttPick${k}`, all), ts = tp.size ? all.filter((t) => tp.has(t)) : all;
     const sum = ts.map((t) => { const fs = ms.map((m) => fn(m, t)); return [fs.filter((f) => good(f)).length, fs.filter((f) => good(1 / (f || 0.001)) && f !== 1).length]; });
     return `<details class="box tteam" data-tt="${k}"${store.get("ttOpen", {})[k] === false ? "" : " open"}><summary><h2>${title}</h2><span class="hint">${hint}</span></summary>
-      <div class="scroll"><table class="chart" id="tt-${k}"><thead><tr><th class="corner"></th>${ts.map((t) => `<th class="v" data-c="${t}" data-pc="${t}"><span>${tchip(t)}</span></th>`).join("")}</tr></thead>
+      ${typeFilter(`ttPick${k}`, all, tp, "Typen wählen: die Tabelle zeigt nur diese Spalten; die Zählung rechts gilt weiter für alle Typen")}
+      <div class="scroll"><table class="chart" id="tt-${k}"><thead><tr><th class="corner"></th>${ts.map((t) => `<th class="v" data-c="${t}" data-pc="${t}"><span>${tchip(t)}</span></th>`).join("")}${cntHeads(k === "d" ? DEFC : ATTC)}</tr></thead>
       <tbody>${ms.map((m, i) => `<tr data-r="${i}"><th class="r tm" data-pr="${i}" data-hc="${m.id}"><span class="tmh">${img(m.id, "sm")}<span>${esc(m.name)}</span>${tchips(m.typen)}</span></th>${ts.map((t) => { const f = fn(m, t);
-        return `<td data-c="${t}" data-tip="${esc(k === "d" ? `${tname(t)} gegen ${m.name}: ×${fl(f)}` : `${m.name} (Eigentyp) gegen ${tname(t)}: ×${fl(f)}`)}">${f === 1 ? "" : `<span class="f ${k === "a" && f ? fcls(1 / f) : fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}</tr>`).join("")}</tbody>
-      <tfoot><tr><th class="r">${k === "d" ? "resistent · schwach" : "stark · schwach"}</th>${sum.map(([g, b], j) => `<td data-c="${ts[j]}"><span class="go">${g || ""}</span>${g && b ? "·" : ""}<span class="stop">${b || ""}</span></td>`).join("")}</tr></tfoot></table></div></details>`;
+        return `<td data-c="${t}" data-tip="${esc(k === "d" ? `${tname(t)} gegen ${m.name}: ×${fl(f)}` : `${m.name} (Eigentyp) gegen ${tname(t)}: ×${fl(f)}`)}">${f === 1 ? "" : `<span class="f ${k === "a" && f ? fcls(1 / f) : fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}${(() => {
+          const fs = all.map((t) => fn(m, t)); return k === "d" ? cntCells(DEFC, defCnt(fs), "n") : cntCells(ATTC, attCnt(fs), "n"); })()}</tr>`).join("")}</tbody>
+      <tfoot><tr><th class="r">${k === "d" ? "resistent · schwach" : "stark · schwach"}</th>${sum.map(([g, b], j) => `<td data-c="${ts[j]}"><span class="go">${g || ""}</span>${g && b ? "·" : ""}<span class="stop">${b || ""}</span></td>`).join("")}${"<td></td>".repeat(k === "d" ? 4 : 3)}</tr></tfoot></table></div></details>`;
   };
   // Farben aus Sicht des Mitglieds: grün hilft ihm, rot schadet ihm. Verteidigung: ½ grün, 2 rot; Angriff umgekehrt
   return one("d", "Verteidigung je Mitglied", "Spalte: angreifender Typ. So viel steckt das Mitglied mit seinen Typen ein; grün: steckt wenig ein, rot: viel.", def, (f) => f < 1)
@@ -2584,34 +2649,34 @@ async function chartView() {
     fremd = (ev.nicht_im_spiel || []).map((i) => ROWS[S.team.ids[i]]?.name).filter(Boolean);
   }
   const own = new Set(ms.flatMap((m) => m.typen));
-  const pick = new Set(store.get("chartPick", []).filter((t) => ts.includes(t)));
+  const pick = typePick("chartPick", ts);
   const rowOk = (a) => (!mine || own.has(a)) && (!pick.size || pick.has(a));
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Typtabelle Generation ${S.chartGen}</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <label data-tip="${S.team.ids.length ? "Nur die Typen deines Teams als Zeilen, dazu Verteidigung und Angriff je Mitglied" : "Erst ein Team zusammenstellen"}"><input type="checkbox" id="ctm"${mine ? " checked" : ""}${S.team.ids.length ? "" : " disabled"}> Mein Team</label>
       <button class="small" data-act="unpin" id="unpin" hidden>Markierung aufheben</button></div>
-    <div class="bar tpick" data-tip="Typen wählen: die Tabelle zeigt nur diese Angreifer, die Kombinationen nur solche mit allen gewählten Typen">
-      <span class="hint">Filter</span>${ts.map((t) => `<button class="tpk${pick.has(t) ? " on" : ""}" data-tpk="${t}">${tchip(t)}</button>`).join("")}
-      ${pick.size ? `<button class="small" id="tpkx">alle</button>` : ""}</div>
+    ${typeFilter("chartPick", ts, pick, "Typen wählen: die Tabelle zeigt nur diese Angreifer")}
     ${fremd.length ? `<div class="note warn">Nicht in ${esc(gameName())}: ${fremd.map(esc).join(", ")}. Die Typen gelten trotzdem, das Pokémon kannst du dort aber nicht einsetzen.</div>` : ""}
     <p class="hint">Zeile greift an, Spalte verteidigt. <span class="f f2">2</span> sehr effektiv · <span class="f f05">½</span> nicht sehr effektiv ·
       <span class="f f0">0</span> keine Wirkung (immun) · leer = normal (×1). Klick auf einen Typ hält Zeile oder Spalte fest, Klick auf eine Zelle beides.</p>
-    <div class="scroll"><table class="chart"><thead><tr><th class="corner"><span>Angriff ↓ · Verteidigung →</span></th>${ts.map((t) => `<th class="v" data-c="${t}" data-pc="${t}"><span>${tchip(t)}</span></th>`).join("")}</tr></thead>
+    <div class="scroll"><table class="chart" id="tchart"><thead><tr><th class="corner"><span>Angriff ↓ · Verteidigung →</span></th>${ts.map((t) => `<th class="v" data-c="${t}" data-pc="${t}"><span>${tchip(t)}</span></th>`).join("")}${cntHeads(ATTC)}</tr></thead>
     <tbody>${ts.filter(rowOk).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ts.map((v) => { const f = ch[a][v];
-      return `<td data-c="${v}" data-tip-cell="${a}:${v}">${f === 1 ? "" : `<span class="f ${fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}</tr>`).join("")}</tbody>
+      return `<td data-c="${v}" data-tip-cell="${a}:${v}">${f === 1 ? "" : `<span class="f ${fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}${cntCells(ATTC, attCnt(ts.map((v) => ch[a][v])), "n")}</tr>`).join("")}</tbody>
     </table></div>${mine ? `<p class="hint">Nur die Typen deines Teams als Angreifer: ${ms.map((m) => esc(m.name)).join(", ")}.</p>` : ""}</div>
-    ${mine ? teamTypeHtml(ms, ts) : combosHtml(ch, pick)}`;
+    ${mine ? teamTypeHtml(ms, ts) : combosHtml(ch)}`;
   header();
-  $$("[data-tpk]").forEach((b) => b.addEventListener("click", () => {
-    const t = b.dataset.tpk; pick.has(t) ? pick.delete(t) : pick.add(t);
-    store.set("chartPick", [...pick]); chartView();
+  // jeder Filter merkt sich seine Auswahl selbst (data-tf); „alle“ leert ihn
+  $$("[data-tf]").forEach((b) => b.addEventListener("click", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const k = b.dataset.tf, p = typePick(k, ts);
+    if (b.dataset.tpkx !== undefined) p.clear(); else p.has(b.dataset.tpk) ? p.delete(b.dataset.tpk) : p.add(b.dataset.tpk);
+    store.set(k, [...p]); chartView();
   }));
-  $("#tpkx")?.addEventListener("click", () => { store.set("chartPick", []); chartView(); });
   if (!mine) {
     $("details.combos").addEventListener("toggle", (e) => store.set("combosOpen", e.target.open));
     $("#cbsicht").addEventListener("change", (e) => { store.set("combosSicht", e.target.value); chartView(); });
     crossTable($("table.cbt"), CPIN);
   }
-  crossTable($(".chart"), PIN, () => { $("#unpin").hidden = PIN.r === null && PIN.c === null; });
+  crossTable($("#tchart"), PIN, () => { $("#unpin").hidden = PIN.r === null && PIN.c === null; });
   $("#ctm").addEventListener("change", (e) => { store.set("chartTeam", e.target.checked); chartView(); });
   $$("details.tteam").forEach((d) => {
     crossTable($("table", d), TPIN[d.dataset.tt]);
@@ -2735,53 +2800,91 @@ async function logBox() {
   autocomplete($("#logq"), (r) => { if (LOGPICK.length < 6 && !LOGPICK.includes(r.id)) LOGPICK.push(r.id); logBox(); });
   $("#logall")?.addEventListener("toggle", (e) => store.set("logOpen", e.target.open));
 }
-/* Schadensrechner: eine gewählte Attacke eines Team-Platzes gegen die häufigsten Gegner oder das eigene Team (Level 50) */
+/* Schadensrechner: eine gewählte Attacke eines Team-Platzes gegen Gegner. Champions (Reiter Kampf, Level 50): die
+   häufigsten aus der Nutzungsstatistik; sonst (Reiter Team, ab Generation 3): die Gegner aus „Gegen Gegner“ mit Level.
+   Dazu immer das eigene Team oder eine eigene Auswahl */
 async function calcBox() {
+  const CH = () => BATTLE() ? "<h2>Schadensrechner</h2>" : "";
   const rid = RID, el = () => $("#calc"), t = S.team;
   if (!el()) return;
-  if (!t.ids.length) { el().innerHTML = `<h2>Schadensrechner</h2><p class="hint">Das Team ist leer.</p>`; return; }
+  if (!t.ids.length) { el().innerHTML = `${CH()}<p class="hint">Das Team ist leer.</p>`; return; }
   const ev = await api("/api/team/bewerten", {spiel: S.game, ids: t.ids, details: t.details, kurz: 1});
   if (rid !== RID || !el()) return;
   (ev.mitglieder || []).forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
   const A = ev.attacken || {};
   const dmg = (i) => (t.details[i]?.attacken || []).filter((x) => A[x] && A[x].klasse !== 1 && A[x].staerke);
-  const o = Object.assign({slot: 0, move: null, gegen: "smogon", vert: "0", krit: false, flaeche: "auto", tera: ""}, store.get("calc", {}));
+  const champ = BATTLE(), ck = champ ? "calc" : "calcT";
+  const o = Object.assign({slot: 0, move: null, gegen: champ ? "smogon" : "foes", vert: "0", krit: false, flaeche: "auto", tera: "", level: "", lvv: ""}, store.get(ck, {}));
+  if (!champ && o.gegen === "smogon") o.gegen = "foes";
   if (!dmg(o.slot)?.length) o.slot = t.ids.findIndex((_, i) => dmg(i).length);
   if (o.slot < 0) {
-    el().innerHTML = `<h2>Schadensrechner</h2><p class="hint">Wähle auf der Detailseite eines Mitglieds Schadens-Attacken, dann rechnet das hier den Schaden gegen die häufigsten Gegner aus.</p>`;
+    el().innerHTML = `${CH()}<p class="hint">Wähle auf der Detailseite eines Mitglieds Schadens-Attacken, dann rechnet das hier den Schaden gegen deine Gegner aus.</p>`;
     return;
   }
   if (!dmg(o.slot).includes(o.move)) o.move = dmg(o.slot)[0];
-  const foes = o.gegen === "team" || !(S.usageIds || []).length ? t.ids : S.usageIds.slice(0, 30);
+  // Gegner: die 30 häufigsten aus der Nutzungsstatistik, das eigene Team oder eine eigene Auswahl (gemerkt je Spiel)
+  const ownKey = "calcFoes:" + S.game, own = store.get(ownKey, []);
+  if (o.gegen === "smogon" && !(S.usageIds || []).length) o.gegen = "team";
+  if (o.gegen === "foes" && !S.foes.length) o.gegen = "team";
+  const foes = o.gegen === "eigene" ? own : o.gegen === "team" ? t.ids : o.gegen === "foes" ? S.foes : S.usageIds.slice(0, 30);
+  if (!foes.length) {
+    el().innerHTML = `${CH()}<p class="hint">Noch keine eigenen Gegner gewählt.</p><div class="bar"><div class="ac"><input id="cfoeq" type="search" placeholder="Gegner hinzufügen" style="width:220px"></div>
+      <button data-act="calcgegen" data-v="${champ && (S.usageIds || []).length ? "smogon" : "team"}">zurück zu ${champ && (S.usageIds || []).length ? "häufigen Gegnern" : "meinem Team"}</button></div>`;
+    autocomplete($("#cfoeq"), (x) => { store.set(ownKey, [x.id]); calcBox(); });
+    return;
+  }
   const r = await api("/api/schaden", {spiel: S.game, ids: t.ids, details: t.details, slot: o.slot, attacke: o.move, verteidiger: foes,
-    vert: o.vert, krit: o.krit ? 1 : "", flaeche: o.flaeche === "auto" ? null : o.flaeche === "ja", tera_vert: o.tera ? +o.tera : null});
+    vert: o.vert, krit: o.krit ? 1 : "", flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null,
+    level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv});
+  if (rid !== RID || !el()) return;
+  if (r.hinweis) { el().innerHTML = `${CH()}<p class="hint">${esc(r.hinweis)}</p>`; return; }
+  // Übersicht: je Mitglied gegen jeden Gegner die stärkste seiner gewählten Attacken
+  const all = o.ansicht === "alle" ? await api("/api/schaden/uebersicht", {spiel: S.game, ids: t.ids, details: t.details, verteidiger: foes, vert: o.vert, krit: o.krit ? 1 : "",
+    flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null, level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv}) : null;
   if (rid !== RID || !el()) return;
   const pct = (x) => String(x).replace(".", ",");
+  const toneOf = (x) => x.min_pct >= 100 ? "go" : x.max_pct >= 100 ? "warn" : x.max_pct >= 50 ? "mid" : "low";
   const ko = (x) => !x.sicher ? "keine Wirkung" : x.sicher === 1 ? "sicher K.O." : x.moeglich === 1 ? `K.O. mit Glück, sonst ${x.sicher} Treffer` : x.sicher === x.moeglich ? `${x.sicher} Treffer` : `${x.moeglich}–${x.sicher} Treffer`;
   const cls = (x) => x.sicher === 1 ? "go" : x.moeglich === 1 ? "warn" : x.sicher === 0 || !x.sicher ? "stop" : "";
-  el().innerHTML = `<h2>Schadensrechner</h2>
-    <div class="bar"><label>Angreifer <select id="cslot">${t.ids.map((id, i) => dmg(i).length ? `<option value="${i}"${i === o.slot ? " selected" : ""}>${esc(ROWS[id]?.name || id)} (Platz ${i + 1})</option>` : "").join("")}</select></label>
-      <label>Attacke <select id="cmove">${dmg(o.slot).map((x) => `<option value="${x}"${x === o.move ? " selected" : ""}>${esc(A[x].name)} (${A[x].staerke})</option>`).join("")}</select></label>
-      <label>gegen <select id="cgegen"><option value="smogon"${o.gegen !== "team" ? " selected" : ""}>häufige Gegner</option><option value="team"${o.gegen === "team" ? " selected" : ""}>mein Team</option></select></label>
+  el().innerHTML = `${CH()}
+    <div class="bar"><span class="seg"><button class="${o.ansicht === "alle" ? "" : "on"}" data-cv="eins" data-tip="Eine Attacke eines Mitglieds gegen alle Gegner, mit Balken und Treffern bis K.O.">eine Attacke</button><button class="${o.ansicht === "alle" ? "on" : ""}" data-cv="alle" data-tip="Jedes Mitglied gegen jeden Gegner mit seiner stärksten gewählten Attacke">Übersicht</button></span>
+      ${o.ansicht === "alle" ? "" : `<label>Angreifer <select id="cslot">${t.ids.map((id, i) => dmg(i).length ? `<option value="${i}"${i === o.slot ? " selected" : ""}>${esc(ROWS[id]?.name || id)} (Platz ${i + 1})</option>` : "").join("")}</select></label>
+      <label>Attacke <select id="cmove">${dmg(o.slot).map((x) => `<option value="${x}"${x === o.move ? " selected" : ""}>${esc(A[x].name)} (${A[x].staerke})</option>`).join("")}</select></label>`}
+      <label data-tip="${champ ? "Häufige Gegner: die 30 meistgenutzten Pokémon der Nutzungsstatistik von Smogon (unten unter „Häufige Gegner“)." : "Gegner von oben: die aus „Gegen Gegner“."} Mein Team: deine eigenen sechs. Eigene Auswahl: wen du selbst hinzufügst">gegen <select id="cgegen">${champ && (S.usageIds || []).length ? `<option value="smogon"${o.gegen === "smogon" ? " selected" : ""}>häufige Gegner (Top 30)</option>` : ""}
+        ${!champ && S.foes.length ? `<option value="foes"${o.gegen === "foes" ? " selected" : ""}>Gegner von oben (${S.foes.length})</option>` : ""}
+        <option value="team"${o.gegen === "team" ? " selected" : ""}>mein Team</option><option value="eigene"${o.gegen === "eigene" ? " selected" : ""}>eigene Auswahl (${own.length})</option></select></label>
       <label data-tip="Wie viel die Verteidiger in KP und die passende Verteidigung stecken (252 EVs)">Gegner <select id="cvert">${[["0", "nicht investiert"], ["kp", "volle KP"], ["kp_vert", "volle KP und Verteidigung"]].map(([k, n]) => `<option value="${k}"${o.vert === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
-      <label data-tip="Tera-Typ aller Verteidiger (ersetzt ihre Typen)">Tera Gegner <select id="ctera"><option value="">–</option>${Object.entries(S.types).map(([k, n]) => `<option value="${k}"${o.tera === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
-      <label data-tip="Flächenattacken treffen im Doppel beide Gegner mit 75 % Stärke">Fläche <select id="cfl">${[["auto", "nach Attacke"], ["ja", "ja"], ["nein", "nein"]].map(([k, n]) => `<option value="${k}"${o.flaeche === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
-      <label data-tip="Volltreffer: × 1,5"><input type="checkbox" id="ckrit"${o.krit ? " checked" : ""}> Volltreffer</label></div>
-    <p class="hint">${esc(r.angreifer)}: ${esc(r.attacke)} ${tchip(r.typ)} ${r.klasse === 2 ? "physisch" : "speziell"}, Stärke ${r.staerke}, Level ${r.level},
-      ${r.ev == null ? "Angriff voll investiert (252 EVs)" : `${r.ev} EVs`}${r.wesen > 1 ? ", Wesen +10 %" : r.wesen < 1 ? ", Wesen −10 %" : ""}${r.tera ? `, Tera ${tname(r.tera)}` : ""}${r.flaeche ? ", als Flächenattacke (× 0,75)" : ""}.
-      Ohne Fähigkeiten, Items, Wetter und Felder; Zufall 85 bis 100 %.</p>
-    <div class="scroll sticky"><table class="rows sort dmg"><thead><tr>${th("Verteidiger")}${thc("Wirkung")}${thc("Schaden", "Prozent der KP, kleinster bis größter Wurf")}${thc("KP")}${th("Treffer bis K.O.", "", true)}</tr></thead>
-      <tbody>${r.rows.map((x) => `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a></td>
-        <td class="c num" data-s="${x.eff}">×${fl(x.eff)}</td>
-        <td class="num" data-s="${x.max_pct}"><span class="sbar" style="display:inline-block;width:80px;vertical-align:middle"><i style="width:${Math.min(100, x.max_pct)}%"></i></span> ${pct(x.min_pct)}–${pct(x.max_pct)} %</td>
-        <td class="c num" data-s="${x.kp}">${x.min}–${x.max} / ${x.kp}</td><td class="${cls(x)}">${ko(x)}</td></tr>`).join("")}</tbody></table></div>`;
-  const set = (k, v) => { o[k] = v; store.set("calc", o); calcBox(); };
-  $("#cslot").addEventListener("change", (e) => set("slot", +e.target.value));
-  $("#cmove").addEventListener("change", (e) => set("move", +e.target.value));
+      ${champ ? "" : `<label data-tip="Level deines Pokémon; leer: wie auf seiner Detailseite eingetragen, sonst 50">Level <input type="number" id="clv" min="1" max="100" value="${esc(o.level)}" placeholder="${r.level}" style="width:64px"></label>
+        <label data-tip="Level der Gegner; leer: wie dein Pokémon">Level Gegner <input type="number" id="clvv" min="1" max="100" value="${esc(o.lvv)}" placeholder="${r.level_vert}" style="width:64px"></label>`}
+      ${champ || TERA() ? `<label data-tip="Tera-Typ aller Verteidiger (ersetzt ihre Typen)">Tera Gegner <select id="ctera"><option value="">–</option>${Object.entries(S.types).map(([k, n]) => `<option value="${k}"${o.tera === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label>` : ""}
+      ${champ ? `<label data-tip="Flächenattacken treffen im Doppel beide Gegner mit 75 % Stärke">Fläche <select id="cfl">${[["auto", "nach Attacke"], ["ja", "ja"], ["nein", "nein"]].map(([k, n]) => `<option value="${k}"${o.flaeche === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
+      <label data-tip="Volltreffer: × ${r.krit === 2 ? "2 (bis Generation 5)" : "1,5"}"><input type="checkbox" id="ckrit"${o.krit ? " checked" : ""}> Volltreffer</label></div>
+    ${all ? `<p class="hint">Je Zelle die stärkste gewählte Attacke des Mitglieds gegen den Gegner, Schaden in Prozent seiner KP (größter Wurf, Einzelheiten beim Darüberfahren); grün: sicher K.O., gelb: K.O. mit Glück. Level ${r.level}${r.level_vert !== r.level ? `, Gegner Level ${r.level_vert}` : ""}; ohne Fähigkeiten, Items, Wetter und Felder.</p>` : `<p class="hint">${esc(r.angreifer)}: ${esc(r.attacke)} ${tchip(r.typ)} ${r.klasse === 2 ? "physisch" : "speziell"}, Stärke ${r.staerke}, Level ${r.level},
+      ${r.ev == null ? "Angriff voll investiert (252 EVs)" : `${r.ev} EVs`}${r.wesen > 1 ? ", Wesen +10 %" : r.wesen < 1 ? ", Wesen −10 %" : ""}${r.tera ? `, Tera ${tname(r.tera)}` : ""}${r.flaeche ? ", als Flächenattacke (× 0,75)" : ""}${r.level_vert !== r.level ? `; Gegner Level ${r.level_vert}` : ""}.
+      Ohne Fähigkeiten, Items, Wetter und Felder; Zufall 85 bis 100 %.</p>`}
+    ${o.gegen === "eigene" ? `<div class="bar logpick">${own.map((id) => `<span class="chip on" data-act="calcfoe" data-id="${id}" data-tip="Entfernen">${img(id, "sm")}${esc(ROWS[id]?.name || "#" + id)} ✕</span>`).join("")}
+      <div class="ac"><input id="cfoeq" type="search" placeholder="Gegner hinzufügen" style="width:200px"></div></div>` : ""}
+    ${all ? `<div class="scroll"><table class="rows dmgx"><thead><tr><th></th>${all.gegner.map((g) => `<th class="c" data-hc="${g.id}">${img(g.id, "sm")}<div>${esc(g.name)}</div></th>`).join("")}</tr></thead>
+      <tbody>${all.rows.map((m) => `<tr><th class="nw" data-hc="${m.id}">${img(m.id, "sm")} ${esc(m.name)}</th>${m.zellen.map((x, k) => !x ? `<td class="c hint">–</td>`
+        : `<td class="c ${toneOf(x)}" data-tip="${esc(`${m.name}: ${x.attacke} gegen ${all.gegner[k].name}\n${pct(x.min_pct)}–${pct(x.max_pct)} % (${ko(x)}), Wirkung ×${fl(x.eff)}`)}"><b>${pct(x.max_pct)} %</b><div class="hint">${esc(x.attacke)}</div></td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<div class="scroll sticky"><table class="rows sort dmg fixed"><colgroup><col style="width:26%"><col style="width:84px"><col style="width:180px"><col style="width:110px"><col style="width:120px"><col></colgroup>
+      <thead><tr>${th("Verteidiger")}${thc("Wirkung")}${thc("Schaden", "Balken: kräftig der kleinste Wurf, blass bis zum größten; ein voller Balken ist 100 % der KP")}${thc("in %", "Prozent der KP, kleinster bis größter Wurf")}${thc("KP")}${th("Treffer bis K.O.", "", true)}</tr></thead>
+      <tbody>${r.rows.map((x) => { const tone = x.min_pct >= 100 ? "go" : x.max_pct >= 100 ? "warn" : x.max_pct >= 50 ? "mid" : "low";
+        return `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a></td>
+        <td class="c" data-s="${x.eff}">${x.eff === 1 ? `<span class="hint">×1</span>` : `<span class="f ${fcls(x.eff)}">×${fl(x.eff)}</span>`}</td>
+        <td data-s="${x.max_pct}"><span class="dbar ${tone}"><i class="mx" style="width:${Math.min(100, x.max_pct)}%"></i><i class="mn" style="width:${Math.min(100, x.min_pct)}%"></i></span></td>
+        <td class="c num ${tone}" data-s="${x.max_pct}">${pct(x.min_pct)}–${pct(x.max_pct)} %</td>
+        <td class="c num hint" data-s="${x.kp}">${x.min}–${x.max} / ${x.kp}</td><td class="${cls(x)}">${ko(x)}</td></tr>`; }).join("")}</tbody></table></div>`}`;
+  $$("[data-cv]", el()).forEach((b) => b.addEventListener("click", () => set("ansicht", b.dataset.cv)));
+  if ($("#cfoeq")) autocomplete($("#cfoeq"), (x) => { if (!own.includes(x.id)) store.set(ownKey, [...own, x.id].slice(0, 30)); calcBox(); });
+  const set = (k, v) => { o[k] = v; store.set(ck, o); calcBox(); };
+  $("#cslot")?.addEventListener("change", (e) => set("slot", +e.target.value));
+  $("#cmove")?.addEventListener("change", (e) => set("move", +e.target.value));
   $("#cgegen").addEventListener("change", (e) => set("gegen", e.target.value));
   $("#cvert").addEventListener("change", (e) => set("vert", e.target.value));
-  $("#ctera").addEventListener("change", (e) => set("tera", e.target.value));
-  $("#cfl").addEventListener("change", (e) => set("flaeche", e.target.value));
+  $("#ctera")?.addEventListener("change", (e) => set("tera", e.target.value));
+  $("#cfl")?.addEventListener("change", (e) => set("flaeche", e.target.value));
+  $("#clv")?.addEventListener("change", (e) => set("level", e.target.value));
+  $("#clvv")?.addEventListener("change", (e) => set("lvv", e.target.value));
   $("#ckrit").addEventListener("change", (e) => set("krit", e.target.checked));
 }
 async function speedView() {
@@ -2845,18 +2948,23 @@ async function compareView(a, b) {
   ds.forEach((d) => { if (d) { ROWS[d.id] = Object.assign(ROWS[d.id] || {}, d); } });
   const [A, B] = ds;
   const go = (x, y) => { location.hash = `vergleich/${x ?? "-"}/${y ?? "-"}`; };
-  // Schnellwahl: gemerkte (⚖) und Favoriten (★), ohne die schon gewählten
-  const quick = [...cmpList().map((id) => [id, "⚖"]), ...S.favs.map((f) => [f.id, "★"])]
-    .filter(([id], i, xs) => xs.findIndex(([x]) => x === id) === i);
-  const qrow = (k) => quick.length ? `<div class="cmpquick">${quick.filter(([id]) => id !== ids[k]).slice(0, 14).map(([id, m]) =>
-      `<button class="cq" data-cq="${k}" data-id="${id}" data-hc="${id}" data-tip="${m === "⚖" ? "Für den Vergleich gemerkt" : "Favorit"}: hierher stellen">${img(id)}<span>${m}</span></button>`).join("")}</div>`
-    : `<p class="hint small">Tipp: Auf der Detailseite „Zum Vergleich merken“ oder Favoriten setzen, dann stehen sie hier zur Wahl.</p>`;
-  const head = (d, k) => `<div class="box cmphead"><div class="ac"><input type="search" id="cmpq${k}" placeholder="${d ? "anderes Pokémon suchen" : "Pokémon suchen"}" aria-label="Pokémon suchen"></div>
-    ${qrow(k)}
+  // Schnellwahl unter dem Vergleich: zuerst die gemerkten (mit „alle entfernen“), darunter die Favoriten, ohne die schon gewählten
+  const marked = cmpList(), favs = S.favs.map((f) => f.id).filter((id) => !marked.includes(id));
+  const qbtn = (k, id, tip) => `<button class="cq" data-cq="${k}" data-id="${id}" data-hc="${id}" data-tip="${tip}: hierher stellen">${img(id)}</button>`;
+  const qrow = (k) => {
+    const m = marked.filter((id) => id !== ids[k]), f = favs.filter((id) => id !== ids[k]).slice(0, 12);
+    return `<div class="cmppick">${m.length ? `<div class="cqh"><b>Zum Vergleich gemerkt</b>${k === 0 ? `<button class="small" data-act="cmpclear" data-tip="Alle gemerkten Pokémon aus der Merkliste nehmen">alle entfernen</button>` : ""}</div>
+        <div class="cmpquick">${m.map((id) => qbtn(k, id, "Gemerkt")).join("")}</div>` : ""}
+      ${f.length ? `<div class="cqh"><b>Favoriten</b></div><div class="cmpquick fav">${f.map((id) => qbtn(k, id, "Favorit")).join("")}</div>` : ""}
+      ${!m.length && !f.length ? `<p class="hint small">Tipp: Auf der Detailseite „Zum Vergleich merken“ oder Favoriten setzen, dann stehen sie hier zur Wahl.</p>` : ""}</div>`;
+  };
+  const pick = (d, k) => `<div class="box cmphead cmpsel"><div class="ac"><input type="search" id="cmpq${k}" placeholder="${d ? `statt ${esc(d.name)} ein anderes Pokémon` : "Pokémon suchen"}" aria-label="Pokémon suchen"></div>${qrow(k)}</div>`;
+  const head = (d, k) => `<div class="box cmphead">
     ${d ? `<a class="cmpmon" href="#pokemon/${d.id}" data-tip="Zur Detailseite">${img(d.id, "big", true)}<b>${esc(d.name)}</b></a><div>${tchips(d.typen)}</div>
       ${d.im_spiel === false ? `<div class="note warn small">In ${esc(gameName())} nicht enthalten</div>` : ""}
       <span class="cmpradar" data-tip-stats="${d.werte.join(",")}">${radar(d.werte, 200, true)}</span>
-      <button class="mark small${cmpMarked(d.id) ? " on" : ""}" data-act="cmpmark" data-id="${d.id}" data-markbtn="cmp">${markLabel("cmp", cmpMarked(d.id))}</button>` : `<p class="hint">Noch kein Pokémon gewählt.</p>`}</div>`;
+      <button class="mark small${cmpMarked(d.id) ? " on" : ""}" data-act="cmpmark" data-id="${d.id}" data-markbtn="cmp">${markLabel("cmp", cmpMarked(d.id))}</button>`
+      : `<p class="hint">Noch kein Pokémon gewählt. Suche oder wähle unten eines aus.</p><div class="ac"><input type="search" id="cmpe${k}" placeholder="Pokémon suchen"></div>`}</div>`;
   const better = (x, y) => x > y ? " win" : "";
   const statRows = A && B ? [...STAT.map((n, i) => [n, A.werte[i], B.werte[i], i]), ["Summe", A.summe, B.summe, "summe"]].map(([n, x, y, i]) => {
     const w = (v) => Math.min(100, v / (i === "summe" ? 780 : statMax(i)) * 100);
@@ -2866,8 +2974,11 @@ async function compareView(a, b) {
       <td><span class="sbar"><i style="width:${w(y)}%;background:${i === "summe" ? sumColor(y) : statColor(y)}"></i></span></td><td class="num${better(y, x)}">${y}</td></tr>`;
   }).join("") : "";
   const ts = Object.keys(S.chart || {});
+  // Verteidigung: je Angriffstyp der Faktor beider; wer weniger einsteckt, bekommt die Zelle grün hinterlegt und ein ✓
+  const fword = (f) => f === 0 ? "keine Wirkung" : f >= 4 ? "4-fach schwach" : f > 1 ? "schwach" : f <= 0.25 ? "4-fach resistent" : f < 1 ? "resistent" : "neutral";
+  const dcell = (d, f, other, t) => `<td class="c${f < other ? " better" : ""}" data-tip="${esc(`${tname(t)}-Attacken gegen ${d.name}: ×${fl(f)} (${fword(f)})${f < other ? `; steckt weniger ein als ${(d === A ? B : A).name}` : f > other ? `; steckt mehr ein als ${(d === A ? B : A).name}` : ""}`)}">${f === 1 ? `<span class="hint">1</span>` : `<span class="f ${fcls(f)}">${fl(f)}</span>`}${f < other ? ` <span class="ok">✓</span>` : ""}</td>`;
   const defRow = A && B ? ts.map((t) => { const x = A.wirkung[t] ?? 1, y = B.wirkung[t] ?? 1;
-    return `<tr><td class="c">${x === 1 ? "" : `<span class="f ${fcls(x)}${x < y ? " win" : ""}">${fl(x)}</span>`}</td><th class="c">${tchip(t)}</th><td class="c">${y === 1 ? "" : `<span class="f ${fcls(y)}${y < x ? " win" : ""}">${fl(y)}</span>`}</td></tr>`; }).join("") : "";
+    return `<tr data-r="${t}">${dcell(A, x, y, t)}<th class="c">${tchip(t)}</th>${dcell(B, y, x, t)}</tr>`; }).join("") : "";
   const sum = (d) => { const v = Object.values(d.wirkung); return {s: v.filter((f) => f > 1).length, r: v.filter((f) => f < 1 && f > 0).length, i: v.filter((f) => f === 0).length}; };
   const mv = (d) => new Map([...d.attacken.attacken, ...d.attacken.status].map((m) => [m.id, m]));
   let moves = "";
@@ -2903,6 +3014,7 @@ async function compareView(a, b) {
   main.innerHTML = `<div class="bar">${backLink()}<h2 style="margin:0">Vergleich</h2><label class="game2">Spiel <select class="gamesel"></select></label>
       ${A || B ? `<button id="cmpswap" data-tip="Seiten tauschen">⇄ tauschen</button>` : ""}</div>
     <div class="cmpgrid">${head(A, 0)}<div class="box cmpmid">${A && B ? `<table class="cmpst">${statRows}</table>` : `<p class="hint">Wähle zwei Pokémon, dann stehen hier die Werte nebeneinander.</p>`}</div>${head(B, 1)}</div>
+    <div class="cmpgrid sel">${pick(A, 0)}<div></div>${pick(B, 1)}</div>
     ${fazit}
     ${A && B ? `<div class="cols"><div class="box"><h2 data-tip="So stark treffen Attacken eines Typs; grün = steckt weniger ein">Verteidigung</h2>
         <p class="hint">${esc(A.name)}: ${sum(A).s} Schwächen, ${sum(A).r} Resistenzen, ${sum(A).i} Immunitäten · ${esc(B.name)}: ${sum(B).s}, ${sum(B).r}, ${sum(B).i}</p>
@@ -2911,37 +3023,36 @@ async function compareView(a, b) {
   header();
   autocomplete($("#cmpq0"), (r) => go(r.id, B?.id));
   autocomplete($("#cmpq1"), (r) => go(A?.id, r.id));
+  if ($("#cmpe0")) autocomplete($("#cmpe0"), (r) => go(r.id, B?.id));
+  if ($("#cmpe1")) autocomplete($("#cmpe1"), (r) => go(A?.id, r.id));
   $("#cmpswap")?.addEventListener("click", () => go(B?.id, A?.id));
   $$("[data-cq]").forEach((b) => b.addEventListener("click", () => { const id = +b.dataset.id; b.dataset.cq === "0" ? go(id, B?.id) : go(A?.id, id); }));
-  if (!A) $("#cmpq0").focus(); else if (!B) $("#cmpq1").focus();
+  if (!A) $("#cmpe0")?.focus(); else if (!B) $("#cmpe1")?.focus();
 }
 
 /* Alle Typkombinationen (Verteidigung): je Kombination die Wirkung jedes Angriffstyps, dazu Schwächen, 4-fach,
    Resistenzen und Immunitäten zum Sortieren; Filter auf einen enthaltenen Typ */
-function combosHtml(ch, pick = new Set()) {
-  const ts = Object.keys(ch), att = store.get("combosSicht", "def") === "att";
+function combosHtml(ch) {
+  const ts = Object.keys(ch), att = store.get("combosSicht", "def") === "att", pick = typePick("combosPick", ts);
   const combos = [];
   ts.forEach((x, i) => { combos.push([x]); ts.slice(i + 1).forEach((y) => combos.push([x, y])); });
   const shown = combos.filter((c) => [...pick].every((t) => c.includes(t)));
   const rows = shown.map((c) => {
     // Verteidiger: Spalte greift an, Faktoren multiplizieren sich. Angreifer: Spalte verteidigt, es zählt der bessere Eigentyp
     const fs = ts.map((t) => att ? Math.max(...c.map((a) => ch[a]?.[t] ?? 1)) : c.reduce((f, d) => f * (ch[t]?.[d] ?? 1), 1));
-    const n = (p) => fs.filter(p).length;
-    const cnt = att ? [n((f) => f > 1), n((f) => f < 1 && f > 0), n((f) => f === 0)]
-      : [n((f) => f > 1), n((f) => f >= 4), n((f) => f < 1 && f > 0), n((f) => f === 0)];
+    const cnt = att ? attCnt(fs) : defCnt(fs);
     // als Verteidiger ist ½ gut (grün), als Angreifer ist 2 gut: dann Farben umdrehen
     return `<tr data-r="${c.join(",")}"><th class="r" data-pr="${c.join(",")}" data-s="${esc(c.map(tname).join(" "))}">${tchips(c)}</th>
-      ${cnt.map((v, i) => `<td class="c num" data-c="${i + 1}" data-s="${v}">${v || (i === 0 ? 0 : "")}</td>`).join("")}
+      ${cntCells(att ? ATTC : DEFC, cnt, 1)}
       ${fs.map((f, j) => `<td class="c" data-c="${j + cnt.length + 1}" data-s="${f}">${f === 1 ? "" : `<span class="f ${att && f ? fcls(1 / f) : fcls(f)}">${fl(f)}</span>`}</td>`).join("")}</tr>`;
   }).join("");
-  const heads = att ? thc("Stark", "Verteidigende Typen, die mindestens ein Eigentyp sehr effektiv trifft") + thc("Schwach", "Typen, gegen die beide Eigentypen nur ×½ schaffen")
-      + thc("Imm.", "Typen, gegen die keiner der beiden etwas ausrichtet")
-    : thc("Schw.", "Schwächen: Angriffstypen mit ×2 oder mehr") + thc("×4", "4-fache Schwächen") + thc("Res.", "Resistenzen: ×½ oder weniger") + thc("Imm.", "Immun: keine Wirkung");
+  const heads = (att ? ATTC : DEFC).map(([n, tip]) => thc(n, tip)).join("");
   return `<details class="box combos"${store.get("combosOpen", false) ? " open" : ""}><summary><h2 style="display:inline">Alle Typkombinationen</h2> <span class="hint">${shown.length} von ${combos.length} Kombinationen</span></summary>
     <div class="bar"><label data-tip="Verteidiger: so viel steckt ein Pokémon mit diesen Typen ein. Angreifer: so gut treffen Attacken seiner beiden Eigentypen zusammen">Sicht
         <select id="cbsicht"><option value="def"${att ? "" : " selected"}>als Verteidiger</option><option value="att"${att ? " selected" : ""}>als Angreifer</option></select></label>
       <span class="hint">${att ? "Spalte: verteidigender Typ, es zählt der bessere der beiden Eigentypen (wie die Typtabelle oben, nur je Kombination)." : "Spalte: angreifender Typ, so stark trifft er ein Pokémon mit diesen Typen."}
-        Klick auf eine Überschrift sortiert, das Zeichen davor markiert die Spalte; Klick auf die Typen markiert die Zeile.${pick.size ? " Gefiltert über die Typauswahl oben." : ""}</span></div>
+        Klick auf eine Überschrift sortiert, das Zeichen davor markiert die Spalte; Klick auf die Typen markiert die Zeile. Zählung: grün hilft, rot schadet, kräftiger je mehr.</span></div>
+    ${typeFilter("combosPick", ts, pick, "Typen wählen: nur Kombinationen, die alle gewählten Typen enthalten")}
     <div class="scroll sticky"><table class="chart sort cbt"><thead><tr>${th("Typen")}${heads}
       ${ts.map((t) => `<th class="v c" data-sort><span>${tchip(t)}</span></th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
@@ -2993,11 +3104,18 @@ async function settingsView() {
       ${st.running ? `<div class="note info">Läuft: ${esc(st.step || "")}${st.total ? ` (${st.done}/${st.total})` : ""}</div>` : ""}
       <p>Letzter Lauf: ${st.started ? esc(deTime(st.started)) + (st.ok === false ? " <b>mit Fehlern</b>" : "") : "noch keiner"}
       ${st.built ? `<br>Datenbank gebaut: ${esc(deTime(st.built))}` : ""}
-      ${srcKeys.length ? `<br>Quellen: ${[okN && `<b class="okc">${okN} ok</b>`, bad.length && `<b class="errc">${bad.length} mit Problem</b> (${esc(bad.join(", "))})`].filter(Boolean).join(", ")}` : ""}</p>
+      ${bad.length ? `<br><b class="errc">${bad.length} ${bad.length === 1 ? "Quelle" : "Quellen"} mit Problem</b> (${esc(bad.join(", "))})` : ""}</p>
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
+      ${srcKeys.length ? `<details class="sub"${bad.length ? " open" : ""}><summary><b>Quellen</b> <span class="hint">${[okN && `${okN} ok`, bad.length && `${bad.length} mit Problem`].filter(Boolean).join(", ")}</span></summary>
+      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("itemhq", "Große Item-Bilder")}${srcRow("mapgenie", "Map Genie")}${srcRow("smogon", "Smogon")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table></details>` : ""}
       <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
-        <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button></div>
-      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("itemhq", "Große Item-Bilder")}${srcRow("mapgenie", "Map Genie")}${srcRow("smogon", "Smogon")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table>
+        <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button>
+        <button data-act="diag" data-tip="Fragt jede Quelle einmal an, auch mögliche neue (Items, Fundorte, Wikis, Kampfdaten, Karten), und beschreibt die Antwort. Speichert nichts; dauert etwa eine Minute">Verbindung testen</button></div>
+      <details class="sub" id="diagsub"><summary><b>Verbindungstest</b> <span class="hint">noch nicht gestartet</span></summary>
+        <div class="bar slim"><span id="dlinks"></span></div><div id="diag"><p class="hint">„Verbindung testen“ fragt jede Quelle einmal an; Probe-Seiten lassen sich danach herunterladen.</p></div></details>
+      <details class="sub"${st.ok === false || st.running ? " open" : ""}><summary><b>Protokoll</b> <span class="hint">${st.started ? esc(deTime(st.started)) + (st.ok === false ? ", mit Fehlern" : "") : "noch keins"}</span></summary>
+        ${(st.log || []).length ? `<div class="bar slim"><button class="link" data-act="copy" data-src="#plog">kopieren</button> · <button class="link" data-act="dl" data-src="#plog" data-name="pokedex-protokoll">herunterladen</button></div>` : ""}
+        <div class="log" id="plog">${esc((st.log || []).map(logLocal).join("\n") || "Noch kein Lauf.")}</div></details>
       <h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
@@ -3019,17 +3137,15 @@ async function settingsView() {
         : `<div class="note go">Nichts offen${pr.length ? ` (${pr.length} Abweichungen entschieden)` : ""}.</div>`}
       ${pr.length - open.length ? `<details><summary>Entschieden (${pr.length - open.length})</summary><table class="rows">${pr.filter((r) => r.entscheidung).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.feld)}</td><td>${esc(r.entscheidung)}</td><td><button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="">zurück</button></td></tr>`).join("")}</table></details>` : ""}
     </div></div>
-    <h2 class="sect">Spieldaten aus den Quellen</h2>
-    <div class="box"><h2>Spieldaten</h2>
-      <p class="hint">Alles, was der Abgleich gesammelt hat, als ZIP-Datei: die gebaute Datenbank (SQLite), Stand und Protokoll, Einstellungen, die Liste „Zu erledigen“
-        und eine Übersicht, welche Bilder, Rufe und Kartenkacheln da sind und welche fehlen. Ohne die Bilder selbst und ohne eigene Daten. Etwa 20 MB.</p>
-      <div class="bar"><a class="btn" href="/api/spieldaten" download>Spieldaten herunterladen</a></div></div>
-    <div class="box"><div class="bar"><h2 style="margin:0">Protokoll</h2><span class="grow"></span>
-        ${(st.log || []).length ? `<button class="link" data-act="copy" data-src="#plog">kopieren</button> <button class="link" data-act="dl" data-src="#plog" data-name="pokedex-protokoll">herunterladen</button>` : ""}</div>
-      <div class="log" id="plog">${esc((st.log || []).map(logLocal).join("\n") || "Noch kein Lauf.")}</div></div>
-    <div class="box"><h2>Verbindungstest</h2><p class="hint">Fragt jede Quelle einmal an, auch mögliche neue (Items, Fundorte aus den Spieldaten, Wikis, Kampfdaten), und beschreibt die Antwort. Speichert nichts; Probe-Seiten lassen sich herunterladen. Dauert etwa eine Minute.</p>
-      <div class="bar"><button data-act="diag">Test starten</button><span class="grow"></span><span id="dlinks"></span></div>
-      <div id="diag"></div></div>
+    <h2 class="sect">Deine Daten</h2>
+    <div class="box"><h2>Sicherung</h2>
+      <p class="hint">Die Sicherung enthält alles Eigene: Teams, Favoriten, deine Sammlung (als gefangen markiert), Kampftagebuch und Entscheidungen. Der Server sichert user.db außerdem täglich selbst (die letzten 14 Tage).
+        Die Spieldaten sind alles, was der Abgleich gesammelt hat (Datenbank, Stand, Protokoll, „Zu erledigen“ und welche Bilder und Kacheln fehlen), zum Nachprüfen; zum Einlesen braucht es sie nicht.</p>
+      <div class="bar"><a class="btn" href="/api/spieldaten" download data-tip="ZIP-Datei, etwa 20 MB, ohne Bilder und ohne eigene Daten">Spieldaten herunterladen</a>
+        <a class="btn" href="/api/export" download>Sicherung herunterladen</a>
+        <label class="btn filebtn">Sicherung einlesen <input type="file" id="restore" accept="application/json,.json" hidden></label></div>
+      <p class="hint">Einlesen ersetzt alle eigenen Daten durch die Datei; vorher legt der Server eine Kopie an.</p>
+      <div id="restmsg"></div></div>
     <div class="box"><h2>Seite untersuchen (Lesezeichen)</h2><p class="hint">Manche Seiten laden ihre Karten erst im Browser (etwa das PokéWiki),
       der Abgleich sieht dann nur eine leere Hülle. Dieses Lesezeichen liest die fertig geladene Seite in deinem Browser: welche Daten-Dateien sie nachlädt
       (mit Inhalt), Daten in Variablen, Kartenmarker und das HTML. Ergebnis ist eine Datei für den Testdaten-Ordner, aus der sich ein Leser bauen lässt.
@@ -3038,14 +3154,6 @@ async function settingsView() {
         <button data-act="bmcopy" data-tip="Für ein von Hand angelegtes Lesezeichen">Code kopieren</button></span>
       <ul class="hint"><li>Lesezeichenleiste einblenden (Strg+Umschalt+B) und den Knopf hineinziehen, oder „Code kopieren“ und als Adresse eines neuen Lesezeichens einfügen.</li>
         <li>Dann die Seite öffnen (etwa eine Karte im PokéWiki, bei Serebii, GamerGuides oder Pokébip), warten, bis die Karte steht, und das Lesezeichen anklicken.</li></ul></div>
-    <h2 class="sect">Deine Daten</h2>
-    <div class="box"><h2>Sicherung</h2>
-      <p class="hint">Alles Eigene in einer Datei: Teams, Favoriten, deine Sammlung (als gefangen markiert) und Entscheidungen. Die Spieldaten gehören nicht dazu; die holt der Abgleich jederzeit neu.
-        Der Server sichert user.db außerdem täglich selbst (die letzten 14 Tage).</p>
-      <div class="bar"><a class="btn" href="/api/export" download>Sicherung herunterladen</a>
-        <label class="btn filebtn">Sicherung einlesen <input type="file" id="restore" accept="application/json,.json" hidden></label>
-        <span class="hint">Einlesen ersetzt alle eigenen Daten durch die Datei (vorher legt der Server eine Kopie an).</span></div>
-      <div id="restmsg"></div></div>
     <details class="box"><summary><h2>Quellen und Lizenzen</h2><span class="hint">7 Quellen · Pokédex ${esc(S.meta?.version || "")}</span></summary>
       <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
         <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
@@ -3168,12 +3276,15 @@ function download(name, txt, type = "text/plain") {
 }
 async function diag() {
   await api("/api/diag", {});
+  const sub = $("#diagsub");
+  if (sub) { sub.open = true; $("summary .hint", sub).textContent = "läuft …"; }
   const poll = async () => {
     const d = await api("/api/diag");
     const el = $("#diag");
     if (!el) return;
     if (d.running) { el.innerHTML = `<p class="hint">Läuft …</p>`; setTimeout(poll, 1500); return; }
     el.innerHTML = `<div class="log" id="dlog">${esc((d.lines || []).join("\n") || d.error)}</div>`;
+    if (sub) $("summary .hint", sub).textContent = (d.lines || []).length ? `${d.lines.length} Zeilen` : "ohne Ergebnis";
     // Kopieren und Herunterladen erst, wenn es ein Ergebnis gibt
     $("#dlinks").innerHTML = (d.lines || []).length ? `<button class="link" data-act="copy" data-src="#dlog">Ergebnis kopieren</button> <button class="link" data-act="dl" data-src="#dlog" data-name="pokedex-verbindungstest">herunterladen</button>`
       + (d.proben ? ` <a href="/api/diag/proben" download data-tip="Gekürzte Rohseiten der Quellen (${d.proben}), aus denen sich Leser für sie bauen lassen">Proben herunterladen</a>` : "") : "";
@@ -3198,6 +3309,7 @@ document.addEventListener("click", async (e) => {
       if (slot !== null && location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${id}/${slot}`;
     } else if (act === "teamdel") { removeSlot(+b.dataset.slot); if (location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${DETAIL?.id || ""}`; }
     else if (act === "fav") await toggleFav(id);
+    else if (act === "cmpclear") { store.set("cmpMerk", []); redrawMarks(); compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "cmpmark") { cmpToggle(id); redrawMarks(); if (location.hash.startsWith("#vergleich")) compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "favadd") { $("#pick").hidden = true; await toggleFav(id, true); }
     else if (act === "caught") await toggleCaught(id);
@@ -3207,6 +3319,7 @@ document.addEventListener("click", async (e) => {
     else if (act === "xnone") [...XSEL].forEach((x) => xsel(x, false));
     else if (act === "xgo") await xferGo();
     else if (act === "pick") picker(b, +b.dataset.slot);
+    else if (act === "favswap") { if (!teamFull()) addToTeam(id); else swapPicker(b, id); }
     else if (act === "pickfav") { $("#pick").hidden = true; addToTeam(id, +b.dataset.slot); }
     else if (act === "tgame") setGame(S.team.spiel);
     else if (act === "unpin") { PIN.r = null; PIN.c = null; chartView(); }
@@ -3271,6 +3384,8 @@ document.addEventListener("click", async (e) => {
       await api("/api/abgleich", {neu: act === "rebuild"});
       setTimeout(refreshMeta, 800);
     } else if (act === "diag") await diag();
+    else if (act === "calcfoe") { const k = "calcFoes:" + S.game; store.set(k, store.get(k, []).filter((x) => x !== id)); calcBox(); }
+    else if (act === "calcgegen") { const k = BATTLE() ? "calc" : "calcT"; store.set(k, Object.assign(store.get(k, {}), {gegen: b.dataset.v})); calcBox(); }
     else if (act === "nobm") { b.dataset.tip = "Nicht hier klicken: in die Lesezeichenleiste ziehen und auf der fremden Seite anklicken"; }
     else if (act === "bmcopy") await copyText(probeBm(), b);
     else if (act === "todotask") {

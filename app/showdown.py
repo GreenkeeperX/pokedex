@@ -47,6 +47,15 @@ def pokedex(text):
     return {k: v for k, v in entries(text).items() if "num" in v and "baseStats" in v}
 
 
+def mod_stats(text):
+    """Basiswerte aus einem Generations-Mod (data/mods/genN/pokedex.ts): Kennung → baseStats, nur wo der Mod sie ändert.
+    In Generation 1 stehen Sp.-Angriff und Sp.-Verteidigung beide für den einen Spezial-Wert."""
+    return {k: v["baseStats"] for k, v in entries(text).items() if isinstance(v.get("baseStats"), dict)}
+
+
+MOD_GENS = (1, 2, 4, 5, 6, 7, 8)   # Mods mit Pokédex-Datei; jeder erbt vom nächsten (gen1 → gen2 → … → gen8 → heute)
+
+
 def moves(text):
     """Attacken: Kennung → num, name, type, basePower, accuracy (true = trifft immer), pp, priority, category, flags."""
     return {k: v for k, v in entries(text).items() if "num" in v and "category" in v}
