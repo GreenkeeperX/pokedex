@@ -665,6 +665,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/schaden": abfragen.damage_view,
         "/api/schaden/uebersicht": abfragen.damage_matrix,
         "/api/effort": abfragen.effort_view,
+        "/api/werte": abfragen.stats_view,
         "/api/effort/team": abfragen.effort_team,
         "/api/kampftagebuch": add_battle,
         "/api/kampftagebuch/loeschen": delete_battle,

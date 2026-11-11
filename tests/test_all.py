@@ -1269,6 +1269,15 @@ class Server(TempData):
         self.assertEqual(schaden.rolls_old(1, 50, 100, 600, 400)[-1], 68)    # über 255: beide geviertelt
         self.assertEqual(schaden.rolls_old(1, 50, 100, 150, 100, effs=(2.0, 0.5))[-1], 68)
         self.assertEqual(schaden.rolls_old(1, 50, 100, 150, 100, effs=(0,)), [0] * 39)
+        # Werte-Diagramm: Teile ergeben den Wert, Ziel-EVs, bis Gen. 2 DVs und Stat Exp
+        v = schaden.stat_view([78, 84, 78, 109, 85, 100], 50, 9, [31] * 6, [0, 0, 0, 252, 4, 252], [0, 0, 0, 252, 4, 252], (5, 1))
+        self.assertEqual([x["wert"] for x in v["rows"]], [153, 93, 98, 161, 106, 167])        # Glurak, scheu
+        self.assertTrue(all(sum(x["teile"].values()) == x["wert"] for x in v["rows"]))
+        self.assertEqual((v["ev_summe"], v["ev_gesamt"], v["rows"][5]["max"]), (508, 510, 167))
+        v = schaden.stat_view([78, 84, 78, 109, 85, 100], 50, 9, None, None, [252, 0, 0, 0, 0, 0])
+        self.assertEqual((v["rows"][0]["wert"], v["rows"][0]["wert_ziel"], v["rows"][0]["ev_ziel_teil"]), (153, 185, 32))
+        v = schaden.stat_view([106, 110, 90, 154, 154, 130], 100, 1, None, [65535] * 6)
+        self.assertEqual((v["rows"][0]["wert"], v["rows"][3]["wert"], v["ev_gesamt"]), (415, 406, None))
         o = schaden.calc_old(1, 50, 90, 3, PSYCHO, [106, 110, 90, 154, 154, 130], [PSYCHO], [250, 5, 5, 105, 105, 50], [NORMAL], ch())
         self.assertEqual((o["angriff"], o["verteidigung"], o["kp"]), (schaden.stat_old(154, 50), schaden.stat_old(105, 50, exp=0), schaden.stat_old(250, 50, exp=0, hp=True)))
         self.assertEqual(o["stab"], 1.5)
@@ -1550,6 +1559,10 @@ class MitDatenbank(TempData):
                                    "verteidiger": [bi]})
         self.assertEqual((rb["gen"], len(rb["rows"])), (1, 1))
         self.assertGreater(rb["rows"][0]["max"], 0)
+        sv = abfragen.stats_view({"spiel": "scarlet-violet", "id": kn, "level": 100, "evs": [0, 252, 0, 0, 4, 252]})
+        self.assertEqual((len(sv["rows"]), sv["gen"], sv["minzen"]), (6, 9, True))
+        self.assertEqual(sv["rows"][1]["wert"], 359)                            # Knakrack, Angriff 130, 252 EVs, Level 100
+        self.assertEqual(abfragen.stats_view({"spiel": "legends-arceus", "id": kn})["rows"], [])
 
 
 if __name__ == "__main__":

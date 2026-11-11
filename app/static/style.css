@@ -817,7 +817,8 @@ table.items tr.odd td{opacity:.6}
 .elb i{display:block;height:100%}
 .elb-n{color:var(--muted)}
 .elb-v{min-width:64px;font-variant-numeric:tabular-nums}
-.e-b{background:#7d8c8f}.e-l{background:#5b8fc7}.e-e{background:#4fbf8f}.e-w{background:#e0b341}
+.e-b{background:#7d8c8f}.e-l{background:#5b8fc7}.e-e{background:#4fbf8f}.e-w{background:#e0b341}.e-i{background:#a07fd6}
+.stab input{width:58px}
 .e-m{background:repeating-linear-gradient(135deg,#e0605a 0 3px,var(--chip) 3px 6px)}
 .e-z{background:repeating-linear-gradient(90deg,color-mix(in srgb,#4fbf8f 55%,transparent) 0 4px,transparent 4px 7px)}
 .ellg span{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}

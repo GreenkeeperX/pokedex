@@ -1,5 +1,12 @@
 # Roadmap
 
+## 0.31.0 (11.11.2026)
+
+- Werte-Diagramm `statBox` (`#stbox`) für alle Spiele außer Legenden: Arceus (Effort Levels), Let's Go (AVs), Champions und
+  Pokopia: `/api/werte` → `schaden.stat_view` (Teile je Wert, Ziel-EVs, höchstens). Team-Platz `ivs`, `evs`, `ev_ziel`, `wesen`;
+  bis Generation 2 `dvs`, `exp`, `exp_ziel` (Showdown schreibt dort EVs)
+- Offen: Let's Go mit AVs und Freundschaft, Champions-Werte
+
 ## 0.30.0 (11.11.2026)
 
 - `app/serebii.py`: Z-A-Attackenliste (`legendsz-a/attacks.shtml`) → `attacke_spiel.abklingzeit`; Pokédexe von Pokopia

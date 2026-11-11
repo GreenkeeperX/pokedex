@@ -1163,7 +1163,7 @@ async function detailView(id, slot = null) {
         <p>${esc(d.text)}</p><div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
         ${d.werte_alt ? `<p class="hint">Basiswerte wie in Generation ${GEN()}; später wurden sie geändert (Quelle: Pokémon Showdown).</p>` : ""}
         ${moreHtml(d)}
-        ${S.game === "legends-arceus" ? `<div id="elbox"></div>` : ""}
+        ${S.game === "legends-arceus" ? `<div id="elbox"></div>` : STATS_OK() ? `<div id="stbox"></div>` : ""}
         ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${wikiLink(a.name)}</b>${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
           : noAbil() ? `<p class="hint">In ${esc(gameName())} gibt es keine Fähigkeiten${GEN() <= 2 ? " (erst ab Generation 3)" : ""}.</p>` : ""}
         ${GEN() <= 3 ? `<p class="hint">Bis Generation 3 hängt physisch oder speziell am Typ der Attacke: Normal, Kampf, Flug, Gift, Boden, Gestein, Käfer, Geist und Stahl sind physisch, die übrigen speziell.${GEN() === 1 ? " In Generation 1 gab es statt Sp.-Angriff und Sp.-Verteidigung einen gemeinsamen Spezial-Wert." : ""}</p>` : ""}
@@ -1193,6 +1193,7 @@ async function detailView(id, slot = null) {
   header();
   renderMoves(d.attacken, level);
   if (S.game === "legends-arceus") elBox(d, inTeam ? DSLOT : null);
+  else if (STATS_OK()) statBox(d, inTeam ? DSLOT : null);
   wireExtras(d);
   $('details[data-store="raidOpen"]')?.addEventListener("toggle", (e) => store.set("raidOpen", e.target.open));
   $("#formsel")?.addEventListener("change", (e) => {
@@ -1241,6 +1242,58 @@ async function elBox(d, slot) {
   $("#ellv")?.addEventListener("change", (e) => { det.level = Math.max(1, Math.min(100, +e.target.value || 50)); det.el = cur(); det.el_ziel = goal(); save(); });
   $("#elmax").addEventListener("click", () => { det.el = cur(); det.el_ziel = [10, 10, 10, 10, 10, 10]; save(); });
   $("#elreach").addEventListener("click", () => { det.el = goal(); det.el_ziel = goal(); save(); });
+}
+/* Werte-Diagramm (alle Spiele außer Legenden: Arceus, Let's Go, Champions, Pokopia): IVs und EVs (bis Generation 2
+   DVs und Stat Exp), Wesen und Ziel-EVs; der Server rechnet die Werte. Im Team je Platz gespeichert, sonst zum Ausprobieren. */
+const STATS_OK = () => !["legends-arceus", "lets-go-pikachu-lets-go-eevee", "champions", "pokopia"].includes(S.game);
+async function statBox(d, slot) {
+  const el = $("#stbox");
+  if (!el) return;
+  const det = slot !== null ? S.team.details[slot] || {} : (statBox.tmp ||= {});
+  if (slot === null && statBox.tmpId !== d.id) { statBox.tmpId = d.id; Object.keys(det).forEach((k) => delete det[k]); }
+  const lv = det.level || 50, K = GEN() <= 2 ? {iv: "dvs", ev: "exp", z: "exp_ziel"} : {iv: "ivs", ev: "evs", z: "ev_ziel"};   // bis Gen. 2 eigene Felder (Showdown schreibt dort EVs)
+  const r = await api("/api/werte", {spiel: S.game, id: d.id, level: lv, wesen: det.wesen || null, ivs: det[K.iv] || null, evs: det[K.ev] || null, ziel: det[K.z] || null}).catch(() => null);
+  if (!r || !$("#stbox") || !r.rows.length) return;
+  const old = r.gen <= 2, IV = old ? "DV" : "IV", EV = old ? "Stat Exp" : "EV";
+  const nat = (x) => x.wesen > 1 ? ` <span class="f fd" data-tip="Wesen +10 %">+</span>` : x.wesen < 1 ? ` <span class="f fa05" data-tip="Wesen −10 %">−</span>` : "";
+  const open = store.get("stOpen", true), left = r.ev_gesamt ? r.ev_gesamt - r.ev_ziel_summe : null;
+  const tip = (x, i) => `${STAT[i]} ${x.wert}: Basiswert ${x.teile.basis}, durch Level ${lv} +${x.teile.level}, ${IV} ${x.iv}: +${x.teile.iv}, ${EV} ${x.ev}: +${x.teile.ev}${x.teile.wesen ? `, Wesen ${x.teile.wesen > 0 ? "+" : ""}${x.teile.wesen}` : ""}`
+    + (old ? `\nFormel: ((Basis + DV) × 2 + √Stat Exp / 4) × Level / 100 + ${i === 0 ? "Level + 10" : "5"}` : `\nFormel: (2 × Basis + IV + EV / 4) × Level / 100 + ${i === 0 ? "Level + 10" : "5, dann × Wesen"}`);
+  const top = Math.max(...r.rows.map((x) => x.max), 1), pc = (v) => (Math.max(0, v) / top * 100).toFixed(2);
+  const seg = (cls, v, t) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%" data-tip="${esc(t)}"></i>` : "";
+  const bars = r.rows.map((x, i) => { const t = x.teile, extra = x.ev_ziel_teil - t.ev;
+    return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" data-tip="${esc(tip(x, i))}">${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-i", t.iv, `${IV} ${x.iv}: +${t.iv}`)}${seg("e-e", t.ev, `${EV} ${x.ev}: +${t.ev}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%" data-tip="Wesen: ${t.wesen}"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (${x.ziel} ${EV}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
+  const S0 = 150, c = S0 / 2, R = c - 24;
+  const pt = (k, f) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [c + Math.cos(a) * R * f, c + Math.sin(a) * R * f]; };
+  const poly = (fn, cls) => `<polygon class="${cls}" points="${RADAR_ORDER.map((i, k) => pt(k, Math.max(0.03, Math.min(1, fn(r.rows[i]) / top))).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`;
+  const net = `<svg class="elnet" width="${S0}" height="${S0}" viewBox="0 0 ${S0} ${S0}" aria-hidden="true">${[1, 0.5].map((f) => `<polygon class="rg${f < 1 ? "2" : ""}" points="${RADAR_ORDER.map((_, k) => pt(k, f).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`).join("")}
+    ${poly((x) => x.wert_ziel, "n-z")}${poly((x) => x.wert, "n-e")}${poly((x) => x.wert - x.teile.ev, "n-l")}${poly((x) => x.teile.basis, "n-b")}
+    ${RADAR_ORDER.map((i, k) => { const [x, y] = pt(k, 1.22); return `<text x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="middle">${STAT_K[i]}</text>`; }).join("")}</svg>`;
+  el.innerHTML = `<details class="sub" id="stdet"${open ? " open" : ""}><summary><h3 style="display:inline">Werte</h3> <span class="hint">${slot !== null ? `Platz ${slot + 1}, Level ${lv}` : `zum Ausprobieren, Level ${lv}`}</span></summary>
+    <p class="hint">${old ? "Bis Generation 2: DVs 0 bis 15 und Stat Exp bis 65535 je Wert (aus besiegten Pokémon und Vitaminen); es gibt kein Wesen." : `IVs 0 bis 31 (angeboren), EVs bis 252 je Wert und ${r.ev_gesamt} zusammen, aus besiegten Pokémon, Vitaminen (+10) und Federn (+1).${r.minzen ? " Minzen ändern, welchen Wert das Wesen hebt und senkt." : ""}`}${slot === null ? " Im Team merkt sich jeder Platz seine Werte." : ""}</p>
+    <div class="bar slim">${old ? "" : `<label>Wesen <select id="stnat"><option value="">neutral</option>${r.wesen_liste.filter((w) => w.mod).map((w) => `<option value="${w.id}"${w.id === r.wesen ? " selected" : ""}>${esc(w.name)} (+${STAT[w.mod[0]]} −${STAT[w.mod[1]]})</option>`).join("")}</select></label>`}
+      ${slot !== null ? `<span class="hint">Level wie unten bei den Attacken</span>` : `<label>Level <input type="number" id="stlv" min="1" max="100" value="${lv}" style="width:64px"></label>`}</div>
+    <div class="elchart"><div class="elbars">${bars}</div><div>${net}</div></div>
+    <p class="hint ellg"><span class="e-b"></span>Basiswert <span class="e-l"></span>durch das Level <span class="e-i"></span>${IV} <span class="e-e"></span>${EV} <span class="e-w"></span>Wesen + <span class="e-m"></span>Wesen − <span class="e-z"></span>bis zum Ziel</p>
+    <table class="rows eltab stab"><tr><th>Wert</th><th class="c">Basis</th><th class="c" data-tip="0 bis ${r.iv_max}">${IV}</th><th class="c" data-tip="0 bis ${r.ev_max}">${EV}</th><th class="c">jetzt</th>
+      <th class="c" data-tip="${EV}, auf die du hinarbeitest">Ziel</th><th class="c">am Ziel</th><th class="c" data-tip="mit vollen ${IV}s und ${EV}${old ? "" : " und passendem Wesen"}">höchstens</th></tr>
+    ${r.rows.map((x, i) => `<tr><td>${STAT[i]}${nat(x)}</td><td class="c">${x.basis}</td><td class="c"><input type="number" min="0" max="${r.iv_max}" value="${x.iv}" data-stiv="${i}"></td>
+      <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old ? 1 : 4}" value="${x.ev}" data-stev="${i}"></td><td class="c" data-tip="${esc(tip(x, i))}"><b>${x.wert}</b></td>
+      <td class="c"><input type="number" min="0" max="${r.ev_max}" step="${old ? 1 : 4}" value="${x.ziel}" data-stz="${i}"></td>
+      <td class="c">${x.ziel > x.ev ? `<b style="color:var(--go)">${x.wert_ziel}</b> <span class="hint">+${x.wert_ziel - x.wert}</span>` : `<span class="hint">${x.wert_ziel}</span>`}</td><td class="c hint">${x.max}</td></tr>`).join("")}</table>
+    <p class="hint">${left === null ? "" : left >= 0 ? `Ziel-EVs zusammen ${r.ev_ziel_summe} von ${r.ev_gesamt}, noch ${left} frei. ` : `<span style="color:var(--stop)">Ziel-EVs zusammen ${r.ev_ziel_summe}: ${-left} mehr als erlaubt (${r.ev_gesamt}).</span> `}
+      <button class="link" id="streach" data-tip="Ziel erreicht: ${EV} auf das Ziel setzen">Ziel erreicht</button></p></details>`;
+  const cur = (k) => r.rows.map((x) => x[k]);
+  const save = () => { if (slot !== null) { S.team.details[slot] = Object.assign({}, S.team.details[slot], {[K.iv]: det[K.iv], [K.ev]: det[K.ev], [K.z]: det[K.z], wesen: det.wesen}); saveTeam(); dock(); } statBox(d, slot); };
+  const fix = () => { det[K.iv] = det[K.iv] || cur("iv"); det[K.ev] = det[K.ev] || cur("ev"); det[K.z] = det[K.z] || cur("ziel"); };
+  $("#stdet").addEventListener("toggle", (e) => store.set("stOpen", e.target.open));
+  $$("[data-stiv]", el).forEach((s) => s.addEventListener("change", () => { fix(); det[K.iv] = cur("iv"); det[K.iv][+s.dataset.stiv] = Math.max(0, Math.min(r.iv_max, +s.value || 0)); save(); }));
+  $$("[data-stev]", el).forEach((s) => s.addEventListener("change", () => { fix(); const i = +s.dataset.stev, v = Math.max(0, Math.min(r.ev_max, +s.value || 0)), z = cur("ziel");
+    if (z[i] === r.rows[i].ev || z[i] < v) z[i] = v; det[K.ev] = cur("ev"); det[K.ev][i] = v; det[K.z] = z; save(); }));
+  $$("[data-stz]", el).forEach((s) => s.addEventListener("change", () => { fix(); det[K.z] = cur("ziel"); det[K.z][+s.dataset.stz] = Math.max(0, Math.min(r.ev_max, +s.value || 0)); save(); }));
+  $("#stnat")?.addEventListener("change", (e) => { det.wesen = e.target.value ? +e.target.value : null; save(); });
+  $("#stlv")?.addEventListener("change", (e) => { det.level = Math.max(1, Math.min(100, +e.target.value || 50)); save(); });
+  $("#streach").addEventListener("click", () => { fix(); det[K.ev] = cur("ziel"); det[K.z] = cur("ziel"); save(); });
 }
 /* Woraus ein Wert in Legenden: Arceus besteht, als Text für den Tooltip */
 function elTip(x, i, lv) {

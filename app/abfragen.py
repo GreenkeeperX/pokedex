@@ -2048,6 +2048,33 @@ def effort_view(body):
     return out
 
 
+STATS_OTHER = ("legends-arceus", "lets-go-pikachu-lets-go-eevee", "champions", "pokopia")   # eigene Formeln oder keine Werte
+
+
+def stats_view(body):
+    """Werte-Diagramm einer Form (alle Spiele außer STATS_OTHER): body spiel, id, level, wesen (ID), ivs, evs, ziel (je
+    sechs Zahlen; bis Generation 2 DVs und Stat Exp). Dazu die Wesen zur Auswahl (ab Generation 3)."""
+    from . import schaden
+    D = data()
+    f = D.forms.get(_int(body.get("id"))) if D else None
+    if not f:
+        raise ValueError("Pokémon nicht gefunden")
+    g, gen, _ = game_of(D, body.get("spiel"))
+    if g and g["kennung"] in STATS_OTHER:
+        return {"rows": [], "hinweis": "In diesem Spiel rechnen die Werte anders."}
+    P = _paste_names(D)
+    wesen = _int(body.get("wesen"))
+    level = min(100, max(1, _int(body.get("level")) or 50))
+    six = lambda v: [_int(x) for x in v][:6] if isinstance(v, list) and len(v) == 6 else None
+    out = schaden.stat_view(form_stats(D, f, gen)[0], level, gen, six(body.get("ivs")), six(body.get("evs")),
+                            six(body.get("ziel")), P["nat_mod"].get(wesen) if wesen and gen >= 3 else None)
+    out["wesen_liste"] = sorted(({"id": i, "name": n, "mod": P["nat_mod"].get(i)} for i, n in P["nat_de"].items()),
+                                key=lambda x: x["name"]) if gen >= 3 else []
+    out["wesen"] = wesen if gen >= 3 else None
+    out["minzen"] = gen >= 8
+    return out
+
+
 def effort_team(body):
     """Effort Levels des ganzen Teams (Legenden: Arceus): je Mitglied Stufen (None = nicht eingetragen, gerechnet mit 0),
     Werte jetzt und am Ziel, fehlende Leistungs-Items; dazu die Summe für das Team."""
