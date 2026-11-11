@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.27.2 (11.11.2026)
+
+- `mapgenie.GAMES` mit allen Hauptspielen ab Generation 1, mehrere Schreibweisen je Spiel (`mapgenie.slugs`), `SHARE` für
+  Schwester-Editionen. pokemoncompletion (GPL-3.0) als zweite Quelle für Gelb, Kristall, Smaragd, Platin im Verbindungstest;
+  Leser folgt, wenn die Proben vom Server da sind (Punkte in Leaflet-CRS.Simple, Bild `full.png`)
+
 ## 0.27.1 (11.11.2026)
 
 - Potential: Endstufe zählt, wenn sie das Team um ≥ 1 hebt und besser ist als die heutige Stufe (kein Mindestabstand mehr);

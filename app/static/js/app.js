@@ -2060,7 +2060,9 @@ async function mgView(slug, want) {
   if (rid !== RID) return;
   if (!lst.karten.length) return S.game === "legends-arceus" ? mapView() : areasView();
   const kk = "mgKarte:" + S.game;
-  if (!slug || !lst.karten.some((k) => k.slug === slug)) slug = store.get(kk, lst.karten[0].slug);
+  // Schwester-Editionen teilen sich ein Spiel bei Map Genie: anfangs die Karte, deren Kennung zur Edition passt (Gelb: yellow)
+  const mine = lst.karten.find((k) => S.game.split("-").some((w) => w.length > 3 && k.slug.includes(w))) || lst.karten[0];
+  if (!slug || !lst.karten.some((k) => k.slug === slug)) slug = store.get(kk, mine.slug);
   if (!lst.karten.some((k) => k.slug === slug)) slug = lst.karten[0].slug;
   store.set(kk, slug);
   const ck = S.game + "/" + slug;

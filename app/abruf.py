@@ -910,9 +910,13 @@ def _mapgenie(log):
     data/mapgenie/<Spiel>.json. Kacheln holt erst die Oberfläche (mg_tile). Spiele ohne Karte dort melden 404."""
     src = _Source("mapgenie", log, pause=MG_PAUSE)
     found = 0
-    for spiel, slug in mapgenie.GAMES.items():
-        STATE["step"] = f"Map Genie: {slug}"
-        page = src.get(mapgenie.game_url(slug), absent=(404,))
+    for spiel in mapgenie.GAMES:
+        page = slug = None
+        for slug in mapgenie.slugs(spiel):           # Schreibweise unsicher: die erste, die antwortet
+            STATE["step"] = f"Map Genie: {slug}"
+            page = src.get(mapgenie.game_url(slug), absent=(404,))
+            if page or src.stopped:
+                break
         if src.stopped:
             break
         if not page:
@@ -1426,9 +1430,10 @@ def diagnose(proben=None):
     probe("Serebii, Legenden: Arceus Bidiza", "https://www.serebii.net/pokedex-swsh/bidoof/", page_info, keep=True, headers=html)
     probe("Serebii, Legenden: Arceus Übersicht", "https://www.serebii.net/legendsarceus/", page_info, keep=True, headers=html)
     probe("Pokémon Database, Legenden: Arceus", "https://pokemondb.net/pokedex/game/legends-arceus", page_info, keep=True, headers=html)
-    for spiel, slug in mapgenie.GAMES.items():
-        probe(f"Map Genie, {slug}", mapgenie.game_url(slug),
-              lambda t, s=slug: page_info(t) + ", Karten: " + (", ".join(mapgenie.map_slugs(t, s)) or "keine"), headers=html)
+    for spiel in mapgenie.GAMES:
+        for slug in mapgenie.slugs(spiel):
+            probe(f"Map Genie, {slug}", mapgenie.game_url(slug),
+                  lambda t, s=slug: page_info(t) + ", Karten: " + (", ".join(mapgenie.map_slugs(t, s)) or "keine"), headers=html)
     # eine Kachel innerhalb der Karte (zeigt, ob der Kachelspeicher antwortet; außerhalb meldet er 403)
     probe("Map Genie, Kachel Hisui 9/254/254", mapgenie.TILES + "pokemon-legends-arceus/hisui-region/default-v3/9/254/254.png",
           lambda b: f"{len(b)} Bytes, " + ("PNG" if b[:4] == b"\x89PNG" else "kein Bild"), raw=True)
@@ -1523,6 +1528,19 @@ def diagnose(proben=None):
     probe("Bulbapedia-Archiv, Kartenbilder Sinnoh BDSP", "https://archives.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
         {"action": "query", "list": "search", "srsearch": "Sinnoh BDSP map", "srnamespace": "6", "srlimit": "15", "format": "json"}), wiki_hits, keep=True)
     probe("pokemoncompletion, Let’s Go", "https://pokemoncompletion.com/completion/LetsGo", page_info, keep=200_000, headers=html)
+    # pokemoncompletion (GPL-3.0): Spieldaten mit Kartenpunkten liegen als JSON im Repository, die Karten als ganzes Bild
+    # und als Kacheln ({z}_{x}_{y}.png) auf einem CDN; Gelb, Kristall, Smaragd und Platin haben eine Karte
+    def pc_info(text):
+        d = json.loads(text)
+        im = d.get("interactiveMap") or {}
+        n = sum(1 for c in d.get("categories") or [] for x in c.get("list") or [] if x.get("pos"))
+        return (f"Karte {im.get('dim')}, Bild {im.get('fullImgUrl', '–')} ({im.get('fullImgSize', '?')}), "
+                f"{len(d.get('locations') or [])} Orte, {n} Punkte in {len(d.get('categories') or [])} Kategorien")
+    for g in ("Yellow", "Crystal", "Emerald", "Platinum"):
+        probe(f"GitHub: pokemoncompletion, Daten {g}", f"https://raw.githubusercontent.com/RainingChain/pokemoncompletion/main/src/pokemonCompletion/data/{g}.json",
+              pc_info)
+        probe(f"pokemoncompletion, Kachel {g}", f"https://pokemonmap.b-cdn.net/{g.lower()}/0_0_0.png?v=1",
+              lambda b: f"{len(b)} Bytes, " + ("PNG" if b[:4] == b"\x89PNG" else "kein Bild"), raw=True)
     probe("GitHub: Insektaure/pkTeraRaid (Raid-Nester SwSh mit Lage)", "https://api.github.com/repos/Insektaure/pkTeraRaid/git/trees/HEAD?recursive=1",
           tree_hits("den", "map", "swsh", "location"), keep=True)
 

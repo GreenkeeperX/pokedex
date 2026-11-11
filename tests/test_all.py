@@ -1096,7 +1096,11 @@ class Server(TempData):
         abruf.store.save_json("mapgenie/scarlet-violet.json", {"spiel": "scarlet-violet", "am": "2026-11-11", "karten": [
             {"slug": "erfunden", "titel": "Erfunden", "kacheln": "spiel/erfunden/{z}/{x}/{y}.png", "min_zoom": 9, "max_zoom": 12, "orte": []}]})
         self.assertEqual(abruf.mg_maps("the-teal-mask")["karten"][0]["slug"], "erfunden")       # Erweiterung: Karte des Hauptspiels
-        self.assertIsNone(abruf.mg_maps("red-blue"))
+        self.assertIsNone(abruf.mg_maps("red-blue"))                                              # noch nicht geladen
+        from app import mapgenie as _mg
+        self.assertEqual(_mg.slugs("red-blue"), ("pokemon-red-blue-yellow",))
+        self.assertIn("pokemon-sword-and-shield", _mg.slugs("sword-shield"))
+        self.assertEqual(_mg.SHARE["yellow"], "red-blue")
         f = os.path.join(self.dir, "mapgenie", "kacheln", "spiel", "erfunden", "10", "1", "2.png")
         os.makedirs(os.path.dirname(f))
         open(f, "wb").write(b"\x89PNG\r\n\x1a\n")

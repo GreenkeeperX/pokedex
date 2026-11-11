@@ -10,11 +10,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.27.1"
+VERSION = "0.27.2"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.27.2", "11.11.2026", [
+        "Karten älterer Spiele: der Abgleich fragt Map Genie jetzt auch für Rot/Blau/Gelb bis Ultrasonne/Ultramond "
+        "(und SwSh, BDSP, Let’s Go unter weiteren Schreibweisen); Schwester-Editionen zeigen anfangs ihre eigene Karte",
+        "Verbindungstest: pokemoncompletion (Gelb, Kristall, Smaragd, Platin: Kartenpunkte als JSON, Karte als Bild und Kacheln)",
+    ]),
     ("0.27.1", "11.11.2026", [
         "Langfristig mehr Potential: zählt, was die Endstufe dem Team bringt, nicht der Abstand zur heutigen Stufe; "
         "Kadabra steht damit nie schlechter da als Abra. Mitglieder im Team zeigen ihre Endstufe schon ab +0,5",
