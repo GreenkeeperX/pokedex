@@ -10,11 +10,21 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.12.0"
+VERSION = "0.13.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.13.0", "11.11.2026", [
+        "Karte: Schnellreise und Lager (PLA Companion), Filter für Tageszeit und Wetter, Ebenen in Gruppen; "
+        "Ziehen geht auch über Bildern und Symbolen, die Bilder der Übersicht ohne dunklen Hintergrund",
+        "Pokémon: α über dem Pokéball markiert ein Pokémon als Alpha gefangen (nur, wo es Alphas gibt)",
+        "Team: „Langfristig mehr Potential“ zeigt je Endstufe nur die weiteste gefangene Form, nichts schon Vorgeschlagenes",
+        "Attacken und Items: Tabellenkopf bleibt beim Scrollen stehen; Items mit Linien und markierbaren Spalten, "
+        "Herstellen mit Zutaten untereinander und farbigen Orten",
+        "Typen: im Angriff je Mitglied ist ×2 grün und ½ rot (aus Sicht des Mitglieds)",
+        "Bilder: mehr Item-Bilder je Lauf, Ersatz aus anderen Ordnern; getragene Items finden ihr Bild im Spiel",
+    ]),
     ("0.12.0", "10.11.2026", [
         "Karte: Übersicht mit Pokémon-Bildern (je größer, desto wahrscheinlicher) und Vergleich der Gebiete je Pokémon",
         "Karte: Kristallbrocken, Raum-Zeit-Verzerrungen, Massenauftreten, Pokémon in Bäumen, feste Alphas, Items am Boden "

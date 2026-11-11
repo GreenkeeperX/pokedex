@@ -36,6 +36,9 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Spielkoordinaten wie JS-Finder). `importer._derive_wiki_karte` ordnet jede Datei der Karte zu, deren Spawnpunkte sie am
    häufigsten genau trifft, und legt Kristallbrocken, Verzerrungen, Massenauftreten, Bäume, feste Alphas und Items am Boden
    in `kartenobjekt` (ohne Stellen, die Altissimo schon führt; viele Items an einer Stelle gehen an die nächste Grabstelle).
+   **PLA Companion** (software-notion.de, `app/companion.py`): je Karte `/apps/pla-companion/map/<Karte>/data?lang=de`
+   mit 2 Sekunden Pause; Schnellreise und Lager, ausgerichtet an Geisterlichtern und Icognito von Altissimo
+   (`companion.fit`, `importer._derive_companion`). Das Protokoll zählt alle Arten von Einträgen.
    Das Ergebnis liegt in
    `pokewiki.json` im Datenordner und gilt weiter, wenn das Wiki ruht. Die Namen stammen aus der bisherigen Datenbank.
 4. Hat sich nichts geändert (Commit, Prüfsumme von Showdown, PKHeX, PokéWiki, Altissimo und `extra/`, `importer.VERSION`), bleibt die
@@ -58,8 +61,10 @@ Items, die nur PKHeX kennt, haben dort kein Bild.
 
 Extra `itemhq`: größere Bilder von Serebii (`itemdex/sprites/legends/<name>.png` für Legenden: Arceus, sonst
 `itemdex/sprites/sv/<name>.png` für Karmesin/Purpur, Legenden: Z-A und Mega-Dimension; Name = englischer Name klein ohne
-Zeichen, `importer.en_key`), gespeichert als `itemhq/<Nummer>.png`, eine Sekunde Pause, höchstens 400 je Lauf. `/itembild/<Nummer>`
-liefert zuerst das große Bild.
+Zeichen, `importer.en_key`), gespeichert als `itemhq/<Nummer>.png`, eine Sekunde Pause, höchstens 1500 je Lauf. Fehlt es
+im Ordner des Spiels, versucht der Abgleich den anderen Ordner und dann das kleine Bild (`itemdex/sprites/<name>.png`);
+dazu kommen die Items, die nur PKHeX kennt. Fehlende stehen in `itemhq2_fehlen.json`. `/itembild/<Nummer>` liefert zuerst
+das große Bild.
 
 ## Zeitplan
 

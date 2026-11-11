@@ -85,6 +85,7 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 .box h3{font-size:15px;margin:12px 0 6px}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start}
 .cols>.box{margin-bottom:0}
+.cols{margin-bottom:12px}
 .note{border-radius:8px;padding:8px 10px;font-size:14px;margin:6px 0}
 .note.warn{background:var(--warn-bg);color:var(--warn)}
 .note.info{background:var(--info-bg);color:var(--info)}
@@ -147,6 +148,11 @@ td.nw{white-space:nowrap}
 .mk .m-team{color:var(--go)}
 .mk .m-fav{color:#e0a800}
 .mk .m-ball{color:#22282a}
+.mk .m-alpha,.alpha-i{color:#e53935;font:800 13px/1 system-ui,sans-serif}
+.mk .m-alpha{width:19px;height:19px}
+/* α bündig über dem Pokéball (unten am Bild); oben rechts sitzt schon das Plus */
+.mon .acts .a.alp{position:absolute;top:54px;left:calc(50% + 14px);font:800 14px/1 system-ui,sans-serif;color:var(--muted)}
+.mon .acts .a.alp.on{color:#e53935;background:var(--card);border-color:#e53935;opacity:1}
 /* Knöpfe zum Setzen: beim Hovern unten auf dem Bild */
 .mon .sp{position:relative;flex:none;width:84px;display:flex;flex-direction:column;align-items:center}
 .mon .sp>.spr{width:84px;height:84px}
@@ -308,7 +314,7 @@ table.mine th[data-dir=desc]::after{content:" ▼";font-size:10px}
 .sugl{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
 .sugl>div{padding:3px 6px;border-radius:6px;border-bottom:1px solid var(--line)}
 .sugl>div.same{background:var(--sel)}
-.jump{position:sticky;top:0;z-index:4;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;background:var(--bg);padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--line);font-size:13px}
+.jump{position:sticky;top:var(--stick,0px);transition:top .3s ease;z-index:4;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;background:var(--bg);padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--line);font-size:13px}
 .jump a{color:var(--ink);text-decoration:none}
 .jump a:hover{text-decoration:underline}
 .jump .foldall{margin-left:auto;color:var(--muted);white-space:nowrap}
@@ -327,6 +333,13 @@ th{font-weight:600;color:var(--muted);font-size:12.5px;white-space:nowrap}
 tr.off td{opacity:.55}
 .why{color:var(--muted);font-size:12.5px}
 .scroll{overflow-x:auto}
+/* Fester Tabellenkopf (wie im VR-Navigator): bleibt unter der Kopfzeile stehen. Auf breiten Bildschirmen braucht es dafür
+   kein seitliches Scrollen (clip statt auto), schmale scrollen weiter seitlich ohne festen Kopf */
+@media (min-width:1040px){.scroll.sticky{overflow-x:clip}
+  .sticky thead th{position:sticky;top:var(--stick,0px);z-index:3;background:var(--card);box-shadow:0 1px 0 var(--line);transition:top .3s ease}}
+.zut2{display:flex;align-items:center;gap:6px;white-space:nowrap;margin:1px 0}
+.zut2 .zi{width:32px;height:32px;image-rendering:auto}
+.zut2 .zi.none{background:none}
 .evo{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .evo .st{display:flex;flex-direction:column;align-items:center;font-size:13px;min-width:90px}
 .evo .ar{color:var(--muted);font-size:12px;max-width:140px;text-align:center}
@@ -466,9 +479,10 @@ a.bm:active{cursor:grabbing}
 .mobj{display:inline-grid;place-items:center;width:18px;height:18px;padding:0;border-radius:50%;border:1.5px solid rgba(255,255,255,.85);
   font:700 10px/1 system-ui,sans-serif;color:#10171a;background:#9aa;box-shadow:0 1px 3px rgba(0,0,0,.5);vertical-align:middle}
 .heat{position:absolute;left:0;top:0}
-.hspr{position:absolute;display:block;border-radius:50%;background:radial-gradient(circle,rgba(37,48,51,.75) 0,rgba(37,48,51,.45) 55%,transparent 72%);z-index:1}
-.hspr .spr{width:100%;height:100%;image-rendering:auto;filter:drop-shadow(0 1px 2px rgba(0,0,0,.7))}
-.hspr:hover{z-index:3;background:radial-gradient(circle,rgba(91,140,255,.45) 0,transparent 70%)}
+.hspr{position:absolute;display:block;z-index:1;-webkit-user-drag:none;user-select:none}
+.hspr .spr{width:100%;height:100%;image-rendering:auto;pointer-events:none;filter:drop-shadow(0 0 1.5px rgba(0,0,0,.9)) drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+.hspr:hover{z-index:3}
+.hspr:hover .spr{filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 6px #5b8cff)}
 .mlay.heatbtn.on{border-color:var(--accent)}
 .heatl td{padding:3px 6px}
 .heatl .hbar{display:block;height:5px;margin-top:3px;border-radius:3px;background:var(--line);overflow:hidden}
@@ -487,6 +501,13 @@ a.bm:active{cursor:grabbing}
 .pins .mobj.o-boden{margin:-6px 0 0 -6px}
 .pins .mobj.hit{outline:3px solid #fff;z-index:4}
 .mlay-all{margin-left:auto;white-space:nowrap}
+.o-reise{background:#4fc3f7;font-size:12px}.o-lager{background:#ffb74d;border-radius:4px}
+.mgrps{gap:8px 14px;margin-top:-4px}
+.mgrp{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;padding:3px 8px 3px 3px;border:1px solid var(--line);border-radius:10px}
+.mgrp-b{font-weight:600;border:0;background:none;color:var(--ink);padding:2px 6px;cursor:pointer}
+.mgrp-b:hover{color:var(--accent)}
+.mcond{display:inline-flex;align-items:center;gap:6px}
+.mapside tr.dim td{opacity:.45}
 .mlay{display:inline-flex;align-items:center;gap:6px;opacity:.5}
 .mlay.on{opacity:1}
 .mpin-l{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid #fff;background:#3a7bd5}

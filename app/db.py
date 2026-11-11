@@ -25,6 +25,8 @@ USER_SCHEMA = (
     """CREATE TABLE IF NOT EXISTS gefangen (spiel TEXT, form INTEGER, seit TEXT, PRIMARY KEY (spiel, form))""",
     # 0.12.0: schillernd gefangen (der Pokéball glänzt); gilt zusätzlich zu gefangen
     """CREATE TABLE IF NOT EXISTS schillernd (spiel TEXT, form INTEGER, seit TEXT, PRIMARY KEY (spiel, form))""",
+    # 0.13.0: als Alpha gefangen (Legenden-Spiele); gilt zusätzlich zu gefangen
+    """CREATE TABLE IF NOT EXISTS alpha (spiel TEXT, form INTEGER, seit TEXT, PRIMARY KEY (spiel, form))""",
 )
 # Spalten, die später dazukamen: (Tabelle, Spalte, Typ). Alte Dateien bekommen sie beim Start
 USER_COLUMNS = (

@@ -387,6 +387,43 @@ class Leser(unittest.TestCase):
         self.assertEqual(len(rows["graben"][2]), 5)                                    # an die Grabstelle von Altissimo gelegt
         con.close()
 
+    def test_companion(self):
+        from app import companion
+        # erfundene Karte: Companion-Koordinaten = (Spiel − 100) / 0,5 in x, z gespiegelt
+        game = [(120.0, 300.0), (400.0, 80.0), (650.0, 520.0), (900.0, 910.0), (210.0, 760.0)]
+        to_c = lambda x, z: ((x - 100) / 0.5, (1000 - z) / 0.5)
+        es = [{"t": "wisp", "n": "", "x": to_c(*g)[0], "y": to_c(*g)[1]} for g in game]
+        es += [{"t": "fast-travel", "n": "Erfundener Hof", "x": to_c(500, 500)[0], "y": to_c(500, 500)[1]},
+               {"t": "base-camp", "n": "Lager Eins", "x": to_c(300, 200)[0], "y": to_c(300, 200)[1]},
+               {"t": "request", "n": "Auftrag", "x": 0, "y": 0}, {"t": "unown", "n": "A", "x": "kaputt"}]
+        text = json.dumps({"entries": es})
+        self.assertEqual(len(companion.entries(text)), 7)            # ohne Lage und kaputt fallen weg
+        self.assertEqual(companion.art("highland-camp"), "lager")
+        ps = companion.places(text, {"irrlicht": game[::-1]})
+        self.assertEqual(sorted((p["art"], p["name"], p["x"], p["z"]) for p in ps),
+                         [("lager", "Lager Eins", 300.0, 200.0), ("reise", "Erfundener Hof", 500.0, 500.0)])
+        self.assertEqual(companion.places(text, {"irrlicht": game[:1]}), [])      # zu wenig gemeinsame Punkte
+        self.assertTrue(companion.url("obsidianfieldlands").endswith("/obsidian-fieldlands/data?lang=de"))
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE kartenobjekt (spiel TEXT, karte TEXT, gebiet TEXT, art TEXT, nr INTEGER, x REAL, z REAL, menge TEXT, items TEXT)")
+        con.executemany("INSERT INTO kartenobjekt VALUES ('legends-arceus', 'obsidianfieldlands', 'Obsidian-Grasland', 'irrlicht', NULL, ?, ?, '', '[]')", game)
+        self.assertEqual(importer._derive_companion(con, {"legends-arceus": {"companion": {"obsidianfieldlands": text, "crimsonmirelands": "kaputt"}}}), 2)
+        self.assertEqual(json.loads(con.execute("SELECT items FROM kartenobjekt WHERE art = 'reise'").fetchone()[0]), [["Erfundener Hof", ""]])
+        con.close()
+
+    def test_getragen_item_im_spiel(self):
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE spiel (id INTEGER, kennung TEXT)")
+        con.execute("INSERT INTO spiel VALUES (24, 'legends-arceus')")
+        con.execute("CREATE TABLE item (id INTEGER, name TEXT, spiele TEXT)")
+        con.executemany("INSERT INTO item VALUES (?, ?, ?)", [(5, "Erfundsamen", "[1]"), (100002, "Erfundsamen", "[24]"), (7, "Apri-ko-ko", "[24]")])
+        ids = importer._item_ids(con, "legends-arceus")
+        self.assertEqual(ids["erfundsamen"], 100002)                 # das Item im Spiel gewinnt
+        self.assertEqual(ids["aprikoko"], 7)
+        con.close()
+
     def test_altissimo(self):
         import json as js
         from app import altissimo
@@ -728,8 +765,37 @@ class Server(TempData):
             (3, "Potion", "[1]", "Medizin", "potion"), (4, "TM01", "[25]", "Maschinen", "tm01"), (5, "", "[25]", "Medizin", "x")])
         con.commit()
         con.close()
-        self.assertEqual(abruf.media_ids("itemhq"), {1: "sv/pokeball", 2: "legends/gigatonball"})
+        self.assertEqual(abruf.media_ids("itemhq"), {1: ("sv/pokeball", "legends/pokeball", "pokeball"),
+                                                     2: ("legends/gigatonball", "sv/gigatonball", "gigatonball")})
         self.assertEqual(sorted(abruf.media_ids("itembild")), [1, 3, 5])           # PKHeX-Items haben kein Bild bei der PokéAPI
+
+    def test_alpha(self):
+        db.migrate()
+        server.set_mark("alpha", {"spiel": "legends-arceus", "id": 59})
+        self.assertEqual(server.marked("gefangen", "legends-arceus"), [59])          # Alpha heißt auch gefangen
+        server.transfer({"von": "legends-arceus", "nach": "pokemon-home", "ids": [59]})
+        self.assertEqual(server.marked("alpha", "pokemon-home"), [59])
+        dump = json.loads(json.dumps(server.export()))
+        self.assertEqual([r["form"] for r in dump["alpha"]], [59])
+        server.set_mark("gefangen", {"spiel": "pokemon-home", "id": 59, "an": False})
+        self.assertEqual(server.marked("alpha", "pokemon-home"), [])
+        server.restore(dump)
+        self.assertEqual(server.marked("alpha", "pokemon-home"), [59])
+
+    def test_potential_weiteste_form(self):
+        from app import abfragen
+        D = type("D", (), {})()
+        D.forms = {1: {"art": 1}, 2: {"art": 2}, 3: {"art": 3}, 10: {"art": 10}, 11: {"art": 11}}
+        stages = {1: 0, 2: 1, 3: 2, 10: 0, 11: 1}
+        old = abfragen._stage
+        abfragen._stage = lambda D, arten: {a: stages[a] for a in arten}
+        try:
+            pot = [{"id": 1, "plus": 9.0, "wird": {"id": 3}}, {"id": 2, "plus": 8.0, "wird": {"id": 3}}, {"id": 10, "plus": 5.0, "wird": {"id": 11}}]
+            got = abfragen._furthest(pot, D, set())
+            self.assertEqual(sorted(r["id"] for r in got), [2, 10])       # je Endstufe nur die weiteste gefangene Stufe
+            self.assertEqual([r["id"] for r in abfragen._furthest(pot, D, {11})], [2])   # Endstufe schon gefangen oder vorgeschlagen
+        finally:
+            abfragen._stage = old
 
     def test_uebertragen(self):
         db.migrate()

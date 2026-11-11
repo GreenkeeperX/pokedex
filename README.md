@@ -42,8 +42,9 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
 - **Karte** (Legenden: Arceus): Jubeldorf und die fünf Gebiete zum Ziehen und Zoomen; Spawnpunkte (Alpha hervorgehoben,
   wer dort wann erscheint), Bäume, Erzbrocken, Haufen, Kisten, Geisterlichter, Icognito, Gedichte und Grabstellen,
-  Kristallbrocken, Raum-Zeit-Verzerrungen, Massenauftreten, Pokémon in Bäumen, feste Alphas und Items am Boden als
-  Ebenen zum Ein- und Ausblenden; von der Detailseite aus mit den Spawnpunkten des Pokémon. Die „Übersicht mit Bildern“
+  Kristallbrocken, Raum-Zeit-Verzerrungen, Massenauftreten, Pokémon in Bäumen, feste Alphas, Items am Boden,
+  Schnellreise und Lager als Ebenen in Gruppen zum Ein- und Ausblenden; Filter für Tageszeit und Wetter; von der
+  Detailseite aus mit den Spawnpunkten des Pokémon. Die „Übersicht mit Bildern“
   zeigt je Kartenfeld die häufigsten Pokémon (je größer, desto wahrscheinlicher), die häufigsten im Gebiet und für ein
   gewähltes Pokémon den Vergleich aller Gebiete.
 - **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen): Abgleich mit Protokoll, Zeitplan, Verbindungstest (auch für mögliche neue Quellen, mit Probe-Seiten
@@ -64,6 +65,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [Altissimo](https://github.com/Altissimo1/altissimo1.github.io) | Legenden: Arceus: Kartensymbole, Geisterlichter, Icognito, Gedichte, Grabstellen, Kartenbild Jubeldorf, Rezepte | GPL-3.0 (Kartenbild nur im Datenordner) |
 | [PLA-Live-Map](https://github.com/Lincoln-LM/PLA-Live-Map), [JS-Finder](https://github.com/Lincoln-LM/JS-Finder) | Spawnpunkte mit Koordinaten, Tageszeit und Wetter (Legenden: Arceus) | GPL-3.0 |
 | [Serebii](https://www.serebii.net) | Kartenbilder (Kacheln) und große Item-Bilder, nur im Datenordner auf dem Server | Bilder von Serebii, Spielgrafik von Nintendo |
+| [PLA Companion](https://software-notion.de/apps/pla-companion/) | Legenden: Arceus: Schnellreise und Lager | Daten von software-notion.de |
 | [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items, Karte (Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas, Items am Boden und in Grabstellen); geplant: Edelhorden | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.

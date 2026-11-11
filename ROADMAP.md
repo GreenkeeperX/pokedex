@@ -1,5 +1,26 @@
 # Roadmap
 
+## 0.13.0 (Rückmeldung zu 0.12.0; Entscheidung 11.11.2026)
+
+- `app/companion.py` liest den PLA Companion (software-notion.de, `/apps/pla-companion/map/<Karte>/data?lang=de`):
+  Schnellreise und Lager je Karte. Die Lage richtet `companion.fit` an Geisterlichtern und Icognito von Altissimo aus
+  (je Achse eine Gerade aus zwei Paaren, es gilt die mit den meisten Treffern). `importer._derive_companion` legt die Orte
+  als `reise` und `lager` in `kartenobjekt`. `importer.VERSION` 12. Das Protokoll nennt alle Arten von Einträgen, die der
+  Companion führt, damit sich weitere Ebenen planen lassen
+- Karte: Filter für Tageszeit und Wetter (Anteil je Bedingung als `c` in `/api/karte`), Ebenen in Gruppen
+  (`MGROUPS`), Ziehen auch über Bildern und Symbolen (ein Klick nach dem Ziehen zählt nicht)
+- Alpha gefangen: Tabelle `alpha` in user.db (neu, nichts gelöscht), `/api/alpha` mit den möglichen Alphas
+  (`abfragen.alpha_possible` aus `fundort` und `spawn`), Sicherung und Übertragen
+- Team: `abfragen._furthest` hält je Endstufe nur die weiteste gefangene Stufe
+- Fester Tabellenkopf (`.scroll.sticky`, `--stick` wie im VR-Navigator), Items mit `crossTable`
+- Item-Bilder: höchstens 1500 je Lauf, Ersatz aus dem anderen Serebii-Ordner und dem kleinen Bild; PKHeX-Items dabei.
+  Getragene Items nehmen das Item im Spiel (`importer._item_ids`)
+- Verbindungstest: Hisui-Bälle bei Bulbapedia und im PokéWiki (Grundlage für die Fangfaktoren), PLA Companion
+- Widersprechen sich Quellen: Spieldaten vor Wikis; PokéAPI gegen Showdown landet unter „Zu erledigen“. Eine Mehrheit
+  zählt erst ab drei unabhängigen Quellen. Fangfaktoren der Hisui-Bälle: stimmen Bulbapedia und PokéWiki überein, gilt
+  der Wert, sonst stehen beide markiert da (sobald die Proben vom Server da sind)
+- Offen: Karten weiterer Spiele (Karmesin/Purpur, Legenden: Z-A), Formen-Galerie (Burmy, Shellos und ähnliche)
+
 ## 0.12.0 (Rückmeldung zu 0.11.0, Kartenübersicht; Entscheidung 10.11.2026)
 
 - PokéWiki-Karte (`pokewiki.map_pokemon`, `pokewiki.map_items`, Dateien `PwMapHisui/data/{pokemon,items}/ha_area0N.json`,
@@ -13,7 +34,7 @@
 - Schillernd gefangen: Tabelle `schillernd` in user.db (neu, nichts gelöscht), `/api/schillernd`, Sicherung und Übertragen
 - Typen „Mein Team“, Team-Attacken, Spalten markieren (`.pinc` in `crossTable`), Items mit Wirkungsspalten und Fangfaktor,
   Einstellungen mit Abschnittsleiste und einklappbaren Kästen (wie im VR-Navigator), Zeiten deutsch (`deTime`)
-- Offen: Lager und Schnellreise (nur MapGenie und PLA Companion haben sie; MapGenie verbietet das Auslesen)
+- Offen: Lager und Schnellreise (nur MapGenie und PLA Companion haben sie; MapGenie verbietet das Auslesen; erledigt in 0.13.0)
 
 ## 0.11.0 (Fundorte weiterer Spiele, Lesezeichen; Entscheidung 10.11.2026)
 
