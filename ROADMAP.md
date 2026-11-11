@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.28.1 (11.11.2026)
+
+- Verbindungstest nach der Prüfung vom 11.11.: Serebii-Ortsseiten unter `pokearth/galar|sinnoh/…`, Bulbapedia `Category:Game maps`; IGN nur Galar und Let's Go (DLC- und BDSP-Pfade 404)
+
 ## 0.28.0 (11.11.2026)
 
 - `app/pkcompletion.py`: Spieldaten von pokemoncompletion (GPL-3.0) → Karte in der Form von `mapgenie.parse` (Leaflet-CRS.Simple

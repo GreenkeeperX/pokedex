@@ -10,11 +10,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.28.0"
+VERSION = "0.28.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.28.1", "11.11.2026", [
+        "Verbindungstest: richtige Adressen für Serebii (Naturzone, Insel der Rüstung, Kronen-Schneelande, Untergrund), "
+        "Bulbapedia-Kategorie aller Spielkarten; IGN-Pfade, die es nicht gibt, sind raus",
+    ]),
     ("0.28.0", "11.11.2026", [
         "Karten für Kristall, Smaragd und Platin (auch Gold/Silber, Rubin/Saphir, Diamant/Perl): Orte, Pokémon, Items, Trainer "
         "und Sammelobjekte von pokemoncompletion, mit Ebenen, Suche und Abhaken wie bei Map Genie; die Kacheln lädt der "
