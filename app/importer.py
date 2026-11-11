@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, showdown
 
-VERSION = "16"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "17"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -47,6 +47,7 @@ REQUIRED = ("pokemon", "pokemon_species", "pokemon_species_names", "pokemon_type
 
 # Mindestmengen für die Selbstprüfung
 MIN_SPECIES, MIN_MOVES, MIN_GAMES = 1025, 900, 25
+EIGENE_SPIELE = (("pokopia", "Pokopia", 9),)
 
 
 def _table_name(name):
@@ -103,6 +104,11 @@ def _derive_spiel(con):
     con.executemany("INSERT INTO spiel VALUES (?, ?, ?, ?, ?)",
                     [(i, k, game_name(groups.get(i) or [k]), g, o)
                      for i, k, g, o in con.execute('SELECT id, identifier, generation_id, "order" FROM version_groups')])
+    # Spiele, die die PokéAPI (noch) nicht führt: als eigener Eintrag ohne Pokédex, damit Karte und Spielwissen sie finden
+    for kennung, name, gen in EIGENE_SPIELE:
+        if not con.execute("SELECT 1 FROM spiel WHERE kennung = ?", (kennung,)).fetchone():
+            i, o = con.execute("SELECT MAX(id) + 1, MAX(reihenfolge) + 1 FROM spiel").fetchone()
+            con.execute("INSERT INTO spiel VALUES (?, ?, ?, ?, ?)", (max(i or 1, 1000), kennung, name, gen, o or 1))
 
 
 def game_name(names):

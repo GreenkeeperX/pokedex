@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, companion, db, importer, mapgenie, pkcompletion, pokewiki, smogon, sources, store
+from . import altissimo, companion, db, ign, importer, mapgenie, pkcompletion, pokewiki, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -575,7 +575,7 @@ def _media_tiles(st, log, settings, at):
 
 
 def _media_mg(st, log, at):
-    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion)):
+    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign)):
         if db.has_data() and not _resting(st, key, at):
             res = run(log)
             st["sources"][key] = res
@@ -953,30 +953,70 @@ def _pkcompletion(log):
             break
         m = pkcompletion.parse(text, spiel) if text else None
         if m:
-            os.makedirs(mg_dir(), exist_ok=True)
-            store.save_json(os.path.join("mapgenie", spiel + ".json"), {"spiel": spiel, "slug": m["slug"], "am": _iso(now()),
-                                                                        "quelle": "pokemoncompletion", "karten": [m]})
+            _save_maps(spiel, "pc", [m])
             log(f"pokemoncompletion: {name} mit {len(m['orte'])} Punkten")
             found += 1
     return src.result(dateien=found)
 
 
-MAP_GAMES = (*mapgenie.GAMES, *pkcompletion.GAMES)      # Spiele mit eigener Karte (Map Genie oder pokemoncompletion)
+def _save_maps(spiel, quelle, karten):
+    """Karten einer Quelle nach data/mapgenie/<Spiel>.<Quelle>.json (Map Genie selbst: <Spiel>.json)."""
+    os.makedirs(mg_dir(), exist_ok=True)
+    store.save_json(os.path.join("mapgenie", f"{spiel}.{quelle}.json"), {"spiel": spiel, "am": _iso(now()), "karten": karten})
+    old = mg_dir(spiel + ".json")          # bis 0.28.3 lag pokemoncompletion unter <Spiel>.json
+    if quelle == "pc" and (store.load_json(os.path.join("mapgenie", spiel + ".json"), {}) or {}).get("quelle") == "pokemoncompletion":
+        os.remove(old)
+
+
+def _ign(log):
+    """Karten von IGN für die Spiele in ign.GAMES: Kartenseite, daraus Kachelmuster und die mitgelieferten Punkte."""
+    src = _Source("ign", log, pause=MG_PAUSE)
+    found = 0
+    for spiel, (slug, karten) in ign.GAMES.items():
+        maps = []
+        for k in karten:
+            STATE["step"] = f"IGN: {slug}/{k}"
+            page = src.get(ign.page_url(slug, k), absent=(404,))
+            if src.stopped:
+                break
+            m = ign.parse(page, k) if page else None
+            if m:
+                maps.append(m)
+        if maps:
+            _save_maps(spiel, "ign", maps)
+            log(f"IGN: {slug} mit {len(maps)} Karten, {sum(len(m['orte']) for m in maps)} Punkten")
+            found += 1
+        if src.stopped:
+            break
+    return src.result(dateien=found)
+
+
+MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES)))   # Spiele mit eigener Karte
+MAP_FILES = ("", ".pc", ".ign")          # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
 
 
 def mg_maps(spiel):
-    """Gespeicherte Karten eines Spiels (Erweiterungen und Schwester-Editionen: die des Hauptspiels) oder None."""
+    """Gespeicherte Karten eines Spiels aus allen Quellen (Erweiterungen und Schwester-Editionen: die des Hauptspiels)
+    als {spiel, am, karten} oder None."""
     spiel = mapgenie.SHARE.get(spiel) or pkcompletion.SHARE.get(spiel) or spiel
     if spiel not in MAP_GAMES:
         return None
-    f = mg_dir(spiel + ".json")
-    try:
-        mt = os.path.getmtime(f)
-    except OSError:
+    fs = []
+    for suf in MAP_FILES:
+        try:
+            fs.append((suf, os.path.getmtime(mg_dir(spiel + suf + ".json"))))
+        except OSError:
+            pass
+    if not fs:
         return None
     hit = _mg_cache.get(spiel)
-    if not hit or hit[0] != mt:
-        hit = _mg_cache[spiel] = (mt, store.load_json(os.path.join("mapgenie", spiel + ".json"), {}) or None)
+    if not hit or hit[0] != fs:
+        out = {"spiel": spiel, "am": "", "karten": []}
+        for suf, _ in fs:
+            d = store.load_json(os.path.join("mapgenie", spiel + suf + ".json"), {}) or {}
+            out["karten"] += d.get("karten") or []
+            out["am"] = max(out["am"], str(d.get("am") or ""))
+        hit = _mg_cache[spiel] = (fs, out if out["karten"] else None)
     return hit[1]
 
 
@@ -984,7 +1024,7 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "pc_rest": ""}
+_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": ""}
 
 
 def mg_status():
@@ -1009,12 +1049,12 @@ def mg_stock():
     try:
         jobs = [(spiel, m, top) for top in (1, 0) for spiel in MAP_GAMES for m in (mg_maps(spiel) or {}).get("karten", [])]
         for spiel, m, top in jobs:
-            pc = m.get("quelle") == "pokemoncompletion"
-            ts = (pkcompletion if pc else mapgenie).tile_list(m, m["max_zoom"] - top)
+            q = m.get("quelle")
+            ts = TILE_SRC.get(q, mapgenie).tile_list(m, m["max_zoom"] - top)
             key = f"{spiel}/{m['slug']}"
             have = 0
             for i, (z, x, y) in enumerate(ts):
-                if _mg["pc_rest" if pc else "rest"] > _iso(now()):
+                if _mg["rest_" + q if q in TILE_SRC else "rest"] > _iso(now()):
                     break
                 rel = _tile_of(m, z, x, y)[0]
                 if rel and (os.path.isfile(mg_dir("kacheln", *rel.split("/"))) or mg_tile(spiel, m["slug"], z, x, y, pause=MG_STOCK_PAUSE)):
@@ -1049,8 +1089,8 @@ def _mg_probe():
 
 def _tile_of(m, z, x, y):
     """(Pfad unter kacheln/, Adresse) einer Kachel, (None, None) außerhalb der Karte."""
-    if m.get("quelle") == "pokemoncompletion":
-        return pkcompletion.tile(m, z, x, y) or (None, None)
+    if m.get("quelle") in TILE_SRC:
+        return TILE_SRC[m["quelle"]].tile(m, z, x, y) or (None, None)
     rel = mapgenie.tile_ok(m["kacheln"], z, x, y, m.get("endung", "png"))
     if not rel or not (m["min_zoom"] <= z <= m["max_zoom"]):
         return None, None
@@ -1071,8 +1111,8 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
     f = mg_dir("kacheln", *rel.split("/"))
     if os.path.isfile(f):
         return f
-    if m.get("quelle") == "pokemoncompletion":
-        return _pc_tile(rel, url, f, pause)
+    if m.get("quelle") in TILE_SRC:
+        return _cdn_tile(rel, url, f, pause, m["quelle"])
     with _mg_lock:
         if os.path.isfile(f):
             return f
@@ -1107,11 +1147,15 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
         return f
 
 
-def _pc_tile(rel, url, f, pause):
+TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign}     # Kartenquellen mit eigenem Kachelschema
+
+
+def _cdn_tile(rel, url, f, pause, quelle):
+    """Kachel einer anderen Quelle als Map Genie holen; nach 403 oder 429 ruht nur diese Quelle."""
     with _mg_lock:
         if os.path.isfile(f):
             return f
-        if rel in _mg["miss"] or _mg["pc_rest"] > _iso(now()):
+        if rel in _mg["miss"] or _mg["rest_" + quelle] > _iso(now()):
             return None
         wait = _mg["last"] + pause - time.monotonic()
         if wait > 0:
@@ -1119,15 +1163,15 @@ def _pc_tile(rel, url, f, pause):
         try:
             body = sources.fetch(url, timeout=30, raw=True)
         except sources.FetchError as e:
-            _mg["fehler"] = f"pokemoncompletion: HTTP {e.status or '?'} bei {rel} ({_iso(now())[:16].replace('T', ' ')})"
+            _mg["fehler"] = f"{quelle}: HTTP {e.status or '?'} bei {rel} ({_iso(now())[:16].replace('T', ' ')})"
             if e.status in (403, 429):
-                _mg["pc_rest"] = _iso(now() + timedelta(hours=REST_H))
+                _mg["rest_" + quelle] = _iso(now() + timedelta(hours=REST_H))
             elif e.status:
                 _mg["miss"].add(rel)
             return None
         finally:
             _mg["last"] = time.monotonic()
-        if body[:8] != b"\x89PNG\r\n\x1a\n":
+        if not (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff"):
             _mg["miss"].add(rel)
             return None
         os.makedirs(os.path.dirname(f), exist_ok=True)
@@ -1510,7 +1554,7 @@ def diagnose(proben=None):
             rel = (_tile_of(m, m["min_zoom"], 0, 0)[0] if m.get("quelle")
                    else mapgenie.tile_ok(m["kacheln"], m["min_zoom"], 0, 0, m.get("endung", "png")))
             v = mg_status()["vorrat"].get(f"{spiel}/{m['slug']}") or {}
-            lines.append(f"{'pokemoncompletion' if m.get('quelle') else 'Map Genie'}, Karte {spiel}/{m['slug']}: Muster {m['kacheln'] or '–'} ({m.get('endung', '?')}), "
+            lines.append(f"{m.get('quelle') or 'Map Genie'}, Karte {spiel}/{m['slug']}: Muster {m['kacheln'] or '–'} ({m.get('endung', '?')}), "
                          f"Zoom {m['min_zoom']}–{m['max_zoom']}, Grenzen {'ja' if m.get('bounds') else 'aus den Orten' if mapgenie.bounds_of(m) else 'keine'}, "
                          f"Kachelpfad {'ok' if rel else 'unbrauchbar'}" + (f", Vorrat {v.get('da', 0)}/{v.get('alle', 0)}" if v else ""))
     st = mg_status()

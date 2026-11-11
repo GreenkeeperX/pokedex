@@ -10,11 +10,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.28.3"
+VERSION = "0.29.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.29.0", "11.11.2026", [
+        "Karten für Schwert/Schild (Galar) und Let’s Go (Kanto) von IGN: Kachelkarte zum Zoomen, bei Galar mit den Orten; "
+        "die Kacheln lädt der Server im Hintergrund, danach braucht die Karte kein Netz",
+        "Mehrere Kartenquellen je Spiel: jede Quelle liegt in einer eigenen Datei, die Karte zeigt alle zur Auswahl",
+        "Pokopia als eigenes Spiel mit der Karte von Map Genie (die PokéAPI führt es noch nicht; die Datenbank baut einmal neu)",
+    ]),
     ("0.28.3", "11.11.2026", [
         "Verbindungstest: Kartenseiten von IGN, RankedBoost, DittoBase und PokéTools ganz, IGNs Abfragen für Kartenpunkte "
         "und je eine IGN-Kachel (Vorbereitung für Karten zu Schwert/Schild und Let’s Go)",

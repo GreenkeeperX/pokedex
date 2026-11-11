@@ -1,5 +1,16 @@
 # Roadmap
 
+## 0.29.0 (11.11.2026)
+
+- `app/ign.py`: Kartenseite von IGN → Karte wie `mapgenie.parse` (Einheitsquadrat auf der ganzen Mercator-Welt, Kacheln
+  `{z}/{x}-{y}.jpg` zu 256 Pixeln, Punkte aus `__NEXT_DATA__`). Schwert/Schild (Galar) und Let's Go (Kanto)
+- Karten je Quelle in eigener Datei: `mapgenie/<Spiel>.json` (Map Genie), `.pc.json` (pokemoncompletion), `.ign.json` (IGN);
+  `abruf.mg_maps` fügt sie zusammen, `TILE_SRC` und `_cdn_tile` holen Kacheln anderer Quellen mit eigener Ruhezeit
+- Pokopia: `importer.EIGENE_SPIELE` legt Spiele an, die die PokéAPI nicht führt (id ab 1000, ohne Pokédex); Karte von Map Genie
+  (`mapgenie.GAMES["pokopia"]`, Kennung dort ohne „pokemon-“). `importer.VERSION` 17
+- Offen: übrige IGN-Punkte (GraphQL, Abfrage aus dem Verbindungstest), Leser für RankedBoost, DittoBase, PokéTools,
+  Bewertung je Kartenquelle (Auflösung, Zoom, Abdeckung, Punkte) und Wahl der Grundkarte, Punkte über gemeinsame Orte ausrichten
+
 ## 0.28.3 (11.11.2026)
 
 - Verbindungstest „Kartenquellen im Detail“: IGN-Seiten ganz (Karte, Kacheln `oyster.ignimgs.com/ignmedia/wikimaps/<slug>/{z}/{x}-{y}.jpg`,
