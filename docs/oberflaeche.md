@@ -70,6 +70,10 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   als Verteidiger (Faktoren multipliziert) oder Angreifer (bester der beiden Typen), sortierbar, Zeilen und Spalten markierbar (`CPIN`).
 - Spalten markieren (`crossTable`): Spaltensymbol `.pinc` vor dem Titel, auch für nicht sortierbare Spalten.
 - Detailseite: `.dgrid` mit drei Spalten (Stammdaten · Verteidigung und Duell · Entwicklung, Fang, Items, Optik), schmaler zwei, am Telefon eine.
+- Kampf (Champions): `usageBox` unter der Bewertung, Tabelle aus `/api/smogon` (sortierbar, Anzahl `usageN`), „Gefahr für“ und
+  „Antwort“ über die Typtabelle, „Top 6 als Gegner“ setzt `S.foes`.
+- Spiele: `GEN()`, `noAbil()` (Gen 1–2, Let's Go, Legenden: Arceus), `TERA()` (Karmesin/Purpur mit Erweiterungen, Tera-Typ je
+  Platz über `#terasel`).
 - `favStar(id)`: Stern zum Favorisieren an Team-Karten und Vorschlägen, `redrawMarks` hält ihn aktuell.
 - Map Genie: eigene Ebenen „Aus den Spieldaten“ (Legenden: Arceus, `/api/mapgenie/eigene`), „Gehe zu“, Trefferliste der
   Suche, `#karte/mg/<Karte>/<Ort>` springt zu einem Ort. Gefunden gilt auf der großen Karte und den Einzelkarten gleich.

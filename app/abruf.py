@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, companion, db, importer, mapgenie, pokewiki, sources, store
+from . import altissimo, companion, db, importer, mapgenie, pokewiki, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)"}
+         "mapgenie": "Map Genie (Karten)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 WIKI_PAUSE = 2.0            # Sekunden zwischen zwei Anfragen an das PokéWiki (je Anfrage bis zu 50 Seiten)
@@ -489,7 +489,8 @@ def _run(by_hand, force):
         ok = _build(st, log, force, at)
         STATE["step"] = "Bilder, Karten und Map Genie (parallel)"
         res = _parallel({"bilder": lambda: _media(st, log, settings, at), "karten": lambda: _media_tiles(st, log, settings, at),
-                         "mapgenie": lambda: _media_mg(st, log, at), "itemhq": lambda: _media_itemhq(st, log, settings, at)})
+                         "mapgenie": lambda: _media_mg(st, log, at), "itemhq": lambda: _media_itemhq(st, log, settings, at),
+                         "smogon": lambda: _smogon(st, log, at)})
         for k, v in res.items():
             if isinstance(v, Exception):
                 log(f"{k}: abgebrochen: {type(v).__name__}: {v}")
@@ -528,6 +529,38 @@ def _media(st, log, settings, at):
             st["sources"]["extras"] = total
             if total["blocked"]:
                 st["rest"]["extras"] = _iso(now() + timedelta(hours=REST_H))
+
+
+def _smogon(st, log, at):
+    """Nutzungsstatistik für die Kampfansicht (Champions): neuester Monat, passendes Doppel-Format, gekürzt in
+    smogon.json. Ohne Änderung am Stand nur zwei kleine Abrufe (Übersicht und Ordner)."""
+    if _resting(st, "smogon", at):
+        return
+    src = _Source("smogon", log, pause=2.0)
+    old = store.load_json("smogon.json", {})
+    try:
+        ms = smogon.months(src.get(smogon.INDEX))
+        got = None
+        for month in ms[:2]:            # ein neuer Monat ist manchmal noch leer
+            files = smogon.chaos_files(src.get(f"{smogon.INDEX}{month}/chaos/"))
+            got = smogon.pick(files)
+            if got:
+                break
+        if not got:
+            log("Smogon: kein passendes Format gefunden")
+        elif old.get("monat") == month and old.get("format") == got[0] and old.get("grenze") == got[1]:
+            log(f"Smogon: {got[0]} ({month}) unverändert")
+        else:
+            body = src.get(f"{smogon.INDEX}{month}/chaos/{got[0]}-{got[1]}.json")
+            if body:
+                d = smogon.digest(json.loads(body), got[0], got[1], month)
+                store.save_json("smogon.json", d)
+                log(f"Smogon: {got[0]} ({month}, ab {got[1]}): {len(d['pokemon'])} Pokémon aus {d['kaempfe']} Kämpfen")
+    except ValueError as e:
+        log(f"Smogon: Datei nicht lesbar ({e})")
+    st["sources"]["smogon"] = src.result()
+    if src.blocked:
+        st["rest"]["smogon"] = _iso(now() + timedelta(hours=REST_H))
 
 
 def _media_tiles(st, log, settings, at):
@@ -1330,7 +1363,7 @@ def diagnose(proben=None):
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",
           lambda t: f"{len(json.loads(t))} Pokémon mit Sets")
-    probe("Smogon, Nutzungsstatistik", "https://www.smogon.com/stats/", lambda t: f"{t.count('href=')} Einträge")
+    probe("Smogon, Nutzungsstatistik", "https://www.smogon.com/stats/", lambda t: f"{t.count('href=')} Einträge, neuester Monat {(smogon.months(t) or ['–'])[0]}")
     probe("Showdown, learnsets.ts", SD_RAW + "learnsets.ts", lambda t: f"{t.count('learnset:')} Lernlisten (TM, Lehrer, Ei je Generation)")
     probe("Showdown, formats-data.ts", SD_RAW + "formats-data.ts", lambda t: f"{t.count('tier:')} Pokémon mit Stufe (OU, UU …)")
     probe("Showdown, Random-Battle-Sets Gen 9", SD_RAW + "random-battles/gen9/sets.json",

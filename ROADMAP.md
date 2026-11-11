@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.21.0 (Sonderspiele Schritt 1, Gegner aus Smogon; Auftrag 11.11.2026)
+
+- `app/smogon.py` (rein): Monat, Format (Champions-Doppel vor VGC Gen 9), Grenze, Kurzfassung der chaos-Datei;
+  `abruf._smogon` legt `smogon.json` an, `/api/smogon`, `usageBox` in der Kampfansicht
+- `abfragen.no_abilities` (Gen 1–2, Let's Go, Legenden: Arceus), `old_class` (bis Gen 3 physisch/speziell nach Typ, in
+  `move_view`, damit auch in der Wertung)
+- Tera-Typ je Platz (`details.tera`) auf der Detailseite in Karmesin/Purpur
+- Offen: Spezial-Wert der Generation 1 (Quelle für alte Basiswerte), Abklingzeiten in Legenden: Z-A (Quelle), Karten für
+  ältere Spiele (pokemoncompletion liefert nur eine JS-Hülle), Tera in der Team-Bewertung
+
 ## 0.20.0 (Rückmeldung zu 0.19.0, 11.11.2026)
 
 - `abruf._parallel` und globale Pause je Server (`_HOST_LAST`, eine Sperre je Server): `_build` holt Showdown, PKHeX,

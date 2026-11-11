@@ -130,6 +130,9 @@ const teamFull = () => S.team.ids.length >= 6;
 const isFav = (id) => S.favs.some((f) => f.id === id);
 /* Champions ist ein reines Kampfspiel: „im Kader“ statt gefangen, kein Schillernd, keine Fangchance, „Kampf“ statt „Karte“ */
 const BATTLE = () => S.game === "champions";
+const TERA = () => ["scarlet-violet", "the-teal-mask", "the-indigo-disk"].includes(S.game);
+const GEN = () => S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;
+const noAbil = () => S.game === "legends-arceus" || S.game === "lets-go-pikachu-lets-go-eevee" || GEN() <= 2;
 const isCaught = (id) => S.caught.has(id);
 const isShiny = (id) => S.shiny.has(id);
 const isAlpha = (id) => S.alpha.has(id);
@@ -1134,12 +1137,16 @@ async function detailView(id, slot = null) {
         <p>${esc(d.text)}</p><div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
         ${moreHtml(d)}
         ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${wikiLink(a.name)}</b>${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
-          : S.game === "legends-arceus" ? `<p class="hint">In Legenden: Arceus gibt es keine Fähigkeiten.</p>` : ""}
+          : noAbil() ? `<p class="hint">In ${esc(gameName())} gibt es keine Fähigkeiten${GEN() <= 2 ? " (erst ab Generation 3)" : ""}.</p>` : ""}
+        ${GEN() <= 3 ? `<p class="hint">Bis Generation 3 hängt physisch oder speziell am Typ der Attacke: Normal, Kampf, Flug, Gift, Boden, Gestein, Käfer, Geist und Stahl sind physisch, die übrigen speziell.${GEN() === 1 ? " In Generation 1 gab es statt Sp.-Angriff und Sp.-Verteidigung einen gemeinsamen Spezial-Wert; gezeigt sind die heutigen Werte." : ""}</p>` : ""}
       </div>
       <div class="stack">
         <div class="box"><h2 data-tip="Verteidigung: so stark treffen Attacken eines Typs ${esc(d.name)}">Verteidigung: Typwirkung gegen ${esc(d.name)}</h2>
           ${d.faehigkeit_wirkt ? `<p class="hint">Mit Fähigkeit eingerechnet.</p>` : ""}
-          ${defHtml(Object.fromEntries(Object.entries(d.wirkung).map(([t, f]) => [t, f])))}</div>
+          ${defHtml(Object.fromEntries(Object.entries(d.wirkung).map(([t, f]) => [t, f])))}
+          ${inTeam && TERA() ? (() => { const tt = S.team.details[DSLOT]?.tera; return `<div class="bar slim" style="margin-top:8px"><label data-tip="Tera-Typ dieses Team-Platzes: nach der Terakristallisierung zählt nur noch er für die Verteidigung; Attacken vom Tera-Typ bekommen den Eigentyp-Bonus">Tera-Typ
+              <select id="terasel"><option value="">–</option>${Object.entries(S.types).map(([k, n]) => `<option value="${k}"${String(tt) === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label></div>
+            ${tt ? `<h3>Terakristallisiert: ${tchip(String(tt))}</h3>${defHtml(defense([String(tt)]))}` : ""}`; })() : ""}</div>
         <div class="box"><h2 data-tip="Typ-Duell: wie gut ${esc(d.name)} gegen Pokémon eines Typs steht. Austeilen = bester eigener Typ, einstecken = beide eigenen Typen zusammengerechnet. Hovern zeigt die Rechnung.">Im Duell gegen Typen</h2>
           <p class="hint">${DUEL_LEGEND}</p>
           ${duelHtml(d.name, d.typen)}</div>
@@ -1156,6 +1163,10 @@ async function detailView(id, slot = null) {
   header();
   renderMoves(d.attacken, level);
   wireExtras(d);
+  $("#terasel")?.addEventListener("change", (e) => {
+    S.team.details[DSLOT] = Object.assign({}, S.team.details[DSLOT], {tera: e.target.value ? +e.target.value : null}); saveTeam(); dock();
+    const y = window.scrollY; detailView(id, DSLOT).then(() => window.scrollTo(0, y));
+  });
   window.scrollTo(0, 0);
 }
 // Sprite-Umschalter (Artwork, schillernd, animiert) und Ruf, nur für schon geladene Extras
@@ -1206,6 +1217,7 @@ function catchHtml(d) {
     <table class="rows sort catch"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: der beste Fall, etwa dreimal so gut wie volle KP. Die Chance steigt gleichmäßig, je weniger KP übrig sind, ohne Schwellen")}${thc("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${thc("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
     <tbody>${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}">${pc(f.voll)}</td><td class="c" data-s="${f.rot}">${pc(f.rot)}</td><td class="c" data-s="${f.status ?? ""}">${f.status != null ? pc(f.status) : "–"}</td><td class="c" data-s="${f.schlaf}">${pc(f.schlaf)}</td></tr>`).join("")}</tbody></table>
     <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
+      : grob && S.game.startsWith("lets-go") ? ". Let’s Go fängt ohne Kampf: KP und Status zählen nicht, dafür Beeren (Himmihbeere ×1,5, Silberne ×2,5), Wurfkreis und Fangkombo; die Werte geben nur eine Richtung."
       : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p></details>`;
 }
 // Mehr Details, eingeklappt: Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute
@@ -2573,8 +2585,10 @@ async function battleView() {
           <li><b>Flächenattacken</b> treffen beide Gegner (mit 75 % Stärke). Manche wie Erdbeben treffen auch den eigenen Partner; dann passt ein Partner, der dagegen immun ist (etwa ein Flug-Pokémon).</li>
           <li><b>Tempo:</b> Wer zuerst angreift, gewinnt oft. Die Initiative-Liste zeigt, wer auf Level 50 schneller ist.</li>
           <li><b>Was fehlt</b> steht rot; darunter, wer im Team die passende Attacke lernen könnte.</li></ul></details>
-      <div id="dbl"><p class="hint">Lädt …</p></div></div>`;
+      <div id="dbl"><p class="hint">Lädt …</p></div></div>
+    <div class="box" id="usage"><h2>Häufige Gegner</h2><p class="hint">Lädt …</p></div>`;
   header();
+  usageBox();
   $("details.dblhelp").addEventListener("toggle", (e) => store.set("dblHelp", e.target.open));
   if (!t.ids.length) { $("#dbl").innerHTML = `<p class="hint">Das Team ist leer.</p>`; return; }
   const r = await api("/api/team/doppel", {spiel: S.game, ids: t.ids, details: t.details});
@@ -2592,6 +2606,40 @@ async function battleView() {
     <div><h3>Flächenattacken</h3><p>${spread}</p>${partner}
       <h3>Tempo</h3><p class="hint">Schnell (Basis ab 95): ${esc(r.tempo.schnell.join(", ") || "keiner")} · langsam (bis 60): ${esc(r.tempo.langsam.join(", ") || "keiner")}</p>
       ${r.tempo.rat ? `<div class="note info">${esc(r.tempo.rat)}</div>` : ""}</div></div>`;
+}
+/* Häufige Gegner aus der Nutzungsstatistik von Smogon (smogon.json, beim Abgleich geholt) */
+async function usageBox() {
+  const rid = RID, el = () => $("#usage");
+  const u = await api("/api/smogon?" + qs({spiel: S.game})).catch(() => ({rows: []}));
+  if (rid !== RID || !el()) return;
+  if (!u.rows.length) {
+    el().innerHTML = `<h2>Häufige Gegner</h2><p class="hint">Noch keine Nutzungsstatistik. Der nächste Abgleich holt sie von Smogon (monatlich, Doppel-Format für Champions oder die aktuelle VGC-Regel).</p>`;
+    return;
+  }
+  u.rows.forEach((r) => { if (r.id) ROWS[r.id] = Object.assign(ROWS[r.id] || {}, {id: r.id, name: r.name, typen: r.typen, werte: r.werte}); });
+  const team = S.team.ids.map((id) => ROWS[id]).filter((m) => m?.typen);
+  const hitF = (atk, defT) => defT.reduce((f, d) => f * (S.chart?.[atk]?.[d] ?? 1), 1);
+  // Gefahr: welche Mitglieder ein Eigentyp des Gegners sehr effektiv trifft; Antwort: wer ihn selbst mit einem Eigentyp sehr effektiv trifft
+  const threat = (r) => team.filter((m) => r.typen.some((t) => hitF(String(t), m.typen.map(String)) > 1));
+  const answer = (r) => team.filter((m) => m.typen.some((t) => hitF(String(t), r.typen.map(String)) > 1));
+  const names = (xs) => xs.map((m) => esc(m.name)).join(", ");
+  const top = (xs, n) => xs.slice(0, n).map(([k, p]) => `${esc(k)} <span class="hint">${String(p).replace(".", ",")} %</span>`).join(", ");
+  const n = store.get("usageN", 20);
+  el().innerHTML = `<div class="bar"><h2 style="margin:0">Häufige Gegner</h2>
+      <span class="hint grow" data-tip="Nutzungsstatistik von Smogon (Pokémon Showdown) für ${esc(u.format)}, Kämpfe ab Wertung ${u.grenze}">${esc(u.format)} · ${esc(u.monat)} · ${Number(u.kaempfe || 0).toLocaleString("de-DE")} Kämpfe</span>
+      <button data-act="usagefoes" data-tip="Die sechs häufigsten als Gegner in „Gegen Gegner“ im Reiter Team">Top 6 als Gegner</button>
+      <label class="hint">zeigen <select id="usagen">${[10, 20, 40, 60].map((v) => `<option${v === n ? " selected" : ""}>${v}</option>`).join("")}</select></label></div>
+    <p class="hint">So spielen andere das Format: Anteil der Teams mit dem Pokémon, dazu die häufigsten Attacken, Items, Fähigkeiten und Tera-Typen.
+      „Gefahr für“: Mitglieder, die ein Eigentyp des Gegners sehr effektiv trifft. „Antwort“: Mitglieder, die ihn selbst sehr effektiv treffen.</p>
+    <div class="scroll sticky"><table class="rows sort usage"><thead><tr>${thc("#")}${th("Pokémon")}${thc("Anteil", "Anteil der Teams mit diesem Pokémon")}${th("Attacken", "", true)}${th("Item", "", true)}${th("Fähigkeit", "", true)}${team.length ? th("Gefahr für", "", true) + th("Antwort", "", true) : ""}</tr></thead>
+    <tbody>${u.rows.slice(0, n).map((r, i) => { const th_ = r.typen.length ? threat(r) : [], an = r.typen.length ? answer(r) : [];
+      return `<tr${r.id ? ` data-hc="${r.id}"` : ""}><td class="c num" data-s="${i + 1}">${i + 1}</td>
+        <td data-s="${esc(r.name)}" class="nw">${r.id ? `${img(r.id, "sm")} <a href="#pokemon/${r.id}">${esc(r.name)}</a> ${tchips(r.typen)}` : esc(r.name)}</td>
+        <td class="c num" data-s="${r.anteil}">${String(r.anteil).replace(".", ",")} %</td>
+        <td>${top(r.attacken, 4)}</td><td>${top(r.items, 2)}</td><td>${top(r.faehigkeiten, 1)}${r.tera.length ? `<div class="hint">Tera: ${r.tera.slice(0, 2).map(([k]) => esc(k)).join(", ")}</div>` : ""}</td>
+        ${team.length ? `<td class="${th_.length >= 2 ? "stop" : ""}">${names(th_) || "–"}</td><td class="${an.length ? "go" : "stop"}">${names(an) || "keiner"}</td>` : ""}</tr>`; }).join("")}</tbody></table></div>`;
+  $("#usagen").addEventListener("change", (e) => { store.set("usageN", +e.target.value); usageBox(); });
+  S.usageTop = u.rows.filter((r) => r.id).slice(0, 6).map((r) => r.id);
 }
 async function speedView() {
   const rid = RID, gen = S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;
@@ -2795,7 +2843,7 @@ async function settingsView() {
   const src = st.sources || {};
   const open = pr.filter((r) => !r.entscheidung);
   const srcRow = (k, n) => { const r = src[k]; return r ? `<tr><td>${n}</td><td>${r.ok ? "✓" : "✗"} ${esc(r.msg || "")}</td><td class="num">${r.requests}</td><td class="num">${r.errors}</td><td class="nw">${esc(deTime(r.at))}</td></tr>` : ""; };
-  const srcKeys = ["pokeapi", "showdown", "pkhex", "spawns", "karten", "sprites", "extras", "itemhq", "mapgenie", "pokewiki", "altissimo", "companion"].filter((k) => src[k]);
+  const srcKeys = ["pokeapi", "showdown", "pkhex", "spawns", "karten", "sprites", "extras", "itemhq", "mapgenie", "smogon", "pokewiki", "altissimo", "companion"].filter((k) => src[k]);
   const okN = srcKeys.filter((k) => src[k].ok).length, bad = srcKeys.filter((k) => !src[k].ok);
   main.innerHTML = `<div class="cols">
     <div class="box"><h2>Abgleich</h2>
@@ -2806,7 +2854,7 @@ async function settingsView() {
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
       <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
         <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button></div>
-      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("itemhq", "Große Item-Bilder")}${srcRow("mapgenie", "Map Genie")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table>
+      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("itemhq", "Große Item-Bilder")}${srcRow("mapgenie", "Map Genie")}${srcRow("smogon", "Smogon")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table>
       <h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
@@ -3064,6 +3112,7 @@ document.addEventListener("click", async (e) => {
       store.set("team", S.team); dock(); teamView();
     } else if (act === "foedel") { S.foes = S.foes.filter((x) => x !== id); store.set("foes", S.foes); matchup(); }
     else if (act === "foeclear") { S.foes = []; store.set("foes", S.foes); teamView(); }
+    else if (act === "usagefoes") { S.foes = [...(S.usageTop || [])]; store.set("foes", S.foes); location.hash = "team"; }
     else if (act === "mvadd" || act === "mvdel" || act === "mvtake") {
       const pid = DETAIL.id, cur = ownSet(pid), mid = +b.dataset.mid;
       setOwnSet(pid, act === "mvadd" ? [...cur, mid] : act === "mvdel" ? cur.filter((x) => x !== mid) : DETAIL.attacken.moveset.map((m) => m.id));

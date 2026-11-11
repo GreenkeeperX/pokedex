@@ -8,10 +8,10 @@ import os
 import re
 import threading
 
-from . import altissimo, attacken, db, importer, mapgenie, showdown, team, typen
+from . import altissimo, attacken, db, importer, mapgenie, showdown, store, team, typen
 
 LA = "legends-arceus"          # Legenden: Arceus kennt keine Fähigkeiten und eigene Attackenwerte
-NO_ABILITIES = {LA}
+NO_ABILITIES = {LA, "lets-go-pikachu-lets-go-eevee"}
 WIKI = "https://www.pokewiki.de/"
 _lock = threading.Lock()
 _cache = {"stamp": None}
@@ -155,9 +155,25 @@ def form_types(D, f, gen):
     return f["typen"]
 
 
+def no_abilities(g):
+    """Spiele ohne Fähigkeiten: Generation 1 und 2, Let's Go und Legenden: Arceus."""
+    return bool(g) and (g["kennung"] in NO_ABILITIES or (g.get("gen") or 9) <= 2)
+
+
+def old_class(v, gen):
+    """Bis Generation 3 hängt physisch oder speziell am Typ (Normal bis Stahl physisch, Feuer bis Unlicht speziell)."""
+    if gen > 3 or v.get("klasse") == attacken.STATUS:
+        return v
+    try:
+        t = int(v.get("typ"))
+    except (TypeError, ValueError):
+        return v
+    return dict(v, klasse=attacken.PHYS if t <= 9 else attacken.SPEZ) if t <= 18 else v
+
+
 def ability_of(D, f, g):
-    """Fähigkeit für die Typwirkung: die erste normale; in Legenden: Arceus gibt es keine."""
-    if g and g["kennung"] in NO_ABILITIES:
+    """Fähigkeit für die Typwirkung: die erste normale; in Spielen ohne Fähigkeiten keine."""
+    if no_abilities(g):
         return None
     for aid, hidden in f["faehigkeiten"]:
         if not hidden:
@@ -332,7 +348,7 @@ def move_view(D, m, g):
         for k in ("staerke", "genauigkeit", "ap"):
             if w[k] is not None and w[k] != v.get(k):
                 v[k], v["geaendert"] = w[k], True
-    return v
+    return old_class(v, g.get("gen") or 9) if g else v
 
 
 # Erweiterungen ohne eigene Lernliste: die PokéAPI führt deren Lehrer-Attacken und TMs beim Hauptspiel
@@ -472,7 +488,7 @@ def ranked_moves(con, D, f, g, gen, level=None):
         seen_std.append(mid)
     standard = seen_std[:4] if level is None else seen_std[-4:]
     for mid, e in by_move.items():
-        v = move_view(D, e["m"], used)
+        v = old_class(move_view(D, e["m"], used), gen)
         wege = sorted(e["wege"], key=lambda w: (w[0] != "level-up", w[1] or 0))
         now = level is None or any(w[0] != "level-up" or (w[1] or 0) <= level for w in wege)
         base = {"id": mid, "name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"],
@@ -1059,7 +1075,7 @@ def _more(con, f, g, gen):
         out["fangrate"] = sp["capture_rate"]
         out["fangen"] = catch_table(sp["capture_rate"], gen)
         out["schlaf_faktor"] = str(sleep_factor(gen)).replace(".", ",")
-        out["fang_grob"] = gen <= 2 or kennung.startswith("legends-")
+        out["fang_grob"] = gen <= 2 or kennung.startswith("legends-") or kennung.startswith("lets-go")
     if sp["gender_rate"] is not None and gen >= 2:
         gr = sp["gender_rate"]
         out["geschlecht"] = "geschlechtslos" if gr < 0 else f"{100 - gr * 12.5:g} % männlich, {gr * 12.5:g} % weiblich"
@@ -1114,7 +1130,7 @@ def detail(fid, p):
                              "ORDER BY version_id DESC LIMIT 1", (f["art"],)).fetchone()
         genus = con.execute("SELECT genus FROM pokemon_species_names WHERE pokemon_species_id = ? AND local_language_id = 6", (f["art"],)).fetchone()
         abil = []
-        if not (g and g["kennung"] in NO_ABILITIES):
+        if not no_abilities(g):
             for aid, hidden in f["faehigkeiten"]:
                 k, n = D.abilities.get(aid, ("", str(aid)))
                 txt = con.execute("SELECT flavor_text FROM ability_flavor_text WHERE ability_id = ? AND language_id = 6 "
@@ -1756,7 +1772,7 @@ def paste_export(body):
         if not f:
             continue
         abil = _int(d.get("faehigkeit"))
-        if not abil and not (g and g["kennung"] in NO_ABILITIES):
+        if not abil and not no_abilities(g):
             abil = next((a for a, hidden in f["faehigkeiten"] if not hidden), None)
         tera = _int(d.get("tera"))
         sets.append({"name": P["form_en"].get(i) or f["kennung"].title(), "spitzname": str(d.get("spitzname") or "")[:30], "geschlecht": d.get("geschlecht"),
@@ -1770,6 +1786,41 @@ def paste_export(body):
 
 
 # ------------------------------------------------------------------ Doppelkampf
+
+def smogon_view(spiel=None):
+    """Häufige Gegner aus der Nutzungsstatistik (smogon.json), mit IDs und deutschen Namen, soweit zuzuordnen."""
+    d = store.load_json("smogon.json", {})
+    D = data()
+    if not d.get("pokemon") or not D:
+        return {"format": d.get("format", ""), "monat": d.get("monat", ""), "rows": []}
+    P = _paste_names(D)
+    key = importer._sd_key
+    g, gen, _ = game_of(D, spiel)
+
+    def de(kind, pairs):
+        out = []
+        for n, pct in pairs:
+            i = P[kind].get(key(n))
+            if kind == "move":
+                name = D.moves[i]["name"] if i in D.moves else n
+            elif kind == "typ":
+                name = D.types.get(i, n)
+            else:
+                name = P[kind + "_de"].get(i) or n if i else n
+            out.append([name, pct])
+        return out
+    rows = []
+    for r in d["pokemon"]:
+        fid = P["form"].get(key(r["name"]))
+        f = D.forms.get(fid)
+        rows.append({"id": fid, "name": f["name"] if f else r["name"], "en": r["name"], "anteil": r["anteil"],
+                     "typen": form_types(D, f, gen) if f else [], "werte": f["werte"] if f else None,
+                     "attacken": de("move", r.get("attacken", [])), "items": de("item", r.get("items", [])),
+                     "faehigkeiten": de("abil", r.get("faehigkeiten", [])), "tera": de("typ", r.get("tera", [])),
+                     "partner": [P["form"].get(key(x)) for x in r.get("partner", []) if P["form"].get(key(x))]})
+    return {"format": d.get("format", ""), "monat": d.get("monat", ""), "grenze": d.get("grenze", 0),
+            "kaempfe": d.get("kaempfe", 0), "rows": rows}
+
 
 def team_doubles(body):
     """Doppelkampf-Bewertung des Teams (ids, details, spiel) mit Rollen, Flächenattacken und Tempo."""
@@ -1795,7 +1846,7 @@ def team_doubles(body):
             if not f:
                 continue
             aid = _int(d.get("faehigkeit"))
-            if g and g["kennung"] in NO_ABILITIES:
+            if no_abilities(g):
                 abil = None
             elif aid in D.abilities:
                 abil = D.abilities[aid][0]

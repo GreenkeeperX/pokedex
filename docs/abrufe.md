@@ -63,6 +63,14 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Die Kacheln holt erst die Oberfläche über `/mgkachel/…` (`abruf.mg_tile`): eine Anfrage zur Zeit, 0,3 Sekunden
    Pause, abgelegt unter `mapgenie/kacheln/`; bei 403 oder 429 ruht das 24 Stunden.
 
+## Nutzungsstatistik (Smogon)
+
+`_smogon` (parallel zu den Bildern, 2 Sekunden Pause): Übersicht `https://www.smogon.com/stats/`, im neuesten Monat
+(oder dem davor) die Liste `chaos/`, daraus `smogon.pick`: ein Format mit „champions“ im Namen (Doppel zuerst), sonst
+die neueste VGC-Regel der Generation 9; Grenze 1630, sonst 1500, 1760 oder die höchste. Die chaos-Datei wird auf die
+60 häufigsten Pokémon gekürzt (`smogon.digest`) und als `smogon.json` gespeichert. Gleicher Monat und gleiches Format:
+kein neuer Abruf der großen Datei.
+
 ## Item-Bilder
 
 Extra `itembild`: `sprites/items/<Kennung>.png` aus dem Sprite-Repository der PokéAPI, gespeichert als
