@@ -792,3 +792,4 @@ table.items tr.odd td{opacity:.6}
 .raidl>div{padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}.raidl .t{font-size:11px}
 .cmpsel{align-items:stretch;text-align:left}.cmppick .cqh{display:flex;align-items:center;justify-content:space-between;margin:8px 0 4px;font-size:13px}
 .cmppick .cmpquick{justify-content:flex-start}.cmpgrid.sel{margin-top:12px}
+.eltab select{padding:1px 4px}

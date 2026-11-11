@@ -93,6 +93,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   aus: Materialien und Pokémon. Suche auch in ausgeblendeten Ebenen. „Gehe zu“, `#karte/mg/<Karte>/<Ort>` springt zu einem Ort.
 - Detailseite: `wissenHtml` (gepflegtes Spielwissen in der Fangchance), `partnerHtml` (Partner-Techniken, Geheime Techniken).
 - Schadensrechner: Gegner `favs` (Favoriten des Spiels).
+- Effort Levels `elBox` (`#elbox`, Legenden: Arceus): `/api/effort`, Team-Platz `el`, `el_ziel`, `wesen`; ohne Team ein
+  Zwischenstand nur für die Seite (`elBox.tmp`), aufgeklappt `elOpen`.
 - Map Genie (`mgView`, `#karte/mg/<Karte>`, `/api/mapgenie`, Kacheln `/mgkachel/<Spiel>/<Karte>/<z>/<x>/<y>`): eigene
   Kachelanzeige (Web-Mercator, ganze Zoomstufen), Punkte je Kategorie in der Farbe der Gruppe, Ebenen rechts zum
   Auf- und Zuklappen (`mgEbenen:<Spiel>`, `mgOpen`), Suche, Rechtsklick = gefunden (`/api/gefunden`, `mapGotHide`).

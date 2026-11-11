@@ -2011,6 +2011,25 @@ def team_doubles(body):
 
 # ------------------------------------------------------------------ Schadensrechner
 
+def effort_view(body):
+    """Effort Levels (Legenden: Arceus) einer Form: Werte je Stufe, Ziel und nötige Leistungs-Items (app/effort.py).
+    body: spiel, id, level, wesen (ID), el, ziel (je sechs Stufen 0–10). Dazu die Wesen zur Auswahl."""
+    from . import effort
+    D = data()
+    f = D.forms.get(_int(body.get("id"))) if D else None
+    if not f:
+        raise ValueError("Pokémon nicht gefunden")
+    _, gen, _ = game_of(D, body.get("spiel"))
+    P = _paste_names(D)
+    wesen = _int(body.get("wesen"))
+    level = min(100, max(1, _int(body.get("level")) or 50))
+    six = lambda v: [_int(x) or 0 for x in v][:6] if isinstance(v, list) and len(v) == 6 else None
+    out = effort.view(form_stats(D, f, gen)[0], level, six(body.get("el")), six(body.get("ziel")), P["nat_mod"].get(wesen) if wesen else None)
+    out["wesen_liste"] = sorted(({"id": i, "name": n, "mod": P["nat_mod"].get(i)} for i, n in P["nat_de"].items()), key=lambda x: x["name"])
+    out["wesen"] = wesen
+    return out
+
+
 def damage_matrix(body):
     """Übersicht für den Schadensrechner: je Team-Platz und Gegner die stärkste der gewählten Schadens-Attacken
     {rows: [{slot, id, name, zellen: [{gegner, attacke, min_pct, max_pct, sicher, moeglich, eff} | None]}], gegner: [{id, name}]}."""

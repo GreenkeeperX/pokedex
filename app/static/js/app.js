@@ -1154,6 +1154,7 @@ async function detailView(id, slot = null) {
         <p>${esc(d.text)}</p><div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
         ${d.werte_alt ? `<p class="hint">Basiswerte wie in Generation ${GEN()}; später wurden sie geändert (Quelle: Pokémon Showdown).</p>` : ""}
         ${moreHtml(d)}
+        ${S.game === "legends-arceus" ? `<div id="elbox"></div>` : ""}
         ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${wikiLink(a.name)}</b>${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
           : noAbil() ? `<p class="hint">In ${esc(gameName())} gibt es keine Fähigkeiten${GEN() <= 2 ? " (erst ab Generation 3)" : ""}.</p>` : ""}
         ${GEN() <= 3 ? `<p class="hint">Bis Generation 3 hängt physisch oder speziell am Typ der Attacke: Normal, Kampf, Flug, Gift, Boden, Gestein, Käfer, Geist und Stahl sind physisch, die übrigen speziell.${GEN() === 1 ? " In Generation 1 gab es statt Sp.-Angriff und Sp.-Verteidigung einen gemeinsamen Spezial-Wert." : ""}</p>` : ""}
@@ -1182,6 +1183,7 @@ async function detailView(id, slot = null) {
     <div class="box" id="mbox"></div>`;
   header();
   renderMoves(d.attacken, level);
+  if (S.game === "legends-arceus") elBox(d, inTeam ? DSLOT : null);
   wireExtras(d);
   $('details[data-store="raidOpen"]')?.addEventListener("toggle", (e) => store.set("raidOpen", e.target.open));
   $("#formsel")?.addEventListener("change", (e) => {
@@ -1192,6 +1194,41 @@ async function detailView(id, slot = null) {
     const y = window.scrollY; detailView(id, DSLOT).then(() => window.scrollTo(0, y));
   });
   window.scrollTo(0, 0);
+}
+/* Effort Levels (Legenden: Arceus): je Wert die Stufe 0–10 und ein Ziel; der Server rechnet die Werte und wie viele
+   Leistungs-Items (Sand, Kies, Stein, Fels) bis zum Ziel fehlen. Im Team je Platz gespeichert, sonst nur zum Ausprobieren. */
+async function elBox(d, slot) {
+  const el = $("#elbox");
+  if (!el) return;
+  const det = slot !== null ? S.team.details[slot] || {} : (elBox.tmp ||= {});
+  if (slot === null && elBox.tmpId !== d.id) { elBox.tmpId = d.id; Object.keys(det).forEach((k) => delete det[k]); }
+  const lv = det.level || 50;
+  const r = await api("/api/effort", {spiel: S.game, id: d.id, level: lv, wesen: det.wesen || null, el: det.el || [0, 0, 0, 0, 0, 0], ziel: det.el_ziel || det.el || [0, 0, 0, 0, 0, 0]}).catch(() => null);
+  if (!r || !$("#elbox")) return;
+  const opt = (v, from = 0) => Array.from({length: 11 - from}, (_, k) => k + from).map((k) => `<option value="${k}"${k === v ? " selected" : ""}>${k}</option>`).join("");
+  const nat = (x) => x.wesen > 1 ? ` <span class="f fd" data-tip="Wesen +10 %">+</span>` : x.wesen < 1 ? ` <span class="f fa05" data-tip="Wesen −10 %">−</span>` : "";
+  const need = r.bonbons.some((n) => n);
+  const open = store.get("elOpen", true);
+  el.innerHTML = `<details class="sub" id="eldet"${open ? " open" : ""}><summary><h3 style="display:inline">Effort Levels</h3> <span class="hint">${slot !== null ? `Platz ${slot + 1}, Level ${lv}` : `zum Ausprobieren, Level ${lv}`}</span></summary>
+    <p class="hint">In Legenden: Arceus ersetzen Effort Levels (0 bis 10 je Wert) die EVs. Jede Stufe gibt Bonuspunkte, die großen Sprünge kommen bei 4, 7 und 10.
+      Ein frisch gefangenes Pokémon startet nach seinen DVs (31: Stufe 3, ab 26: 2, ab 20: 1).${slot === null ? " Im Team merkt sich jeder Platz seine Stufen." : ""}</p>
+    <div class="bar slim"><label>Wesen <select id="elnat"><option value="">neutral</option>${r.wesen_liste.filter((w) => w.mod).map((w) => `<option value="${w.id}"${w.id === r.wesen ? " selected" : ""}>${esc(w.name)} (+${STAT[w.mod[0]]} −${STAT[w.mod[1]]})</option>`).join("")}</select></label>
+      ${slot !== null ? `<span class="hint">Level wie unten bei den Attacken</span>` : `<label>Level <input type="number" id="ellv" min="1" max="100" value="${lv}" style="width:64px"></label>`}</div>
+    <table class="rows eltab"><tr><th>Wert</th><th class="c">Basis</th><th class="c">Stufe</th><th class="c">jetzt</th><th class="c">Ziel</th><th class="c">am Ziel</th><th class="c" data-tip="mit Stufe 10">höchstens</th></tr>
+    ${r.rows.map((x, i) => `<tr><td>${STAT[i]}${nat(x)}</td><td class="c">${x.basis}</td><td class="c"><select data-el="${i}">${opt(x.el)}</select></td><td class="c"><b>${x.wert}</b></td>
+      <td class="c"><select data-elz="${i}">${opt(x.ziel, x.el)}</select></td><td class="c">${x.ziel > x.el ? `<b style="color:var(--go)">${x.wert_ziel}</b> <span class="hint">+${x.wert_ziel - x.wert}</span>` : `<span class="hint">${x.wert_ziel}</span>`}</td><td class="c hint">${x.max}</td></tr>`).join("")}</table>
+    <p class="hint">${need ? `Bis zum Ziel fehlen: ${r.bonbons.map((n, k) => n ? `<b>${n}× ${esc(r.sorten[k])}</b>` : "").filter(Boolean).join(", ")}.` : "Ziel wählen: dann steht hier, wie viele Leistungs-Items fehlen."}
+      Leistungssand hebt Stufe 0–2, Leistungskies 3–5, Leistungsstein 6–8, Leistungsfels 9 auf 10, je um eins. Es gibt sie für freigelassene Pokémon, von Alphas und bei Zisu im Trainingsplatz zum Tauschen.
+      <button class="link" id="elmax" data-tip="Ziel überall auf 10">alles auf 10</button> · <button class="link" id="elreach" data-tip="Ziel erreicht: Stufen auf das Ziel setzen">Ziel erreicht</button></p></details>`;
+  const save = () => { if (slot !== null) { S.team.details[slot] = Object.assign({}, S.team.details[slot], {el: det.el, el_ziel: det.el_ziel, wesen: det.wesen}); saveTeam(); dock(); } elBox(d, slot); };
+  const cur = () => r.rows.map((x) => x.el), goal = () => r.rows.map((x) => x.ziel);
+  $("#eldet").addEventListener("toggle", (e) => store.set("elOpen", e.target.open));
+  $$("[data-el]", el).forEach((s) => s.addEventListener("change", () => { const a = cur(), z = goal(); a[+s.dataset.el] = +s.value; z[+s.dataset.el] = Math.max(z[+s.dataset.el], +s.value); det.el = a; det.el_ziel = z; save(); }));
+  $$("[data-elz]", el).forEach((s) => s.addEventListener("change", () => { const z = goal(); z[+s.dataset.elz] = +s.value; det.el = cur(); det.el_ziel = z; save(); }));
+  $("#elnat").addEventListener("change", (e) => { det.wesen = e.target.value ? +e.target.value : null; det.el = cur(); det.el_ziel = goal(); save(); });
+  $("#ellv")?.addEventListener("change", (e) => { det.level = Math.max(1, Math.min(100, +e.target.value || 50)); det.el = cur(); det.el_ziel = goal(); save(); });
+  $("#elmax").addEventListener("click", () => { det.el = cur(); det.el_ziel = [10, 10, 10, 10, 10, 10]; save(); });
+  $("#elreach").addEventListener("click", () => { det.el = goal(); det.el_ziel = goal(); save(); });
 }
 // Sprite-Umschalter (Artwork, schillernd, animiert) und Ruf, nur für schon geladene Extras
 function extrasHtml(d) {

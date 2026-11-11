@@ -635,6 +635,22 @@ class Leser(unittest.TestCase):
         self.assertEqual(mapgenie.name_de("Wisp #12", {}), "Geisterlicht #12")
         self.assertEqual(mapgenie.name_de("Unbekannt", {}), "Unbekannt")
 
+    def test_effort_levels(self):
+        from app import effort
+        # Knakrack (108/130/95/80/85/102) auf Level 100: KP 316 + Bonus 144 bei Stufe 10, Angriff 260 + 154
+        self.assertEqual(effort.stat(108, 100, 10, 0), 460)
+        self.assertEqual(effort.stat(130, 100, 10, 1), 414)
+        self.assertEqual(effort.stat(130, 100, 0, 1), 260 + 40)
+        self.assertEqual(effort.stat(130, 100, 0, 1, 1.1), 286 + 40)
+        self.assertEqual(effort.cost(0, 10), [3, 3, 3, 1])
+        self.assertEqual(effort.cost(3, 7), [0, 3, 1, 0])
+        self.assertEqual(effort.cost(5, 5), [0, 0, 0, 0])
+        self.assertEqual([effort.start_level(v) for v in (31, 28, 20, 19)], [3, 2, 1, 0])
+        v = effort.view([108, 130, 95, 80, 85, 102], 50, [0, 3, 0, 0, 0, 0], [10] * 6, (1, 3))
+        self.assertEqual(v["bonbons"], [15, 18, 18, 6])
+        self.assertEqual((v["rows"][1]["wesen"], v["rows"][3]["wesen"]), (1.1, 0.9))
+        self.assertEqual(effort.view([50] * 6, 50, [5] * 6, [2] * 6)["rows"][0]["ziel"], 5)      # Ziel nie unter der Stufe
+
     def test_spielwissen(self):
         import json
         from app import abfragen

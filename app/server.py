@@ -125,6 +125,10 @@ def _details(v, members):
             v6 = d.get(k)
             if isinstance(v6, list) and len(v6) == 6 and all(isinstance(x, int) and 0 <= x <= 255 for x in v6):
                 e[k] = v6
+        for k in ("el", "el_ziel"):                               # Effort Levels (Legenden: Arceus), seit 0.25.0
+            v6 = d.get(k)
+            if isinstance(v6, list) and len(v6) == 6 and all(isinstance(x, int) and 0 <= x <= 10 for x in v6):
+                e[k] = v6
         if d.get("geschlecht") in ("M", "F"):
             e["geschlecht"] = d["geschlecht"]
         if d.get("schillernd") is True:
@@ -660,6 +664,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/team/doppel": abfragen.team_doubles,
         "/api/schaden": abfragen.damage_view,
         "/api/schaden/uebersicht": abfragen.damage_matrix,
+        "/api/effort": abfragen.effort_view,
         "/api/kampftagebuch": add_battle,
         "/api/kampftagebuch/loeschen": delete_battle,
         "/api/team/export": abfragen.paste_export,

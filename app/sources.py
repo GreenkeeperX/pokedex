@@ -10,11 +10,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.24.0"
+VERSION = "0.25.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.25.0", "11.11.2026", [
+        "Legenden: Arceus: Effort Levels auf der Detailseite. Je Wert die Stufe 0 bis 10 und ein Ziel, dazu Wesen und Level; "
+        "die Werte rechnen sich mit (jetzt, am Ziel, höchstens), und der Planer sagt, wie viel Leistungssand, -kies, -stein und "
+        "-fels bis zum Ziel fehlen. Im Team merkt sich jeder Platz seine Stufen",
+    ]),
     ("0.24.0", "11.11.2026", [
         "Karten ganz offline: Der Server holt im Hintergrund alle Kacheln aller Zoomstufen jeder Karte und hebt sie auf; "
         "Orte, Punkte und Texte liegen ohnehin seit dem Abgleich bei ihm. Danach braucht die Karte kein Internet mehr",
