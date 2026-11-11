@@ -167,14 +167,24 @@ function monCard(r, xmode = false) {
     ${radar(r.werte, 100)}</a>`;
 }
 // Marken überall neu zeichnen, ohne die Seite neu aufzubauen
+const favStar = (id) => `<button class="favstar${isFav(id) ? " on" : ""}" data-act="fav" data-id="${id}" data-favstar data-tip="${isFav(id) ? "Favorit; Klick: aus den Favoriten" : "Zu den Favoriten"}">${icon("fav", isFav(id))}</button>`;
 function redrawMarks() {
+  $$("[data-favstar]").forEach((b) => { b.outerHTML = favStar(+b.dataset.id); });
   $$(".mk").forEach((el) => { const a = el.closest("[data-id]"); if (a) el.outerHTML = marks(+a.dataset.id); });
   $$(".acts").forEach((el) => { const a = el.closest("[data-id]"); if (a) el.outerHTML = acts(+a.dataset.id); });
-  $$("[data-markbtn]").forEach((b) => { const id = +b.dataset.id, k = b.dataset.markbtn, on = k === "fav" ? isFav(id) : k === "alpha" ? isAlpha(id) : isCaught(id);
+  $$("[data-markbtn]").forEach((b) => { const id = +b.dataset.id, k = b.dataset.markbtn, on = k === "cmp" ? cmpMarked(id) : k === "fav" ? isFav(id) : k === "alpha" ? isAlpha(id) : isCaught(id);
     b.classList.toggle("on", on); b.innerHTML = markLabel(k, on, id); if (k === "gef") b.dataset.tip = ballTip(id); });
   $$(".mon[data-id]").forEach((el) => el.classList.toggle("inteam", S.team.ids.includes(+el.dataset.id)));
 }
-const markLabel = (k, on, id) => k === "fav" ? `${icon("fav", on)} ${on ? "Favorit" : "Zu den Favoriten"}`
+const cmpList = () => store.get("cmpMerk", []);
+const cmpMarked = (id) => cmpList().includes(id);
+function cmpToggle(id) {
+  const xs = cmpList().filter((x) => x !== id);
+  if (xs.length === cmpList().length) xs.unshift(id);
+  store.set("cmpMerk", xs.slice(0, 8));
+}
+const markLabel = (k, on, id) => k === "cmp" ? `⚖ ${on ? "Für den Vergleich gemerkt" : "Zum Vergleich merken"}`
+  : k === "fav" ? `${icon("fav", on)} ${on ? "Favorit" : "Zu den Favoriten"}`
   : k === "alpha" ? `<span class="alpha-i">α</span> ${on ? "Als Alpha gefangen" : "Als Alpha markieren"}`
   : BATTLE() ? `${ball(id, on)} ${on ? "Im Kader" : "In den Kader"}`
   : `${ball(id, on)} ${on ? (isShiny(id) ? "Schillernd in deiner Sammlung" : "In deiner Sammlung") : "Als gefangen markieren"}`;
@@ -349,9 +359,9 @@ function crossTable(table, pin, onChange) {
   // Sortierbare Spaltenköpfe: der Klick auf den Namen sortiert, das kleine Zeichen daneben hält die Spalte fest
   const hdr = table.tHead?.rows[table.tHead.rows.length - 1];
   if (hdr) [...hdr.cells].forEach((h, i) => {
-    if (h.dataset.sort === undefined || h.dataset.pc || !$(`td[data-c="${i}"]`, table)) return;
+    if (h.dataset.pc || !$(`td[data-c="${i}"]`, table)) return;   // auch nicht sortierbare Spalten (z. B. Beschreibung)
     h.dataset.c = i;
-    h.insertAdjacentHTML("beforeend", `<span class="pinc" data-pc="${i}" data-tip="Spalte markieren">▯</span>`);
+    h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${i}" data-tip="Spalte markieren${h.dataset.sort === undefined ? "" : " (Klick auf den Titel sortiert)"}"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="4.5" y="0.5" width="3" height="11" fill="currentColor"/></svg></span>`);
   });
   const paint = (hr, hc) => {
     $$(".hl,.fix", table).forEach((x) => x.classList.remove("hl", "fix"));
@@ -567,6 +577,7 @@ async function route() {
   nav(tab);
   const rid = RID;
   if (tab === "karte" && BATTLE()) { location.replace("#kampf"); return; }
+  if (tab === "kampf" && !BATTLE()) { location.replace("#karte"); return; }   // Spielwechsel: Kampf gibt es nur in Champions
   try {
     if (!S.meta?.has_data && tab !== "einstellungen") return noData();
     await Promise.all([loadChart(), loadFavs(), loadCaught()]);
@@ -1112,11 +1123,12 @@ async function detailView(id, slot = null) {
       <button data-act="caught" data-id="${d.id}" data-markbtn="gef" class="mark${isCaught(d.id) ? " on" : ""}" data-tip="${ballTip(d.id)}">${markLabel("gef", isCaught(d.id), d.id)}</button>
       ${S.alphaOk.has(d.id) || isAlpha(d.id) ? `<button data-act="alpha" data-id="${d.id}" data-markbtn="alpha" class="mark${isAlpha(d.id) ? " on" : ""}">${markLabel("alpha", isAlpha(d.id), d.id)}</button>` : ""}
       <a class="btn" href="#vergleich/${d.id}/-" data-tip="Neben ein anderes Pokémon stellen: Werte, Typwirkung, Fähigkeiten, Attacken">Vergleichen</a>
+      <button data-act="cmpmark" data-id="${d.id}" data-markbtn="cmp" class="mark${cmpMarked(d.id) ? " on" : ""}" data-tip="Merkt das Pokémon für den Vergleich (bis zu 8). Im Vergleich stehen gemerkte und Favoriten zur schnellen Wahl bereit">${markLabel("cmp", cmpMarked(d.id))}</button>
       <a class="btn" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer">Im PokéWiki öffnen</a>
       ${d.formen.length ? `<span class="hint">Formen:</span>` + d.formen.map((f) => `<a class="btn small" href="#pokemon/${f.id}">${esc(f.name)}</a>`).join("") : ""}</div>
     ${!d.im_spiel && S.game ? `<div class="note warn">In ${esc(gameName())} nicht enthalten.</div>` : ""}
     ${inTeam && S.team.ids.filter((x) => x === id).length > 1 ? `<div class="note info">${esc(d.name)} ist mehrmals im Team; hier geht es um Platz ${DSLOT + 1}.</div>` : ""}
-    <div class="cols">
+    <div class="dgrid">
       <div class="box"><div class="head"><div class="pic">${img(d.id, "big", true)}${extrasHtml(d)}</div><div><h2>${esc(d.name)}</h2><div class="muted">#${d.nr ?? d.art} · ${esc(d.kategorie)}</div>
         <div style="margin-top:4px">${tchips(d.typen)}</div><span data-tip-stats="${d.werte.join(",")}">${radar(d.werte, 220, true)}</span></div></div>
         <p>${esc(d.text)}</p><div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
@@ -1131,7 +1143,9 @@ async function detailView(id, slot = null) {
         <div class="box"><h2 data-tip="Typ-Duell: wie gut ${esc(d.name)} gegen Pokémon eines Typs steht. Austeilen = bester eigener Typ, einstecken = beide eigenen Typen zusammengerechnet. Hovern zeigt die Rechnung.">Im Duell gegen Typen</h2>
           <p class="hint">${DUEL_LEGEND}</p>
           ${duelHtml(d.name, d.typen)}</div>
-        ${evo ? `<div class="box"><h2>Entwicklung</h2><div class="evo">${evo}</div></div>` : ""}
+      </div>
+      <div class="stack">
+        <div class="box"><h2>Entwicklung</h2>${evo ? `<div class="evo">${evo}</div>` : `<p class="hint">${esc(d.name)} entwickelt sich nicht.</p>`}</div>
         ${catchHtml(d)}
         ${heldHtml(d)}
         ${optikHtml(d)}
@@ -1189,7 +1203,7 @@ function catchHtml(d) {
   const pc = (v) => `<span style="color:${ramp(v / 100)}">${String(v).replace(".", ",")} %</span>`;
   const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
   return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
-    <table class="rows sort"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: der beste Fall, etwa dreimal so gut wie volle KP. Die Chance steigt gleichmäßig, je weniger KP übrig sind, ohne Schwellen")}${thc("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${thc("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
+    <table class="rows sort catch"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: der beste Fall, etwa dreimal so gut wie volle KP. Die Chance steigt gleichmäßig, je weniger KP übrig sind, ohne Schwellen")}${thc("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${thc("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
     <tbody>${m.fangen.map((f) => `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}">${pc(f.voll)}</td><td class="c" data-s="${f.rot}">${pc(f.rot)}</td><td class="c" data-s="${f.status ?? ""}">${f.status != null ? pc(f.status) : "–"}</td><td class="c" data-s="${f.schlaf}">${pc(f.schlaf)}</td></tr>`).join("")}</tbody></table>
     <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
       : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p></details>`;
@@ -1426,15 +1440,16 @@ async function caughtBox() {
   if (rid !== RID || !$("#gef")) return;
   [...r.alternativen, ...r.potential].forEach((x) => { ROWS[x.id] = Object.assign(ROWS[x.id] || {}, x); if (x.wird) ROWS[x.wird.id] = Object.assign(ROWS[x.wird.id] || {}, x.wird); });
   const where = (x) => x.slot === null || x.slot === undefined ? "auf einen freien Platz" : `statt ${esc(x.statt)} (Platz ${x.slot + 1})`;
-  const line = (x, extra = "") => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><div class="grow"><b>${esc(x.name)}</b> ${tchips(x.typen)}
+  const line = (x, extra = "") => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><div class="grow"><b>${esc(x.name)}</b> ${favStar(x.id)} ${tchips(x.typen)}
     <div class="why">${extra}<b class="plus">+${x.plus}</b> Teamwertung ${where(x)}</div></div>
     <button class="small" data-act="${x.slot === null || x.slot === undefined ? "teamadd" : "pickfav"}" data-id="${x.id}" data-slot="${x.slot ?? ""}">${x.slot === null || x.slot === undefined ? "Ins Team" : "Tauschen"}</button></div>`;
   el.innerHTML = `<p class="hint">${S.caught.size} gefangen in ${esc(gameName())}.</p>
     <h3 data-tip="Ein Tausch mit einem Mitglied (oder ein freier Platz) hebt die Teamwertung jetzt">Bessere Alternative</h3>
     ${r.alternativen.map((x) => line(x)).join("") || `<p class="hint">Nichts aus deiner Sammlung hebt das Team im Moment.</p>`}
-    <h3 data-tip="Noch nicht voll entwickelt: die Endstufe würde das Team deutlich mehr heben als das Pokémon heute">Langfristig mehr Potential</h3>
+    <h3 data-tip="Noch nicht voll entwickelt (gefangen oder schon im Team): die Endstufe würde das Team deutlich mehr heben als das Pokémon heute. Je Endstufe zählt die weiteste Stufe, die du hast">Langfristig mehr Potential</h3>
     ${r.potential.map((x) => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><span class="arrow">→</span><a href="#pokemon/${x.wird.id}" data-hc="${x.wird.id}">${img(x.wird.id)}</a>
-      <div class="grow"><b>${esc(x.name)}</b> → <b>${esc(x.wird.name)}</b> ${tchips(x.wird.typen)}<div class="why">als ${esc(x.wird.name)}: <b class="plus">+${x.plus}</b> Teamwertung ${where(x)}</div></div></div>`).join("")
+      <div class="grow"><b>${esc(x.name)}</b> → <b>${esc(x.wird.name)}</b> ${favStar(x.wird.id)} ${tchips(x.wird.typen)}<div class="why">als ${esc(x.wird.name)}: <b class="plus">+${x.plus}</b> Teamwertung
+        ${x.im_team ? `auf seinem Platz (${x.slot + 1}), ${esc(x.name)} steht schon im Team` : where(x)}</div></div></div>`).join("")
       || `<p class="hint">Nichts aus deiner Sammlung, das entwickelt deutlich mehr bringt.</p>`}
     <p class="hint">„Bestes Team suchen“ mit „nur aus deiner Sammlung“ im Filter baut ein Team nur aus Pokémon, die du als gefangen markiert hast.</p>`;
 }
@@ -1449,13 +1464,17 @@ async function teamView() {
       <div id="tnote"></div>
       <div class="bar"><div class="ac grow"><input id="add" type="search" placeholder="Pokémon hinzufügen: Name oder Nummer" style="width:100%"></div>
         <a class="btn" href="#initiative" data-tip="Wer ist schneller: alle Pokémon des Spiels nach Initiative, mit deinem Team">Initiative-Liste</a></div>
-      <details class="sdbox" id="sdbox"><summary>Showdown-Text <span class="hint">Team als Text übernehmen oder weitergeben (Pokémon Showdown, PokePaste)</span></summary>
+      <div class="tslots" id="slots"><p class="hint">Lädt …</p></div>
+      <details class="favd dropmark" data-drop="fav" open><summary>${icon("fav")} Favoriten in ${esc(gameName())} <span id="favn"></span> <span class="hint">zum schnellen Tauschen auf einen Platz ziehen; hierher ziehen macht zum Favoriten</span></summary><div id="favs"></div></details>
+      <details class="sdbox" id="sdbox"><summary>Team als Text <span class="hint">im Format von Pokémon Showdown</span>
+          <button class="small" data-act="sdcopy2" data-tip="Das aktuelle Team als Text in die Zwischenablage, etwa für Showdown, PokePaste oder eine Nachricht">Team kopieren</button></summary>
+        <p class="hint">Pokémon Showdown ist der bekannte Kampf-Simulator im Browser. Sein Textformat ist der übliche Weg, Teams weiterzugeben:
+          Smogon-Analysen, PokePaste-Links und Foren nutzen es, und Showdown liest es über „Import/Export“ ein. Hier holst du ein Team aus so einem Text
+          (Pokémon, Item, Fähigkeit, Wesen, EVs/IVs, Attacken; englisch oder deutsch) oder gibst deins als Text weiter.</p>
         <textarea id="sdtext" rows="12" spellcheck="false" placeholder="Garchomp @ Choice Scarf&#10;Ability: Rough Skin&#10;EVs: 252 Atk / 4 SpD / 252 Spe&#10;Jolly Nature&#10;- Earthquake"></textarea>
         <div class="bar"><button data-act="sdexp" data-tip="Das aktuelle Team als Text">Aus dem Team</button>
           <button class="primary" data-act="sdimp" data-tip="Ersetzt das aktuelle Team">Als Team übernehmen</button>
-          <button data-act="sdcopy">Kopieren</button><span id="sdnote" class="hint"></span></div></details>
-      <div class="tslots" id="slots"><p class="hint">Lädt …</p></div>
-      <details class="favd dropmark" data-drop="fav" open><summary>${icon("fav")} Favoriten in ${esc(gameName())} <span id="favn"></span> <span class="hint">zum schnellen Tauschen auf einen Platz ziehen; hierher ziehen macht zum Favoriten</span></summary><div id="favs"></div></details></div>
+          <button data-act="sdcopy">Kopieren</button><span id="sdnote" class="hint"></span></div></details></div>
     <div class="cols">
       <div class="box"><h2>Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
       <div class="box"><h2>Verbesserungen</h2><div id="imp"></div></div>
@@ -1545,6 +1564,7 @@ async function teamRefresh() {
     const fixed = t.fest.includes(id), det = t.details[i] || {};
     return `<div class="tslot${fixed ? " fixed" : ""}${bad.has(i) ? " warn" : ""}" data-slot="${i}" draggable="true" data-id="${id}" data-hc="${id}">
       <span class="grip" data-tip="Ziehen zum Umsortieren">⋮⋮</span>
+      ${favStar(id)}
       <button class="small fixbtn${fixed ? " on" : ""}" data-act="pin" data-id="${id}" data-tip="Für die Teamsuche festsetzen">📌</button>
       <button class="small swap" data-act="pick" data-slot="${i}" data-tip="Gegen einen Favoriten tauschen">⇄</button>
       <button class="small x" data-act="teamdel" data-slot="${i}" data-tip="Entfernen">✕</button>
@@ -2460,7 +2480,7 @@ async function itemsView() {
   $$("#itemseg button").forEach((b) => b.addEventListener("click", () => { pocket = b.dataset.t; store.set("itemPocket", pocket); art = ""; draw(); }));
   draw();
 }
-const TPIN = {d: {r: null, c: null}, a: {r: null, c: null}};
+const CPIN = {r: null, c: null}, TPIN = {d: {r: null, c: null}, a: {r: null, c: null}};
 /* Typen des Teams: je Mitglied mit seinen (Doppel-)Typen, wie viel es einsteckt (Verteidigung) und wie stark seine
    Eigentypen treffen (Angriff, der bessere der beiden). Zeilen sind die Mitglieder, Spalten die 18 Typen */
 function teamTypeHtml(ms, ts) {
@@ -2482,27 +2502,42 @@ function teamTypeHtml(ms, ts) {
 async function chartView() {
   const ch = S.chart, ts = Object.keys(ch);
   const rid = RID, mine = store.get("chartTeam", false) && S.team.ids.length;
-  let ms = [];
+  let ms = [], fremd = [];
   if (mine) {
-    const miss = S.team.ids.filter((id) => !ROWS[id]?.typen);
-    if (miss.length) (await api("/api/team/bewerten", {spiel: S.game, ids: miss, kurz: 1})).mitglieder.forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
+    const ev = await api("/api/team/bewerten", {spiel: S.game, ids: S.team.ids, kurz: 1});
     if (rid !== RID) return;
+    ev.mitglieder.forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
     ms = S.team.ids.map((id) => ROWS[id]).filter((r) => r?.typen).map((r) => ({...r, typen: r.typen.map(String)}));
+    fremd = (ev.nicht_im_spiel || []).map((i) => ROWS[S.team.ids[i]]?.name).filter(Boolean);
   }
   const own = new Set(ms.flatMap((m) => m.typen));
+  const pick = new Set(store.get("chartPick", []).filter((t) => ts.includes(t)));
+  const rowOk = (a) => (!mine || own.has(a)) && (!pick.size || pick.has(a));
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Typtabelle Generation ${S.chartGen}</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <label data-tip="${S.team.ids.length ? "Nur die Typen deines Teams als Zeilen, dazu Verteidigung und Angriff je Mitglied" : "Erst ein Team zusammenstellen"}"><input type="checkbox" id="ctm"${mine ? " checked" : ""}${S.team.ids.length ? "" : " disabled"}> Mein Team</label>
       <button class="small" data-act="unpin" id="unpin" hidden>Markierung aufheben</button></div>
+    <div class="bar tpick" data-tip="Typen wählen: die Tabelle zeigt nur diese Angreifer, die Kombinationen nur solche mit allen gewählten Typen">
+      <span class="hint">Filter</span>${ts.map((t) => `<button class="tpk${pick.has(t) ? " on" : ""}" data-tpk="${t}">${tchip(t)}</button>`).join("")}
+      ${pick.size ? `<button class="small" id="tpkx">alle</button>` : ""}</div>
+    ${fremd.length ? `<div class="note warn">Nicht in ${esc(gameName())}: ${fremd.map(esc).join(", ")}. Die Typen gelten trotzdem, das Pokémon kannst du dort aber nicht einsetzen.</div>` : ""}
     <p class="hint">Zeile greift an, Spalte verteidigt. <span class="f f2">2</span> sehr effektiv · <span class="f f05">½</span> nicht sehr effektiv ·
       <span class="f f0">0</span> keine Wirkung (immun) · leer = normal (×1). Klick auf einen Typ hält Zeile oder Spalte fest, Klick auf eine Zelle beides.</p>
     <div class="scroll"><table class="chart"><thead><tr><th class="corner"><span>Angriff ↓ · Verteidigung →</span></th>${ts.map((t) => `<th class="v" data-c="${t}" data-pc="${t}"><span>${tchip(t)}</span></th>`).join("")}</tr></thead>
-    <tbody>${ts.filter((a) => !mine || own.has(a)).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ts.map((v) => { const f = ch[a][v];
+    <tbody>${ts.filter(rowOk).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ts.map((v) => { const f = ch[a][v];
       return `<td data-c="${v}" data-tip-cell="${a}:${v}">${f === 1 ? "" : `<span class="f ${fcls(f)}">${fl(f)}</span>`}</td>`; }).join("")}</tr>`).join("")}</tbody>
     </table></div>${mine ? `<p class="hint">Nur die Typen deines Teams als Angreifer: ${ms.map((m) => esc(m.name)).join(", ")}.</p>` : ""}</div>
-    ${mine ? teamTypeHtml(ms, ts) : ""}${combosHtml(ch)}`;
+    ${mine ? teamTypeHtml(ms, ts) : combosHtml(ch, pick)}`;
   header();
-  $("details.combos").addEventListener("toggle", (e) => store.set("combosOpen", e.target.open));
-  $("#cbt").addEventListener("change", (e) => { const t = e.target.value; $$("table.cbt tbody tr").forEach((r) => { r.hidden = !!t && !r.dataset.ts.split(",").includes(t); }); });
+  $$("[data-tpk]").forEach((b) => b.addEventListener("click", () => {
+    const t = b.dataset.tpk; pick.has(t) ? pick.delete(t) : pick.add(t);
+    store.set("chartPick", [...pick]); chartView();
+  }));
+  $("#tpkx")?.addEventListener("click", () => { store.set("chartPick", []); chartView(); });
+  if (!mine) {
+    $("details.combos").addEventListener("toggle", (e) => store.set("combosOpen", e.target.open));
+    $("#cbsicht").addEventListener("change", (e) => { store.set("combosSicht", e.target.value); chartView(); });
+    crossTable($("table.cbt"), CPIN);
+  }
   crossTable($(".chart"), PIN, () => { $("#unpin").hidden = PIN.r === null && PIN.c === null; });
   $("#ctm").addEventListener("change", (e) => { store.set("chartTeam", e.target.checked); chartView(); });
   $$("details.tteam").forEach((d) => {
@@ -2524,15 +2559,23 @@ function speedCols(base, lv, gen) {
   if (gen <= 2) return [speedStat(base, lv, 0, 0, 1, gen), null, speedStat(base, lv, 15, 65535, 1, gen), null];
   return [speedStat(base, lv, 0, 0, 0.9, gen), speedStat(base, lv, 31, 0, 1, gen), speedStat(base, lv, 31, 252, 1, gen), speedStat(base, lv, 31, 252, 1.1, gen)];
 }
-/* ------------------------------------------------------------------ Kampf: Doppelkampf-Bewertung (Champions, für alle Spiele erreichbar) */
+/* ------------------------------------------------------------------ Kampf: Doppelkampf-Bewertung (nur Champions) */
 async function battleView() {
   const rid = RID, t = S.team;
   main.innerHTML = `<div class="box"><div class="bar"><b>Kampf in</b> <select class="gamesel"></select>
       <a class="btn" href="#team">Team bearbeiten</a><a class="btn" href="#initiative">Initiative-Liste</a></div>
       <p class="hint">Doppelkampf-Bewertung des aktuellen Teams (${t.ids.length} Pokémon) mit den gewählten Attacken: Rollen, Flächenattacken und
-        Tempo. Attacken wählst du je Platz auf der Detailseite oder übernimmst sie als Showdown-Text im Reiter Team.</p>
+        Tempo. Attacken wählst du je Platz auf der Detailseite oder übernimmst sie als Team-Text im Reiter Team.</p>
+      <details class="dblhelp"${store.get("dblHelp", true) ? " open" : ""}><summary>Kurz erklärt: Kämpfen in Champions</summary>
+        <ul><li><b>Doppelkampf:</b> In offiziellen Turnieren (VGC) stehen je zwei Pokémon gleichzeitig im Feld. Du meldest sechs an und wählst vor jedem Kampf vier aus; alle kämpfen auf Level 50.</li>
+          <li><b>Rollen:</b> Ein gutes Doppel-Team hat Werkzeuge für bestimmte Aufgaben: sich schützen (Schutzschild), das Tempo bestimmen (Rückenwind, Bizarroraum),
+            den Gegner stören (Mogelhieb, die Fähigkeit Bedroher), Angriffe auf sich ziehen (Spotlight, Wutpulver) oder den Partner stärken (Rechte Hand). Hovern über eine Rolle erklärt sie.</li>
+          <li><b>Flächenattacken</b> treffen beide Gegner (mit 75 % Stärke). Manche wie Erdbeben treffen auch den eigenen Partner; dann passt ein Partner, der dagegen immun ist (etwa ein Flug-Pokémon).</li>
+          <li><b>Tempo:</b> Wer zuerst angreift, gewinnt oft. Die Initiative-Liste zeigt, wer auf Level 50 schneller ist.</li>
+          <li><b>Was fehlt</b> steht rot; darunter, wer im Team die passende Attacke lernen könnte.</li></ul></details>
       <div id="dbl"><p class="hint">Lädt …</p></div></div>`;
   header();
+  $("details.dblhelp").addEventListener("toggle", (e) => store.set("dblHelp", e.target.open));
   if (!t.ids.length) { $("#dbl").innerHTML = `<p class="hint">Das Team ist leer.</p>`; return; }
   const r = await api("/api/team/doppel", {spiel: S.game, ids: t.ids, details: t.details});
   if (rid !== RID) return;
@@ -2560,7 +2603,7 @@ async function speedView() {
       <label><input type="checkbox" id="spteam"${o.team ? " checked" : ""}> nur mein Team</label>
       <input id="spq" type="search" placeholder="Pokémon suchen" value="${esc(o.q)}" class="grow"></div>
       <p class="hint">${gen <= 2 ? "Bis Generation 2: ohne und mit vollen DVs und Stat Exp." : "Spalten: minimal (0 IV, 0 EV, senkendes Wesen), neutral (31 IV, 0 EV), maximal (31 IV, 252 EV), maximal mit Wesen (+10 %)."}
-        Dein Team ist hervorgehoben, mit dem Wert aus Level, EVs, IVs und Wesen, soweit eingetragen (sonst neutral). Unter Bitterraum gilt die Liste umgekehrt.</p>
+        Dein Team ist hervorgehoben, mit dem Wert aus Level, EVs, IVs und Wesen, soweit eingetragen (sonst neutral). Unter Bizarroraum gilt die Liste umgekehrt.</p>
       <div id="splist"><p class="hint">Lädt …</p></div></div>`;
   header();
   const d = await api("/api/pokemon?" + qs({spiel: S.game, formen: "relevant", kampf: 1, sort: "init", limit: 2000}));
@@ -2611,15 +2654,24 @@ async function compareView(a, b) {
   ds.forEach((d) => { if (d) { ROWS[d.id] = Object.assign(ROWS[d.id] || {}, d); } });
   const [A, B] = ds;
   const go = (x, y) => { location.hash = `vergleich/${x ?? "-"}/${y ?? "-"}`; };
+  // Schnellwahl: gemerkte (⚖) und Favoriten (★), ohne die schon gewählten
+  const quick = [...cmpList().map((id) => [id, "⚖"]), ...S.favs.map((f) => [f.id, "★"])]
+    .filter(([id], i, xs) => xs.findIndex(([x]) => x === id) === i);
+  const qrow = (k) => quick.length ? `<div class="cmpquick">${quick.filter(([id]) => id !== ids[k]).slice(0, 14).map(([id, m]) =>
+      `<button class="cq" data-cq="${k}" data-id="${id}" data-hc="${id}" data-tip="${m === "⚖" ? "Für den Vergleich gemerkt" : "Favorit"}: hierher stellen">${img(id)}<span>${m}</span></button>`).join("")}</div>`
+    : `<p class="hint small">Tipp: Auf der Detailseite „Zum Vergleich merken“ oder Favoriten setzen, dann stehen sie hier zur Wahl.</p>`;
   const head = (d, k) => `<div class="box cmphead"><div class="ac"><input type="search" id="cmpq${k}" placeholder="${d ? "anderes Pokémon suchen" : "Pokémon suchen"}" aria-label="Pokémon suchen"></div>
-    ${d ? `<a class="cmpmon" href="#pokemon/${d.id}">${img(d.id, "big")}<b>${esc(d.name)}</b></a><div>${tchips(d.typen)}</div>
-      <span data-tip-stats="${d.werte.join(",")}">${radar(d.werte, 150, true)}</span>` : `<p class="hint">Noch kein Pokémon gewählt.</p>`}</div>`;
+    ${qrow(k)}
+    ${d ? `<a class="cmpmon" href="#pokemon/${d.id}" data-tip="Zur Detailseite">${img(d.id, "big", true)}<b>${esc(d.name)}</b></a><div>${tchips(d.typen)}</div>
+      ${d.im_spiel === false ? `<div class="note warn small">In ${esc(gameName())} nicht enthalten</div>` : ""}
+      <span class="cmpradar" data-tip-stats="${d.werte.join(",")}">${radar(d.werte, 200, true)}</span>
+      <button class="mark small${cmpMarked(d.id) ? " on" : ""}" data-act="cmpmark" data-id="${d.id}" data-markbtn="cmp">${markLabel("cmp", cmpMarked(d.id))}</button>` : `<p class="hint">Noch kein Pokémon gewählt.</p>`}</div>`;
   const better = (x, y) => x > y ? " win" : "";
   const statRows = A && B ? [...STAT.map((n, i) => [n, A.werte[i], B.werte[i], i]), ["Summe", A.summe, B.summe, "summe"]].map(([n, x, y, i]) => {
     const w = (v) => Math.min(100, v / (i === "summe" ? 780 : statMax(i)) * 100);
     const diff = x - y;
     return `<tr><td class="num${better(x, y)}">${x}</td><td><span class="sbar rev"><i style="width:${w(x)}%;background:${i === "summe" ? sumColor(x) : statColor(x)}"></i></span></td>
-      <th>${n}<div class="hint">${diff ? (diff > 0 ? "+" : "") + diff : "gleich"}</div></th>
+      <th data-tip="${esc(i === "summe" ? "Summe aller Basiswerte" : STAT[i] + ": Basiswert. Grün ist der höhere; darunter der Unterschied aus Sicht von " + A.name)}">${n}<div class="hint">${diff ? (diff > 0 ? "+" : "") + diff : "gleich"}</div></th>
       <td><span class="sbar"><i style="width:${w(y)}%;background:${i === "summe" ? sumColor(y) : statColor(y)}"></i></span></td><td class="num${better(y, x)}">${y}</td></tr>`;
   }).join("") : "";
   const ts = Object.keys(S.chart || {});
@@ -2638,10 +2690,29 @@ async function compareView(a, b) {
       <details><summary>Beide <span class="hint">${both.length}</span></summary>${list(both)}</details>
       <details><summary>Nur ${esc(B.name)} <span class="hint">${only(mb, ma).length}</span></summary>${list(only(mb, ma))}</details></div>`;
   }
+  // Kurz gesagt: wer schneller ist (Level 50, volle Initiative), wer wen mit Eigentyp-Attacken härter trifft
+  let fazit = "";
+  if (A && B) {
+    const gen = S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;
+    const sp = (d) => speedCols(d.werte[5], 50, gen)[2];
+    const hit = (x, y) => Math.max(...x.typen.map((t) => y.typen.reduce((f, d) => f * (S.chart?.[t]?.[d] ?? 1), 1)));
+    const ha = hit(A, B), hb = hit(B, A), sa = sp(A), sb = sp(B);
+    const line = (txt, tip) => `<li data-tip="${esc(tip)}">${txt}</li>`;
+    fazit = `<div class="box"><h2>Kurz gesagt</h2><ul class="fazit">
+      ${line(sa === sb ? `Gleich schnell (${sa} auf Level 50)` : `<b>${esc(sa > sb ? A.name : B.name)}</b> ist schneller: ${Math.max(sa, sb)} gegen ${Math.min(sa, sb)} auf Level 50`,
+        "Initiative auf Level 50 mit 31 IV und 252 EV, neutrales Wesen. Mehr dazu in der Initiative-Liste")}
+      ${line(`${esc(A.name)} trifft ${esc(B.name)} mit dem besten Eigentyp <span class="f ${fcls(1 / (ha || 0.001))}">×${fl(ha)}</span>, umgekehrt <span class="f ${fcls(1 / (hb || 0.001))}">×${fl(hb)}</span>`,
+        "Bester Faktor einer Attacke vom eigenen Typ (mit Eigentyp-Bonus wären es noch ×1,5)")}
+      ${line(`Physisch oder speziell: ${esc(A.name)} ${A.werte[1] >= A.werte[3] ? "eher physisch" : "eher speziell"}, ${esc(B.name)} ${B.werte[1] >= B.werte[3] ? "eher physisch" : "eher speziell"}`,
+        "Aus dem höheren der Werte Angriff und Spezial-Angriff")}
+      ${line(`Schwächen: ${esc(A.name)} ${sum(A).s}, ${esc(B.name)} ${sum(B).s}; Resistenzen und Immunitäten: ${sum(A).r + sum(A).i} gegen ${sum(B).r + sum(B).i}`, "Aus der Typwirkung unten")}
+    </ul></div>`;
+  }
   const abil = (d) => d.faehigkeiten.length ? d.faehigkeiten.map((x) => `<div><b>${wikiLink(x.name)}</b>${x.versteckt ? " <span class='cls'>versteckt</span>" : ""}<div class="why">${esc(x.text)}</div></div>`).join("") : `<p class="hint">keine</p>`;
   main.innerHTML = `<div class="bar">${backLink()}<h2 style="margin:0">Vergleich</h2><label class="game2">Spiel <select class="gamesel"></select></label>
       ${A || B ? `<button id="cmpswap" data-tip="Seiten tauschen">⇄ tauschen</button>` : ""}</div>
     <div class="cmpgrid">${head(A, 0)}<div class="box cmpmid">${A && B ? `<table class="cmpst">${statRows}</table>` : `<p class="hint">Wähle zwei Pokémon, dann stehen hier die Werte nebeneinander.</p>`}</div>${head(B, 1)}</div>
+    ${fazit}
     ${A && B ? `<div class="cols"><div class="box"><h2 data-tip="So stark treffen Attacken eines Typs; grün = steckt weniger ein">Verteidigung</h2>
         <p class="hint">${esc(A.name)}: ${sum(A).s} Schwächen, ${sum(A).r} Resistenzen, ${sum(A).i} Immunitäten · ${esc(B.name)}: ${sum(B).s}, ${sum(B).r}, ${sum(B).i}</p>
         <table class="cmpdef"><thead><tr><th class="c">${esc(A.name)}</th><th class="c">Angriffstyp</th><th class="c">${esc(B.name)}</th></tr></thead><tbody>${defRow}</tbody></table></div>
@@ -2650,27 +2721,37 @@ async function compareView(a, b) {
   autocomplete($("#cmpq0"), (r) => go(r.id, B?.id));
   autocomplete($("#cmpq1"), (r) => go(A?.id, r.id));
   $("#cmpswap")?.addEventListener("click", () => go(B?.id, A?.id));
+  $$("[data-cq]").forEach((b) => b.addEventListener("click", () => { const id = +b.dataset.id; b.dataset.cq === "0" ? go(id, B?.id) : go(A?.id, id); }));
   if (!A) $("#cmpq0").focus(); else if (!B) $("#cmpq1").focus();
 }
 
 /* Alle Typkombinationen (Verteidigung): je Kombination die Wirkung jedes Angriffstyps, dazu Schwächen, 4-fach,
    Resistenzen und Immunitäten zum Sortieren; Filter auf einen enthaltenen Typ */
-function combosHtml(ch) {
-  const ts = Object.keys(ch);
+function combosHtml(ch, pick = new Set()) {
+  const ts = Object.keys(ch), att = store.get("combosSicht", "def") === "att";
   const combos = [];
   ts.forEach((x, i) => { combos.push([x]); ts.slice(i + 1).forEach((y) => combos.push([x, y])); });
-  const rows = combos.map((c) => {
-    const fs = ts.map((a) => c.reduce((f, d) => f * (ch[a]?.[d] ?? 1), 1));
+  const shown = combos.filter((c) => [...pick].every((t) => c.includes(t)));
+  const rows = shown.map((c) => {
+    // Verteidiger: Spalte greift an, Faktoren multiplizieren sich. Angreifer: Spalte verteidigt, es zählt der bessere Eigentyp
+    const fs = ts.map((t) => att ? Math.max(...c.map((a) => ch[a]?.[t] ?? 1)) : c.reduce((f, d) => f * (ch[t]?.[d] ?? 1), 1));
     const n = (p) => fs.filter(p).length;
-    return `<tr data-ts="${c.join(",")}"><th class="r" data-s="${esc(c.map(tname).join(" "))}">${tchips(c)}</th>
-      <td class="c num" data-s="${n((f) => f > 1)}">${n((f) => f > 1)}</td><td class="c num" data-s="${n((f) => f >= 4)}">${n((f) => f >= 4) || ""}</td>
-      <td class="c num" data-s="${n((f) => f < 1 && f > 0)}">${n((f) => f < 1 && f > 0)}</td><td class="c num" data-s="${n((f) => f === 0)}">${n((f) => f === 0) || ""}</td>
-      ${fs.map((f) => `<td class="c" data-s="${f}">${f === 1 ? "" : `<span class="f ${fcls(f)}">${fl(f)}</span>`}</td>`).join("")}</tr>`;
+    const cnt = att ? [n((f) => f > 1), n((f) => f < 1 && f > 0), n((f) => f === 0)]
+      : [n((f) => f > 1), n((f) => f >= 4), n((f) => f < 1 && f > 0), n((f) => f === 0)];
+    // als Verteidiger ist ½ gut (grün), als Angreifer ist 2 gut: dann Farben umdrehen
+    return `<tr data-r="${c.join(",")}"><th class="r" data-pr="${c.join(",")}" data-s="${esc(c.map(tname).join(" "))}">${tchips(c)}</th>
+      ${cnt.map((v, i) => `<td class="c num" data-c="${i + 1}" data-s="${v}">${v || (i === 0 ? 0 : "")}</td>`).join("")}
+      ${fs.map((f, j) => `<td class="c" data-c="${j + cnt.length + 1}" data-s="${f}">${f === 1 ? "" : `<span class="f ${att && f ? fcls(1 / f) : fcls(f)}">${fl(f)}</span>`}</td>`).join("")}</tr>`;
   }).join("");
-  return `<details class="box combos"${store.get("combosOpen", false) ? " open" : ""}><summary><h2 style="display:inline">Alle Typkombinationen</h2> <span class="hint">${combos.length} Kombinationen, als Verteidiger</span></summary>
-    <div class="bar"><label>mit Typ <select id="cbt"><option value="">alle</option>${ts.map((t) => `<option value="${t}">${esc(tname(t))}</option>`).join("")}</select></label>
-      <span class="hint">Spalten: so stark treffen Attacken dieses Typs. Klick auf eine Überschrift sortiert.</span></div>
-    <div class="scroll sticky"><table class="chart sort cbt"><thead><tr>${th("Typen")}${thc("Schw.", "Schwächen: Angriffstypen mit ×2 oder mehr")}${thc("×4", "4-fache Schwächen")}${thc("Res.", "Resistenzen: ×½ oder weniger")}${thc("Imm.", "Immun: keine Wirkung")}
+  const heads = att ? thc("Stark", "Verteidigende Typen, die mindestens ein Eigentyp sehr effektiv trifft") + thc("Schwach", "Typen, gegen die beide Eigentypen nur ×½ schaffen")
+      + thc("Imm.", "Typen, gegen die keiner der beiden etwas ausrichtet")
+    : thc("Schw.", "Schwächen: Angriffstypen mit ×2 oder mehr") + thc("×4", "4-fache Schwächen") + thc("Res.", "Resistenzen: ×½ oder weniger") + thc("Imm.", "Immun: keine Wirkung");
+  return `<details class="box combos"${store.get("combosOpen", false) ? " open" : ""}><summary><h2 style="display:inline">Alle Typkombinationen</h2> <span class="hint">${shown.length} von ${combos.length} Kombinationen</span></summary>
+    <div class="bar"><label data-tip="Verteidiger: so viel steckt ein Pokémon mit diesen Typen ein. Angreifer: so gut treffen Attacken seiner beiden Eigentypen zusammen">Sicht
+        <select id="cbsicht"><option value="def"${att ? "" : " selected"}>als Verteidiger</option><option value="att"${att ? " selected" : ""}>als Angreifer</option></select></label>
+      <span class="hint">${att ? "Spalte: verteidigender Typ, es zählt der bessere der beiden Eigentypen (wie die Typtabelle oben, nur je Kombination)." : "Spalte: angreifender Typ, so stark trifft er ein Pokémon mit diesen Typen."}
+        Klick auf eine Überschrift sortiert, das Zeichen davor markiert die Spalte; Klick auf die Typen markiert die Zeile.${pick.size ? " Gefiltert über die Typauswahl oben." : ""}</span></div>
+    <div class="scroll sticky"><table class="chart sort cbt"><thead><tr>${th("Typen")}${heads}
       ${ts.map((t) => `<th class="v c" data-sort><span>${tchip(t)}</span></th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 
@@ -2714,7 +2795,7 @@ async function settingsView() {
   const src = st.sources || {};
   const open = pr.filter((r) => !r.entscheidung);
   const srcRow = (k, n) => { const r = src[k]; return r ? `<tr><td>${n}</td><td>${r.ok ? "✓" : "✗"} ${esc(r.msg || "")}</td><td class="num">${r.requests}</td><td class="num">${r.errors}</td><td class="nw">${esc(deTime(r.at))}</td></tr>` : ""; };
-  const srcKeys = ["pokeapi", "showdown", "pkhex", "spawns", "karten", "sprites", "extras", "pokewiki", "altissimo", "companion"].filter((k) => src[k]);
+  const srcKeys = ["pokeapi", "showdown", "pkhex", "spawns", "karten", "sprites", "extras", "itemhq", "mapgenie", "pokewiki", "altissimo", "companion"].filter((k) => src[k]);
   const okN = srcKeys.filter((k) => src[k].ok).length, bad = srcKeys.filter((k) => !src[k].ok);
   main.innerHTML = `<div class="cols">
     <div class="box"><h2>Abgleich</h2>
@@ -2725,7 +2806,7 @@ async function settingsView() {
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
       <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
         <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button></div>
-      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table>
+      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("itemhq", "Große Item-Bilder")}${srcRow("mapgenie", "Map Genie")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table>
       <h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
@@ -2733,14 +2814,15 @@ async function settingsView() {
       <p class="hint">Ändert sich bei keiner Quelle etwas, bleibt die Datenbank. Eine neue gilt erst nach bestandener Selbstprüfung; deine Teams liegen getrennt (user.db) und werden täglich gesichert.</p>
     </div>
     <div class="box"><h2>Zu erledigen</h2>
-      ${open.length ? `<p class="hint">PokéAPI und Showdown sind sich hier nicht einig. Wähle, welcher Wert stimmt; im Zweifel im PokéWiki nachsehen. Oder gib die Liste als Auftrag an eine KI und lies ihre Antwort ein.</p>
+      ${open.length ? `<p class="hint">PokéAPI und Showdown sind sich hier nicht einig. Das gilt für kein einzelnes Spiel: verglichen wird der neueste Stand der Hauptspiele
+          (Generation 9), so steht es auch im Auftrag. Ältere Spiele haben teils andere Werte, die zeigt die Attackenliste je Spiel. Wähle, welcher Wert stimmt; im Zweifel im PokéWiki nachsehen. Oder gib die Liste als Auftrag an eine KI und lies ihre Antwort ein.</p>
         <div class="bar slim"><button data-act="todotask" data-tip="Auftrag für einen KI-Chat: die offenen Punkte mit der Bitte, sie zu prüfen. Die Antwort fügst du unter „Antwort einlesen“ ein und siehst erst eine Vorschau.">Auftrag kopieren${open.length > 60 ? ` (60 von ${open.length})` : ""}</button>
           <button data-act="todoans">Antwort einlesen</button>
           <button data-act="todocsv" data-tip="Die offenen Punkte als CSV-Datei, etwa für LibreOffice">herunterladen</button></div>
         <div id="todoans" hidden><textarea id="todotext" rows="5" placeholder="Antwort der KI hier einfügen (JSON)" style="width:100%"></textarea>
           <div class="bar slim"><button class="primary" data-act="todoprev">Vorschau</button><span class="hint">Übernommen wird erst nach der Vorschau.</span></div><div id="todoprev"></div></div>
         <div class="scroll"><table class="rows"><tr><th>Was</th><th>Feld</th><th>PokéAPI</th><th>Showdown</th><th></th></tr>
-        ${open.slice(0, 80).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.feld)}</td><td>${esc(r.pokeapi)}</td><td>${esc(r.showdown)}</td>
+        ${open.slice(0, 80).map((r) => `<tr><td data-tip="${esc(`${r.key.startsWith("attacke") ? "Attacke" : "Pokémon"}: neuester Stand der Hauptspiele (Generation 9), kein einzelnes Spiel`)}">${esc(r.name)}</td><td>${esc(r.feld)}</td><td>${esc(r.pokeapi)}</td><td>${esc(r.showdown)}</td>
           <td><button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="pokeapi">PokéAPI</button> <button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="showdown">Showdown</button>
           <button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="egal">egal</button></td></tr>`).join("")}</table></div>`
         : `<div class="note go">Nichts offen${pr.length ? ` (${pr.length} Abweichungen entschieden)` : ""}.</div>`}
@@ -2925,6 +3007,7 @@ document.addEventListener("click", async (e) => {
       if (slot !== null && location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${id}/${slot}`;
     } else if (act === "teamdel") { removeSlot(+b.dataset.slot); if (location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${DETAIL?.id || ""}`; }
     else if (act === "fav") await toggleFav(id);
+    else if (act === "cmpmark") { cmpToggle(id); redrawMarks(); if (location.hash.startsWith("#vergleich")) compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "favadd") { $("#pick").hidden = true; await toggleFav(id, true); }
     else if (act === "caught") await toggleCaught(id);
     else if (act === "alpha") await toggleAlpha(id);
@@ -2950,6 +3033,7 @@ document.addEventListener("click", async (e) => {
     else if (act === "sdexp") await sdExport();
     else if (act === "sdimp") await sdImport();
     else if (act === "sdcopy") await copyText($("#sdtext").value, b);
+    else if (act === "sdcopy2") await copyText((await api("/api/team/export", {spiel: S.game, ids: S.team.ids, details: S.team.details})).text, b);
     else if (act === "take") {
       const ids = S.lastOpt[+b.dataset.i].ids, old = S.team;
       // Level und Attacken bleiben bei Pokémon, die schon im Team waren

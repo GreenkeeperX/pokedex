@@ -10,11 +10,28 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.19.1"
+VERSION = "0.20.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.20.0", "11.11.2026", [
+        "Abgleich parallel: Quellen an verschiedenen Servern laufen gleichzeitig (Showdown, PKHeX, PokéWiki, Altissimo …, danach "
+        "Bilder, Kartenkacheln, Map Genie und große Item-Bilder); die Pause je Server gilt weiter für alle zusammen",
+        "Detailseite mit festem Raster aus drei Spalten: Stammdaten, Typwirkung, Entwicklung und Fang; die Fundorte folgen direkt darunter",
+        "Vergleich: „Zum Vergleich merken“ auf der Detailseite, Schnellwahl aus Gemerkten und Favoriten, Artworks, großes Netz wie auf der "
+        "Hover-Karte, „Kurz gesagt“ (wer schneller ist, wer wen härter trifft) und mehr Tooltips",
+        "Team: „Langfristig mehr Potential“ nimmt die weiteste Stufe, auch aus dem Team (Kadabra statt Abra); Sterne an Vorschlägen und "
+        "Team-Karten; „Team als Text“ erklärt, weiter unten und mit „Team kopieren“ im Kopf",
+        "Typen: Filter nach Typen, Kombinationen als Verteidiger oder Angreifer, Spalten markierbar; „Mein Team“ ohne Kombinationen und mit "
+        "Hinweis auf Mitglieder, die es im Spiel nicht gibt",
+        "Spalten markieren über ein Spaltensymbol vor dem Titel, jetzt auch bei Beschreibungen",
+        "Pokémon-Karten: Knöpfe ohne Rahmen, leuchten beim Hovern; α steht rechts neben dem Pokéball",
+        "Feste Tabellenköpfe gleiten so schnell wie die Kopfzeile",
+        "Große Item-Bilder auch für Namen mit Bindestrich oder Apostroph (Königsblatt, Selfe-Kralle, Doppelrettich …)",
+        "„Zu erledigen“ sagt, dass der neueste Stand der Hauptspiele verglichen wird, nicht ein einzelnes Spiel",
+        "Champions: Kampfansicht erklärt Doppelkampf, Rollen und Tempo; beim Wechsel in ein anderes Spiel geht es zur Karte",
+    ]),
     ("0.19.1", "11.11.2026", [
         "Karten von Map Genie laden wieder ganz: Kacheln außerhalb der Karte werden nicht mehr angefragt (Map Genie "
         "antwortete dort mit 403, und der Pokédex ließ die Quelle daraufhin einen Tag ruhen); fehlen Kacheln, sagt die Karte warum",

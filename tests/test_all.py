@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
@@ -585,6 +586,9 @@ class Leser(unittest.TestCase):
         # Kacheln innerhalb der Karte wie bei Map Genie (Zoom 11: x und y 1016–1023)
         self.assertEqual(mapgenie.tile_range([-1.4, 0, 0, 1.4], 11), (1016, 1023, 1016, 1023))
         self.assertIsNone(mapgenie.tile_range(None, 11))
+        from app import abruf
+        self.assertEqual(abruf.serebii_key("King’s Leaf"), "king'sleaf")              # Item-Bilder bei Serebii
+        self.assertEqual(abruf.serebii_key("Twice-Spiced Radish"), "twice-spicedradish")
         lat, lng = mapgenie.unproject(*mapgenie.project(0.75, -0.5))
         self.assertAlmostEqual(lat, 0.75, places=6)
         self.assertAlmostEqual(lng, -0.5, places=6)
@@ -1003,6 +1007,31 @@ class Server(TempData):
         server.restore(dump)
         self.assertEqual(server.marked("alpha", "pokemon-home"), [59])
 
+    def test_abgleich_parallel(self):
+        from app import abruf, sources
+        # Ergebnisse und Fehler je Aufgabe
+        r = abruf._parallel({"a": lambda: 1, "b": lambda: 1 / 0})
+        self.assertEqual(r["a"], 1)
+        self.assertIsInstance(r["b"], ZeroDivisionError)
+        # zwei Quellen am selben Server: Abrufe nie gleichzeitig, die Pause gilt für beide zusammen
+        busy, over = [0], []
+        def fake(url, timeout=40, headers=None, raw=False):
+            busy[0] += 1
+            over.append(busy[0])
+            time.sleep(0.01)
+            busy[0] -= 1
+            return "x"
+        old = sources.fetch
+        sources.fetch = fake
+        try:
+            a, b = abruf._Source("pkhex", lambda m: None, pause=0), abruf._Source("spawns", lambda m: None, pause=0)
+            abruf._parallel({"a": lambda: [a.get("https://erfunden.example/1") for _ in range(5)],
+                             "b": lambda: [b.get("https://erfunden.example/2") for _ in range(5)]})
+        finally:
+            sources.fetch = old
+        self.assertEqual(max(over), 1)
+        self.assertEqual(a.n + b.n, 10)
+
     def test_potential_weiteste_form(self):
         from app import abfragen
         D = type("D", (), {})()
@@ -1015,6 +1044,9 @@ class Server(TempData):
             got = abfragen._furthest(pot, D, set())
             self.assertEqual(sorted(r["id"] for r in got), [2, 10])       # je Endstufe nur die weiteste gefangene Stufe
             self.assertEqual([r["id"] for r in abfragen._furthest(pot, D, {11})], [2])   # Endstufe schon gefangen oder vorgeschlagen
+            # gleiche Stufe: das Mitglied im Team geht dem gefangenen vor
+            pot2 = [{"id": 2, "plus": 9.0, "wird": {"id": 3}}, {"id": 2, "plus": 4.0, "wird": {"id": 3}, "im_team": True}]
+            self.assertTrue(abfragen._furthest(pot2, D, set())[0].get("im_team"))
         finally:
             abfragen._stage = old
 
@@ -1135,6 +1167,10 @@ class MitDatenbank(TempData):
         r = abfragen.team_caught({"spiel": "legends-arceus", "ids": [karp, karp]})
         self.assertEqual(r["gefangen"], 1)
         self.assertTrue(r["alternativen"] or r["potential"])
+        # Steht Staravia schon im Team, bringt das gefangene Staralili kein eigenes Potential mehr
+        via = abfragen.search({"spiel": "legends-arceus", "q": "Staravia"})["rows"][0]["id"]
+        r = abfragen.team_caught({"spiel": "legends-arceus", "ids": [karp, via]})
+        self.assertFalse([x for x in r["potential"] if x["id"] == star])
 
 
 if __name__ == "__main__":

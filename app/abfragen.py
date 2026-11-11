@@ -1439,6 +1439,13 @@ def team_caught(body):
         return best
 
     alt, pot = [], []
+    # weiteste Stufe je Entwicklungskette im Team: ein gefangenes Abra bringt kein Potential, wenn Kadabra schon mitspielt
+    st = _stage(D, {D.forms[i]["art"] for i in ids | {f["id"] for f in caught} if i in D.forms})
+    in_team = {}
+    for m in ms:
+        f = D.forms.get(m["id"])
+        if f and f.get("kette"):
+            in_team[f["kette"]] = max(in_team.get(f["kette"], -1), st.get(f["art"], 0))
     for f in caught:
         if f["id"] in ids:
             continue
@@ -1446,7 +1453,7 @@ def team_caught(body):
         if gain >= 1:
             alt.append(dict(row(D, f, g, gen), plus=round(gain, 1), slot=ms[k]["slot"] if k is not None else None,
                             statt=ms[k]["name"] if k is not None else ""))
-        if f["endstufe"] or not f.get("kette"):
+        if f["endstufe"] or not f.get("kette") or in_team.get(f["kette"], -1) >= st.get(f["art"], 0):
             continue
         finals = [x for x in D.forms.values() if x.get("kette") == f["kette"] and x["endstufe"] and x["relevant"] and not x["kampfform"]
                   and x["id"] not in ids and (in_game is None or x["id"] in in_game)]
@@ -1459,6 +1466,19 @@ def team_caught(body):
             gain2, k2, x = best
             pot.append(dict(row(D, f, g, gen), plus=round(gain2, 1), wird=row(D, x, g, gen),
                             slot=ms[k2]["slot"] if k2 is not None else None, statt=ms[k2]["name"] if k2 is not None else ""))
+    # Mitglieder, die sich noch entwickeln: Endstufe auf ihrem eigenen Platz. Steht etwa Kadabra im Team, zeigt das
+    # Potential Kadabra → Simsala statt des gefangenen Abra (die weitere Stufe gewinnt in _furthest)
+    for k, m in enumerate(ms):
+        f = D.forms.get(m["id"])
+        if not f or f["endstufe"] or not f.get("kette"):
+            continue
+        for x in D.forms.values():
+            if x.get("kette") != f["kette"] or not x["endstufe"] or not x["relevant"] or x["kampfform"] or x["id"] in ids \
+                    or (in_game is not None and x["id"] not in in_game):
+                continue
+            gain2 = team.evaluate(ms[:k] + [member(D, x, g, gen)] + ms[k + 1:], ctx, w)["wertung"] - base
+            if gain2 >= 1:
+                pot.append(dict(row(D, f, g, gen), plus=round(gain2, 1), wird=row(D, x, g, gen), slot=m["slot"], statt=m["name"], im_team=True))
     alt.sort(key=lambda r: -r["plus"])
     pot = _furthest(pot, D, {f["id"] for f in caught} | {r["id"] for r in alt[:8]})
     pot.sort(key=lambda r: -r["plus"])
@@ -1495,7 +1515,7 @@ def _furthest(pot, D, skip):
         w = r["wird"]["id"]
         if w in skip:
             continue
-        key = (st.get(D.forms[r["id"]]["art"], 0) if r["id"] in D.forms else 0, r["plus"])
+        key = (st.get(D.forms[r["id"]]["art"], 0) if r["id"] in D.forms else 0, bool(r.get("im_team")), r["plus"])
         if w not in best or key > best[w][0]:
             best[w] = (key, r)
     return [r for _, r in best.values()]

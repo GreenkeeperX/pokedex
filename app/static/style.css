@@ -116,7 +116,7 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 /* Liste */
 .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
 .list.xmode{row-gap:20px}
-.mon{position:relative;display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 8px;
+.mon{position:relative;display:flex;gap:18px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 8px;
   text-decoration:none;color:var(--ink);cursor:pointer}
 .mon:hover{background:var(--hov);border-color:var(--accent)}
 .mon .nr{position:absolute;left:8px;top:4px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;z-index:1}
@@ -160,9 +160,10 @@ td.nw{white-space:nowrap}
 .mk .m-ball{color:#22282a}
 .mk .m-alpha,.alpha-i{color:#e53935;font:800 13px/1 system-ui,sans-serif}
 .mk .m-alpha{width:19px;height:19px}
-/* α bündig über dem Pokéball (unten am Bild); oben rechts sitzt schon das Plus */
-.mon .acts .a.alp{position:absolute;top:54px;left:calc(50% + 14px);font:800 14px/1 system-ui,sans-serif;color:var(--muted)}
-.mon .acts .a.alp.on{color:#e53935;background:var(--card);border-color:#e53935;opacity:1}
+/* α rechts neben dem Pokéball, ohne die Reihe zu verschieben; leuchtet beim Hovern wie Stern und Ball */
+.mon .acts .a.alp{position:absolute;top:80px;left:calc(50% + 36px);width:16px;font:800 15px/1 system-ui,sans-serif;color:var(--muted)}
+.mon .acts .a.alp.on{color:#e53935;opacity:1}
+.acts .a.alp:hover{color:#ff6b66}
 /* Knöpfe zum Setzen: beim Hovern unten auf dem Bild */
 .mon .sp{position:relative;flex:none;width:84px;display:flex;flex-direction:column;align-items:center}
 .mon .sp>.spr{width:84px;height:84px}
@@ -174,11 +175,12 @@ td.nw{white-space:nowrap}
 .acts .a.on{border-color:transparent;background:none}
 .acts .a.ph{visibility:hidden}
 .mon:hover .acts .a,.mon:focus-visible .acts .a{opacity:1}
-.acts .a{width:24px;height:24px;display:inline-grid;place-items:center;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+.acts .a{width:24px;height:24px;display:inline-grid;place-items:center;border-radius:50%;background:none;border:0;color:var(--muted);cursor:pointer}
 .acts .a .ic{width:17px;height:17px}
 .acts .a .ic-ball{width:21px;height:21px}
 .acts .a .ic-ball.on{transform:scale(1.13)}
 .acts .a:hover{color:var(--ink-hi)}
+.acts .a:not(.plus):not(.team):hover{filter:drop-shadow(0 0 3px rgba(255,255,255,.35))}
 .acts .a.on .ic-fav{color:#e0a800}
 .acts .a.plus{background:var(--accent);border-color:var(--accent);color:var(--bg)}
 @media (hover:none){.acts .a:not(.on),.acts .a.plus{opacity:.85}}
@@ -324,7 +326,7 @@ table.mine th[data-dir=desc]::after{content:" ▼";font-size:10px}
 .sugl{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
 .sugl>div{padding:3px 6px;border-radius:6px;border-bottom:1px solid var(--line)}
 .sugl>div.same{background:var(--sel)}
-.jump{position:sticky;top:var(--stick,0px);transition:top .3s ease;z-index:4;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;background:var(--bg);padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--line);font-size:13px}
+.jump{position:sticky;top:var(--stick,0px);transition:top .8s cubic-bezier(.4,0,.2,1);z-index:4;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;background:var(--bg);padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--line);font-size:13px}
 .jump a{color:var(--ink);text-decoration:none}
 .jump a:hover{text-decoration:underline}
 .jump .foldall{margin-left:auto;color:var(--muted);white-space:nowrap}
@@ -346,7 +348,7 @@ tr.off td{opacity:.55}
 /* Fester Tabellenkopf (wie im VR-Navigator): bleibt unter der Kopfzeile stehen. Auf breiten Bildschirmen braucht es dafür
    kein seitliches Scrollen (clip statt auto), schmale scrollen weiter seitlich ohne festen Kopf */
 @media (min-width:1040px){.scroll.sticky{overflow-x:clip}
-  .sticky thead th{position:sticky;top:var(--stick,0px);z-index:3;background:var(--card);box-shadow:0 1px 0 var(--line);transition:top .3s ease}}
+  .sticky thead th{position:sticky;top:var(--stick,0px);z-index:3;background:var(--card);box-shadow:0 1px 0 var(--line);transition:top .8s cubic-bezier(.4,0,.2,1)}}
 .optik{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
 .optik figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;font-size:12.5px}
 .optik .spr{width:72px;height:72px}
@@ -388,6 +390,13 @@ tr.off td{opacity:.55}
 .tslot.fixed{border-color:var(--go);box-shadow:inset 0 0 0 1px var(--go)}
 .tslot .grip{position:absolute;top:6px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:12px;letter-spacing:-2px;cursor:grab}
 .tslot .swap{position:absolute;top:4px;left:48px}
+.tslot .favstar{position:absolute;top:5px;right:34px}
+.favstar{background:none;border:0;padding:0 2px;color:var(--muted);cursor:pointer;vertical-align:-3px;opacity:.7}
+.favstar .ic{width:16px;height:16px}
+.favstar:hover{opacity:1;color:var(--ink-hi);filter:drop-shadow(0 0 3px rgba(255,255,255,.35))}
+.favstar.on{opacity:1}.favstar.on .ic-fav{color:#e0a800}
+.sdbox summary .small{margin-left:8px}
+.sdbox>p.hint{margin:6px 0}
 .tslot .note.small{font-size:12px;padding:2px 6px;margin:4px 0}
 .favd summary{margin-top:10px}
 .favlist{margin-top:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
@@ -461,7 +470,13 @@ table.vs th.r .spr{width:36px;height:36px;vertical-align:middle}
 .cross .fix{background:var(--sel)}
 .cross th.fix{color:var(--ink-hi)}
 .cross .fix.hl{background:var(--hov)}
-.pinc{display:inline-block;margin-left:4px;padding:0 3px;border-radius:4px;color:var(--muted);opacity:.35;font-size:11px;cursor:pointer}
+.pinc{display:inline-grid;place-items:center;vertical-align:-1px;margin-right:4px;padding:1px;border-radius:3px;color:var(--muted);opacity:.45;cursor:pointer}
+.pinc svg{width:11px;height:11px;display:block}
+th.v>.pinc{position:absolute;top:3px;left:50%;transform:translateX(-50%);margin:0}
+@media (max-width:1039px){th.v{position:relative}}
+.tpick{gap:4px;flex-wrap:wrap}
+.tpk{background:none;border:0;padding:0;cursor:pointer;opacity:.55;border-radius:6px}
+.tpk:hover{opacity:.9}.tpk.on{opacity:1;box-shadow:0 0 0 2px var(--ink-hi)}
 th:hover>.pinc,.pinc:hover{opacity:1}
 .pinc:hover{background:var(--line);color:var(--ink-hi)}
 .cls.tm{color:var(--go);border-color:var(--go)}
@@ -536,6 +551,15 @@ a.bm:active{cursor:grabbing}
 .cmphead .ac{align-self:stretch;position:relative}
 .cmphead .ac input{width:100%}
 .cmpmon{display:flex;flex-direction:column;align-items:center;color:var(--ink);text-decoration:none;font-size:18px}
+.cmpmon .spr.big{width:150px;height:150px;object-fit:contain}
+.cmpradar{display:block;padding:4px 0}
+.cmpquick{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;align-self:stretch}
+.cq{position:relative;background:none;border:0;padding:0;cursor:pointer;border-radius:8px}
+.cq .spr{width:40px;height:40px}
+.cq span{position:absolute;right:0;bottom:0;font-size:10px;color:var(--muted)}
+.cq:hover{background:var(--hcbg)}
+.fazit{margin:0;padding-left:18px;line-height:1.7}
+.fazit .f{display:inline-block}
 .cmpst{width:100%;border-collapse:collapse}
 .cmpst td,.cmpst th{padding:5px 6px}
 .cmpst th{text-align:center;font-weight:600;white-space:nowrap}
@@ -713,3 +737,13 @@ table.items tr.odd td{opacity:.6}
 .pickl a.on{background:var(--sel);font-weight:600}
 .pickl .spr{width:34px;height:34px}
 .pickl span.spr{display:block}
+
+/* Detailseite: festes Raster aus drei Spalten (Stammdaten · Typwirkung · Entwicklung, Fang, Items), gleich für alle Pokémon */
+.dgrid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+.dgrid>.box,.dgrid>.stack>.box{margin:0}
+.dgrid>.stack{display:flex;flex-direction:column;gap:12px}
+@media (max-width:1250px){.dgrid{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}.dgrid>.stack:last-child{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}}
+@media (max-width:760px){.dgrid{grid-template-columns:minmax(0,1fr)}}
+.catch td,.catch th{white-space:nowrap;padding-left:4px;padding-right:4px}
+.catch{font-size:13px}
+.dblhelp{margin:6px 0 10px}.dblhelp ul{margin:6px 0;padding-left:18px;line-height:1.55;font-size:13.5px}

@@ -53,8 +53,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Rückenwind und Wahlschal; das eigene Team steht mit seinem Wert dazwischen.
 - **Kampf** (in Champions statt „Karte“, sonst über `#kampf`): Doppelkampf-Bewertung des Teams mit Rollen,
   Flächenattacken, Gefahr für den Partner und Tempo. In Champions heißt „gefangen“ „im Kader“.
-- **Vergleich**: zwei Pokémon nebeneinander (Werte mit Unterschied, Typwirkung, Fähigkeiten, Attacken), über
-  „Vergleichen“ auf der Detailseite.
+- **Vergleich**: zwei Pokémon nebeneinander (Werte mit Unterschied, Kurzfazit, Typwirkung, Fähigkeiten, Attacken), über
+  „Vergleichen“ auf der Detailseite; „Zum Vergleich merken“ und Favoriten stehen dort zur schnellen Wahl.
 - **Typkombinationen** (Reiter Typen): alle 171 Kombinationen als Verteidiger, sortierbar.
 - **Karte (Map Genie)**: in Legenden: Arceus mit den eigenen Spawnpunkten und Symbolen auf der Karte von ganz Hisui;
   „Gehe zu“ für Gebiete, Suche mit Trefferliste. für jedes Spiel mit Karte bei Map Genie die Orte, Sammelobjekte und Materialien als Ebenen,

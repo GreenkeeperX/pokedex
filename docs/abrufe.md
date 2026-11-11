@@ -2,7 +2,9 @@
 
 Alle Abrufe laufen über `app/sources.py`: ehrliche Kennung `pokedex/<Version> (privates Nachschlage-Tool)`, nur
 öffentliche Ziele, Grenzen für Größe und Zeit. Der Abgleich in `app/abruf.py` hält je Server eine Pause ein
-(`PAUSE`, Sprites 0,2 s) und versucht es nach einem Netzfehler einmal erneut. Antwortet eine Quelle mit 403, 429
+(`PAUSE`, Sprites 0,2 s) und versucht es nach einem Netzfehler einmal erneut. Die Pause gilt je Server für alle Quellen
+zusammen (`_HOST_LAST`, eine Sperre je Server): Quellen ohne Abhängigkeit laufen gleichzeitig (`_parallel`), Abrufe am
+selben Server aber nie. Antwortet eine Quelle mit 403, 429
 oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 
 ## Ablauf eines Laufs
@@ -69,9 +71,9 @@ Items, die nur PKHeX kennt, haben dort kein Bild.
 
 Extra `itemhq`: größere Bilder von Serebii (`itemdex/sprites/legends/<name>.png` für Legenden: Arceus, sonst
 `itemdex/sprites/sv/<name>.png` für Karmesin/Purpur, Legenden: Z-A und Mega-Dimension; Name = englischer Name klein ohne
-Zeichen, `importer.en_key`), gespeichert als `itemhq/<Nummer>.png`, eine Sekunde Pause, höchstens 1500 je Lauf. Fehlt es
+Zeichen, `importer.en_key`, und wie bei Serebii mit Bindestrich und Apostroph, `serebii_key`), gespeichert als `itemhq/<Nummer>.png`, eine Sekunde Pause, höchstens 1500 je Lauf. Fehlt es
 im Ordner des Spiels, versucht der Abgleich den anderen Ordner und dann das kleine Bild (`itemdex/sprites/<name>.png`);
-dazu kommen die Items, die nur PKHeX kennt. Fehlende stehen in `itemhq2_fehlen.json`. `/itembild/<Nummer>` liefert zuerst
+dazu kommen die Items, die nur PKHeX kennt. Fehlende stehen in `itemhq3_fehlen.json`. Läuft als eigene Quelle `itemhq` neben den anderen Bildern. `/itembild/<Nummer>` liefert zuerst
 das große Bild.
 
 Extra `formen`: Formen nur zum Ansehen (gleiche Werte, eigenes Aussehen) aus `sprites/pokemon/<Art>-<Form>.png`,
