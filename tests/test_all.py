@@ -1593,6 +1593,22 @@ class MitDatenbank(TempData):
         self.assertEqual(sv["rows"][1]["wert"], 359)                            # Knakrack, Angriff 130, 252 EVs, Level 100
         self.assertEqual(abfragen.stats_view({"spiel": "legends-arceus", "id": kn})["rows"], [])
 
+    def test_0_33_0(self):
+        from app import abfragen
+        kn = abfragen.search({"spiel": "scarlet-violet", "q": "Knakrack"})["rows"][0]["id"]
+        erd = next(m["id"] for m in abfragen.move_list({"q": "Erdbeben"})["rows"] if m["name"] == "Erdbeben")
+        r = abfragen.damage_view({"spiel": "scarlet-violet", "ids": [kn], "details": [{"attacken": [erd]}], "slot": 0, "attacke": erd,
+                                  "verteidiger": [kn]})
+        x = r["rows"][0]
+        self.assertEqual((x["staerke"], x["grund"]), (100, (22 * 100 * x["angriff"] // x["verteidigung"]) // 50 + 2))
+        self.assertIn("Zufall", [f[0] for f in x["faktoren"]])
+        self.assertIn("Basis 130", x["a_info"])
+        # getragene Items aus der PokéAPI: Chaneira trägt in Feuerrot und Blattgrün zu 5 % ein Glücks-Ei
+        ch = abfragen.search({"spiel": "firered-leafgreen", "q": "Chaneira"})["rows"][0]["id"]
+        held = abfragen.detail(ch, {"spiel": "firered-leafgreen"})["getragen"]
+        ei = next(h for h in held if h["item"] == "Glücks-Ei")
+        self.assertEqual((ei["prozent"], ei["quelle"]), ("5 %", "PokéAPI"))
+
 
 if __name__ == "__main__":
     unittest.main()

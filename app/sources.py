@@ -10,11 +10,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.32.0"
+VERSION = "0.33.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.33.0", "11.11.2026", [
+        "Getragene Items wilder Pokémon jetzt für alle Spiele von Rubin bis Ultrasonne (PokéAPI, je Edition)",
+        "Rechenweg als Tooltip: Schadensrechner mit Werten, Grundschaden-Formel und allen Faktoren der Reihe nach",
+        "Werte-Diagramm und Effort Levels: Tooltip zeigt die farbigen Anteile, die Summe und die Formel",
+    ]),
     ("0.32.0", "11.11.2026", [
         "Schadensrechner Legenden: Arceus: Werte nach Effort Levels statt EVs; Let's Go: mit AVs",
         "Schadensrechner gegen das eigene Team: Items der Verteidiger zählen (Offensivweste, Evolith, Fokusgurt)",

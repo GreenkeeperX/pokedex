@@ -44,6 +44,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
   eigene Team oder eine eigene Auswahl, mit Level beider Seiten; „Übersicht“ zeigt jedes Mitglied gegen jeden Gegner.
   Item und Fähigkeit des Mitglieds zählen, wo sie immer wirken, dazu Sonne oder Regen; Generation 1 und 2 mit eigener Formel,
   Legenden: Arceus mit Effort Levels, Let's Go mit AVs. Gegen das eigene Team zählen dessen Items (Offensivweste, Evolith, Fokusgurt).
+  Jede Zeile zeigt im Tooltip den Rechenweg: Werte, Grundschaden-Formel mit Zahlen, Faktoren der Reihe nach, Ergebnis.
+  Auch Werte-Diagramm und Effort Levels erklären jeden Wert im Tooltip (Anteile, Summe, Formel).
 - **Legenden: Z-A**: Abklingzeit jeder Attacke, auch in der Attacken-Wertung. **Pokopia**: die Pokémon des Spiels mit ihren Spezialitäten.
 - **Frühere Basiswerte**: ältere Spiele zeigen die Werte von damals, Generation 1 den Spezial-Wert (Showdown-Mods).
 - **Attacken-Liste** mit Kurz-Info zur Wirkung von Status-Attacken (etwa „Angriff −1 (Gegner)“).
@@ -90,7 +92,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 
 | Quelle | Rolle | Lizenz |
 |---|---|---|
-| [PokéAPI](https://github.com/PokeAPI/pokeapi) (CSV) | Primärquelle: alle Grunddaten, alle Spiele, deutsche Namen | BSD-3 |
+| [PokéAPI](https://github.com/PokeAPI/pokeapi) (CSV) | Primärquelle: alle Grunddaten, alle Spiele, deutsche Namen, getragene Items (Generation 3 bis 7) | BSD-3 |
 | [Pokémon Showdown](https://github.com/smogon/pokemon-showdown) | Gegenprüfung von Werten und Attacken, Merkmale wie „Aufladen“ | MIT |
 | [PokéAPI-Sprites](https://github.com/PokeAPI/sprites) | Bilder (Sprites und offizielle Artworks) | siehe dort |
 | [PKHeX](https://github.com/kwsch/PKHeX) | Fundorte aus den Spieldaten (Strahlender Diamant/Leuchtende Perle, Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Mega-Dimension: Gebiet, Level, Alpha, feste Begegnungen); Item-Listen und Itemnamen je Spiel; Lernlisten von Legenden: Z-A | GPL-3.0 |
