@@ -10,11 +10,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.27.2"
+VERSION = "0.27.3"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.27.3", "11.11.2026", [
+        "Map Genie: der Abgleich fragt nur noch die Spiele ab, die es dort gibt (Legenden: Arceus, Karmesin/Purpur, "
+        "Legenden: Z-A, Feuerrot/Blattgrün, Rot/Blau/Gelb)",
+    ]),
     ("0.27.2", "11.11.2026", [
         "Karten älterer Spiele: der Abgleich fragt Map Genie jetzt auch für Rot/Blau/Gelb bis Ultrasonne/Ultramond "
         "(und SwSh, BDSP, Let’s Go unter weiteren Schreibweisen); Schwester-Editionen zeigen anfangs ihre eigene Karte",

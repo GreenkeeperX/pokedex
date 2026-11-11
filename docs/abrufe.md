@@ -60,7 +60,7 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    (`abruf.file_kind`): Die Rufe der PokéAPI heißen `.ogg`, sind aber MP3.
 6. **Kartenkacheln** (Legenden: Arceus): fehlende Kacheln von Serebii (`abruf.MAP_TILES`, 5 Karten × 84 Kacheln) nach
    `karten/<Karte>/<z>-<x>-<y>.png`, eine Sekunde Pause je Kachel; fehlende (404) 30 Tage nicht erneut.
-7. **Map Genie** (`app/mapgenie.py`, Quelle „mapgenie“): je Spiel in `mapgenie.GAMES` (ab Generation 1; je Spiel eine oder mehrere Schreibweisen, die erste antwortende gilt) die Spielseite, daraus die Karten
+7. **Map Genie** (`app/mapgenie.py`, Quelle „mapgenie“): je Spiel in `mapgenie.GAMES` (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, Feuerrot/Blattgrün, Rot/Blau/Gelb) die Spielseite, daraus die Karten
    (`/<Spiel>/maps/<Karte>`), je Karte die Seite (`window.mapData`) und `/api/v1/maps/<Nummer>/data`, 3 Sekunden Pause.
    Ergebnis kompakt in `mapgenie/<Spiel>.json` im Datenordner; Spiele, die es dort nicht gibt, melden 404 und fallen weg.
    Kacheln (`abruf.mg_tile`) liegen unter `mapgenie/kacheln/`: Die Oberfläche fragt sie über `/mgkachel/…` an (0,3 Sekunden
