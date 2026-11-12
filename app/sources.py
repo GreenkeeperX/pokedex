@@ -5,16 +5,20 @@ und Zeit. Alle Abrufe laufen über `fetch(url)`, damit Tests eine Attrappe einse
 """
 import ipaddress
 import socket
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.35.0"
+VERSION = "0.35.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.35.1", "12.11.2026", [
+        "Verbindungstest hängt nicht mehr: jede Abfrage gibt nach 20 Sekunden ohne Antwort oder 60 Sekunden insgesamt auf",
+    ]),
     ("0.35.0", "12.11.2026", [
         "Verbindungstest fragt verschiedene Server gleichzeitig an (jeden für sich mit Pause) und zeigt, wie weit er ist",
         "Der Test läuft weiter, wenn du den Reiter wechselst; die Einstellungen zeigen danach Stand oder Ergebnis",
@@ -477,9 +481,26 @@ def _decode(raw, enc):
     return raw
 
 
-def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False):
+def _read(resp, deadline):
+    """Antwort in Stücken lesen; bricht ab, wenn sie zu groß wird oder die Gesamtzeit überschreitet (timeout gilt
+    nur je Lesevorgang: ein Server, der tröpfchenweise sendet, hielt die Abfrage sonst beliebig lange fest)."""
+    parts, n = [], 0
+    while True:
+        chunk = resp.read(1 << 16)
+        if not chunk:
+            return b"".join(parts)
+        parts.append(chunk)
+        n += len(chunk)
+        if n > MAX_BODY:
+            raise ValueError("Antwort zu groß")
+        if deadline and time.monotonic() > deadline:
+            raise TimeoutError(f"nach {n} Bytes abgebrochen, Zeitlimit überschritten")
+
+
+def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False, limit=None):
     """HTTP GET ohne Ausnahme: liefert Status, Text (mit raw die Bytes unter „body“) und Kopfdaten
-    für den Verbindungstest."""
+    für den Verbindungstest. limit: Gesamtzeit in Sekunden (Vorgabe: keine, nur timeout je Lesevorgang)."""
+    deadline = time.monotonic() + limit if limit else None
     head = {
         "User-Agent": USER_AGENT,
         "Accept": "application/json,text/plain;q=0.9,*/*;q=0.8",
@@ -496,14 +517,12 @@ def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False):
         except urllib.error.HTTPError as e:
             resp = e                      # Fehlerseiten haben auch einen Inhalt
         with resp:
-            body = resp.read(MAX_BODY + 1)
-            if len(body) > MAX_BODY:
-                raise ValueError("Antwort zu groß")
+            body = _read(resp, deadline)
             out["status"] = getattr(resp, "status", None) or resp.getcode()
             out["enc"] = (resp.headers.get("Content-Encoding") or "").lower()
             out["server"] = resp.headers.get("Server") or ""
             if out["enc"] not in ("", "identity", "gzip", "deflate") and encoding != "identity":
-                return request(url, timeout, "identity", headers, raw)
+                return request(url, timeout, "identity", headers, raw, max(1, deadline - time.monotonic()) if deadline else None)
             data = _decode(body, out["enc"])
             if raw:
                 out["body"] = data

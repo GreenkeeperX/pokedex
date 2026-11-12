@@ -1341,6 +1341,8 @@ PKHEX_GAMES = {"brilliant-diamond-shining-pearl": ("legality/wild/Gen8/encounter
 
 
 # Pausen im Verbindungstest je Server (sonst PAUSE): wer beim Abgleich langsamer abgefragt wird, auch hier
+DIAG_TIMEOUT = 20           # Sekunden ohne Antwort, dann gibt eine Abfrage im Verbindungstest auf
+DIAG_LIMIT = 60             # Sekunden insgesamt je Abfrage (große Seiten, die langsam tröpfeln)
 DIAG_PAUSE = {"www.serebii.net": SEREBII_PAUSE, "www.pokewiki.de": WIKI_PAUSE, "mapgenie.io": MG_PAUSE}
 
 
@@ -1363,7 +1365,7 @@ def diagnose(proben=None, stand=None):
             stand["laeuft"].append(name)
         r = None
         try:
-            r = sources.request(url, raw=raw, headers=headers)
+            r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT)
             if r["error"]:
                 lines[slot] = f"{name}: keine Verbindung ({r['error']})"
                 return None
