@@ -303,6 +303,8 @@ class Leser(unittest.TestCase):
         self.assertEqual([x["faktor"] for x in t], [1, 1.5, 2])                    # für den Rechenweg im Tooltip
         self.assertEqual(t[1]["schlaf"], 73.4)                                   # Fangrate 45, Superball, 1 KP, Schlaf: b = 60654, vier Proben
         self.assertTrue(all(x["voll"] <= x["rot"] <= x["status"] <= x["schlaf"] for x in t))
+        h = {x["ball"]: x["faktor"] for x in abfragen.catch_table(45, 8, abfragen.BALLS_HISUI)}   # 0.48.7: Hisui-Bälle
+        self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
     def test_tm_und_extras(self):

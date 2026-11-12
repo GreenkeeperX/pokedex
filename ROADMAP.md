@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.48.7 (12.11.2026)
+
+- `abfragen.BALLS_HISUI`: Fangtabelle in Legenden: Arceus mit den Hisui-Bällen. Noch offen: die echte Hisui-Formel
+  (Rücken, Level gegen Rang, Alpha), dafür erst eine Probe
+
 ## 0.48.6 (12.11.2026)
 
 - Schadensrechner: `#calc .seg button.on` mit `--hcbg`; zwei `.bar` statt `.brk` (der leere Umbruch gab doppelten Zeilenabstand);

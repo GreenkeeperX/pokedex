@@ -1338,6 +1338,11 @@ def _areas_pokeapi(con, D, g):
 
 
 BALLS = (("Pokéball", 1), ("Superball", 1.5), ("Hyperball", 2))
+# 0.48.7: Bälle in Legenden: Arceus (Faktoren wie in der Item-Liste, BALL_HISUI in app.js); die Schwer-Bälle zusätzlich mit dem
+# Faktor, wenn das Pokémon dich nicht bemerkt hat, der Düsenball bei fliegenden Pokémon. Urball (fängt immer) fehlt
+BALLS_HISUI = (("Pokéball", 1), ("Superball", 1.5), ("Hyperball", 2.25), ("Federball", 1), ("Flügelball", 1.5), ("Düsenball", 2),
+               ("Düsenball, Pokémon fliegt", 2.75), ("Schwerball", 1), ("Schwerball, unbemerkt", 1.25), ("Zentnerball", 1.25),
+               ("Zentnerball, unbemerkt", 2), ("Tonnenball", 2.5), ("Tonnenball, unbemerkt", 2.75))
 GROWTH_DE = {"slow": "langsam", "medium": "mittel", "fast": "schnell", "medium-slow": "mittel-langsam",
              "slow-then-very-fast": "erratisch", "fast-then-very-slow": "fluktuierend"}
 STAT_KEYS = ("kp", "ang", "vert", "spang", "spvert", "init")
@@ -1358,12 +1363,12 @@ def catch_chance(rate, ball=1.0, hp_share=1.0, status=1.0, gen=9):
     return round(100 * (b / 65536) ** (3 if gen == 5 else 4), 1)
 
 
-def catch_table(rate, gen):
+def catch_table(rate, gen, balls=BALLS):
     """Fangchance je Ball bei vollen KP, bei 1 KP, bei 1 KP mit Paralyse, Gift oder Verbrennung (×1,5) und bei 1 KP mit
     Schlaf oder Einfrieren (ab Generation 5 ×2,5, sonst ×2)."""
     sleep = sleep_factor(gen)
     return [{"ball": n, "faktor": f, "voll": catch_chance(rate, f, gen=gen), "rot": catch_chance(rate, f, 0, gen=gen),
-             "status": catch_chance(rate, f, 0, 1.5, gen=gen), "schlaf": catch_chance(rate, f, 0, sleep, gen=gen)} for n, f in BALLS]
+             "status": catch_chance(rate, f, 0, 1.5, gen=gen), "schlaf": catch_chance(rate, f, 0, sleep, gen=gen)} for n, f in balls]
 
 
 def sleep_factor(gen):
@@ -1384,7 +1389,7 @@ def _more(con, f, g, gen):
     kennung = g["kennung"] if g else ""
     if sp["capture_rate"] is not None:
         out["fangrate"] = sp["capture_rate"]
-        out["fangen"] = catch_table(sp["capture_rate"], gen)
+        out["fangen"] = catch_table(sp["capture_rate"], gen, BALLS_HISUI if kennung == "legends-arceus" else BALLS)
         out["schlaf_faktor"] = str(sleep_factor(gen)).replace(".", ",")
         out["fang_gen"] = gen
         out["fang_grob"] = gen <= 2 or kennung.startswith("legends-") or kennung.startswith("lets-go")
