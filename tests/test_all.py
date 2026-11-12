@@ -1681,6 +1681,48 @@ class Server(TempData):
                          [("firered-leafgreen", 14), ("heartgold-soulsilver", 60), ("red-blue", 14), ("yellow", 14)])
         self.assertEqual(importer._derive_blaubeer(con, {"blaubeer": xs}), 3)
 
+    def test_0_48_0_pokewiki_bildkarte(self):
+        """Regionen ohne Bildkarte bei Serebii: Orte aus einer PokéWiki-Vorlage, großes Bild nur bei gleichem
+        Seitenverhältnis (erfundene Vorlage und Bilder), Abgleich ohne Netz."""
+        from app import pokearth
+        wt = """<div>Lage der Orte:</div>{{#tag:imagemap|Datei:{{fileexist|XY-Map {{PAGENAME}}.gif|XY-Map Erfunden.png}}
+rect 10 20 30 40 [[Erfundstadt]]
+poly 50 50 70 50 70 60 [[Route 1 (Kalos)|Route 1 (Erfund-Weg)]]
+circle 100 80 5 [[Erfundhöhle]]
+rect 1 1 2 2 [[Erfundstadt]]
+desc none
+}}
+rect 0 0 9 9 [[Außerhalb]]"""
+        orte = pokearth.pw_areas(wt)
+        self.assertEqual([(o["name"], o["x"], o["y"], o["w"], o["h"]) for o in orte],
+                         [("Erfundstadt", 10, 20, 20, 20), ("Route 1", 50, 50, 20, 10), ("Erfundhöhle", 95, 75, 10, 10)])
+        small = ("https://www.pokewiki.de/images/a/ab/XY-Map_Erfunden.png", 320, 210)
+        big = ("https://archives.bulbagarden.net/media/upload/a/ab/Erfunden.png", 960, 630)
+        d = pokearth.pw_map(orte, small, big)
+        self.assertEqual((d["bild"], d["w"], d["orte"][0]["x"], d["orte"][0]["w"]), (big[0], 960, 30, 60))
+        self.assertEqual(pokearth.pw_map(orte, small, (big[0], 960, 960))["bild"], small[0])     # anderes Seitenverhältnis
+        info = json.dumps({"query": {"pages": [{"title": "Datei:X", "imageinfo": [{"url": small[0], "width": 320, "height": 210}]}]}})
+        self.assertEqual(pokearth.imageinfo(info), small)
+        self.assertIsNone(pokearth.imageinfo(info.replace("https://www.pokewiki.de", "https://boese.example")))
+        m = pokearth.parse(d, "kalos")
+        self.assertEqual((m["titel"], m["bilder"][0][3:]), ("Kalos (PokéWiki)", [960, 630, "se/kalos.png"]))
+        self.assertEqual([o[1] for o in m["orte"]], [1, 2, 1])
+        png = b"\x89PNG\r\n\x1a\nerfunden"
+        page = json.dumps({"query": {"pages": [{"title": "Vorlage:XY-Map Kalos", "revisions": [{"slots": {"main": {"content": wt}}}]}]}})
+
+        def fake(self_, u, raw=False, absent=(), data=None):
+            if "Vorlage" in u:
+                return page
+            if "imageinfo" in u:
+                return info if "pokewiki" in u else json.dumps({"query": {"pages": [{"imageinfo": [{"url": big[0], "width": 960, "height": 630}]}]}})
+            return png if u == big[0] else None
+        with mock.patch.object(abruf._Source, "get", fake):
+            abruf._pokearth(lambda *a: None)
+        k = next(k for k in abruf.mg_maps("x-y")["karten"] if k.get("quelle") == "pokearth")
+        self.assertEqual((k["slug"], len(k["orte"])), ("se-kalos", 3))
+        with open(abruf.mg_image("x-y", "se-kalos", 0), "rb") as fh:
+            self.assertEqual(fh.read(), png)
+
     def test_0_41_0_pokearth(self):
         """Serebii PokéEarth: Bildkarte der Region → Karte mit einem Bild und einem Punkt je Ort (erfundene Seite)."""
         from app import pokearth

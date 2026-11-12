@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.48.0 (12.11.2026)
+
+- Auswertung des Verbindungstests vom 12.11. (Kartenbilder): Serebii hat für Kalos und Alola keine Bildkarte, X/Y, SM und
+  USUM hatten keine Karte. Bulbapedia `Kalos XY.png` 1032×676 (Seitenverhältnis wie `XY-Map Kalos.png` 320×210 im
+  PokéWiki), Inselkarten Alola dort 654–752 px; PokéWiki `USUM-Map …` 270×270 je Insel, `USUM-Global-Map …` 400×240;
+  Fan-Karten (zombiecrisis) 4414 px mit Beschriftung; MewMaps, japanische Übersicht und FrontierNav ohne Bilder im HTML
+- Kalos: Orte aus `Vorlage:XY-Map Kalos` (54 Flächen, `pokearth.pw_areas`), Bild groß von Bulbapedia (`pw_map`, nur bei
+  gleichem Seitenverhältnis); Pokémon je Ort über die deutschen Ortsnamen (`_pokearth_mons`)
+- Alola: Entscheidung offen (PokéWiki-Inselkarten, Fan-Karte oder Bulbapedia-Inselkarten)
+
 ## 0.47.12 (12.11.2026)
 
 - `.sp` streckt sich über die Kartenhöhe, Bild mittig darüber, Knöpfe unten; Bild `top:5px`, Knöpfe `top:1px`; α-Hover weiß
