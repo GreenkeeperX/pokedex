@@ -17,7 +17,9 @@ dem Vorbild von VR-Navigator und eShopKompass.
   „Im Duell gegen Typen“ (klar im Vorteil, im Vorteil, im Nachteil; ↑ austeilen, ↓ einstecken), Fangchance je Ball
   (offen, solange nicht gefangen), Fundorte im Spiel (Legenden: Arceus, Karmesin/Purpur samt Erweiterungen, Legenden: Z-A und
   Mega-Dimension aus den Spieldaten mit Level, in den Legenden-Spielen mit Alpha, in Legenden: Arceus mit Stellen), „Mehr Details“ zum Aufklappen (Geschlecht, Wachstum, Ei-Gruppen, EV-Ausbeute, je nach Spiel),
-  schillerndes Artwork und animiertes Sprite, Ruf, getragene Items, Links ins PokéWiki.
+  schillerndes Artwork und animiertes Sprite, Ruf, getragene Items, Links ins PokéWiki. Pokédex-Eintrag und
+  Fähigkeitstexte auf Deutsch für das gewählte Spiel (PokéAPI, ergänzt aus dem PokéWiki), in Legenden: Arceus die
+  Forschungsaufgaben.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
   Vorschlag für vier Attacken mit Typ-Abdeckung. Eigene Auswahl mit Standard-Attacken wie im Spiel, beigebrachten
@@ -105,7 +107,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [Map Genie](https://mapgenie.io) | Interaktive Karten (Orte, Sammelobjekte, Materialien) für jedes Spiel, das es dort gibt; nur im Datenordner, für den privaten Gebrauch | Daten und Kacheln von Map Genie |
 | [IGN Maps](https://www.ign.com/maps) | Kachelkarten für Schwert/Schild und Let’s Go mit den Punkten, die die Seite mitbringt; nur im Datenordner, für den privaten Gebrauch | Karten von IGN |
 | [pokemoncompletion](https://github.com/RainingChain/pokemoncompletion) | Karten für Kristall, Smaragd und Platin (Orte, Pokémon, Items, Trainer, Sammelobjekte); auch für Gold/Silber, Rubin/Saphir, Diamant/Perl | GPL-3.0 |
-| [PokéWiki](https://www.pokewiki.de) | Links; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items, Karte (Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas, Items am Boden und in Grabstellen); geplant: Edelhorden | CC BY-SA 3.0 DE |
+| [PokéWiki](https://www.pokewiki.de) | Links; deutsche Pokédex-Einträge, Attacken- und Fähigkeitstexte je Spiel, Forschungsaufgaben in Legenden: Arceus; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items, Karte (Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas, Items am Boden und in Grabstellen); geplant: Edelhorden | CC BY-SA 3.0 DE |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
 

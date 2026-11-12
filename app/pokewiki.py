@@ -3,6 +3,9 @@ die PokéAPI und PKHeX nicht haben.
 
 - Attacken in Legenden: Arceus (Infobox Attacke: PLStärke, PLStärkeKraft, PLStärkeTempo, PLGenauigkeit, PLAP)
 - getragene Items wilder Pokémon je Spiel (Vorlage „Getragene Items“, mit Anteil und „Nur Elite-Pokémon“)
+- deutsche Texte je Spiel: Pokédex-Einträge (Vorlage „Pokédex-Einträge“), Attackenbeschreibungen („Atk-Beschreibung“),
+  Fähigkeitstexte („Fähigkeit/Infobox“, Gen3 … Gen9), dazu die Forschungsaufgaben in Legenden: Arceus („Pokédex-Aufgaben“).
+  Die Kürzel der Vorlagen bleiben in den Rohdaten; welche Spiele sie meinen, steht in DEX_KEYS und ATK_KEYS.
 
 Abgerufen wird gebündelt: bis zu 50 Seiten je Anfrage (action=query, prop=revisions), siehe abruf._pokewiki.
 """
@@ -56,9 +59,19 @@ def pages(text):
 
 def template(wt, name):
     """Parameter der ersten Vorlage name im Wikitext als {Name: Wert}; verschachtelte Vorlagen bleiben im Wert."""
-    m = re.search(r"\{\{\s*" + re.escape(name) + r"\s*\|", wt)
+    out = {}
+    for p in _parts(wt, name):
+        if "=" in p:
+            k, v = p.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def _parts(wt, name):
+    """Alle Teile der ersten Vorlage name (zwischen den „|“ der obersten Ebene), benannte und unbenannte."""
+    m = re.search(r"\{\{\s*" + re.escape(name) + r"\s*\|", wt or "")
     if not m:
-        return {}
+        return []
     i, depth, start, parts = m.end(), 1, m.end(), []
     while i < len(wt) and depth:
         two = wt[i:i + 2]
@@ -77,12 +90,7 @@ def template(wt, name):
             parts.append(wt[start:i])
             start = i + 1
         i += 1
-    out = {}
-    for p in parts:
-        if "=" in p:
-            k, v = p.split("=", 1)
-            out[k.strip()] = v.strip()
-    return out
+    return parts
 
 
 def _num(v):
@@ -191,3 +199,157 @@ def map_items(text):
 def item_key(name):
     """Vergleichsschlüssel für Itemnamen ohne Silbentrennung: klein, ohne Striche und Leerzeichen."""
     return re.sub(r"[\s\-­]", "", str(name or "")).lower()
+
+
+# ------------------------------------------------------------------ deutsche Texte je Spiel
+# Kürzel der Vorlage „Pokédex-Einträge“ → (Spiele, Edition). Groß- und Kleinschreibung zählt: „sw“ ist Schwarz/Weiß,
+# „SW“ Schwert. Ein Kürzel für mehrere Spiele gilt nur, wo es kein genaueres gibt.
+DEX_KEYS = {
+    "rotblau": (("red-blue",), ""), "gelb": (("yellow",), ""),
+    "gold": (("gold-silver",), "Gold"), "silber": (("gold-silver",), "Silber"), "crystal": (("crystal",), ""),
+    "rubin": (("ruby-sapphire",), "Rubin"), "saphir": (("ruby-sapphire",), "Saphir"), "rubinsaphir": (("ruby-sapphire",), ""),
+    "feuerrot": (("firered-leafgreen",), "Feuerrot"), "blattgrün": (("firered-leafgreen",), "Blattgrün"),
+    "feuerrotblattgrün": (("firered-leafgreen",), ""), "smaragd": (("emerald",), ""),
+    "diamond": (("diamond-pearl",), "Diamant"), "pearl": (("diamond-pearl",), "Perl"), "diamondpearl": (("diamond-pearl",), ""),
+    "platinum": (("platinum",), ""), "diamondpearlplatinum": (("diamond-pearl", "platinum"), ""),
+    "hg": (("heartgold-soulsilver",), "HeartGold"), "ss": (("heartgold-soulsilver",), "SoulSilver"),
+    "hgss": (("heartgold-soulsilver",), ""),
+    "s": (("black-white",), "Schwarz"), "w": (("black-white",), "Weiß"), "sw": (("black-white",), ""),
+    "sw2": (("black-2-white-2",), ""), "s2w2": (("black-2-white-2",), ""),
+    "x": (("x-y",), "X"), "y": (("x-y",), "Y"), "xy": (("x-y",), ""),
+    "or": (("omega-ruby-alpha-sapphire",), "Omega Rubin"), "as": (("omega-ruby-alpha-sapphire",), "Alpha Saphir"),
+    "oras": (("omega-ruby-alpha-sapphire",), ""),
+    "so": (("sun-moon",), "Sonne"), "mo": (("sun-moon",), "Mond"), "somo": (("sun-moon",), ""),
+    "us": (("ultra-sun-ultra-moon",), "Ultrasonne"), "um": (("ultra-sun-ultra-moon",), "Ultramond"),
+    "usum": (("ultra-sun-ultra-moon",), ""), "lgpe": (("lets-go-pikachu-lets-go-eevee",), ""),
+    "SW": (("sword-shield",), "Schwert"), "SH": (("sword-shield",), "Schild"), "SWSH": (("sword-shield",), ""),
+    "sd": (("brilliant-diamond-shining-pearl",), "Strahlender Diamant"),
+    "lp": (("brilliant-diamond-shining-pearl",), "Leuchtende Perle"), "sdlp": (("brilliant-diamond-shining-pearl",), ""),
+    "pla": (("legends-arceus",), ""),
+    "KA": (("scarlet-violet",), "Karmesin"), "PU": (("scarlet-violet",), "Purpur"), "KAPU": (("scarlet-violet",), ""),
+    "PLZA": (("legends-za",), ""),
+}
+_G2, _G3 = ("gold-silver", "crystal"), ("ruby-sapphire", "emerald", "firered-leafgreen", "colosseum", "xd")
+_G4, _G5 = ("diamond-pearl", "platinum", "heartgold-soulsilver"), ("black-white", "black-2-white-2")
+_G6, _G7 = ("x-y", "omega-ruby-alpha-sapphire"), ("sun-moon", "ultra-sun-ultra-moon", "lets-go-pikachu-lets-go-eevee")
+_G8, _G9 = ("sword-shield", "brilliant-diamond-shining-pearl", "legends-arceus"), ("scarlet-violet", "legends-za")
+# Kürzel der Vorlage „Atk-Beschreibung“ (Attacken und Fähigkeiten) → Spiele; „sm“ ist hier Smaragd
+ATK_KEYS = {
+    "gosi": ("gold-silver",), "kr": ("crystal",), "gen2": _G2,
+    "rusa": ("ruby-sapphire",), "rusasm": ("ruby-sapphire", "emerald"), "sm": ("emerald",), "frbg": ("firered-leafgreen",),
+    "smfrbg": ("emerald", "firered-leafgreen"), "col": ("colosseum",), "xd": ("xd",), "gen3": _G3,
+    "dp": ("diamond-pearl",), "dppt": ("diamond-pearl", "platinum"), "pt": ("platinum",), "hgss": ("heartgold-soulsilver",),
+    "pthgss": ("platinum", "heartgold-soulsilver"), "gen4": _G4,
+    "sw": ("black-white",), "s2w2": ("black-2-white-2",), "gen5": _G5,
+    "xy": ("x-y",), "oras": ("omega-ruby-alpha-sapphire",), "gen6": _G6,
+    "somo": ("sun-moon",), "usum": ("ultra-sun-ultra-moon",), "somousum": ("sun-moon", "ultra-sun-ultra-moon"),
+    "usumlgpe": ("ultra-sun-ultra-moon", "lets-go-pikachu-lets-go-eevee"), "lgpe": ("lets-go-pikachu-lets-go-eevee",), "gen7": _G7,
+    "swsh": ("sword-shield",), "sdlp": ("brilliant-diamond-shining-pearl",),
+    "swshsdlp": ("sword-shield", "brilliant-diamond-shining-pearl"), "pla": ("legends-arceus",), "gen8": _G8,
+    "kapu": ("scarlet-violet",), "plza": ("legends-za",), "gen9": _G9,
+}
+# Kürzel aus Spin-offs (Mystery Dungeon, Stadium, UNITE …): gehören zu keinem Hauptspiel und fallen still weg
+ATK_SPINOFF = {"stadium", "stadium2", "pmd", "pmd2", "pmd3", "pmd4", "zd", "himmel", "rumble", "conquest", "spru", "psmd",
+               "rblw", "quest", "masters", "pmddx", "unite", "poko", "cmp", "typ"}
+
+
+def clean(v):
+    """Wikitext eines Spieltexts als schlichter Text: ohne Fußnoten, Vorlagen, Links und Formatierung."""
+    v = re.sub(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>", "", v or "", flags=re.S)
+    v = re.sub(r"<!--.*?-->", "", v, flags=re.S)
+    v = re.sub(r"<br\s*/?>", " ", v)
+    v = re.sub(r"\{\{\s*Anmerkung\s*\|[^{}]*\}\}", "", v)
+    for _ in range(3):          # verschachtelte Vorlagen von innen nach außen: {{tt|Text|Hinweis}} → Text
+        v = re.sub(r"\{\{\s*(?:tt|item|p|a|atk|fäh|sk)\s*\|([^|{}]*)[^{}]*\}\}", r"\1", v, flags=re.I)
+        v = re.sub(r"\{\{[^{}]*\}\}", "", v)
+    v = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", v)
+    v = re.sub(r"<[^>]+>|'''|''", "", v)
+    return " ".join(v.replace("&nbsp;", " ").split())
+
+
+def _texts(wt, name, skip=()):
+    out = {}
+    for k, v in template(wt, name).items():
+        if k.lower() in skip or k.lower().startswith("typ"):
+            continue
+        t = clean(v)
+        if t and t not in ("-", "—", "?"):
+            out[k] = t
+    return out
+
+
+def dex_texts(wt):
+    """Pokédex-Einträge der Hauptspiele: {Kürzel: Text} (die Spin-offs stehen in einer eigenen Vorlage)."""
+    return _texts(wt, "Pokédex-Einträge")
+
+
+def move_texts(wt):
+    """Beschreibungen einer Attacke: {Kürzel: Text}."""
+    return _texts(wt, "Atk-Beschreibung")
+
+
+def ability_texts(wt):
+    """Texte einer Fähigkeit: die Infobox trägt sie je Generation (Gen3 … Gen9 → gen3 …), die Vorlage
+    „Atk-Beschreibung“ im Abschnitt Beschreibungen kann genauere Kürzel ergänzen."""
+    out = {k.lower(): clean(v) for k, v in template(wt, "Fähigkeit/Infobox").items() if re.fullmatch(r"Gen\d", k)}
+    out = {k: v for k, v in out.items() if v}
+    out.update(move_texts(wt))
+    return out
+
+
+def research_tasks(wt):
+    """Forschungsaufgaben in Legenden: Arceus: [{aufgabe, stufen, doppelt}]. Jede Aufgabe ist ein unbenannter Teil
+    „Aufgabe/Stufe1/…/Stufe5“, doubleN=1 heißt: zählt doppelt."""
+    parts = _parts(wt, "Pokédex-Aufgaben")
+    named = {k.strip(): v.strip() for k, v in (p.split("=", 1) for p in parts if "=" in p)}
+    out = []
+    for p in parts:
+        if "=" in p:
+            continue
+        bits = [clean(x) for x in p.split("/")]
+        if not bits or not bits[0]:
+            continue
+        out.append({"aufgabe": bits[0], "stufen": [b for b in bits[1:] if b],
+                    "doppelt": named.get(f"double{len(out) + 1}") == "1"})
+    return out
+
+
+def games_for(kind, key):
+    """Spiele und Edition zu einem Kürzel: ((Spiele…), Edition) oder None, wenn es zu keinem Hauptspiel gehört."""
+    if kind == "pokemon":
+        return DEX_KEYS.get(key)
+    g = ATK_KEYS.get(key) or ATK_KEYS.get(key.lower())
+    return (g, "") if g else None
+
+
+def unknown_keys(kind, texts):
+    """Kürzel, die weder ein Hauptspiel noch ein bekanntes Spin-off sind (für das Protokoll)."""
+    return sorted(k for k in texts if games_for(kind, k) is None and (kind == "pokemon" or k.lower() not in ATK_SPINOFF))
+
+
+def per_game(kind, texts):
+    """{Spiel: [(Edition, Text)]} aus {Kürzel: Text}. Gilt ein Kürzel für mehrere Spiele, zählt es nur dort, wo kein
+    genaueres (für weniger Spiele) da ist; gleicher Text verschiedener Editionen wird zusammengefasst."""
+    best = {}
+    for k, t in texts.items():
+        g = games_for(kind, k)
+        if not g:
+            continue
+        games, ed = g
+        for sp in games:
+            cur = best.get(sp)
+            if cur is None or len(games) < cur[0]:
+                best[sp] = (len(games), [(ed, t)])
+            elif len(games) == cur[0]:
+                cur[1].append((ed, t))
+    out = {}
+    for sp, (_, xs) in best.items():
+        merged = []
+        for ed, t in xs:
+            same = next((m for m in merged if m[1] == t), None)
+            if same:
+                same[0] = " / ".join(x for x in (same[0], ed) if x) if same[0] and ed else ""
+            else:
+                merged.append([ed, t])
+        out[sp] = [tuple(m) for m in merged]
+    return out

@@ -95,6 +95,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   aus den Spieldaten), "ob" (nur Spieldaten), "sp" (Spawnpunkt); Kategorien mit `art` zeigen das Symbol der Einzelkarten.
   Gefunden: Schlüssel von Map Genie, alte Marken am eigenen Symbol gelten mit (`isGot`). Ebenen `mgEbenen:<Spiel>`, anfangs
   aus: Materialien und Pokémon. Suche auch in ausgeblendeten Ebenen. „Gehe zu“, `#karte/mg/<Karte>/<Ort>` springt zu einem Ort.
+- Detailseite: `dexTextHtml` (Pokédex-Eintrag des Spiels, bei zwei Editionen beide), `fromHtml` (Marke „aus <Spiel>“,
+  wenn der Text aus einem anderen Spiel stammt, sonst die Quelle, wenn es nicht die PokéAPI ist), `researchHtml`
+  (Forschungsaufgaben in Legenden: Arceus, Punkte als Rechen-Tooltip).
 - Detailseite: `wissenHtml` (gepflegtes Spielwissen in der Fangchance), `partnerHtml` (Partner-Techniken, Geheime Techniken).
 - Schadensrechner: Gegner `favs` (Favoriten des Spiels).
 - Werte `statBox` (`#stbox`, übrige Spiele außer Champions, Pokopia; `STATS_OK`): `/api/werte`, Team-Platz `ivs`,

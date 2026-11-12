@@ -44,6 +44,11 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Spielkoordinaten wie JS-Finder). `importer._derive_wiki_karte` ordnet jede Datei der Karte zu, deren Spawnpunkte sie am
    häufigsten genau trifft, und legt Kristallbrocken, Verzerrungen, Massenauftreten, Bäume, feste Alphas und Items am Boden
    in `kartenobjekt` (ohne Stellen, die Altissimo schon führt; viele Items an einer Stelle gehen an die nächste Grabstelle).
+   Dazu deutsche Texte je Spiel (`abruf._wiki_texts`): die Seiten aller Arten, Attacken und Fähigkeiten (ganze Seiten,
+   20 je Anfrage), alle 30 Tage komplett, sonst nur neue Namen; was in einer Antwort fehlt, kommt in einer zweiten
+   Runde, Attacken und Fähigkeiten ohne Text noch einmal als „Name (Attacke)“ bzw. „Name (Fähigkeit)“. Gespeichert in
+   `pokewiki_texte.json` mit den Kürzeln der Vorlagen; `importer._derive_texts` ordnet sie über `pokewiki.per_game` den
+   Spielen zu (Tabellen `spieltext` und `forschung`) und meldet unbekannte Kürzel im Protokoll.
    **PLA Companion** (software-notion.de, `app/companion.py`): je Karte `/apps/pla-companion/map/<Karte>/data?lang=de`
    mit 2 Sekunden Pause; Schnellreise und Lager, ausgerichtet an Geisterlichtern und Icognito von Altissimo
    (`companion.fit`, `importer._derive_companion`). Das Protokoll zählt alle Arten von Einträgen.

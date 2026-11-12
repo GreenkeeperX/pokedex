@@ -1,5 +1,19 @@
 # Roadmap
 
+## 0.36.0 (12.11.2026)
+
+- Deutsche Texte je Spiel aus dem PokéWiki (`abruf._wiki_texts`, `pokewiki_texte.json` im Datenordner): Seiten aller
+  Arten, Attacken und Fähigkeiten, 20 je Anfrage, alle `WIKI_TEXT_TAGE` (30) Tage komplett, neue Namen beim nächsten
+  Abgleich. Gelesen werden die Vorlagen „Pokédex-Einträge“, „Atk-Beschreibung“ und „Fähigkeit/Infobox“ (Gen3 … Gen9);
+  die Kürzel bleiben roh, `pokewiki.DEX_KEYS` und `ATK_KEYS` ordnen sie beim Bauen den Spielen zu (das genaueste gewinnt)
+- Tabelle `spieltext` (Art, ID, Spiel, Edition, Text, Quelle): zuerst die PokéAPI, wo sie nichts hat, das PokéWiki;
+  `abfragen.pick_text` nimmt das gewählte Spiel (Erweiterungen: Hauptspiel), sonst das Spiel davor, sonst das danach
+- Legenden: Arceus: Forschungsaufgaben aus der Vorlage „Pokédex-Aufgaben“ (Tabelle `forschung`), Kasten auf der
+  Detailseite mit Punkten je Stufe
+- Verbindungstest: Probe „PokéWiki, Texte je Spiel“ meldet abgedeckte Spiele und unbekannte Kürzel; das Protokoll
+  des Abgleichs nennt unbekannte Kürzel ebenfalls. `importer.VERSION` 19
+- Nächster Schritt: Aufträge in Legenden: Arceus auf Deutsch
+
 ## 0.35.4 (12.11.2026)
 
 - Oberfläche: die Abfrage des Teststands versucht es nach einem Fehler weiter (bisher blieb die Anzeige stehen)

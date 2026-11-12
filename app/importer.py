@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "18"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "19"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -1262,6 +1262,80 @@ def _derive_wiki(con, wiki):
     return n_moves, n_items
 
 
+def _derive_texts(con, wiki):
+    """Deutsche Texte je Spiel (spieltext) und Forschungsaufgaben in Legenden: Arceus (forschung). Zuerst die PokéAPI
+    (Pokédex-Einträge je Edition, Attacken- und Fähigkeitstexte je Spiel), wo sie nichts hat, das PokéWiki
+    (abruf._wiki_texts, Kürzel → Spiele in pokewiki.per_game). Gibt ({Art: Zeilen}, Aufgaben, unbekannte Kürzel) zurück."""
+    con.execute("CREATE TABLE spieltext (art TEXT, id INTEGER, spiel TEXT, edition TEXT, text TEXT, quelle TEXT)")
+    con.execute("CREATE TABLE forschung (art INTEGER, nr INTEGER, aufgabe TEXT, stufen TEXT, doppelt INTEGER)")
+    vg = dict(con.execute("SELECT id, identifier FROM version_groups")) if _has(con, "version_groups") else {}
+    rows, have = [], set()
+
+    def add(kind, oid, spiel, ed, txt, src):
+        txt = " ".join(str(txt or "").split())
+        if oid is None or not spiel or not txt:
+            return
+        rows.append((kind, oid, spiel, ed, txt, src))
+        if src == "PokéAPI":
+            have.add((kind, oid, spiel))
+
+    if _has(con, "pokemon_species_flavor_text") and _has(con, "versions"):
+        ver = {i: (vg.get(g), i) for i, g in con.execute("SELECT id, version_group_id FROM versions")}
+        vname = _names(con, "version_names", "version_id")
+        for sid, vid, txt in con.execute("SELECT species_id, version_id, flavor_text FROM pokemon_species_flavor_text "
+                                         "WHERE language_id = ? ORDER BY version_id", (DE,)):
+            g = ver.get(vid, (None,))[0]
+            add("pokemon", sid, g, vname.get(vid, ""), txt, "PokéAPI")
+    for kind, table, key in (("attacken", "move_flavor_text", "move_id"), ("faehigkeiten", "ability_flavor_text", "ability_id")):
+        if _has(con, table):
+            for oid, g, txt in con.execute(f"SELECT {key}, version_group_id, flavor_text FROM {table} WHERE language_id = ? "
+                                           "ORDER BY version_group_id", (DE,)):
+                add(kind, oid, vg.get(g), "", txt, "PokéAPI")
+    # Gleicher Text beider Editionen eines Spiels (PokéAPI) nur einmal, mit beiden Namen
+    merged = {}
+    for r in rows:
+        k = (r[0], r[1], r[2], r[4])
+        if k in merged:
+            m = merged[k]
+            merged[k] = (m[0], m[1], m[2], " / ".join(x for x in (m[3], r[3]) if x) if m[3] and r[3] else "", m[4], m[5])
+        else:
+            merged[k] = r
+    rows = list(merged.values())
+
+    texts = (wiki or {}).get("texte") or {}
+    ids = {"pokemon": {n: i for i, n in con.execute("SELECT pokemon_species_id, name FROM pokemon_species_names "
+                                                    "WHERE local_language_id = ?", (DE,)) if n},
+           "attacken": {n: i for i, n in con.execute("SELECT id, name FROM attacke")} if _has(con, "attacke") else {},
+           "faehigkeiten": {n: i for i, n in con.execute("SELECT ability_id, name FROM ability_names WHERE local_language_id = ? "
+                                                         "AND ability_id < 10000", (DE,)) if n} if _has(con, "ability_names") else {}}
+    unknown, n_tasks = {}, 0
+    for kind in ("pokemon", "attacken", "faehigkeiten"):
+        for name, v in (texts.get(kind) or {}).items():
+            oid = ids[kind].get(name)
+            if oid is None or not isinstance(v, dict):
+                continue
+            tx = v.get("texte") or {}
+            for k in pokewiki.unknown_keys(kind, tx):
+                unknown.setdefault(kind, set()).add(k)
+            for spiel, xs in pokewiki.per_game(kind, tx).items():
+                if (kind, oid, spiel) in have:
+                    continue
+                for ed, txt in xs:
+                    add(kind, oid, spiel, ed, txt, "PokéWiki")
+            if kind == "pokemon":
+                for nr, a in enumerate(v.get("aufgaben") or []):
+                    con.execute("INSERT INTO forschung VALUES (?, ?, ?, ?, ?)",
+                                (oid, nr, a.get("aufgabe", ""), json.dumps(a.get("stufen") or [], ensure_ascii=False),
+                                 int(bool(a.get("doppelt")))))
+                    n_tasks += 1
+    con.executemany("INSERT INTO spieltext VALUES (?, ?, ?, ?, ?, ?)", rows)
+    con.execute("CREATE INDEX spieltext_id ON spieltext(art, id)")
+    counts = {}
+    for r in rows:
+        counts.setdefault(r[0], set()).add(r[1])
+    return {k: len(v) for k, v in counts.items()}, n_tasks, {k: sorted(v) for k, v in unknown.items()}
+
+
 def _derive_serebii(con, ser):
     """Aus Serebii (abruf._serebii): Abklingzeiten in Legenden: Z-A (attacke_spiel.abklingzeit) und die Pokémon in Pokopia
     (Tabelle pokopia, dazu spiel_form für den Haupt-Pokédex). ser = {"za": {Schlüssel: {...}}, "pokopia": {Dex: [...]}}.
@@ -1357,6 +1431,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_rez = _derive_rezept(con, alt, en_de)
         n_sets = _derive_moveset(con, sets)
         n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
+        n_texte, n_forschung, unbekannt = _derive_texts(con, wiki)
         n_abkling, n_pokopia = _derive_serebii(con, (wiki or {}).get("serebii"))
         n_wiki_karte = _derive_wiki_karte(con, wiki)
         n_orte = _derive_companion(con, alt)
@@ -1377,7 +1452,8 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
                  "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
-                 "kartenobjekte": n_obj, "lernen": n_lernen, "abklingzeiten": n_abkling, "pokopia": n_pokopia, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez, "check": why}
+                 "kartenobjekte": n_obj, "lernen": n_lernen, "abklingzeiten": n_abkling, "pokopia": n_pokopia, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez,
+                 "texte": n_texte, "forschung": n_forschung, "kuerzel_unbekannt": unbekannt, "check": why}
     finally:
         con.close()
     return stats
