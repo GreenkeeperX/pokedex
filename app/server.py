@@ -500,10 +500,46 @@ def _prewarm(d):
     def run():
         for m in d["karten"][:abfragen.MERGED_MAX - 2]:
             try:
-                _packed(abfragen.mg_map(m, d["spiel"], d["am"]))
+                t0 = time.time()
+                body = _packed(abfragen.mg_map(m, d["spiel"], d["am"]))
+                _gz_put(body)
+                print(f"Karte vorbereitet: {d['spiel']}/{m.get('slug')} in {time.time() - t0:.1f} s, "
+                      f"{len(body) // 1024} KB", file=sys.stderr, flush=True)
             except Exception as e:
                 print("Karte vorbereiten:", e, file=sys.stderr)
     threading.Thread(target=run, daemon=True, name="karten-vorbereiten").start()
+
+
+def _gz_put(body):
+    """0.52: die gepackte Fassung einer großen Antwort gleich mit vorbereiten (spart beim ersten Öffnen das Packen)."""
+    hit = _GZ.get(id(body))
+    if hit and hit[0] is body:
+        return
+    gz = gzip.compress(body, compresslevel=5)
+    if len(_GZ) >= 16:
+        _GZ.clear()
+    _GZ[id(body)] = (body, gz)
+
+
+WARM_GAMES = ("legends-arceus",)    # 0.52: diese Karten führt der Server schon beim Start zusammen (Arceus ist das Startspiel)
+
+
+def _warm_loop():
+    """0.52: nach dem Start und nach jedem Abgleich (neuer Stand der Karten) die Karten von WARM_GAMES vorbereiten,
+    damit das erste Öffnen nicht auf das Zusammenführen wartet. Prüft alle 5 Minuten; ist alles bereit, kostet das nichts."""
+    try:
+        abfragen.data()
+    except Exception:
+        pass
+    while True:
+        for spiel in WARM_GAMES:
+            try:
+                d = abruf.mg_maps(spiel)
+                if d:
+                    _prewarm(d)
+            except Exception as e:
+                print("Karten vorbereiten:", e, file=sys.stderr)
+        time.sleep(300)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -794,6 +830,7 @@ def main():
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     # Spieldaten gleich in den Speicher laden, damit die erste Anfrage nach einem Update nicht wartet
     threading.Thread(target=abfragen.data, daemon=True, name="vorladen").start()
+    threading.Thread(target=_warm_loop, daemon=True, name="karten-warm").start()
     if os.environ.get("AUTO_SYNC", "1") != "0":
         threading.Thread(target=abruf.scheduler, daemon=True, name="zeitplan").start()
         abruf.start_stock()           # Kartenkacheln im Hintergrund vervollständigen
