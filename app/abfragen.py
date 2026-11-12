@@ -350,7 +350,17 @@ def search(p):
         return {"rows": [], "n": 0, "ohne_daten": True}
     g, gen, found = candidates(D, p)
     rows = [row(D, f, g, gen, nr) for f, nr in found]
-    rows.sort(key=SORTS.get(p.get("sort") or "nr", SORTS["nr"]))
+    if g and g["kennung"] == LA and p.get("sort") == "forschung":      # 0.49: wo noch viele Forschungspunkte zu holen sind
+        con = db.game()
+        try:
+            op = research_open(con)
+        finally:
+            con.close()
+        for r in rows:
+            r["forschung_offen"] = op.get(r["art"])
+        rows.sort(key=lambda r: (-(r["forschung_offen"] or 0), r.get("dex", 0), r["nr"] or 99999, r["id"]))
+    else:
+        rows.sort(key=SORTS.get(p.get("sort") or "nr", SORTS["nr"]))
     lim = min(_int(p.get("limit")) or 60, 2000)
     off = _int(p.get("offset")) or 0
     return {"rows": rows[off:off + lim], "n": len(rows), "spiel": g["kennung"] if g else ""}
@@ -1117,9 +1127,11 @@ def _pokearth_mons(r, spiel):
         con.close()
     en2de = {}
     for k, n in en.items():
-        en2de.setdefault(n.lower(), de.get(k) or n)
+        if n:
+            en2de.setdefault(n.lower(), de.get(k) or n)
     for n in de.values():                  # 0.48: Karten aus dem PokéWiki nennen die Orte schon deutsch
-        en2de.setdefault(n.lower(), n)
+        if n:                              # 0.49: Arten ohne deutschen Namen (None) warfen AttributeError
+            en2de.setdefault(n.lower(), n)
     for p in r["punkte"]:
         if p.get("text"):              # „Ort: Cherrygrove“ (Trainer, Items) → deutscher Ortsname
             p["text"] = re.sub(r"(\*\*Ort:\*\* )([^\n(]+?)(?=\s*\(|\n|$)", lambda x: x.group(1) + (
@@ -1628,17 +1640,56 @@ def _pokopia(con, g, f):
              "spezial": [serebii.spezial_de(k) for k in json.loads(r[3] or "[]")]} for r in rows]
 
 
-def _research(con, art):
-    """Forschungsaufgaben in Legenden: Arceus (PokéWiki): [{aufgabe, stufen, doppelt}]."""
+def research_done(spiel=LA):
+    """0.49: erreichte Stufen der Forschungsaufgaben aus user.db (Tabelle gefunden, Karte „forschung“, Objekt
+    „Art|Nr|Stufe“): {(Art, Nr): höchste erreichte Stufe}."""
+    con = db.user()
     try:
-        rows = con.execute("SELECT aufgabe, stufen, doppelt FROM forschung WHERE art = ? ORDER BY nr", (art,)).fetchall()
+        rows = con.execute("SELECT objekt FROM gefunden WHERE spiel = ? AND karte = 'forschung'", (spiel,)).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        con.close()
+    out = {}
+    for (o,) in rows:
+        try:
+            art, nr, k = (int(x) for x in str(o).split("|"))
+        except ValueError:
+            continue
+        out[(art, nr)] = max(out.get((art, nr), 0), k)
+    return out
+
+
+def _research(con, art, done=None):
+    """Forschungsaufgaben in Legenden: Arceus (PokéWiki): [{nr, aufgabe, stufen, doppelt, erreicht}]."""
+    try:
+        rows = con.execute("SELECT nr, aufgabe, stufen, doppelt FROM forschung WHERE art = ? ORDER BY nr", (art,)).fetchall()
     except Exception:
         return []
+    done = research_done() if done is None else done
     out = []
-    for a, st, d in rows:
+    for nr, a, st, d in rows:
         stufen = [x for x in json.loads(st or "[]") if x not in ("0", "")]
-        out.append({"aufgabe": a, "stufen": stufen, "doppelt": bool(d)})
+        out.append({"nr": nr, "aufgabe": a, "stufen": stufen, "doppelt": bool(d), "erreicht": min(done.get((art, nr), 0), len(stufen))})
     return out
+
+
+def research_open(con):
+    """Offene Forschungspunkte je Art bis zum Forschungslevel 10 (100 Punkte): {Art: Punkte}. Jede Stufe 10 Punkte,
+    doppelt zählende 20; was über 100 hinausgeht, zählt nicht."""
+    done = research_done()
+    got, open_ = {}, {}
+    try:
+        rows = con.execute("SELECT art, nr, stufen, doppelt FROM forschung").fetchall()
+    except Exception:
+        return {}
+    for art, nr, st, d in rows:
+        n = len([x for x in json.loads(st or "[]") if x not in ("0", "")])
+        k = min(done.get((art, nr), 0), n)
+        w = 20 if d else 10
+        got[art] = got.get(art, 0) + k * w
+        open_[art] = open_.get(art, 0) + (n - k) * w
+    return {a: max(0, min(o, 100 - got.get(a, 0))) for a, o in open_.items()}
 
 
 def _requests(con, D, art=None, spiel=LA):

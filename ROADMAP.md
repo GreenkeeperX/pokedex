@@ -1,5 +1,12 @@
 # Roadmap
 
+## 0.49.0 (12.11.2026)
+
+- `abfragen._pokearth_mons`: Arten ohne deutschen Namen (None) übersprungen; sie warfen auf allen PokéEarth-Karten AttributeError.
+- Forschung: erreichte Stufen in user.db (Tabelle `gefunden`, Karte „forschung“, Objekt „Art|Nr|Stufe“);
+  `research_open` rechnet offene Punkte bis 100 je Art (Sortierung „forschung“, nur Legenden: Arceus).
+- Offen: Alola-Karten (Sonne/Mond, Ultra), Ladezeit der Arceus-Karte beim Start, Hisui-Fangformel und Shiny-Sperren nach den Proben.
+
 ## 0.48.9 (12.11.2026)
 
 - `abfragen.ball_rows`: Bälle aus der Item-Liste des Spiels (Tasche „Bälle“) mit Faktor je Generation; der Schwerball als
