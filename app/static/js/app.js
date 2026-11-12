@@ -667,7 +667,7 @@ function versionsDialog() {
 }
 function nav(tab) {
   $("#nav").innerHTML = TABS.map(([k, n]) => k === "karte" && BATTLE() ? ["kampf", "Kampf"] : [k, n])
-    .flatMap((x) => x[0] === "karte" && TERA() ? [x, ["raids", "Raids"]] : x[0] === "karte" && S.game === "legends-arceus" ? [x, ["auftraege", "Aufträge"]] : [x])
+    .flatMap((x) => x[0] === "karte" && TERA() ? [x, ["raids", "Raids"]] : x[0] === "karte" && REQ_GAME() ? [x, ["auftraege", "Aufträge"]] : [x])
     .map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
 }
 // Zweiter Klick auf den offenen Reiter: nach oben
@@ -708,7 +708,7 @@ async function route() {
   if (tab === "karte" && BATTLE()) { location.replace("#kampf"); return; }
   if (tab === "kampf" && !BATTLE()) { location.replace("#karte"); return; }   // Spielwechsel: Kampf gibt es nur in Champions
   if (tab === "raids" && !TERA()) { location.replace("#karte"); return; }    // Raids nur in Karmesin/Purpur
-  if (tab === "auftraege" && S.game !== "legends-arceus") { location.replace("#karte"); return; }   // Aufträge nur in Legenden: Arceus
+  if (tab === "auftraege" && !REQ_GAME()) { location.replace("#karte"); return; }   // Aufträge nur in Legenden: Arceus und Z-A
   // neue Ansicht: der alte Reiter verschwindet sofort; dieselbe Ansicht mit anderem Inhalt bleibt stehen, oben läuft ein Balken
   const view = tab + (tab === "pokemon" && arg ? "/d" : tab === "karte" ? "/" + (arg === "gebiete" ? "g" : !arg || arg === "mg" ? "mg" : "pla") : "");
   if (view !== VIEW && VIEW) main.innerHTML = `<p class="hint loading">Lädt …</p>`;
@@ -716,7 +716,7 @@ async function route() {
   clearTimeout(busyT); busyT = setTimeout(() => { if (rid === RID) document.body.classList.add("busy"); }, 120);
   try {
     if (!S.meta?.has_data && tab !== "einstellungen") return noData();
-    await Promise.all([loadChart(), loadFavs(), loadCaught(), S.game === "legends-arceus" ? loadReqDone() : null]);
+    await Promise.all([loadChart(), loadFavs(), loadCaught(), REQ_GAME() ? loadReqDone() : null]);
     if (tab === "pokemon" && arg) await detailView(+arg, arg2 === undefined ? null : +arg2);
     else if (tab === "pokemon") await listView();
     else if (tab === "team") await teamView();
@@ -1536,15 +1536,17 @@ async function raidsView(arg) {
    in „gefunden“ unter der Karte „auftrag“ */
 let REQ_DONE = new Set();
 let REQ_REDRAW = null, REQ_OK = false;
-const REQ_KAPITEL = ["Erste Schritte in einer fremden Welt", "Wächter und Könige in Hisui", "Abenteuer im Sumpfland", "Gemeinsamkeit und Stärke",
-  "Der Berg ruft!", "Eisige Abenteuer im Frostland", "Unerwartete Unterstützung", "Legenden im Sinnoh-Tempel", "Die Suche nach Arceus"];
-async function loadReqDone(force = false) {      // einmal je Seitenaufruf; die Haken ändert die Oberfläche selbst
-  if (REQ_OK && !force) return;
-  const r = await api("/api/gefunden?" + qs({spiel: "legends-arceus"})).catch(() => null);
+// Spiele mit Aufträgen und Missionen; Mega-Dimension teilt sie mit Legenden: Z-A
+const REQ_GAMES = {"legends-arceus": "legends-arceus", "legends-za": "legends-za", "mega-dimension": "legends-za"};
+const REQ_GAME = () => REQ_GAMES[S.game] || "";
+async function loadReqDone(force = false) {      // einmal je Seitenaufruf und Spiel; die Haken ändert die Oberfläche selbst
+  if (REQ_OK === REQ_GAME() && !force) return;
+  const g = REQ_GAME();
+  const r = g ? await api("/api/gefunden?" + qs({spiel: g})).catch(() => null) : null;
   if (!r) return;
   // Nebenaufträge unter ihrer Nummer, Hauptmissionen als „m“ + Nummer (gespeichert unter auftrag und mission)
   REQ_DONE = new Set([...(r.auftrag || []).map(String), ...(r.mission || []).map((x) => "m" + x)]);
-  REQ_OK = true;
+  REQ_OK = g;
 }
 const reqCheck = (nr) => `<span class="a req${REQ_DONE.has(String(nr)) ? " on" : ""}" data-act="reqdone" data-id="${nr}" data-tip="${REQ_DONE.has(String(nr)) ? "Erledigt; Klick: wieder offen" : "Als erledigt markieren"}">${REQ_DONE.has(String(nr)) ? "✓" : "○"}</span>`;
 const reqMons = (x) => x.pokemon.map((m) => `<a href="#pokemon/${m.id}" data-hc="${m.id}">${esc(m.name)}</a>`).join(", ");
@@ -1557,24 +1559,26 @@ async function requestsView() {
       <input id="reqq" type="search" placeholder="Suchen: Name, Pokémon, Ort, Belohnung" value="${esc(q)}">
       <span class="seg">${[["offen", "Offen"], ["alle", "Alle"], ["erledigt", "Erledigt"]].map(([k, n]) => `<button class="${k === mode ? "on" : ""}" data-reqmode="${k}">${n}</button>`).join("")}</span>
       <span id="reqn" class="hint"></span></div>
-    <p class="hint">Legenden: Arceus auf Deutsch (Quelle: BisaFans, Hauptmissionen aus der Komplettlösung). Fährst du über einen Eintrag, siehst du
+    <p class="hint"><span id="reqsrc"></span> Fährst du über einen Eintrag, siehst du
       Beschreibung und Lösung. ○ markiert ihn als erledigt, auch auf der Karte (und umgekehrt); 📍 springt zur Stelle auf der Karte.</p>
     <div id="reqlist"><p class="hint">Lädt …</p></div></div>`;
   header();
   const [r] = await Promise.all([api("/api/auftraege?" + qs({spiel: S.game})), loadReqDone(true)]);
   if (rid !== RID) return;
-  const K = r.karte || {};
-  const pin = (k, nr) => K[k]?.[nr] ? ` <a class="reqpin" href="#karte/mg/${esc(K.slug)}/${K[k][nr]}" data-tip="Auf der Karte zeigen">📍</a>` : "";
+  const K = r.karte || {}, KAP = r.kapitel || [];
+  $("#reqsrc").textContent = `${gameName(r.spiel || REQ_GAME())} auf Deutsch (Quelle: ${r.quelle || "BisaFans"}).`;
+  const pin = (k, nr) => K[k]?.[nr] ? ` <a class="reqpin" href="#karte/mg/${esc(K[k][nr][0])}/${K[k][nr][1]}" data-tip="Auf der Karte zeigen">📍</a>` : "";
+  const late = (x) => r.karte_bis && x.nr > r.karte_bis ? `<span class="hint" data-tip="${esc(r.spaet || "")}">nach dem Spiel</span>` : "";
   const draw = () => {
     const ql = ($("#reqq")?.value || "").trim().toLowerCase(), m = store.get("reqMode", "offen");
     if (store.get("reqArt", "neben") === "haupt") {
       const ms = r.missionen || [], done = (x) => REQ_DONE.has("m" + x.nr);
       const xs = ms.filter((x) => (m === "alle" || (m === "erledigt") === done(x)) && (!ql || [x.name, x.text].join(" ").toLowerCase().includes(ql)));
       $("#reqn").textContent = `${ms.filter(done).length} von ${ms.length} erledigt`;
-      $("#reqlist").innerHTML = !ms.length ? `<p class="hint">Noch keine Hauptmissionen. Der nächste Abgleich holt sie aus der Komplettlösung von BisaFans.</p>`
+      $("#reqlist").innerHTML = !ms.length ? `<p class="hint">Noch keine Hauptmissionen. Der nächste Abgleich holt sie.</p>`
         : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Mission")}${th("Kapitel")}${th("Weg", "", true)}${th("", "", true)}</tr></thead>
-          <tbody>${xs.map((x) => `<tr class="${done(x) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${x.nr}</td>
-            <td data-s="${esc(x.name)}"><b>${esc(x.name)}</b>${pin("mission", x.nr)}</td><td class="hint" data-s="${x.kapitel}">${x.kapitel ? esc(`${x.kapitel}. ${REQ_KAPITEL[x.kapitel - 1] || ""}`) : ""}</td>
+          <tbody>${xs.map((x) => `<tr class="${done(x) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${esc(x.label || String(x.nr))}</td>
+            <td data-s="${esc(x.name)}"><b data-tip="${esc(x.text)}">${esc(x.name)}</b>${pin("mission", x.nr)}</td><td class="hint" data-s="${x.kapitel}">${x.kapitel ? esc(KAP.length > 2 ? `${x.kapitel}. ${KAP[x.kapitel - 1] || ""}` : KAP[x.kapitel - 1] || "") : ""}</td>
             <td class="why">${esc(x.text.split("\n").slice(0, 2).join(" "))}</td><td class="c">${reqCheck("m" + x.nr)}</td></tr>`).join("")
             || `<tr><td colspan="5" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
       return;
@@ -1582,11 +1586,11 @@ async function requestsView() {
     const xs = r.rows.filter((x) => (m === "alle" || (m === "erledigt") === REQ_DONE.has(String(x.nr)))
       && (!ql || [x.name, x.aufgabe, x.ort, x.belohnung, x.beschreibung, ...x.pokemon.map((p) => p.name)].join(" ").toLowerCase().includes(ql)));
     $("#reqn").textContent = `${r.rows.filter((x) => REQ_DONE.has(String(x.nr))).length} von ${r.rows.length} erledigt`;
-    $("#reqlist").innerHTML = !r.rows.length ? `<p class="hint">Noch keine Aufträge. Der nächste Abgleich holt sie von BisaFans.</p>`
+    $("#reqlist").innerHTML = !r.rows.length ? `<p class="hint">Noch keine Aufträge. Der nächste Abgleich holt sie.</p>`
       : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Auftrag")}${th("Aufgabe", "", true)}${th("Ort")}${th("Belohnung")}${th("Pokémon", "", true)}${th("", "", true)}</tr></thead>
         <tbody>${xs.map((x) => `<tr class="${REQ_DONE.has(String(x.nr)) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${x.nr}</td>
           <td data-s="${esc(x.name)}"><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b>${pin("auftrag", x.nr)}</td><td class="why">${esc(x.aufgabe)}</td>
-          <td data-s="${esc(x.ort)}">${esc(x.ort) || (K.auftrag?.[x.nr] ? `<span class="hint">siehe Karte</span>` : x.nr > 94 ? `<span class="hint" data-tip="Aus dem Update „Ein neuer Tag in Hisui“; die Karte von Map Genie kennt ihn nicht">nach dem Spiel</span>` : "")}</td><td data-s="${esc(x.belohnung)}">${esc(x.belohnung)}</td><td>${reqMons(x)}</td><td class="c">${reqCheck(x.nr)}</td></tr>`).join("")
+          <td data-s="${esc(x.ort)}">${esc(x.ort) || (K.auftrag?.[x.nr] ? `<span class="hint">siehe Karte</span>` : late(x))}</td><td data-s="${esc(x.belohnung)}">${esc(x.belohnung)}</td><td>${reqMons(x)}</td><td class="c">${reqCheck(x.nr)}</td></tr>`).join("")
           || `<tr><td colspan="7" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
   };
   draw();
@@ -1603,7 +1607,7 @@ async function toggleReq(nr) {
   if (on) REQ_DONE.add(k); else REQ_DONE.delete(k);
   paint();
   if (location.hash.startsWith("#auftraege") && REQ_REDRAW) REQ_REDRAW();
-  await api("/api/gefunden", {spiel: "legends-arceus", karte: mis ? "mission" : "auftrag", objekt: mis ? k.slice(1) : k, an: on}).catch(() => {
+  await api("/api/gefunden", {spiel: REQ_GAME(), karte: mis ? "mission" : "auftrag", objekt: mis ? k.slice(1) : k, an: on}).catch(() => {
     if (on) REQ_DONE.delete(k); else REQ_DONE.add(k);
     paint();
   });
@@ -2407,7 +2411,7 @@ async function mgView(slug, want) {
         <span class="hint">|</span> <button class="link" data-gfold="1" data-tip="alle Gruppen aufklappen">auf</button> · <button class="link" data-gfold="0" data-tip="alle Gruppen zuklappen">zu</button></span></div>
         ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
-    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN", dittobase: "DittoBase (aus den Spieldaten gezeichnet; Häuser und Höhlen stehen an ihrem Eingang)", rankedboost: "RankedBoost (je Ort ein Bild an seiner Stelle, ein Punkt je Ort mit seinen Pokémon)"})[d.quelle] || "Map Genie"}${["pokemoncompletion", "dittobase"].includes(d.quelle) && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
+    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN", dittobase: "DittoBase (aus den Spieldaten gezeichnet; Häuser und Höhlen stehen an ihrem Eingang)", pokearth: "Serebii PokéEarth (Karte der Region; je Ort die Pokémon aus den Fundorten des Spiels)", rankedboost: "RankedBoost (je Ort ein Bild an seiner Stelle, ein Punkt je Ort mit seinen Pokémon)"})[d.quelle] || "Map Genie"}${["pokemoncompletion", "dittobase"].includes(d.quelle) && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
   header();
   const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box), old = $(".mgold", box), ld = $(".mgload", box);
   const tileUrl = (k) => `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;

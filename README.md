@@ -20,7 +20,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   schillerndes Artwork und animiertes Sprite, Ruf, getragene Items, Links ins PokéWiki. Pokédex-Eintrag und
   Fähigkeitstexte auf Deutsch für das gewählte Spiel (PokéAPI, ergänzt aus dem PokéWiki), in Legenden: Arceus die
   Forschungsaufgaben und die Aufträge, in denen das Pokémon vorkommt.
-- **Aufträge** (Legenden: Arceus): alle Nebenmissionen auf Deutsch mit Aufgabe, Ort, Belohnung und Lösung, Suche,
+- **Aufträge** (Legenden: Arceus und Legenden: Z-A): alle Neben- und Hauptmissionen auf Deutsch mit Aufgabe, Ort, Belohnung und Lösung, Suche,
   Haken für erledigte.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein
@@ -80,7 +80,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Weitere Kartenquellen: IGN (Schwert/Schild, Let’s Go, alle Punkte), pokemoncompletion (Kristall, Smaragd, Platin) und
   DittoBase (Kristall und Gold/Silber, aus den Spieldaten gezeichnet, mit Trainern samt Team und den wilden Pokémon je Gebiet; was in
   Häusern und Höhlen liegt, steht am Eingang) und RankedBoost (Let’s Go, Feuerrot/Blattgrün: je Ort ein Bild und ein Punkt mit den
-  Pokémon je Fangart).
+  Pokémon je Fangart). Alle übrigen Spiele bekommen die Regionskarte von Serebii mit einem Punkt je Ort und den Pokémon dort.
 - **Effort Levels** (Legenden: Arceus, Detailseite): Stufe 0 bis 10 je Wert mit Wertrechnung, Ziel und Planer für
   Leistungssand, -kies, -stein und -fels; im Team je Platz gespeichert. Im Reiter Team der Stand aller Mitglieder und was dem
   Team fehlt; die Initiative-Liste rechnet in diesem Spiel mit Effort Levels. Balken und Netz zeigen live, woraus jeder Wert
@@ -116,7 +116,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [DittoBase](https://www.dittobase.com) | Kristall, Gold/Silber: Karte aus den Spieldaten (selbst gezeichnet), Items, versteckte Items, Trainer mit Team, wilde Pokémon je Gebiet; nur im Datenordner, für den privaten Gebrauch | Daten und Grafik von DittoBase, Spielgrafik von Nintendo |
 | [PokéWiki](https://www.pokewiki.de) | Links; deutsche Pokédex-Einträge, Attacken- und Fähigkeitstexte je Spiel, Forschungsaufgaben in Legenden: Arceus; Attackenwerte in Legenden: Arceus (Kraft- und Tempostil), getragene Items, Karte (Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas, Items am Boden und in Grabstellen); geplant: Edelhorden | CC BY-SA 3.0 DE |
 | [RankedBoost](https://rankedboost.com) | Let’s Go, Feuerrot/Blattgrün: Ortsbilder als Karte und die Pokémon je Ort und Fangart; nur im Datenordner, für den privaten Gebrauch | Daten und Bilder von RankedBoost, Spielgrafik von Nintendo |
-| [BisaFans](https://www.bisafans.de) | Aufträge (Nebenmissionen) und Hauptmissionen (Komplettlösung) in Legenden: Arceus auf Deutsch | Daten von BisaFans, für den privaten Gebrauch |
+| [BisaFans](https://www.bisafans.de) | Aufträge (Nebenmissionen) und Hauptmissionen (Komplettlösung) in Legenden: Arceus, Nebenmissionen in Legenden: Z-A auf Deutsch | Daten von BisaFans, für den privaten Gebrauch |
+| [Serebii PokéEarth](https://www.serebii.net/pokearth/) | Regionskarten (Johto, Kanto, Hoenn, Sinnoh, Einall, Kalos, Alola, Orre) für die Spiele ohne andere Karte; nur im Datenordner | Bilder von Serebii, Spielgrafik von Nintendo |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
 

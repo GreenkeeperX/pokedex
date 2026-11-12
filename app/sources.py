@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.40.0"
+VERSION = "0.41.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.41.0", "12.11.2026", [
+        "Legenden: Z-A hat jetzt auch den Reiter Aufträge: alle Nebenmissionen auf Deutsch (BisaFans, auch die der Mega-Dimension) und die Haupt- und Dimensions-Missionen (PokéWiki), abhakbar und mit der Karte verbunden",
+        "Karten für alle übrigen Spiele: HeartGold/SoulSilver (Johto und Kanto), Schwarz/Weiß und Schwarz 2/Weiß 2, X/Y, Omega Rubin/Alpha Saphir, Sonne/Mond, Ultrasonne/Ultramond, Strahlender Diamant/Leuchtende Perle, Colosseum und XD als Regionskarte von Serebii; je Ort ein Punkt mit den Pokémon dort",
+        "Die Erweiterungen von Schwert/Schild zeigen die Karte von Galar",
+    ]),
     ("0.40.0", "12.11.2026", [
         "Aufträge und Karte hängen zusammen: ein Haken im Reiter Aufträge gilt auch auf der Karte und umgekehrt; 📍 springt vom Auftrag zur Stelle auf der Karte",
         "Auf der Karte von Legenden: Arceus tragen Aufträge und Hauptmissionen jetzt den deutschen Namen und Text von BisaFans (Beschreibung, Aufgabe, Lösung, Belohnung), der englische steht darunter",

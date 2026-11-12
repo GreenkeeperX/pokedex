@@ -19,7 +19,7 @@ GAMES = {"legends-arceus": "pokemon-legends-arceus", "scarlet-violet": "pokemon-
          "legends-za": "pokemon-legends-z-a", "firered-leafgreen": "pokemon-firered-leafgreen",
          "red-blue": "pokemon-red-blue-yellow", "pokopia": "pokopia"}
 # Erweiterungen und Schwester-Editionen zeigen die Karten ihres Hauptspiels
-SHARE = {"the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet", "mega-dimension": "legends-za",
+SHARE = {"the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield", "the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet", "mega-dimension": "legends-za",
          "yellow": "red-blue", "red-green-japan": "red-blue", "blue-japan": "red-blue"}
 
 
@@ -291,7 +291,7 @@ def name_de(t, de):
     return t
 
 
-QUELLE = {"pokemoncompletion": "pokemoncompletion", "ign": "IGN", "dittobase": "DittoBase", "rankedboost": "RankedBoost"}   # Name der Quelle einer Karte
+QUELLE = {"pokemoncompletion": "pokemoncompletion", "ign": "IGN", "dittobase": "DittoBase", "rankedboost": "RankedBoost", "pokearth": "Serebii"}   # Name der Quelle einer Karte
 MERGE_TOL = 30.0            # so nah (Weltpixel bei Zoomstufe 14, wenige Meter) gelten zwei Punkte als dasselbe
 MERGE_WIDE = 3              # Einzelstücke (Geisterlichter, Icognito, Gedichte, Alphas …) dürfen dreimal so weit weg sein
 

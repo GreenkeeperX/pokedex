@@ -53,7 +53,9 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    3 Sekunden Pause; ohne Treffer gilt `bisafans.json` vom letzten Lauf. `importer._derive_auftrag` legt die Aufträge in
    `auftrag` und sucht darin die Namen der Arten aus dem Hisui-Pokédex. Dazu die neun Seiten der Komplettlösung
    (`bisafans.LA_STORY`): die Hauptmissionen („Mission N: Name“ mit dem Anfang des Wegs) in `la_missionen`,
-   `importer._derive_mission` legt sie in `mission`.
+   `importer._derive_mission` legt sie in `mission`. Für Legenden: Z-A die Nebenmissionen (`bisafans.ZA_REQUESTS`, Hauptspiel
+   und Mega-Dimension) und aus dem PokéWiki die Seite „Missionen in Pokémon-Legenden: Z-A“ (`pokewiki.za_missions`): Haupt-
+   und Dimensions-Missionen, dazu Nebenmissionen, die BisaFans noch fehlen.
    **PLA Companion** (software-notion.de, `app/companion.py`): je Karte `/apps/pla-companion/map/<Karte>/data?lang=de`
    mit 2 Sekunden Pause; Schnellreise und Lager, ausgerichtet an Geisterlichtern und Icognito von Altissimo
    (`companion.fit`, `importer._derive_companion`). Das Protokoll zählt alle Arten von Einträgen.
@@ -82,6 +84,10 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    einmal nach `mapgenie/kacheln/db/_saetze/`; daraus zeichnet der Abgleich alle Kacheln selbst nach
    `mapgenie/kacheln/db/<Spiel>/<z>/<x>-<y>.png` (`app/png.py`), neu nur, wenn sich Daten oder Kachelsätze ändern
    (`stand.json`). Gold/Silber hat eine eigene Karte; von Kristall kommt dort nur die Karte von pokemoncompletion dazu.
+7. **Serebii PokéEarth** (`app/pokearth.py`, Quelle „pokearth“): je Region in `pokearth.GAMES` die Regionsseite
+   (`/pokearth/<Region>/`, 2 Sekunden Pause) mit Bildkarte; das Bild einmal nach `mapgenie/kacheln/se/<Region>.png`, je
+   Spiel die Karten seiner Regionen nach `mapgenie/<Spiel>.se.json`. Die Pokémon je Ort setzt `abfragen._pokearth_mons`
+   beim Anzeigen aus den Fundorten des Spiels ein.
 7. **RankedBoost** (`app/rankedboost.py`, Quelle „rankedboost“): je Spiel in `rankedboost.GAMES` (Let’s Go, Feuerrot/Blattgrün)
    die Fundortseite, darin die Adresse der Kartendaten (`megamap-<Spiel>-<Prüfsumme>.json`; ohne Treffer die zuletzt
    bekannte), daraus Orte und Pokémon nach `mapgenie/<Spiel>.rb.json`. Die Ortsbilder (webp) kommen einmal nach

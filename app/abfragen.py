@@ -960,22 +960,23 @@ def mg_names():
     return out
 
 
-def _quests_de(r):
+def _quests_de(r, spiel=LA):
     """Aufträge und Hauptmissionen auf der Karte: deutscher Name und Text von BisaFans vor dem englischen von Map Genie;
     „aq“ nennt den Schlüssel, unter dem der Haken liegt (wie im Reiter Aufträge)."""
-    cats = {c["id"]: QUEST_CATS.get(c["en"]) for g in r["gruppen"] for c in g["kategorien"]}
+    spiel = QUEST_GAMES.get(spiel, spiel)
+    cats = {c["id"]: quest_kind(c["en"]) for g in r["gruppen"] for c in g["kategorien"]}
     con = db.game()
     try:
         D = data()
-        de = {"auftrag": {x["nr"]: x for x in (_requests(con, D) if D else [])}, "mission": {x["nr"]: x for x in _missions(con)}}
+        de = {"auftrag": {x["nr"]: x for x in (_requests(con, D, spiel=spiel) if D else [])},
+              "mission": {x["nr"]: x for x in _missions(con, spiel)}}
     finally:
         con.close()
     for p in r["punkte"]:
         k = cats.get(p["c"])
-        x = k and re.match(r"#(\d{1,3})\s*:", p.get("en") or p["name"] or "")
-        if not x:
+        nr = quest_nr(p.get("en") or p["name"]) if k else None
+        if nr is None:
             continue
-        nr = int(x.group(1))
         p["aq"] = f"{k}|{nr}"
         g = de[k].get(nr)
         if not g:
@@ -990,6 +991,47 @@ def _quests_de(r):
             p["q"] = p.get("q", []) + ["BisaFans"]
 
 
+def _pokearth_mons(r, spiel):
+    """Regionskarten von Serebii: je Ort die Pokémon aus den Fundorten des Spiels (Spieldaten oder PokéAPI), deutscher
+    Ortsname. Serebii nennt die Orte englisch; die PokéAPI kennt beide Namen."""
+    a = areas({"spiel": spiel}) or {}
+    if not a.get("gebiete"):
+        return
+    con = db.game()
+    try:
+        en, de = {}, {}
+        for k, lang, n in con.execute("SELECT location_id, local_language_id, name FROM location_names WHERE local_language_id IN (6, 9)"):
+            (de if lang == 6 else en).setdefault(k, n)
+    except Exception:
+        return
+    finally:
+        con.close()
+    en2de = {}
+    for k, n in en.items():
+        en2de.setdefault(n.lower(), de.get(k) or n)
+    for p in r["punkte"]:
+        name = p.get("en") or p["name"]
+        d = en2de.get(name.lower()) or en2de.get(re.sub(r"\s+(City|Town)$", "", name).lower())
+        if not d:
+            continue
+        if d != p["name"]:
+            p.setdefault("en", p["name"])
+            p["name"] = d
+        dl = d.lower()
+        gs = [g for g in a["gebiete"] if g["ort"].lower() == dl or g["ort"].lower().startswith(dl + " (")]
+        if not gs:
+            continue
+        lines = []
+        for g in gs:
+            by = {}
+            for x in g["mons"]:
+                by.setdefault(x["methode"] or "Pokémon", []).append(f"{x['name']} ({x['level']})" if x.get("level") else x["name"])
+            head = f"**{g['ort']}**" if len(gs) > 1 else ""
+            lines += ([head] if head else []) + [f"- **{k}:** " + ", ".join(dict.fromkeys(v)) for k, v in by.items()]
+        p["text"] = "\n".join(lines)
+        p["q"] = list(dict.fromkeys(p.get("q", []) + [a.get("quelle") or "PokéAPI"]))
+
+
 def mg_map(m, spiel, stamp=None):
     """Eine Karte von Map Genie als eine Datenbank mit den eigenen Daten (mapgenie.merge): deutsche Ebenen, gleiche
     Stellen verschmolzen. Für Legenden: Arceus kommen Spawnpunkte und Symbole aus den Spieldaten dazu."""
@@ -999,8 +1041,10 @@ def mg_map(m, spiel, stamp=None):
         return hit[key]
     own = mg_overlay(m, stamp) if spiel == "legends-arceus" else None
     r = mapgenie.merge(m, own, mg_names())
-    if spiel == LA:
-        _quests_de(r)
+    if spiel in QUEST_GAMES:
+        _quests_de(r, spiel)
+    if m.get("quelle") == "pokearth":
+        _pokearth_mons(r, spiel)
     out = {k: v for k, v in m.items() if k not in ("orte", "gruppen")}
     out.update(r, spiel=spiel, am=stamp, bounds=mapgenie.bounds_of(m))
     while len(hit) >= MERGED_MAX:            # die ältesten zuerst weg
@@ -1301,7 +1345,7 @@ def detail(fid, p):
                     text=joined(dex) if dex["texte"] else (" ".join(str(flavor[0]).split()) if flavor else ""),
                     texte=dex["texte"], text_aus=dex["aus"], text_quelle=dex["quelle"] or ("PokéAPI" if flavor else ""),
                     forschung=_research(con, f["art"]) if g and g["kennung"] == LA else [], faehigkeiten=abil,
-                    auftraege=_requests(con, D, f["art"]) if g and g["kennung"] == LA else [],
+                    auftraege=_requests(con, D, f["art"], QUEST_GAMES[g["kennung"]]) if g and g["kennung"] in QUEST_GAMES else [],
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
@@ -1417,11 +1461,11 @@ def _research(con, art):
     return out
 
 
-def _requests(con, D, art=None):
-    """Aufträge in Legenden: Arceus (BisaFans), mit art nur die, in denen die Art vorkommt."""
+def _requests(con, D, art=None, spiel=LA):
+    """Aufträge (Nebenmissionen) eines Spiels (BisaFans), mit art nur die, in denen die Art vorkommt."""
     try:
         rows = con.execute("SELECT nr, name, beschreibung, aufgabe, ort, loesung, belohnung, arten FROM auftrag "
-                           "WHERE spiel = ? ORDER BY nr", (LA,)).fetchall()
+                           "WHERE spiel = ? ORDER BY nr", (spiel,)).fetchall()
     except Exception:
         return []
     std = {}
@@ -1438,45 +1482,82 @@ def _requests(con, D, art=None):
     return out
 
 
-def _missions(con):
+def _missions(con, spiel=LA):
     try:
-        return [{"nr": nr, "name": n, "kapitel": k, "text": t} for nr, n, k, t in
-                con.execute("SELECT nr, name, kapitel, text FROM mission WHERE spiel = ? ORDER BY nr", (LA,))]
+        return [{"nr": nr, "name": n, "kapitel": k, "text": t, "label": f"D{nr - 100}" if spiel == ZA and k == 2 else str(nr)}
+                for nr, n, k, t in con.execute("SELECT nr, name, kapitel, text FROM mission WHERE spiel = ? ORDER BY nr", (spiel,))]
     except Exception:
         return []
 
 
-QUEST_CATS = {"Request": "auftrag", "Story Mission": "mission"}     # Kategorien von Map Genie → Schlüssel in gefunden
+ZA = "legends-za"
+QUEST_GAMES = {LA: LA, ZA: ZA, "mega-dimension": ZA}       # Spiel → Spiel, unter dem Aufträge und Haken liegen
+QUEST_INFO = {
+    LA: {"kapitel": ["Erste Schritte in einer fremden Welt", "Wächter und Könige in Hisui", "Abenteuer im Sumpfland",
+                     "Gemeinsamkeit und Stärke", "Der Berg ruft!", "Eisige Abenteuer im Frostland", "Unerwartete Unterstützung",
+                     "Legenden im Sinnoh-Tempel", "Die Suche nach Arceus"],
+         "quelle": "Nebenmissionen von BisaFans, Hauptmissionen aus der Komplettlösung von BisaFans", "karte_bis": 94,
+         "spaet": "Aus dem Update „Ein neuer Tag in Hisui“; die Karte von Map Genie kennt ihn nicht"},
+    ZA: {"kapitel": ["Hauptmission", "Dimensions-Mission (Mega-Dimension)"],
+         "quelle": "Nebenmissionen von BisaFans (auch Mega-Dimension), Haupt- und Dimensions-Missionen aus dem PokéWiki",
+         "karte_bis": 0, "spaet": ""},
+}
+
+
+def quest_kind(title):
+    """Kategorie von Map Genie → Schlüssel in gefunden: Aufträge (Request, Side Mission) und Hauptmissionen."""
+    t = (title or "").lower()
+    if "request" in t or "side mission" in t or "side quest" in t:
+        return "auftrag"
+    if "story mission" in t or "main mission" in t or "main quest" in t:
+        return "mission"
+    return None
+
+
+QUEST_CATS = {"Request": "auftrag", "Story Mission": "mission"}     # Legenden: Arceus; andere über quest_kind
+_QNR = re.compile(r"^\s*(?:#|(?:(?:side|main|story)\s+)?(?:mission|quest|request)\s*#?)?\s*(\d{1,3})\s*[:.\-–]", re.I)
+
+
+def quest_nr(name):
+    x = _QNR.match(name or "")
+    return int(x.group(1)) if x else None
 
 
 def quest_points(m):
     """Aufträge und Hauptmissionen auf der Karte von Map Genie: {"auftrag": {Nr: Ort-id}, "mission": {...}}. Die Namen
-    beginnen mit „#Nr: “; Map Genie zählt wie BisaFans."""
-    out = {v: {} for v in QUEST_CATS.values()}
+    beginnen mit der Nummer („#Nr: “, „Side Mission Nr: “); Map Genie zählt wie BisaFans."""
+    out = {"auftrag": {}, "mission": {}}
     cats = {c["id"]: c["titel"] for g in (m or {}).get("gruppen") or [] for c in g["kategorien"]}
     for o in (m or {}).get("orte") or []:
-        k = QUEST_CATS.get(cats.get(o[1]))
-        x = re.match(r"#(\d{1,3})\s*:", o[4] or "")
-        if k and x:
-            out[k].setdefault(int(x.group(1)), o[0])
+        k = quest_kind(cats.get(o[1]))
+        nr = quest_nr(o[4])
+        if k and nr is not None:
+            out[k].setdefault(nr, o[0])
     return out
 
 
 def request_list(p):
-    """Alle Aufträge in Legenden: Arceus: {"rows": [...], "missionen": [...], "karte": {slug, auftrag: {Nr: Ort-id},
-    mission: {...}}} (leer in anderen Spielen)."""
+    """Aufträge und Missionen eines Spiels mit Aufträgen (QUEST_GAMES): {"spiel", "rows": [...], "missionen": [...],
+    "kapitel", "quelle", "karte": {auftrag: {Nr: [Karte, Ort-id]}, mission: {...}}} (leer in anderen Spielen)."""
     D = data()
-    if not D or p.get("spiel") not in (None, "", LA):
+    spiel = QUEST_GAMES.get(p.get("spiel") or LA)
+    if not D or not spiel:
         return {"rows": [], "missionen": []}
     from . import abruf
     con = db.game()
     try:
-        out = {"rows": _requests(con, D), "missionen": _missions(con)}
+        out = {"spiel": spiel, "rows": _requests(con, D, spiel=spiel), "missionen": _missions(con, spiel)}
     finally:
         con.close()
-    m = next((k for k in (abruf.mg_maps(LA) or {}).get("karten", []) if not k.get("quelle")), None)
-    if m:
-        out["karte"] = dict(quest_points(m), slug=m["slug"])
+    out.update(QUEST_INFO.get(spiel, {}))
+    karte = {"auftrag": {}, "mission": {}}
+    for m in (abruf.mg_maps(spiel) or {}).get("karten", []):
+        if m.get("quelle"):
+            continue
+        for k, v in quest_points(m).items():
+            for nr, oid in v.items():
+                karte[k].setdefault(nr, [m["slug"], oid])
+    out["karte"] = karte
     return out
 
 
