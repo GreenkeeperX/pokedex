@@ -99,7 +99,10 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Spiel die Karten seiner Regionen nach `mapgenie/<Spiel>.se.json`. Die Pokémon je Ort setzt `abfragen._pokearth_mons`
    beim Anzeigen aus den Fundorten des Spiels ein. Hat Serebii keine Bildkarte (Kalos, seit 0.48), kommen die Orte aus der
    PokéWiki-Vorlage in `pokearth.PW_MAPS` (`<imagemap>`, deutsche Namen) und das Bild in groß von Bulbapedia, wenn es
-   dasselbe Seitenverhältnis hat wie das kleine PokéWiki-Bild (sonst das kleine); Adressen über `imageinfo`.
+   dasselbe Seitenverhältnis hat wie das kleine PokéWiki-Bild (sonst das kleine); Adressen über `imageinfo`. Alola (seit 0.56)
+   hat keine Gesamtkarte: die Vorlage „USUM-Map Alola“ enthält je Insel eine Bildkarte (`pokearth.pw_islands`), daraus
+   wird je Insel eine Karte (`se-alola-<Insel>`, Bild `se/alola-<Insel>.png` in Originalgröße, 270 px). Der Punkt eines
+   Orts liegt im Schwerpunkt seiner Fläche (`_centre`).
 7. **HGSS IronMON Map** (`app/ironmon.py`, Quelle „ironmon“, GitHub): je Region Trainer und Items (`src/data/*.ts`) und
    einmal das Bild (`src/assets/Full<Region>.webp`) nach `mapgenie/kacheln/im/<Region>.webp`; Karten nach
    `mapgenie/heartgold-soulsilver.im.json`. Kacheln macht der Browser beim ersten Öffnen (`/api/kacheln/umwandeln`),

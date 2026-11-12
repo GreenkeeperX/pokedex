@@ -27,7 +27,13 @@ REGION = {"kanto": "Kanto", "johto": "Johto", "hoenn": "Hoenn", "sinnoh": "Sinno
 # kommt in groß von Bulbapedia, wenn dort dieselbe Karte liegt (gleiches Seitenverhältnis), sonst klein aus dem PokéWiki.
 PW_API = "https://www.pokewiki.de/api.php"
 BULBA_API = "https://archives.bulbagarden.net/w/api.php"
-PW_MAPS = {"kalos": {"vorlage": "XY-Map Kalos", "bild": "XY-Map Kalos.png", "gross": "Kalos XY.png"}}
+PW_MAPS = {"kalos": {"vorlage": "XY-Map Kalos", "bild": "XY-Map Kalos.png", "gross": "Kalos XY.png"},
+           # 0.56: Alola hat keine Gesamtkarte, sondern je Insel eine Bildkarte (270 px) in einer Vorlage; eine Karte je Insel
+           "alola": {"vorlage": "USUM-Map Alola", "inseln": (("mele-mele", "Mele-Mele", "USUM-Map Mele-Mele.png"),
+                                                             ("akala", "Akala", "USUM-Map Akala.png"),
+                                                             ("ula-ula", "Ula-Ula", "USUM-Map Ula-Ula.png"),
+                                                             ("poni", "Poni", "USUM-Map Poni.png"),
+                                                             ("aether", "Æther-Paradies", "USUM-Map Æther-Paradies.png"))}}
 _IMG = re.compile(r"<img\b[^>]*\busemap\s*=\s*[\"']#?([^\"']+)[\"'][^>]*>", re.I)
 _AREA = re.compile(r"<area\b[^>]*>", re.I)
 
@@ -138,7 +144,52 @@ def pw_areas(wt):
     m = re.search(r"(#tag:imagemap|<imagemap>)", wt, re.I)
     if not m:
         return []
-    body = wt[m.end():]
+    return _areas_of(wt[m.end():])
+
+
+_MAP_START = re.compile(r"(#tag:imagemap\||<imagemap>)", re.I)
+
+
+def pw_imagemaps(wt):
+    """0.56: alle Bildkarten einer Vorlage → {Bilddatei: Orte}. Die Datei steht in der ersten Zeile („Datei:X.png“, bei
+    {{Fileexist|…}} die letzte, das ist das Bild ohne hervorgehobenen Ort)."""
+    wt = str(wt or "")
+    starts = [m.end() for m in _MAP_START.finditer(wt)] + [len(wt)]
+    out = {}
+    for a, b in zip(starts, starts[1:]):
+        body = wt[a:b]
+        files = re.findall(r"(?:Datei|File|Bild):([^|{}\[\]\n]+?\.(?:png|jpe?g|gif))", body.split("\n", 1)[0], re.I)
+        if files:
+            out.setdefault(" ".join(files[-1].split()), _areas_of(body))
+    return out
+
+
+def _centre(cs, kind):
+    """Punkt für einen Ort: Schwerpunkt der Fläche; liegt er außerhalb (Route mit Knick), die nächste Ecke."""
+    if kind == "circle" or len(cs) < 6:
+        return None
+    xs, ys = cs[0::2], cs[1::2]
+    n = min(len(xs), len(ys))
+    a = cx = cy = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        f = xs[i] * ys[j] - xs[j] * ys[i]
+        a, cx, cy = a + f, cx + (xs[i] + xs[j]) * f, cy + (ys[i] + ys[j]) * f
+    if abs(a) < 1e-9:
+        return None
+    cx, cy = cx / (3 * a), cy / (3 * a)
+    inside = False
+    for i in range(n):
+        j = i - 1
+        if (ys[i] > cy) != (ys[j] > cy) and cx < (xs[j] - xs[i]) * (cy - ys[i]) / ((ys[j] - ys[i]) or 1e-9) + xs[i]:
+            inside = not inside
+    if inside:
+        return cx, cy
+    k = min(range(n), key=lambda i: (xs[i] - cx) ** 2 + (ys[i] - cy) ** 2)
+    return xs[k], ys[k]
+
+
+def _areas_of(body):
     end = re.search(r"(?m)^\s*desc\b|</imagemap>", body)
     body = body[:end.start()] if end else body
     orte, seen = [], set()
@@ -158,8 +209,12 @@ def pw_areas(wt):
         if not name or name in seen:
             continue
         seen.add(name)
-        orte.append({"name": name[:120], "x": x0, "y": y0, "w": max(1.0, x1 - x0), "h": max(1.0, y1 - y0),
-                     "seite": "https://www.pokewiki.de/" + urllib.parse.quote(target.strip().replace(" ", "_"))})
+        o = {"name": name[:120], "x": x0, "y": y0, "w": max(1.0, x1 - x0), "h": max(1.0, y1 - y0),
+             "seite": "https://www.pokewiki.de/" + urllib.parse.quote(target.strip().replace(" ", "_"))}
+        c = _centre(cs, kind)
+        if c:
+            o["cx"], o["cy"] = c
+        orte.append(o)
     return orte
 
 
@@ -171,13 +226,15 @@ def pw_map(orte, small, big=None):
     url, w, h = small
     if big and big[1] > w and abs(big[1] / big[2] - w / h) <= 0.02 * (w / h):
         fx, fy = big[1] / w, big[2] / h
-        orte = [dict(o, x=o["x"] * fx, y=o["y"] * fy, w=o["w"] * fx, h=o["h"] * fy) for o in orte]
+        orte = [dict(o, x=o["x"] * fx, y=o["y"] * fy, w=o["w"] * fx, h=o["h"] * fy,
+                     **({"cx": o["cx"] * fx, "cy": o["cy"] * fy} if "cx" in o else {})) for o in orte]
         url, w, h = big
     return {"bild": url, "w": w, "h": h, "orte": orte, "quelle": "PokéWiki"}
 
 
-def parse(d, region):
-    """Daten einer Regionsseite → Karte wie mapgenie.parse mit einem Bild (bilder [[0, 0, 0, w, h, Datei]]) oder None."""
+def parse(d, region, teil=None):
+    """Daten einer Regionsseite → Karte wie mapgenie.parse mit einem Bild (bilder [[0, 0, 0, w, h, Datei]]) oder None.
+    teil: (Kennung, Titel) eines Teils der Region (Insel in Alola), sonst die ganze Region."""
     if not d:
         return None
     W, H = d["w"], d["h"]
@@ -189,7 +246,7 @@ def parse(d, region):
         if o["name"] in seen:
             continue
         seen.add(o["name"])
-        la, lo = ll(o["x"] + o["w"] / 2, o["y"] + o["h"] / 2)
+        la, lo = ll(o["cx"], o["cy"]) if "cx" in o else ll(o["x"] + o["w"] / 2, o["y"] + o["h"] / 2)
         n, w = ll(o["x"], o["y"])
         s, e = ll(o["x"] + o["w"], o["y"] + o["h"])
         cat = 2 if re.search(r"\b(Route|Road|Path|Sea|Water|Weg|Pfad|Straße)\b", o["name"]) else 1
@@ -200,11 +257,27 @@ def parse(d, region):
     cats = [{"id": 1, "titel": "Städte und Orte", "icon": "", "n": sum(1 for o in orte if o[1] == 1)},
             {"id": 2, "titel": "Routen", "icon": "", "n": sum(1 for o in orte if o[1] == 2)}]
     gebiete.sort(key=lambda g: g[0].lower())
-    return {"id": 0, "slug": "se-" + region, "titel": f"{REGION.get(region, region.title())} ({d.get('quelle') or 'Serebii'})", "quelle": "pokearth",
+    key = region + ("-" + teil[0] if teil else "")
+    name = REGION.get(region, region.title()) + (": " + teil[1] if teil else "")
+    return {"id": 0, "slug": "se-" + key, "titel": f"{name} ({d.get('quelle') or 'Serebii'})", "quelle": "pokearth",
             "kacheln": "", "endung": ext, "kachel": TILE, "dim": {"w": W, "h": H}, "min_zoom": z1, "max_zoom": z1 + ZOOM_IN,
             "bild_z": z1, "bounds": [w0, s0, e0, n0], "region": region,
             "gruppen": [{"id": 910, "titel": "Orte der Region", "farbe": "#e0a040", "kategorien": cats}],
-            "orte": orte, "gebiete": gebiete, "bilder": [[0, 0, 0, W, H, f"se/{region}.{ext}"]]}
+            "orte": orte, "gebiete": gebiete, "bilder": [[0, 0, 0, W, H, f"se/{key}.{ext}"]]}
+
+
+def pw_islands(wt, region):
+    """0.56: Orte je Insel aus einer Vorlage mit mehreren Bildkarten → [(Kennung, Titel, Bilddatei, Orte)]. Flächen, die
+    auf eine andere Insel verweisen (Pfeile zur Nachbarinsel), fallen weg."""
+    cfg = PW_MAPS.get(region) or {}
+    maps = pw_imagemaps(wt)
+    names = {t for _, t, _ in cfg.get("inseln", ())}
+    out = []
+    for key, title, f in cfg.get("inseln", ()):
+        orte = [o for o in maps.get(f, []) if o["name"] not in names and not o["name"].startswith(("Kategorie:", "{{"))]
+        if orte:
+            out.append((key, title, f, orte))
+    return out
 
 
 def tile(m, z, x, y):

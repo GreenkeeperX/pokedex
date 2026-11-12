@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.56.0 (12.11.2026)
+
+- Alola: `pokearth.pw_imagemaps` liest alle Bildkarten einer Vorlage, `pw_islands` je Insel die Orte (ohne Pfeile zur
+  Nachbarinsel), `abruf._pw_island` holt das Inselbild (270 px, PokéWiki). Punkte im Schwerpunkt der Fläche (`_centre`).
+  Damit hat jedes Spiel außer Champions eine Karte. Die größeren Inselbilder (Bulbapedia „Island Map 2“, 650–750 px) haben
+  einen anderen Ausschnitt; sie bräuchten eine Ausrichtung, die sich ohne die vollen Bilder nicht prüfen lässt.
+- Kopfzeile: `syncPoll` fragt `/api/meta` alle 5 Sekunden, solange ein Abgleich läuft, in jedem Reiter.
+- `_pokearth_mons` vergleicht Ortsnamen mit ’ und ' gleich (Lili’i).
+
 ## 0.55.0 (12.11.2026)
 
 - Sammelobjekte: `abfragen.collectibles` (`/api/sammeln?spiel=…`) liest alle zusammengeführten Karten des Spiels

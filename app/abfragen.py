@@ -1277,26 +1277,27 @@ def _pokearth_mons(r, spiel):
         return
     finally:
         con.close()
+    low = lambda t: t.lower().replace("’", "'")      # 0.56: PokéWiki schreibt „Lili’i“, die PokéAPI „Lili'i“
     en2de = {}
     for k, n in en.items():
         if n:
-            en2de.setdefault(n.lower(), de.get(k) or n)
+            en2de.setdefault(low(n), de.get(k) or n)
     for n in de.values():                  # 0.48: Karten aus dem PokéWiki nennen die Orte schon deutsch
         if n:                              # 0.49: Arten ohne deutschen Namen (None) warfen AttributeError
-            en2de.setdefault(n.lower(), n)
+            en2de.setdefault(low(n), n)
     for p in r["punkte"]:
         if p.get("text"):              # „Ort: Cherrygrove“ (Trainer, Items) → deutscher Ortsname
             p["text"] = re.sub(r"(\*\*Ort:\*\* )([^\n(]+?)(?=\s*\(|\n|$)", lambda x: x.group(1) + (
                 en2de.get(x.group(2).lower()) or en2de.get(re.sub(r"\s+(City|Town)$", "", x.group(2)).lower()) or x.group(2)), p["text"])
         name = p.get("en") or p["name"]
-        d = en2de.get(name.lower()) or en2de.get(re.sub(r"\s+(City|Town)$", "", name).lower())
+        d = en2de.get(low(name)) or en2de.get(low(re.sub(r"\s+(City|Town)$", "", name)))
         if not d:
             continue
         if d != p["name"]:
             p.setdefault("en", p["name"])
             p["name"] = d
-        dl = d.lower()
-        gs = [g for g in a["gebiete"] if g["ort"].lower() == dl or g["ort"].lower().startswith(dl + " (")]
+        dl = low(d)
+        gs = [g for g in a["gebiete"] if low(g["ort"]) == dl or low(g["ort"]).startswith(dl + " (")]
         if not gs:
             continue
         lines = []
