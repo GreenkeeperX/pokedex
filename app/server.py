@@ -729,6 +729,9 @@ class Handler(BaseHTTPRequestHandler):
                                      "kacheln": abruf.mg_status()})
                     if d:
                         _prewarm(d)
+            elif path == "/api/fehlt":
+                d = abfragen.missing(q)
+                self._send(200 if d else 404, d or {"error": "kein Spiel"})
             elif path == "/api/gebiete":
                 d = abfragen.areas(q)
                 self._send(200 if d else 404, d or {"error": "keine Gebiete"})

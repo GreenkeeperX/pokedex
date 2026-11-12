@@ -1,5 +1,16 @@
 # Roadmap
 
+## 0.54.0 (12.11.2026)
+
+- „Was fehlt mir noch“: `abfragen.missing` (`/api/fehlt?spiel=…&edition=…`), je Art des Spiel-Dex ohne gefangene Form die Wege:
+  Fundorte aus `areas` (PKHeX oder PokéAPI, Editionen aus der PokéAPI), Vorstufe aus `pokemon_species`, Bedingung aus
+  `pokemon_evolution` (Tausch-Auslöser → Tausch-Entwicklung), Zucht über eine Weiterentwicklung außerhalb der Ei-Gruppe
+  „Unbekannt“ (nicht in `NO_BREEDING`), Tera-Raids (Tabelle `raid`, Karmesin/Purpur). Bester Weg nach `WAYS`.
+- Begegnungsarten 18–66 der PokéAPI deutsch (`METHOD_DE`), auch in Karte › Gebiete und auf der Detailseite.
+- Offen: Editionsexklusive in Spielen nur mit PKHeX-Daten (Karmesin/Purpur, Strahlender Diamant/Leuchtende Perle) fehlen noch;
+  Raid-Nester Schwert/Schild als Weg.
+- Als Nächstes: Sammelobjekte mit Fortschritt.
+
 ## 0.53.0 (12.11.2026)
 
 - Maschinen-Besitz: user.db `gefunden` (Karte „tm“, Objekt Item-Id); `abfragen.owned_tms`, `_tm_missing` (nur wenn mindestens eine
@@ -7,7 +18,7 @@
   Kartenpunkten (`abfragen.tm_places`).
 - Kartencache: `server._map_body` speichert die zusammengeführte Karte gepackt unter `kartencache/` mit Schlüssel
   (Spiel, Karte, Stand, pokeapi.db, Version).
-- Als Nächstes: „Was fehlt mir noch“ je Spiel, dann Sammelobjekte mit Fortschritt (Entscheidung 12.11.2026: alle drei nacheinander).
+- Danach (Entscheidung 12.11.2026: alle drei nacheinander): „Was fehlt mir noch“, dann Sammelobjekte.
 
 ## 0.52.0 (12.11.2026)
 

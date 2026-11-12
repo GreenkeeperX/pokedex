@@ -317,6 +317,13 @@ class Leser(unittest.TestCase):
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
+    def test_0_54_begegnungsarten(self):
+        from app import abfragen
+        self.assertIn("Geschenk", abfragen.FIXED_METHODS)
+        self.assertNotIn("Inselscan", abfragen.FIXED_METHODS)
+        self.assertEqual(abfragen.WAYS[0], "jetzt")
+        self.assertTrue(set(abfragen.WAYS) >= {"wild", "edition", "zucht", "unklar"})
+
     def test_0_53_kartencache_und_tms(self):
         import tempfile
         from unittest import mock
@@ -2431,6 +2438,26 @@ class MitDatenbank(TempData):
             self.assertEqual(mg["teile"][0]["teile"][0]["name"], "johto")
             self.assertIs(abruf.disk_usage(), r)            # zwischengespeichert
         abruf._disk.update(at=0.0, data=None)
+
+    def test_0_54_was_fehlt(self):
+        """Was fehlt mir noch: Gold/Silber mit gefangenem Taubsi; Tauboga geht jetzt (entwickeln), Pichu per Ei,
+        Ledyba gibt es wild nur in Silber."""
+        from app import abfragen, server
+        D = abfragen.data()
+        taubsi = next(f["id"] for f in D.forms.values() if f["art"] == 16 and f["standard"])
+        server.set_mark("gefangen", {"spiel": "gold-silver", "id": taubsi, "an": True})
+        d = abfragen.missing({"spiel": "gold-silver", "edition": "Gold"})
+        self.assertEqual((d["arten"], d["gefangen"], len(d["fehlt"])), (251, 1, 250))
+        by = {x["art"]: x for x in d["fehlt"]}
+        self.assertNotIn(16, by)
+        self.assertEqual(by[17]["weg"], "jetzt")
+        self.assertEqual(by[18]["weg"], "jetzt")                    # Tauboss: Taubsi zählt als Vorstufe der Vorstufe
+        self.assertEqual(by[18]["wege"][0]["hast_name"], "Taubsi")
+        self.assertIn("zucht", [w["art"] for w in by[172]["wege"]])   # Pichu: Ei von Pikachu, obwohl Pichu selbst nie Eier legt
+        self.assertIn("edition", [w["art"] for w in by[165]["wege"]])  # Ledyba: nur Silber
+        self.assertEqual(by[152]["weg"], "fest")                     # Endivie: Geschenk in Neuborkia
+        la = abfragen.missing({"spiel": "legends-arceus"})
+        self.assertNotIn("zucht", {w["art"] for x in la["fehlt"] for w in x["wege"]})   # keine Zucht in Legenden: Arceus
 
     def test_0_47_0_inhalt_der_raid_nester(self):
         """Raid-Nester: Pokémon je Nest aus RaidTables.cs (erfundene Tabelle), als Bilder im Kartenpunkt."""

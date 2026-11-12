@@ -742,6 +742,7 @@ async function route() {
     else if (tab === "raids") await raidsView(arg);
     else if (tab === "auftraege") await requestsView();
     else if (tab === "items") await itemsView();
+    else if (tab === "fehlt") await missingView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
     else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);
     else if (tab === "karte") await mapView(arg, arg2 === undefined ? null : +arg2);
@@ -910,7 +911,7 @@ function filterBar(f, id, opts = {}) {
       <label data-tip="Nur deine Favoriten (Stern) oder deine Sammlung (als gefangen markiert, Pokéball) im gewählten Spiel"><select data-f="nur"><option value="">alle Pokémon</option><option value="fav"${f.nur === "fav" ? " selected" : ""}>nur Favoriten</option><option value="gef"${f.nur === "gef" ? " selected" : ""}>nur aus deiner Sammlung</option></select></label>
       ${areaSelect(f)}
       <label>Basiswerte ab <input data-f="min" type="number" min="0" max="800" step="10" style="width:80px" value="${esc(f.min)}"></label>
-      <span class="hint grow" data-cnt="${id}"></span></div></div>`;
+      <span class="hint grow" data-cnt="${id}"></span>${id === "lf" ? `<a class="btn small" href="#fehlt" data-tip="Welche Pokémon des Spiel-Dex dir noch fehlen und wie du sie bekommst">Was fehlt mir noch?</a>` : ""}</div></div>`;
 }
 function bindFilter(f, id, onChange, save) {
   const box = $("#" + id);
@@ -2984,6 +2985,60 @@ async function mgView(slug, want) {
   $("#mgq").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); pins(); listHits(); }, 150); });
   // #karte/mg/<Karte>/<Ort>: direkt dorthin
   if (want) { const i = pts.findIndex((p) => p.t === "mg" && String(p.id) === String(want)); if (i >= 0) jump(i); }
+}
+/* 0.54: Was fehlt mir noch: Arten des Spiel-Dex ohne gefangene Form, gruppiert nach dem besten Weg dorthin */
+const WEG = {jetzt: ["Geht jetzt", "Du hast eine Vorstufe (entwickeln) oder eine Weiterentwicklung (Ei)"],
+  wild: ["Wild fangen", "Kommt in deiner Edition wild vor"], fest: ["Geschenk oder einmalig", "Geschenk, Tausch im Spiel oder eine feste Begegnung"],
+  entwicklung: ["Entwickeln", "Entsteht aus einer Vorstufe, die du noch fangen musst"], raid: ["Tera-Raid", "Gibt es in Tera-Raids"],
+  zucht: ["Züchten", "Schlüpft aus dem Ei einer Weiterentwicklung"], tausch: ["Tausch-Entwicklung", "Entwickelt sich nur beim Tausch"],
+  edition: ["Andere Edition", "Nur in der anderen Edition: tauschen"], unklar: ["Sonst", "Kein Weg in den Daten: Geschenk, Event, Tausch oder ein anderes Spiel"]};
+async function missingView() {
+  const rid = RID, ek = "edition:" + S.game;
+  let ed = store.get(ek, ""), q = "", weg = store.get("fehltWeg", "");
+  const load = () => api("/api/fehlt?" + qs({spiel: S.game, edition: ed}));
+  let d = await load();
+  if (rid !== RID) return;
+  main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Was fehlt mir noch?</h2><span class="hint">Spiel</span><select class="gamesel"></select>
+      <span id="fed"></span><input id="fq" type="search" placeholder="Pokémon oder Ort" style="width:200px"><span class="hint grow" id="fcnt"></span>
+      <a class="btn small" href="#pokemon">Zur Liste</a></div>
+    <div class="bar"><span class="seg" id="fseg"></span></div><div id="fbody"></div>
+    <p class="hint">Gezählt wird je Art: eine gefangene Form (Pokéball) reicht. Wege aus den Fundorten des Spiels (Spieldaten oder PokéAPI), den Entwicklungen und,
+      wo es Zucht gibt, den Eiern einer Weiterentwicklung. Den Pokéball auf einer Karte kannst du gleich hier setzen.</p></div>`;
+  header();
+  const draw = () => {
+    $("#fed").innerHTML = d.editionen.length ? `<select id="fedsel" data-tip="Deine Edition: was nur die andere hat, steht unter „Andere Edition“"><option value="">beide Editionen</option>${d.editionen.map((e) =>
+      `<option${e === ed ? " selected" : ""}>${esc(e)}</option>`).join("")}</select>` : "";
+    $("#fedsel")?.addEventListener("change", async (e) => { ed = e.target.value; store.set(ek, ed); d = await load(); if (rid === RID) draw(); });
+    const ql = q.toLowerCase();
+    const xs = d.fehlt.filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.wege.some((w) => (w.text || "").toLowerCase().includes(ql)));
+    const by = {};
+    xs.forEach((x) => (by[x.weg] ||= []).push(x));
+    const ks = Object.keys(WEG).filter((k) => by[k]);
+    if (weg && !by[weg]) weg = "";
+    $("#fcnt").textContent = `${d.gefangen} von ${d.arten} Arten gefangen, ${d.fehlt.length} fehlen`;
+    $("#fseg").innerHTML = `<button data-w=""${weg ? "" : ' class="on"'}>alle ${xs.length}</button>` + ks.map((k) =>
+      `<button data-w="${k}"${weg === k ? ' class="on"' : ""} data-tip="${esc(WEG[k][1])}">${esc(WEG[k][0])} ${by[k].length}</button>`).join("");
+    $$("#fseg button").forEach((b) => b.addEventListener("click", () => { weg = b.dataset.w; store.set("fehltWeg", weg); draw(); }));
+    const card = (x) => {
+      const main1 = x.wege.find((w) => w.art === x.weg) || x.wege.find((w) => w.hast) || x.wege[0];
+      const more = x.wege.filter((w) => w !== main1);
+      const line = (w) => `<span class="fw fw-${w.art}">${esc(WEG[w.art]?.[0] || w.art)}</span> ${esc(w.text || "")}${w.hast ? ` <b class="fok">${w.hast_name && w.hast_name !== w.von_name ? `hast ${esc(w.hast_name)}` : "hast du"}</b>` : ""}`;
+      return `<a class="gmon fmon" href="#pokemon/${x.id}" data-id="${x.id}" data-tip="${esc(x.wege.map((w) => (WEG[w.art]?.[0] || w.art) + ": " + w.text).join("\n"))}">
+        <button class="gball" data-act="caught" data-id="${x.id}" data-tip="${ballTip(x.id)}">${ball(x.id)}</button>
+        ${img(x.id)}<b>${esc(x.name)}</b><span class="hint">${x.dexk ? esc(x.dexk) + " " : ""}#${x.nr}</span>
+        <span class="fway">${line(main1)}</span>${more.length ? `<span class="hint fmore">${more.length === 1 ? "oder: " + esc(WEG[more[0].art]?.[0] || "") : `+${more.length} Wege`}</span>` : ""}</a>`;
+    };
+    $("#fbody").innerHTML = (weg ? [weg] : ks).map((k) => `<div class="fsec"><h3 data-fold="fehlt-${k}">${esc(WEG[k][0])} <span class="hint">${by[k].length} · ${esc(WEG[k][1])}</span></h3>
+      <div class="ggrid">${by[k].map(card).join("")}</div></div>`).join("")
+      || `<p class="hint">${d.fehlt.length ? "Nichts gefunden." : `Du hast alle ${d.arten} Arten in ${esc(gameName())}. Glückwunsch!`}</p>`;
+  };
+  draw();
+  $("#fq").addEventListener("input", (e) => { q = e.target.value.trim(); draw(); });
+  // Pokéball gesetzt: die Karte wird blass; erst beim nächsten Öffnen fällt sie aus der Liste
+  $("#fbody").addEventListener("click", (e) => {
+    const b = e.target.closest('[data-act="caught"]');
+    if (b) setTimeout(() => { const id = +b.dataset.id; b.closest(".fmon")?.classList.toggle("got", isCaught(id)); b.innerHTML = ball(id); b.dataset.tip = ballTip(id); }, 400);
+  });
 }
 async function areasView(want) {
   const rid = RID;
