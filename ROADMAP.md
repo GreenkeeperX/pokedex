@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.5 (12.11.2026)
+
+- Karten ohne „+“-Knopf (Entscheidung 12.11.2026); Häkchen grau, im Team grün. „Noch einmal ins Team“ bleibt auf der Detailseite
+
 ## 0.47.4 (12.11.2026)
 
 - Haken „Im Team“ auf Karten trägt die Pokémon-Nummer; `teamChanged` zeichnet die Marken auch im Team-Reiter neu

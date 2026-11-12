@@ -257,8 +257,7 @@ function acts(id) {
   return `<span class="acts">${inTeam ? `<span class="a team on" data-act="teamdel" data-id="${id}" data-slot="${S.team.ids.lastIndexOf(id)}" data-tip="Im Team; Klick: aus dem Team">${icon("team")}</span>`
     : teamFull() ? `<span class="a team ph"></span>` : `<span class="a team" data-act="teamadd" data-id="${id}" data-tip="Ins Team (auf den nächsten freien Platz)">${icon("team")}</span>`}`
     + `<span class="a${fav ? " on" : ""}" data-act="fav" data-id="${id}" data-tip="${fav ? "Favorit; Klick: aus den Favoriten" : "Zu den Favoriten (Kader zum schnellen Tauschen)"}">${icon("fav", fav)}</span>`
-    + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${ballTip(id)}">${ball(id, got)}</span>` + alphaBtn(id)
-    + `${teamFull() ? `<span class="a ph"></span>` : `<span class="a plus" data-act="teamadd" data-id="${id}" data-tip="${inTeam ? "Noch einmal ins Team" : "Ins Team"}">${icon("plus")}</span>`}</span>`;
+    + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${ballTip(id)}">${ball(id, got)}</span>` + alphaBtn(id) + `</span>`;   // 0.47.5: ohne „+“, das Häkchen nimmt ins Team
 }
 // mode: true = Sammlung (⇄ wählt zum Übertragen aus), "swap" = Favoriten im Team (⇄ nimmt ins Team oder tauscht)
 function monCard(r, mode = false) {

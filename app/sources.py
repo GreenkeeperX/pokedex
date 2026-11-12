@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.47.4"
+VERSION = "0.47.5"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.47.5", "12.11.2026", [
+        "Pokémon-Karten: das rote „+“ ist weg, ins Team geht es über das Häkchen; das Häkchen ist nur grün, wenn das Pokémon im Team ist",
+    ]),
     ("0.47.4", "12.11.2026", [
         "Favoriten im Team-Reiter: der grüne Haken nimmt genau dieses Pokémon aus dem Team und ist danach aus (vorher traf er einen beliebigen Platz und blieb an)",
     ]),
