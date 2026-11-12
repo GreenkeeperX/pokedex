@@ -115,6 +115,13 @@ class Data:
                 self.game_moves[(r["spiel"], r["attacke"])] = dict(r)
         except Exception:
             pass
+        # Deutsche Attackentexte je Spiel (PokéAPI, ergänzt aus dem PokéWiki): {Attacke: {Spiel: [(Edition, Text, Quelle)]}}
+        self.move_texts = {}
+        try:
+            for mid, sp, ed, txt, src in con.execute("SELECT id, spiel, edition, text, quelle FROM spieltext WHERE art = 'attacken'"):
+                self.move_texts.setdefault(mid, {}).setdefault(sp, []).append((ed, txt, src))
+        except Exception:
+            pass
         self.charts = {}
         self.max_gen = max((g["gen"] for g in self.games), default=9)
 
@@ -357,9 +364,59 @@ def _ints(v):
 
 # ------------------------------------------------------------------ Attacken
 
+# Spiele ohne eigene Texte: die Erweiterungen nehmen die ihres Hauptspiels
+TEXT_BASE = {"the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield", "the-teal-mask": "scarlet-violet",
+             "the-indigo-disk": "scarlet-violet", "mega-dimension": "legends-za", "red-green-japan": "red-blue",
+             "blue-japan": "red-blue"}
+
+
+def pick_text(D, per, g):
+    """Text für das gewählte Spiel aus {Spiel: [(Edition, Text, Quelle)]}: das Spiel selbst (bei Erweiterungen das
+    Hauptspiel), sonst das letzte Spiel davor mit Text, sonst das erste danach. Gibt {"texte": [{edition, text}], "quelle",
+    "aus"} zurück; "aus" nennt das Spiel, wenn der Text nicht aus dem gewählten stammt."""
+    if not per:
+        return {"texte": [], "quelle": "", "aus": ""}
+    order = {x["kennung"]: x["reihenfolge"] for x in D.games}
+    names = {x["kennung"]: x["name"] for x in D.games}
+    want = TEXT_BASE.get(g["kennung"], g["kennung"]) if g else None
+    if want in per:
+        sp = want
+    else:
+        known = sorted(per, key=lambda k: order.get(k, 0))
+        before = [k for k in known if g and order.get(k, 0) <= g["reihenfolge"]]
+        sp = before[-1] if before else known[0] if g else known[-1]       # sonst das nächste danach; ohne Spiel das neueste
+    xs = per[sp]
+    return {"texte": [{"edition": ed, "text": t} for ed, t, _ in xs], "quelle": xs[0][2],
+            "aus": "" if sp == want else names.get(sp, sp)}
+
+
+def text_rows(con, art, oid):
+    """{Spiel: [(Edition, Text, Quelle)]} aus spieltext (leer, solange die Datenbank die Tabelle noch nicht hat)."""
+    per = {}
+    try:
+        for sp, ed, txt, src in con.execute("SELECT spiel, edition, text, quelle FROM spieltext WHERE art = ? AND id = ? "
+                                            "ORDER BY rowid", (art, oid)):
+            per.setdefault(sp, []).append((ed, txt, src))
+    except Exception:
+        pass
+    return per
+
+
+def joined(t):
+    """Ein Text aus pick_text als Zeile: bei zwei Editionen mit Namen davor."""
+    xs = t["texte"]
+    if len(xs) == 1:
+        return xs[0]["text"]
+    return " · ".join((x["edition"] + ": " if x["edition"] else "") + x["text"] for x in xs)
+
+
 def move_view(D, m, g):
     order = g["reihenfolge"] if g else 10 ** 6
     v = attacken.in_game(m, D.changes.get(m["id"], []), order)
+    per = getattr(D, "move_texts", {}).get(m["id"])
+    if per:
+        t = pick_text(D, per, g)
+        v = dict(v, text=joined(t) + (f" (Text aus {t['aus']})" if t["aus"] else ""), text_aus=t["aus"], text_quelle=t["quelle"])
     w = D.game_moves.get((g["kennung"], m["id"])) if g else None
     if w and w.get("abklingzeit") is not None:
         v = dict(v, abkling=w["abklingzeit"])
@@ -1188,6 +1245,7 @@ def detail(fid, p):
         dvec = typen.defense(ts, ch, ab)
         flavor = con.execute("SELECT flavor_text FROM pokemon_species_flavor_text WHERE species_id = ? AND language_id = 6 "
                              "ORDER BY version_id DESC LIMIT 1", (f["art"],)).fetchone()
+        dex = pick_text(D, text_rows(con, "pokemon", f["art"]), g)
         genus = con.execute("SELECT genus FROM pokemon_species_names WHERE pokemon_species_id = ? AND local_language_id = 6", (f["art"],)).fetchone()
         abil = []
         if not no_abilities(g):
@@ -1195,14 +1253,18 @@ def detail(fid, p):
                 k, n = D.abilities.get(aid, ("", str(aid)))
                 txt = con.execute("SELECT flavor_text FROM ability_flavor_text WHERE ability_id = ? AND language_id = 6 "
                                   "ORDER BY version_group_id DESC LIMIT 1", (aid,)).fetchone()
-                abil.append({"name": n, "versteckt": bool(hidden), "text": " ".join(str(txt[0]).split()) if txt else "",
-                             "wirkt": k in typen.ABILITY_DEFENSE})
+                at = pick_text(D, text_rows(con, "faehigkeiten", aid), g)
+                abil.append({"name": n, "versteckt": bool(hidden),
+                             "text": joined(at) if at["texte"] else (" ".join(str(txt[0]).split()) if txt else ""),
+                             "text_aus": at["aus"], "text_quelle": at["quelle"], "wirkt": k in typen.ABILITY_DEFENSE})
         siblings = [{"id": x["id"], "name": x["name"], "kampf": bool(x["kampfform"])} for x in D.forms.values()
                     if x["art"] == f["art"] and x["id"] != f["id"] and (x["relevant"] or x["standard"])]
         moves = ranked_moves(con, D, f, g, gen, _int(p.get("level")))
         nr = D.in_game.get(g["id"], {}).get(fid) if g else None
         return dict(row(D, f, g, gen, nr), formname=f["formname"], kategorie=genus[0] if genus else "",
-                    text=" ".join(str(flavor[0]).split()) if flavor else "", faehigkeiten=abil,
+                    text=joined(dex) if dex["texte"] else (" ".join(str(flavor[0]).split()) if flavor else ""),
+                    texte=dex["texte"], text_aus=dex["aus"], text_quelle=dex["quelle"] or ("PokéAPI" if flavor else ""),
+                    forschung=_research(con, f["art"]) if g and g["kennung"] == LA else [], faehigkeiten=abil,
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
@@ -1303,6 +1365,19 @@ def _pokopia(con, g, f):
         return []
     return [{"dex": serebii.POKOPIA_DEX.get(r[0], r[0]), "nr": r[1], "name": r[2],
              "spezial": [serebii.spezial_de(k) for k in json.loads(r[3] or "[]")]} for r in rows]
+
+
+def _research(con, art):
+    """Forschungsaufgaben in Legenden: Arceus (PokéWiki): [{aufgabe, stufen, doppelt}]."""
+    try:
+        rows = con.execute("SELECT aufgabe, stufen, doppelt FROM forschung WHERE art = ? ORDER BY nr", (art,)).fetchall()
+    except Exception:
+        return []
+    out = []
+    for a, st, d in rows:
+        stufen = [x for x in json.loads(st or "[]") if x not in ("0", "")]
+        out.append({"aufgabe": a, "stufen": stufen, "doppelt": bool(d)})
+    return out
 
 
 def _wiki_title(D, f):

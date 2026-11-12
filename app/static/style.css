@@ -847,3 +847,4 @@ table.items tr.odd td{opacity:.6}
 .eltab img{width:40px;height:40px;vertical-align:middle}
 .cnt.cg{color:var(--go)}.cnt.cb{color:var(--stop)}
 .usage td.ushare{background:linear-gradient(90deg,color-mix(in srgb,var(--info) 22%,transparent) var(--w),transparent var(--w))}
+.dex p{margin:8px 0}

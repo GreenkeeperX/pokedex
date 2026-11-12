@@ -50,6 +50,8 @@ MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergru
 MG_403_MAX = 8              # so viele 403 nacheinander, dann ruht Map Genie (einzelne 403: Kachel gibt es nicht)
 WIKI_PAUSE = 2.0            # Sekunden zwischen zwei Anfragen an das PokéWiki (je Anfrage bis zu 50 Seiten)
 WIKI_GAMES = ("legends-arceus",)    # Spiele, deren Attacken und Pokémon im PokéWiki gelesen werden
+WIKI_TEXT_TAGE = 30         # deutsche Texte aus dem PokéWiki höchstens so oft neu holen (neue Namen sofort)
+WIKI_TEXT_BATCH = 20        # ganze Seiten je Anfrage (Attacken tragen lange Lernlisten)
 
 sleep = time.sleep          # Tests setzen hier eine Attrappe ein
 # Pausen je Server gelten für alle Quellen zusammen: laufen Quellen parallel (ab 0.20.0), wartet jeder Abruf an einem
@@ -713,10 +715,16 @@ def _build(st, log, force, at):
            if (wiki or {}).get("serebii") else "")
         + (f"; Altissimo: {stats['kartenobjekte']} Kartensymbole, {stats['rezepte']} Rezepte" if alt else "")
         + (f"; PLA Companion: {stats.get('orte', 0)} Orte (Schnellreise, Lager)" if comp else "")
-        + (f"; {stats['items']} Items" if stats.get("items") else ""))
+        + (f"; {stats['items']} Items" if stats.get("items") else "")
+        + ("; deutsche Texte je Spiel: " + ", ".join(f"{n} {TEXT_LABEL.get(k, k)}" for k, n in sorted((stats.get("texte") or {}).items()))
+           if stats.get("texte") else "")
+        + (f", {stats['forschung']} Forschungsaufgaben (Legenden: Arceus)" if stats.get("forschung") else ""))
+    for k, keys in (stats.get("kuerzel_unbekannt") or {}).items():
+        log(f"PokéWiki: unbekannte Spielkürzel bei {TEXT_LABEL.get(k, k)}: {', '.join(keys[:20])}")
     return not papi.stopped and not sd.stopped
 
 
+TEXT_LABEL = {"pokemon": "Pokémon", "attacken": "Attacken", "faehigkeiten": "Fähigkeiten"}
 CSV_CACHE = "pokeapi-csv.json.gz"      # die CSV-Texte des letzten Stands: ein Nachlauf (neue Quelle, Lücken) lädt sie nicht neu
 
 
@@ -1203,6 +1211,9 @@ def _pokewiki(st, log, at):
     Die Namen kommen aus der bisherigen Datenbank (ohne sie gibt es noch nichts zu fragen). Bei Sperre oder Fehlern gilt
     das Ergebnis des letzten Laufs (pokewiki.json im Datenordner)."""
     old = store.load_json("pokewiki.json", {})
+    old_texts = store.load_json("pokewiki_texte.json", {})
+    if old_texts:
+        old["texte"] = old_texts            # liegen in einer eigenen Datei, siehe _wiki_texts
     if _resting(st, "pokewiki", at):
         log(f"PokéWiki ruht bis {st['rest']['pokewiki'][:16].replace('T', ' ')} UTC")
         return old
@@ -1246,13 +1257,107 @@ def _pokewiki(st, log, at):
         if got.get("pokemon"):
             karte[area] = {k: v for k, v in got.items() if v}
     out["karte"] = {"legends-arceus": karte} if karte else old.get("karte", {})
+    texte = _wiki_texts(src, log, at)
+    if texte:
+        out["texte"] = texte
     st["sources"]["pokewiki"] = src.result(seiten=sum(len(v) for k in ("attacken", "items") for v in out[k].values()),
-                                           karten=len(karte))
+                                           karten=len(karte), texte=sum(len(texte.get(k) or {}) for k in WIKI_TEXT_KINDS))
     if src.blocked:
         st["rest"]["pokewiki"] = _iso(now() + timedelta(hours=REST_H))
     if src.stopped or not any(out["attacken"].values()):
+        return dict(old, texte=texte) if texte else old
+    store.save_json("pokewiki.json", {k: v for k, v in out.items() if k != "texte"})
+    return out
+
+
+WIKI_TEXT_KINDS = ("pokemon", "attacken", "faehigkeiten")
+_WIKI_SUFFIX = {"attacken": " (Attacke)", "faehigkeiten": " (Fähigkeit)"}
+
+
+def wiki_text_titles(con):
+    """Deutsche Namen aller Arten, Attacken und Fähigkeiten: {Art der Seite: [Titel]}."""
+    def names(sql):
+        return sorted({r[0] for r in con.execute(sql) if r[0]})
+    return {"pokemon": names("SELECT name FROM pokemon_species_names WHERE local_language_id = 6"),
+            "attacken": names("SELECT name FROM attacke"),
+            "faehigkeiten": names("SELECT name FROM ability_names WHERE local_language_id = 6 AND ability_id < 10000")}
+
+
+def _wiki_page(kind, wt):
+    """Was aus einer Seite übernommen wird, oder None, wenn sie nichts davon trägt (etwa eine Begriffsklärung)."""
+    if kind == "pokemon":
+        v = {"texte": pokewiki.dex_texts(wt), "aufgaben": pokewiki.research_tasks(wt)}
+        return v if v["texte"] or v["aufgaben"] else None
+    v = pokewiki.move_texts(wt) if kind == "attacken" else pokewiki.ability_texts(wt)
+    return {"texte": v} if v else None
+
+
+def _wiki_texts(src, log, at):
+    """Deutsche Texte je Spiel aus dem PokéWiki (pokewiki_texte.json): {"stand", Art: {Name: {"texte": {Kürzel: Text},
+    "aufgaben": […]}}}. Alle WIKI_TEXT_TAGE Tage alles neu, sonst nur Namen, die noch fehlen. Seiten, die die API in
+    einer Antwort nicht mehr unterbringt, kommen in einer zweiten Runde; tragen Attacken oder Fähigkeiten nichts, wird
+    „Name (Attacke)“ bzw. „Name (Fähigkeit)“ versucht."""
+    old = store.load_json("pokewiki_texte.json", {})
+    con = db.game()
+    if con is None or src.stopped:
         return old
-    store.save_json("pokewiki.json", out)
+    try:
+        titles = wiki_text_titles(con)
+    except Exception as e:
+        log(f"PokéWiki: Namen für Texte nicht lesbar ({e})")
+        return old
+    finally:
+        con.close()
+    age = _ago(old.get("stand"), at)
+    full = age is None or age >= timedelta(days=WIKI_TEXT_TAGE)
+    out = {"stand": old.get("stand"), "gefragt": dict(old.get("gefragt") or {})}
+    asked = 0
+    labels = {"pokemon": "Pokédex-Einträge", "attacken": "Attackentexte", "faehigkeiten": "Fähigkeitstexte"}
+
+    def ask(kind, names, have):
+        """Seiten holen; gibt (fehlt in der Antwort, ohne Texte) zurück. names: {Seitentitel: Name}."""
+        nonlocal asked
+        absent, empty, todo = [], [], list(names)
+        for i in range(0, len(todo), WIKI_TEXT_BATCH):
+            part = todo[i:i + WIKI_TEXT_BATCH]
+            STATE.update(step=f"PokéWiki: {labels[kind]}", done=i, total=len(todo))
+            t = src.get(pokewiki.batch_url(part))
+            asked += 1
+            if src.stopped:
+                break
+            try:
+                got = pokewiki.pages(t or "{}")
+            except ValueError as e:
+                log(f"PokéWiki: Antwort nicht lesbar ({e})")
+                got = {}
+            for title in part:
+                v = _wiki_page(kind, got[title]) if title in got else None
+                if v:
+                    have[names[title]] = v
+                else:
+                    (absent if title not in got else empty).append(names[title])
+        return absent, empty
+
+    for kind in WIKI_TEXT_KINDS:
+        have = dict(old.get(kind) or {})
+        done = set() if full else set(out["gefragt"].get(kind) or ())
+        todo = [t for t in titles[kind] if full or (t not in have and t not in done)]
+        absent, empty = ask(kind, {t: t for t in todo}, have) if todo else ([], [])
+        if absent and not src.stopped:              # fehlt in der Antwort: Antwort war voll, oder es gibt die Seite nicht
+            a2, e2 = ask(kind, {t: t for t in absent}, have)
+            empty += a2 + e2
+        if empty and kind in _WIKI_SUFFIX and not src.stopped:
+            ask(kind, {t + _WIKI_SUFFIX[kind]: t for t in empty}, have)
+        out[kind] = have
+        if todo and not src.stopped:
+            out["gefragt"][kind] = sorted(set(titles[kind]) - set(have))      # ohne Texte: erst beim nächsten vollen Lauf
+    if full and not src.stopped:
+        out["stand"] = _iso(at)
+    if asked:
+        n = {k: len(out.get(k) or {}) for k in WIKI_TEXT_KINDS}
+        log(f"PokéWiki: Texte für {n['pokemon']} Pokémon, {n['attacken']} Attacken und {n['faehigkeiten']} Fähigkeiten"
+            + (" (unvollständig, Rest beim nächsten Abgleich)" if src.stopped else ""))
+        store.save_json("pokewiki_texte.json", out)
     return out
 
 
@@ -1595,6 +1700,23 @@ def diagnose(proben=None, stand=None):
         vals = {k: pokewiki.la_move(v) for k, v in got.items()}
         return f"{len(got)} Seiten gebündelt; " + "; ".join(f"{k}: {v}" for k, v in vals.items())
     probe("PokéWiki, Bündel Attacken (Legenden: Arceus)", pokewiki.batch_url(["Tackle", "Donnerblitz", "Kraftschub"], True), wiki_batch)
+
+    # 0.36.0: deutsche Texte je Spiel; meldet, welche Spiele die Kürzel abdecken und welche Kürzel unbekannt sind
+    def wiki_texts(text):
+        got = pokewiki.pages(text)
+        out = []
+        for name, kind in (("Pikachu", "pokemon"), ("Donnerblitz", "attacken"), ("Statik", "faehigkeiten")):
+            v = _wiki_page(kind, got.get(name, "")) if name in got else None
+            if not v:
+                out.append(f"{name}: keine Texte")
+                continue
+            tx = v["texte"]
+            unk = pokewiki.unknown_keys(kind, tx)
+            out.append(f"{name}: {len(pokewiki.per_game(kind, tx))} Spiele" + (f", unbekannt: {', '.join(unk)}" if unk else "")
+                       + (f", {len(v.get('aufgaben') or [])} Forschungsaufgaben" if kind == "pokemon" else ""))
+        return "; ".join(out)
+    probe("PokéWiki, Texte je Spiel (Pikachu, Donnerblitz, Statik)", pokewiki.batch_url(["Pikachu", "Donnerblitz", "Statik"]),
+          wiki_texts, keep=True)
     probe("Bulbapedia, API", "https://bulbapedia.bulbagarden.net/w/api.php?action=query&meta=siteinfo&format=json", wiki_info)
     probe("Bulbapedia, Seite Bidoof", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=Bidoof_(Pok%C3%A9mon)"
           "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)

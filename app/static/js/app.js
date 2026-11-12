@@ -1238,11 +1238,11 @@ async function detailView(id, slot = null) {
     <div class="dgrid">
       <div class="box"><div class="head"><div class="pic">${img(d.id, "big", true)}${extrasHtml(d)}</div><div><h2>${esc(d.name)}</h2><div class="muted">#${d.nr ?? d.art} · ${esc(d.kategorie)}</div>
         <div style="margin-top:4px">${tchips(d.typen)}</div><span data-tip-stats="${d.werte.join(",")}">${radar(d.werte, 220, true)}</span></div></div>
-        <p>${esc(d.text)}</p><div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
+        ${dexTextHtml(d)}<div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
         ${d.werte_alt ? `<p class="hint">Basiswerte wie in Generation ${GEN()}; später wurden sie geändert (Quelle: Pokémon Showdown).</p>` : ""}
         ${moreHtml(d)}
         ${S.game === "legends-arceus" ? `<div id="elbox"></div>` : STATS_OK() ? `<div id="stbox"></div>` : ""}
-        ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${wikiLink(a.name)}</b>${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}</div></div>`).join("")
+        ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${wikiLink(a.name)}</b>${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}${fromHtml(a)}</div></div>`).join("")
           : noAbil() ? `<p class="hint">In ${esc(gameName())} gibt es keine Fähigkeiten${GEN() <= 2 ? " (erst ab Generation 3)" : ""}.</p>` : ""}
         ${GEN() <= 3 ? `<p class="hint">Bis Generation 3 hängt physisch oder speziell am Typ der Attacke: Normal, Kampf, Flug, Gift, Boden, Gestein, Käfer, Geist und Stahl sind physisch, die übrigen speziell.${GEN() === 1 ? " In Generation 1 gab es statt Sp.-Angriff und Sp.-Verteidigung einen gemeinsamen Spezial-Wert." : ""}</p>` : ""}
       </div>
@@ -1259,7 +1259,7 @@ async function detailView(id, slot = null) {
       </div>
       <div class="stack">
         <div class="box"><h2>Entwicklung</h2>${evo ? `<div class="evo">${evo}</div>` : `<p class="hint">${esc(d.name)} entwickelt sich nicht.</p>`}</div>
-        ${catchHtml(d)}${partnerHtml(d)}
+        ${catchHtml(d)}${researchHtml(d)}${partnerHtml(d)}
         ${raidHtml(d)}
         ${cryptoHtml(d)}
         ${heldHtml(d)}${pokopiaHtml(d)}
@@ -1534,6 +1534,32 @@ function evoHtml(list, cur) {
   return cells.join("");
 }
 /* Fangchance als eigene Karte unter der Entwicklung: offen, solange das Pokémon nicht als gefangen markiert ist */
+// Pokédex-Eintrag des gewählten Spiels; bei zwei Editionen beide, mit Namen. Fehlt er im Spiel, steht dabei, woher er ist.
+function dexTextHtml(d) {
+  const xs = d.texte?.length ? d.texte : d.text ? [{edition: "", text: d.text}] : [];
+  if (!xs.length) return "";
+  return `<div class="dex">${xs.map((x, i) => `<p>${x.edition && xs.length > 1 ? `<span class="cls">${esc(x.edition)}</span> ` : ""}${esc(x.text)}${i === xs.length - 1 ? fromHtml(d) : ""}</p>`).join("")}</div>`;
+}
+
+function fromHtml(x) {
+  const src = x.text_quelle ? `Quelle: ${x.text_quelle}` : "";
+  if (x.text_aus) return ` <span class="cls" data-tip="${esc(`Im gewählten Spiel gibt es keinen deutschen Text; gezeigt ist der aus ${x.text_aus}. ${src}`)}">aus ${esc(x.text_aus)}</span>`;
+  return src && x.text_quelle !== "PokéAPI" ? ` <span class="cls" data-tip="${esc(src)}">${esc(x.text_quelle)}</span>` : "";
+}
+
+// Forschungsaufgaben in Legenden: Arceus (PokéWiki): je Aufgabe die Stufen; jede erreichte Stufe bringt 10 Punkte,
+// doppelt zählende 20, ab 100 Punkten ist der Forschungslevel 10 erreicht
+function researchHtml(d) {
+  const xs = d.forschung || [];
+  if (!xs.length) return "";
+  const pts = (a) => a.stufen.length * (a.doppelt ? 20 : 10);
+  const all = xs.reduce((n, a) => n + pts(a), 0);
+  const calc = calcRows(xs.map((a) => [a.aufgabe, `${a.stufen.length} × ${a.doppelt ? 20 : 10} = ${pts(a)}`]).concat([["Alle Stufen", `${all} Punkte`]]));
+  return `<div class="box"><h2 data-tip="Aufgaben im Pokédex von Hisui. Jede erreichte Stufe bringt 10 Punkte, doppelt zählende 20. Ab 100 Punkten ist der Forschungslevel 10 erreicht.">Forschungsaufgaben</h2>
+    <table class="rows"><tbody>${xs.map((a) => `<tr><td>${esc(a.aufgabe)}${a.doppelt ? ' <span class="cls tm" data-tip="Zählt doppelt: 20 statt 10 Punkte je Stufe">×2</span>' : ""}</td><td class="c">${a.stufen.map(esc).join(" · ")}</td></tr>`).join("")}</tbody></table>
+    <p class="hint"><span ${tipRef(`<b>Punkte, wenn alle Stufen erreicht sind</b>${calc}`)}>Alle Stufen: ${all} Punkte</span>, Forschungslevel 10 ab 100. Quelle: PokéWiki.</p></div>`;
+}
+
 function catchHtml(d) {
   const m = d.mehr || {};
   if (!m.fangen || BATTLE()) return "";

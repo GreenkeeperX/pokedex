@@ -11,11 +11,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.35.4"
+VERSION = "0.36.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.36.0", "12.11.2026", [
+        "Pokédex-Einträge, Attacken- und Fähigkeitstexte auf Deutsch für das gewählte Spiel, auch für ältere Spiele und Karmesin/Purpur (aus dem PokéWiki)",
+        "Fehlt der Text im Spiel, steht dabei, aus welchem Spiel er stammt; bei zwei Editionen stehen beide",
+        "Legenden: Arceus: Forschungsaufgaben mit Stufen und doppelt zählenden Aufgaben auf der Detailseite",
+    ]),
     ("0.35.4", "12.11.2026", [
         "Verbindungstest: die Anzeige gibt nicht mehr auf, wenn eine Nachfrage beim Dienst ausbleibt",
         "Höchstens sechs Abfragen gleichzeitig und ein zweiter Versuch, wenn die Namensauflösung kurz überlastet ist",

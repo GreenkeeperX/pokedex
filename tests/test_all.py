@@ -389,6 +389,75 @@ class Leser(unittest.TestCase):
         self.assertNotIn("kraft", abfragen.move_view(D, m, {"kennung": "scarlet-violet", "reihenfolge": 21}))
         con.close()
 
+    def test_0_36_0_texte_je_spiel(self):
+        from app import pokewiki
+        wt = ("{{Pokédex-Einträge\n|typ1=Normal\n|diamond=Text D mit [[Link|Wort]].\n|pearl=Text P.\n|platinum=Text Pt.\n"
+              "|sw=Text SW.\n|SW=Text Schwert.\n|SH=Text Schwert.\n|pla=Text LA{{Anmerkung|x}}.\n|neu=Unbekannt.\n}}\n"
+              "{{Pokédex-Einträge/Spin-offs\n|go=Spin-off.\n}}\n"
+              "{{Pokédex-Aufgaben\n|Exemplare gefangen/1/3/6/12/25|double1=1\n|Registrierte Formen/2/0/0/0/0\n}}")
+        tx = pokewiki.dex_texts(wt)
+        self.assertNotIn("typ1", tx)
+        self.assertNotIn("go", tx)
+        self.assertEqual(tx["diamond"], "Text D mit Wort.")
+        self.assertEqual(tx["pla"], "Text LA.")
+        per = pokewiki.per_game("pokemon", tx)
+        self.assertEqual(per["diamond-pearl"], [("Diamant", "Text D mit Wort."), ("Perl", "Text P.")])
+        self.assertEqual(per["black-white"], [("", "Text SW.")])                 # „sw“ ist Schwarz/Weiß, „SW“ Schwert
+        self.assertEqual(per["sword-shield"], [("Schwert / Schild", "Text Schwert.")])     # gleicher Text zusammengefasst
+        self.assertEqual(pokewiki.unknown_keys("pokemon", tx), ["neu"])
+        self.assertEqual(pokewiki.research_tasks(wt), [
+            {"aufgabe": "Exemplare gefangen", "stufen": ["1", "3", "6", "12", "25"], "doppelt": True},
+            {"aufgabe": "Registrierte Formen", "stufen": ["2", "0", "0", "0", "0"], "doppelt": False}])
+        # Attacken: das genaueste Kürzel gewinnt (gen3 gilt für alle Spiele der Generation, frbg nur für Feuerrot/Blattgrün)
+        mv = pokewiki.move_texts("{{Atk-Beschreibung\n|gen3=Alt.\n|frbg=FRBG.\n|pmd=Dungeon.\n|kapu=KP.\n}}")
+        per = pokewiki.per_game("attacken", mv)
+        self.assertEqual(per["emerald"], [("", "Alt.")])
+        self.assertEqual(per["firered-leafgreen"], [("", "FRBG.")])
+        self.assertEqual(per["scarlet-violet"], [("", "KP.")])
+        self.assertEqual(pokewiki.unknown_keys("attacken", mv), [])             # Spin-offs fallen still weg
+        ab = pokewiki.ability_texts("{{Fähigkeit/Infobox\n|Name_en=Static\n|Gen3=Drei.\n|Gen9=Neun.\n}}")
+        self.assertEqual(ab, {"gen3": "Drei.", "gen9": "Neun."})
+        self.assertEqual(pokewiki.per_game("faehigkeiten", ab)["legends-za"], [("", "Neun.")])
+        self.assertEqual(pokewiki.clean("A{{tt|B|Hinweis}}<br />C<ref>Fuß</ref>"), "AB C")
+
+    def test_0_36_0_texte_in_der_datenbank(self):
+        import sqlite3
+        from types import SimpleNamespace
+        from app import abfragen
+        con = sqlite3.connect(":memory:")
+        csvs = {"pokemon_species_names": "pokemon_species_id,local_language_id,name\n399,6,Bidiza\n",
+                "version_groups": "id,identifier,generation_id,order\n8,diamond-pearl,4,8\n15,x-y,6,15\n",
+                "versions": "id,version_group_id,identifier\n12,8,diamond\n13,8,pearl\n23,15,x\n24,15,y\n",
+                "version_names": "version_id,local_language_id,name\n23,6,X\n24,6,Y\n",
+                "pokemon_species_flavor_text": "species_id,version_id,language_id,flavor_text\n399,23,6,Gleich.\n399,24,6,Gleich.\n",
+                "ability_names": "ability_id,local_language_id,name\n9,6,Statik\n"}
+        for n, t in csvs.items():
+            importer.import_csv(con, n, t)
+        con.execute("CREATE TABLE attacke (id INTEGER, name TEXT)")
+        con.execute("INSERT INTO attacke VALUES (33, 'Tackle')")
+        wiki = {"texte": {"pokemon": {"Bidiza": {"texte": {"diamond": "D.", "pearl": "P.", "x": "Wiki X."},
+                                                 "aufgaben": [{"aufgabe": "Exemplare gefangen", "stufen": ["1", "3"], "doppelt": True}]},
+                                      "Gibtsnicht": {"texte": {"x": "?"}}},
+                          "attacken": {"Tackle": {"texte": {"gen4": "Vier.", "neu": "?"}}},
+                          "faehigkeiten": {"Statik": {"texte": {"gen3": "Drei."}}}}}
+        n, tasks, unknown = importer._derive_texts(con, wiki)
+        self.assertEqual((n, tasks, unknown), ({"pokemon": 1, "attacken": 1, "faehigkeiten": 1}, 1, {"attacken": ["neu"]}))
+        rows = con.execute("SELECT spiel, edition, text, quelle FROM spieltext WHERE art = 'pokemon' ORDER BY spiel, edition").fetchall()
+        # PokéAPI vor PokéWiki (X/Y), gleicher Text beider Editionen einmal
+        self.assertEqual(rows, [("diamond-pearl", "Diamant", "D.", "PokéWiki"), ("diamond-pearl", "Perl", "P.", "PokéWiki"),
+                                ("x-y", "X / Y", "Gleich.", "PokéAPI")])
+        games = [{"kennung": k, "name": k.upper(), "reihenfolge": i} for i, k in enumerate(
+            ("red-blue", "diamond-pearl", "platinum", "x-y", "the-crown-tundra", "sword-shield"))]
+        D = SimpleNamespace(games=games)
+        per = abfragen.text_rows(con, "pokemon", 399)
+        t = abfragen.pick_text(D, per, games[2])                              # Platin ohne Text: das Spiel davor
+        self.assertEqual((t["aus"], abfragen.joined(t)), ("DIAMOND-PEARL", "Diamant: D. · Perl: P."))
+        self.assertEqual(abfragen.pick_text(D, per, games[0])["aus"], "DIAMOND-PEARL")     # nichts davor: das erste
+        self.assertEqual(abfragen.pick_text(D, per, games[3])["aus"], "")
+        self.assertEqual(abfragen.pick_text(D, {"sword-shield": [("", "S.", "PokéAPI")]}, games[4])["aus"], "")  # Erweiterung
+        self.assertEqual(abfragen._research(con, 399), [{"aufgabe": "Exemplare gefangen", "stufen": ["1", "3"], "doppelt": True}])
+        con.close()
+
     def test_pokewiki_karte(self):
         from app import pokewiki
         mons = json.dumps({"Fukano": {"10.5,20.25": {"t": "default", "LvlMin": "3", "LvlMax": "5", "ALvlMin": "18", "ALvlMax": "20",
