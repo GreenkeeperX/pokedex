@@ -12,11 +12,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.48.6"
+VERSION = "0.48.7"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.48.7", "12.11.2026", [
+        "Fangchance in Legenden: Arceus mit allen Hisui-Bällen (Feder-, Flügel-, Düsenball, Schwer-, Zentner-, Tonnenball), "
+        "die Schwer-Bälle auch für unbemerkt, der Düsenball für fliegende Pokémon",
+    ]),
     ("0.48.6", "12.11.2026", [
         "Schadensrechner: „eine Attacke“/„Übersicht“ wie der gewählte Angreifer, „gegen …“-Zeile mit normalem Abstand",
         "Schadensrechner, Übersicht: Zeilen und Spalten markierbar, alle Prozente farbig von Rot bis Grün",
