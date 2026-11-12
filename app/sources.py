@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.48.0"
+VERSION = "0.48.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.48.1", "12.11.2026", [
+        "Verbindungstest: Inselkarten von MewMaps (Google Drive) mit Größe und die Datenquellen der FrontierNav-Karte für Alola",
+    ]),
     ("0.48.0", "12.11.2026", [
         "X/Y bekommt eine Karte: die Regionskarte von Kalos (1032 × 676 Pixel) mit 54 Orten und den Pokémon je Ort, deutsche Ortsnamen (gilt nach dem nächsten Abgleich)",
     ]),
