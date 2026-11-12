@@ -172,6 +172,7 @@ td.nw{white-space:nowrap}
 .mon .acts:has(.alp) .a{width:21px}
 .acts .a.team{border-color:transparent;background:none;cursor:pointer}
 .mon .acts .a{border-radius:4px}   /* rund schnitt die Ecken aus der Klickfläche */
+.mon .acts .a[data-act="fav"]{position:relative;left:-1px}   /* 0.48.9: Stern 1 px näher am Häkchen, weiter weg vom Ball */
 .acts .a.team.on{color:var(--go)}   /* 0.47.5: grün nur, wenn im Team, wie Stern und Pokéball */
 #toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:40;display:flex;gap:12px;align-items:center;background:var(--tipbg);color:#eef2f1;
   border:1px solid var(--tipline);border-radius:8px;padding:8px 12px;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:14px}

@@ -20,6 +20,7 @@ NEUIGKEITEN = [
     ("0.48.9", "12.11.2026", [
         "Fangchance in den übrigen Spielen mit allen Bällen des Spiels: Netz-, Turbo-, Mond-, Schwer- und Ultraball, wo sie beim Pokémon wirken, "
         "dazu Tauch-, Finster-, Flott-, Timer-, Nest-, Wieder-, Köder-, Traum-, Level- und Sympaball mit ihrer Bedingung; Faktoren je Generation",
+        "Pokémon-Karten: Stern 1 px weiter links",
     ]),
     ("0.48.8", "12.11.2026", [
         "Verbindungstest: Proben für die echte Fangformel in Legenden: Arceus (Bulbapedia „Catch rate“ und alle Hisui-Bälle, PokéWiki „Fangchance“)",
