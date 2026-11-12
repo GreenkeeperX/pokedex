@@ -356,3 +356,63 @@ def per_game(kind, texts):
                 merged.append([ed, t])
         out[sp] = [tuple(m) for m in merged]
     return out
+
+
+ZA_MISSIONS = "Missionen in Pokémon-Legenden: Z-A"
+
+
+def _cell(c):
+    """Zelle einer Wikitabelle: „attr | Inhalt“ → Inhalt (nur wenn links Attribute oder nichts stehen)."""
+    m = re.match(r"^([^|\[{]*?)\s*\|(?!\|)\s*(.*)$", c, re.S)
+    if m and (not m.group(1).strip() or "=" in m.group(1)):
+        c = m.group(2)
+    return "\n".join(x for x in (clean(ln) for ln in re.sub(r"<br\s*/?>", "\n", c).split("\n")) if x)
+
+
+def wikitables(wt):
+    """Alle Tabellen eines Wikitexts je Abschnitt: {Überschrift (Ebene 2): [[Zellen je Zeile], …]} (ohne Kopfzeilen)."""
+    out, head = {}, ""
+    for part in re.split(r"(?m)^(==[^=].*?==)\s*$", wt or ""):
+        h = re.fullmatch(r"==\s*(.*?)\s*==", part.strip())
+        if h:
+            head = h.group(1)
+            continue
+        for tab in re.findall(r"(?ms)^\{\|.*?^\|\}", part):
+            rows = []
+            for row in re.split(r"(?m)^\|-.*$", tab)[1:]:
+                cells, cur = [], None
+                for ln in row.split("\n"):
+                    if ln.startswith("|}") or ln.startswith("!") or ln.startswith("|+"):
+                        cur = None
+                        continue
+                    if ln.startswith("|"):
+                        for c in ln[1:].split("||") if "||" in ln[1:] and not ln.startswith("| |") else [ln[1:]]:
+                            cells.append(c)
+                        cur = len(cells) - 1
+                    elif cur is not None:
+                        cells[cur] += "\n" + ln
+                if cells:
+                    rows.append([_cell(c) for c in cells])
+            out.setdefault(head, []).extend(rows)
+    return out
+
+
+def za_missions(wt):
+    """Missionen in Legenden: Z-A aus dem PokéWiki: {"haupt": [{nr, name, text}], "dimension": [...], "neben": [{nr, name,
+    beschreibung, belohnung, freischaltung}]}."""
+    out = {"haupt": [], "dimension": [], "neben": []}
+    for head, rows in wikitables(wt).items():
+        h = head.lower()
+        k = "neben" if "neben" in h else "dimension" if "dimension" in h else "haupt" if "haupt" in h else None
+        if not k:
+            continue
+        for r in rows:
+            nr = _num(r[0]) if r else None
+            if nr is None or len(r) < 3:
+                continue
+            x = {"nr": nr, "name": r[1].replace("\n", " "), "text": r[2]}
+            if k == "neben":
+                x = {"nr": nr, "name": x["name"], "beschreibung": r[2].replace("\n", " "), "belohnung": (r[3] if len(r) > 3 else "").replace("\n", ", "),
+                     "freischaltung": (r[4] if len(r) > 4 else "").replace("\n", " ")}
+            out[k].append(x)
+    return out

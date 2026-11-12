@@ -1,5 +1,20 @@
 # Roadmap
 
+## 0.41.0 (12.11.2026)
+
+- Aufträge für mehrere Spiele (`abfragen.QUEST_GAMES`: Legenden: Arceus, Legenden: Z-A, Mega-Dimension teilt mit Z-A):
+  Nebenmissionen Z-A von BisaFans (`bisafans.ZA_REQUESTS`, `merged_requests`), Haupt- und Dimensions-Missionen aus dem
+  PokéWiki (`pokewiki.za_missions`, Dimensions-Missionen als 101 …, angezeigt als D1 …); `importer.VERSION` 23.
+  Kategorien von Map Genie über `quest_kind`/`quest_nr` („Request“, „Side Mission“, „#N:“, „Side Mission N:“)
+- Neue Kartenquelle Serebii PokéEarth (`app/pokearth.py`, `abruf._pokearth`, `mapgenie/<Spiel>.se.json`): Regionsbild als
+  Bildebene (`kacheln/se/<Region>.png`), je Ort ein Punkt; die Pokémon je Ort aus den Fundorten des Spiels
+  (`abfragen._pokearth_mons`, englischer Ortsname → PokéAPI → deutsch). Mit Probedaten: HG/SS 39 von 45 Orten mit Pokémon,
+  BDSP 49 von 68, ORAS 21 von 53 (die PokéAPI kennt in ORAS wenige Fundorte)
+- `mapgenie.SHARE`: Insel der Rüstung und Schneelande der Krone zeigen Galar
+- Verbindungstest: Bildkarten von Serebii für Einall, Kalos, Alola, Orre
+- Stand je Spiel (12.11.): jedes Spiel außer Champions hat eine Karte. Aufträge gibt es nur in Legenden: Arceus und Z-A;
+  vergleichbar wären noch die Blaubeer-Aufgaben in der Indigoblauen Scheibe (offen)
+
 ## 0.40.0 (12.11.2026)
 
 - Aufträge und Karte: Haken unter denselben Schlüsseln (`auftrag|Nr`, `mission|Nr`); Punkte der Kategorien „Request“ und

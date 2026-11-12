@@ -1571,6 +1571,88 @@ class Server(TempData):
         self.assertEqual(out[0]["mal"], 3)
         self.assertEqual([i[0] for i in out[1]["o"]["items"]], ["A", "B"])
 
+    def test_0_41_0_missionen_za(self):
+        """Z-A: Nebenmissionen von BisaFans (zwei Seiten), Missionen aus dem PokéWiki, Nummern auf der Karte (erfunden)."""
+        from app import bisafans, pokewiki, abfragen as _q
+        p1 = "<h3>Nebenmission 1: Erfundene Suche</h3><ul><li><b>Beschreibung:</b> Etwas fehlt.</li><li><b>Aufgabe:</b> Finde es.</li>" \
+             "<li><b>Wo:</b> Erfundener Platz</li><li><b>Belohnung:</b> 1x Trank</li></ul>"
+        p2 = "<h3>Nebenmission 120: Erfundene Erweiterung PLZA MD</h3><ul><li><b>Aufgabe:</b> Mehr finden.</li></ul>"
+        rows = bisafans.merged_requests([p1, p2])
+        self.assertEqual([(r["nr"], r["name"], r["ort"]) for r in rows], [(1, "Erfundene Suche", "Erfundener Platz"), (120, "Erfundene Erweiterung", "")])
+        wt = """__TOC__
+== Hauptmissionen ==
+{| class="spiele__table"
+! Nr. !! Name !! Inhalt
+|-
+| 01
+| <span id="A">Erfundener Anfang</span>
+| Du kommst an.<br />Dann geht es los.
+|-
+| 02
+| Erfundene Flucht
+| Weg hier.
+|}
+== Dimensions-Missionen ==
+{| class="x"
+|-
+| 01
+| Erfundene Dimension
+| Ein Ring {{tt|leuchtet|hell}}.
+|}
+== Nebenmissionen ==
+{| class="x"
+|-
+| 001
+| Erfundene Suche
+| Etwas fehlt.
+| 400 Pokédollar<br />{{Item|Trank|sp=PLZA}}
+| am Anfang
+|-
+| 110
+| Ohne Belohnung
+| Text.
+| | [[Datei:Bild.png]]
+| später
+|}"""
+        za = pokewiki.za_missions(wt)
+        self.assertEqual([(x["nr"], x["name"]) for x in za["haupt"]], [(1, "Erfundener Anfang"), (2, "Erfundene Flucht")])
+        self.assertEqual(za["haupt"][0]["text"], "Du kommst an.\nDann geht es los.")
+        self.assertEqual(za["dimension"][0]["text"], "Ein Ring leuchtet.")
+        self.assertEqual(za["neben"][0]["belohnung"], "400 Pokédollar, Trank")
+        self.assertEqual(za["neben"][1]["nr"], 110)
+        for name, nr in (("#5: Made Up", 5), ("Side Mission 12: Made Up", 12), ("Main Mission 3 - Made Up", 3), ("12 Made Up", None)):
+            self.assertEqual(_q.quest_nr(name), nr)
+        self.assertEqual((_q.quest_kind("Side Missions"), _q.quest_kind("Main Mission"), _q.quest_kind("Shop")), ("auftrag", "mission", None))
+
+    def test_0_41_0_pokearth(self):
+        """Serebii PokéEarth: Bildkarte der Region → Karte mit einem Bild und einem Punkt je Ort (erfundene Seite)."""
+        from app import pokearth
+        page = """<img border="0" src="/pokearth/erfunden.png" usemap="#erf" width="200" height="100">
+          <map name="erf"><area href="/pokearth/erf/stadt.shtml" shape="rect" coords="10, 10, 20, 20" title="Erfundene Stadt">
+          <area href="/pokearth/erf/route1.shtml" shape="poly" coords="30,40,50,40,50,60" title="Route 1">
+          <area href="/x" shape="circle" coords="100,50,10" title="Erfundene Höhle"></map>
+          <img src="https://boese.example/x.png" usemap="#b" width="5" height="5">"""
+        d = pokearth.extract(page)
+        self.assertEqual(d["bild"], "https://www.serebii.net/pokearth/erfunden.png")
+        self.assertEqual([(o["name"], o["x"], o["y"], o["w"]) for o in d["orte"]],
+                         [("Erfundene Stadt", 10, 10, 10), ("Route 1", 30, 40, 20), ("Erfundene Höhle", 90, 40, 20)])
+        m = pokearth.parse(d, "johto")
+        self.assertEqual(m["bilder"], [[0, 0, 0, 200, 100, "se/johto.png"]])
+        self.assertEqual([o[1] for o in m["orte"]], [1, 2, 1])
+        self.assertIsNone(pokearth.extract("<img src='/pokearth/x.png' width='5' height='5'>"))
+        png = b"\x89PNG\r\n\x1a\nerfunden"
+
+        def fake(self_, u, raw=False, absent=(), data=None):
+            return page if u == pokearth.page_url("johto") else png if u.endswith(".png") else None
+        with mock.patch.object(abruf._Source, "get", fake):
+            abruf._pokearth(lambda *a: None)
+        k = next(k for k in abruf.mg_maps("heartgold-soulsilver")["karten"] if k.get("quelle") == "pokearth")
+        self.assertEqual(k["slug"], "se-johto")
+        with open(abruf.mg_image("heartgold-soulsilver", "se-johto", 0), "rb") as fh:
+            self.assertEqual(fh.read(), png)
+        self.assertIsNone(abruf._tile_of(k, 1, 0, 0)[0])
+        self.assertEqual(abruf.mg_maps("the-crown-tundra"), abruf.mg_maps("sword-shield"))    # Erweiterungen zeigen Galar
+
     def test_0_40_0_rankedboost(self):
         """RankedBoost: Seite → JSON → Orte und Ortsbilder (erfundene Daten), Abgleich ohne Netz, Bild über den Server."""
         from app import rankedboost as rb

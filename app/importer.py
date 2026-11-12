@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "22"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "23"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -1337,12 +1337,19 @@ def _derive_texts(con, wiki):
     return {k: len(v) for k, v in counts.items()}, n_tasks, {k: sorted(v) for k, v in unknown.items()}
 
 
+QUESTS = {"legends-arceus": ("la_auftraege", "la_missionen"), "legends-za": ("za_auftraege", "za_missionen")}
+
+
 def _derive_auftrag(con, bisa):
-    """Aufträge in Legenden: Arceus (BisaFans, abruf._bisafans) in die Tabelle auftrag. arten: die Arten aus dem Pokédex
-    von Hisui, deren deutscher Name in Aufgabe, Beschreibung oder Lösung steht. Gibt die Zahl der Aufträge zurück."""
+    """Aufträge (Nebenmissionen) in Legenden: Arceus und Z-A (BisaFans, abruf._bisafans) in die Tabelle auftrag. arten:
+    die Arten aus dem Pokédex des Spiels, deren deutscher Name in Aufgabe, Beschreibung oder Lösung steht. Gibt die Zahl
+    der Aufträge zurück."""
     con.execute("CREATE TABLE auftrag (spiel TEXT, nr INTEGER, name TEXT, beschreibung TEXT, aufgabe TEXT, ort TEXT, "
                 "loesung TEXT, belohnung TEXT, arten TEXT, PRIMARY KEY (spiel, nr))")
-    rows = (bisa or {}).get("la_auftraege") or []
+    return sum(_derive_auftrag_spiel(con, spiel, (bisa or {}).get(k[0]) or []) for spiel, k in QUESTS.items())
+
+
+def _derive_auftrag_spiel(con, spiel, rows):
     if not rows:
         return 0
     names = {}
@@ -1350,7 +1357,7 @@ def _derive_auftrag(con, bisa):
         for art, n in con.execute(
                 "SELECT DISTINCT f.art, n.name FROM spiel_form sf JOIN spiel s ON s.id = sf.spiel JOIN form f ON f.id = sf.form "
                 "JOIN pokemon_species_names n ON n.pokemon_species_id = f.art AND n.local_language_id = ? "
-                "WHERE s.kennung = 'legends-arceus'", (DE,)):
+                "WHERE s.kennung = ?", (DE, spiel)):
             if n:
                 names[n] = art
     pat = re.compile(r"(?<![\wÄÖÜäöüß-])(" + "|".join(sorted(map(re.escape, names), key=len, reverse=True)) + r")(?![\wÄÖÜäöüß])") if names else None
@@ -1361,20 +1368,23 @@ def _derive_auftrag(con, bisa):
                 for n in pat.findall(r.get(part) or ""):
                     if names[n] not in found:
                         found.append(names[n])
-        con.execute("INSERT OR REPLACE INTO auftrag VALUES ('legends-arceus', ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (r["nr"], r.get("name", ""), r.get("beschreibung", ""), r.get("aufgabe", ""), r.get("ort", ""),
+        con.execute("INSERT OR REPLACE INTO auftrag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (spiel, r["nr"], r.get("name", ""), r.get("beschreibung", ""), r.get("aufgabe", ""), r.get("ort", ""),
                      r.get("loesung", ""), r.get("belohnung", ""), json.dumps(found)))
     return len(rows)
 
 
 def _derive_mission(con, bisa):
-    """Hauptmissionen in Legenden: Arceus (BisaFans, Komplettlösung) in die Tabelle mission. Gibt die Zahl zurück."""
+    """Hauptmissionen in Legenden: Arceus (BisaFans, Komplettlösung) und Z-A (PokéWiki; Dimensions-Missionen als 101 …)
+    in die Tabelle mission. Gibt die Zahl zurück."""
     con.execute("CREATE TABLE mission (spiel TEXT, nr INTEGER, name TEXT, kapitel INTEGER, text TEXT, PRIMARY KEY (spiel, nr))")
-    rows = (bisa or {}).get("la_missionen") or []
-    for r in rows:
-        con.execute("INSERT OR REPLACE INTO mission VALUES ('legends-arceus', ?, ?, ?, ?)",
-                    (r["nr"], r.get("name", ""), r.get("kapitel"), r.get("text", "")))
-    return len(rows)
+    n = 0
+    for spiel, (_, key) in QUESTS.items():
+        for r in (bisa or {}).get(key) or []:
+            con.execute("INSERT OR REPLACE INTO mission VALUES (?, ?, ?, ?, ?)",
+                        (spiel, r["nr"], r.get("name", ""), r.get("kapitel"), r.get("text", "")))
+            n += 1
+    return n
 
 
 def _derive_serebii(con, ser):

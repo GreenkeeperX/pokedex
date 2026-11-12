@@ -4,6 +4,8 @@
   je Auftrag Nummer, Name, Beschreibung, Aufgabe, Ort („Wo“), Lösung und Belohnung, auf Deutsch.
 - Legenden: Arceus, Hauptmissionen aus der Komplettlösung (komplettloesung-1.php bis -9.php): Überschriften
   „Mission N: Name“, darunter der Weg durch die Mission.
+- Legenden: Z-A, Nebenmissionen (spiele/editionen/z-a/nebenmissionen.php und die der Mega-Dimension) im selben Aufbau
+  wie die von Legenden: Arceus.
 
 Der Leser hängt nicht an der HTML-Form: er macht aus der Seite Textzeilen und sucht darin die Überschriften
 „Nebenmission N: Name“ und die Beschriftungen der Abschnitte (mit oder ohne Doppelpunkt, in Listen oder Tabellen).
@@ -13,6 +15,7 @@ import re
 
 BASE = "https://www.bisafans.de/"
 LA_REQUESTS = BASE + "spiele/editionen/legenden-arceus/nebenmissionen.php"
+ZA_REQUESTS = [BASE + "spiele/editionen/z-a/nebenmissionen.php", BASE + "spiele/editionen/z-a/mega-dimension/nebenmissionen-dlc.php"]
 LA_STORY = [BASE + f"spiele/editionen/legenden-arceus/komplettloesung-{i}.php" for i in range(1, 10)]
 KAPITEL = ("Erste Schritte in einer fremden Welt", "Wächter und Könige in Hisui", "Abenteuer im Sumpfland", "Gemeinsamkeit und Stärke",
            "Der Berg ruft!", "Eisige Abenteuer im Frostland", "Unerwartete Unterstützung", "Legenden im Sinnoh-Tempel",
@@ -41,7 +44,8 @@ def la_requests(page):
     for ln in lines(page):
         m = _HEAD.match(ln)
         if m:
-            cur = {"nr": int(m.group(1)), "name": m.group(2).strip(), "beschreibung": "", "aufgabe": "", "ort": "",
+            name = re.sub(r"(?:\s+(?:PLZA|PLA|MD))+\s*$", "", m.group(2).strip())       # Spielkürzel hinter der Überschrift
+            cur = {"nr": int(m.group(1)), "name": name, "beschreibung": "", "aufgabe": "", "ort": "",
                    "loesung": "", "belohnung": ""}
             field = None
             prev = out.get(cur["nr"])
@@ -87,3 +91,17 @@ def la_missions(pages):
                     continue
                 cur["text"].append(ln)
     return [dict(x, text="\n".join(x["text"])) for _, x in sorted(out.items())]
+
+
+requests = la_requests      # derselbe Leser für Legenden: Z-A
+
+
+def merged_requests(pages):
+    """Nebenmissionen aus mehreren Seiten (Hauptspiel, Erweiterung): je Nummer der vollständigste Eintrag."""
+    out = {}
+    for page in pages:
+        for r in la_requests(page):
+            prev = out.get(r["nr"])
+            if prev is None or sum(bool(r[k]) for k in r) > sum(bool(prev[k]) for k in prev):
+                out[r["nr"]] = r
+    return [x for _, x in sorted(out.items())]

@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, bisafans, companion, db, dittobase, ign, importer, mapgenie, pkcompletion, pokewiki, rankedboost, serebii, smogon, sources, store
+from . import altissimo, bisafans, companion, db, dittobase, ign, importer, mapgenie, pkcompletion, pokearth, pokewiki, rankedboost, serebii, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -582,7 +582,7 @@ def _media_tiles(st, log, settings, at):
 
 
 def _media_mg(st, log, at):
-    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign), ("dittobase", _dittobase), ("rankedboost", _rankedboost)):
+    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign), ("dittobase", _dittobase), ("rankedboost", _rankedboost), ("pokearth", _pokearth)):
         if db.has_data() and not _resting(st, key, at):
             res = run(log)
             st["sources"][key] = res
@@ -1137,17 +1137,57 @@ def _rankedboost(log):
     return src.result(dateien=found)
 
 
+def _pokearth(log):
+    """Regionskarten von Serebii (PokéEarth) für die Spiele in pokearth.GAMES: je Region die Seite und einmal das Bild
+    (kacheln/se/<Region>.<Endung>), dann je Spiel die Karten seiner Regionen (mapgenie/<Spiel>.se.json)."""
+    src = _Source("pokearth", log, pause=SEREBII_PAUSE)
+    have = {}
+    for i, reg in enumerate(pokearth.regions()):
+        STATE.update(step=f"Serebii PokéEarth: {pokearth.REGION.get(reg, reg)}", done=i, total=len(pokearth.regions()))
+        d = pokearth.extract(src.get(pokearth.page_url(reg), absent=(404,)) or "")
+        if src.stopped:
+            break
+        m = pokearth.parse(d, reg)
+        if not m:
+            log(f"Serebii PokéEarth: {reg} ohne Bildkarte")
+            continue
+        rel = m["bilder"][0][5]
+        f = mg_dir("kacheln", *rel.split("/"))
+        if not os.path.isfile(f):
+            body = src.get(d["bild"], raw=True, absent=(404,))
+            if body and (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff" or body[:4] == b"GIF8"):
+                os.makedirs(os.path.dirname(f), exist_ok=True)
+                with open(f + ".neu", "wb") as fh:
+                    fh.write(body)
+                os.replace(f + ".neu", f)
+        if not os.path.isfile(f):
+            m["bilder"] = []
+        have[reg] = m
+    found = 0
+    for spiel, regs in pokearth.GAMES.items():
+        ks = [have[r] for r in regs if r in have]
+        if ks:
+            _save_maps(spiel, "se", ks)
+            found += 1
+    if have:
+        log(f"Serebii PokéEarth: {len(have)} Regionen mit {sum(len(m['orte']) for m in have.values())} Orten für {found} Spiele")
+    return src.result(dateien=found)
+
+
 def mg_image(spiel, karte, nr):
-    """Pfad eines Ortsbilds (RankedBoost) im Datenordner oder None. Ohne Netz: die Bilder holt der Abgleich."""
+    """Pfad eines Bilds einer Bildkarte (RankedBoost: Ortsbilder, Serebii: Regionsbild) im Datenordner oder None. Ohne
+    Netz: die Bilder holt der Abgleich."""
     m = _mg_map(spiel, karte)
-    if not m or not any(b[0] == nr for b in m.get("bilder") or []):
+    b = next((b for b in (m or {}).get("bilder") or [] if b[0] == nr), None)
+    if not b:
         return None
-    f = mg_dir("kacheln", "rb", m["slug"], f"{nr}.webp")
+    rel = b[5] if len(b) > 5 and re.fullmatch(r"[a-z]{2}/[\w.-]+", str(b[5])) and ".." not in b[5] else f"rb/{m['slug']}/{nr}.webp"
+    f = mg_dir("kacheln", *rel.split("/"))
     return f if os.path.isfile(f) else None
 
 
-MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES, *dittobase.GAMES, *rankedboost.GAMES)))   # Spiele mit eigener Karte
-MAP_FILES = ("", ".pc", ".ign", ".db", ".rb")   # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
+MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES, *dittobase.GAMES, *rankedboost.GAMES, *pokearth.GAMES)))   # Spiele mit eigener Karte
+MAP_FILES = ("", ".pc", ".ign", ".db", ".rb", ".se")   # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
 
 
 def mg_maps(spiel):
@@ -1186,7 +1226,7 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": "", "rest_rankedboost": ""}
+_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": "", "rest_rankedboost": "", "rest_pokearth": ""}
 
 
 def _miss_load():
@@ -1363,7 +1403,7 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE, stock=False):
         return f
 
 
-TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign, "dittobase": dittobase, "rankedboost": rankedboost}     # Kartenquellen mit eigenem Kachelschema
+TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign, "dittobase": dittobase, "rankedboost": rankedboost, "pokearth": pokearth}     # Kartenquellen mit eigenem Kachelschema
 
 
 def _cdn_tile(rel, url, f, pause, quelle):
@@ -1618,12 +1658,39 @@ def _bisafans(st, log, at):
         STATE.update(step="BisaFans: Hauptmissionen in Legenden: Arceus", done=i, total=len(bisafans.LA_STORY))
         pages.append(src.get(url, absent=(404,)) or "")
     story = bisafans.la_missions(pages)
-    st["sources"]["bisafans"] = src.result(auftraege=len(rows), missionen=len(story))
+    za_pages = []
+    for url in bisafans.ZA_REQUESTS:
+        if src.stopped:
+            break
+        STATE.update(step="BisaFans: Nebenmissionen in Legenden: Z-A")
+        za_pages.append(src.get(url, absent=(404,)) or "")
+    za_rows = bisafans.merged_requests(za_pages)
+    # Haupt- und Dimensions-Missionen in Z-A (und Nebenmissionen, die BisaFans noch fehlen) aus dem PokéWiki
+    za = {}
+    if not _resting(st, "pokewiki", at):
+        STATE.update(step="PokéWiki: Missionen in Legenden: Z-A")
+        wsrc = _Source("pokewiki", log, pause=BISA_PAUSE)
+        t = wsrc.get(pokewiki.batch_url([pokewiki.ZA_MISSIONS]), absent=(404,))
+        try:
+            za = pokewiki.za_missions(pokewiki.pages(t).get(pokewiki.ZA_MISSIONS, "")) if t else {}
+        except ValueError:
+            za = {}
+    have = {r["nr"] for r in za_rows}
+    for x in (za or {}).get("neben") or []:
+        if x["nr"] not in have:
+            za_rows.append({"nr": x["nr"], "name": x["name"], "beschreibung": x["beschreibung"], "aufgabe": "", "ort": "",
+                            "loesung": x.get("freischaltung") and "Freigeschaltet: " + x["freischaltung"] or "", "belohnung": x["belohnung"]})
+    za_rows.sort(key=lambda r: r["nr"])
+    za_story = [dict(x, kapitel=1) for x in (za or {}).get("haupt") or []] + \
+        [dict(x, nr=100 + x["nr"], kapitel=2) for x in (za or {}).get("dimension") or []]
+    st["sources"]["bisafans"] = src.result(auftraege=len(rows), missionen=len(story), za_nebenmissionen=len(za_rows), za_missionen=len(za_story))
     if src.blocked:
         st["rest"]["bisafans"] = _iso(now() + timedelta(hours=REST_H))
-    log(f"BisaFans: {len(rows)} Aufträge und {len(story)} Hauptmissionen in Legenden: Arceus" + ("" if rows else ", es gilt der letzte Lauf"))
-    if rows:
-        out = {"la_auftraege": rows, "la_missionen": story or old.get("la_missionen") or []}
+    log(f"BisaFans: {len(rows)} Aufträge und {len(story)} Hauptmissionen in Legenden: Arceus" + ("" if rows else ", es gilt der letzte Lauf")
+        + f"; Legenden: Z-A {len(za_rows)} Nebenmissionen, {len(za_story)} Haupt- und Dimensions-Missionen (PokéWiki)")
+    if rows or za_rows:
+        out = {"la_auftraege": rows or old.get("la_auftraege") or [], "la_missionen": story or old.get("la_missionen") or [],
+               "za_auftraege": za_rows or old.get("za_auftraege") or [], "za_missionen": za_story or old.get("za_missionen") or []}
         store.save_json("bisafans.json", out)
         return out
     return old
@@ -2058,6 +2125,11 @@ def diagnose(proben=None, stand=None):
     # Karten älterer Spiele: Ortsbilder bei Serebii (PokéEarth), Disassemblies (pret) und das Bildarchiv von Bulbapedia
     for reg in ("kanto", "johto", "hoenn", "sinnoh"):
         probe(f"Serebii, PokéEarth {reg.title()}", f"https://www.serebii.net/pokearth/{reg}/", img_info, keep=True, headers=html)
+    def earth_info(t):
+        d = pokearth.extract(t)
+        return f"Bildkarte {d['bild'].rsplit('/', 1)[-1]} ({d['w']}×{d['h']}) mit {len(d['orte'])} Orten" if d else "keine Bildkarte"
+    for reg in ("unova", "kalos", "alola", "orre"):          # 0.41: Regionskarten der übrigen Spiele
+        probe(f"Serebii, PokéEarth {reg.title()} (Bildkarte)", pokearth.page_url(reg), earth_info, keep=True, headers=html)
     probe("Serebii, PokéEarth Route 1 (Kanto)", "https://www.serebii.net/pokearth/kanto/route1.shtml", img_info, keep=True, headers=html)
     probe("Bulbapedia-Archiv, Kartenbilder Kanto", "https://archives.bulbagarden.net/w/api.php?" + urllib.parse.urlencode(
         {"action": "query", "list": "search", "srsearch": "Kanto Route 1 RBY", "srnamespace": "6", "srlimit": "15", "format": "json"}), wiki_hits, keep=True)
