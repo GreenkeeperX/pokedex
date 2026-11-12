@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.48.2"
+VERSION = "0.48.3"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.48.3", "12.11.2026", [
+        "Schadensrechner: Knöpfe wieder wie ab 0.43 (Ansicht kräftig hervorgehoben, gewählter Angreifer ruhiger ohne Rahmen); 0.46 hatte das versehentlich wieder umgestellt",
+    ]),
     ("0.48.2", "12.11.2026", [
         "Formen zum Ansehen: Formen ohne eigenes Bild bei der Quelle (z. B. Moterpel, das in jeder Form gleich aussieht) erscheinen nicht mehr, der Hinweis auf den nächsten Abgleich kommt nur noch, wenn wirklich noch etwas zu laden ist",
     ]),

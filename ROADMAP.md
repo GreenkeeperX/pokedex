@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.48.3 (12.11.2026)
+
+- Schadensrechner: Regel `#calc .seg button.on` aus 0.46 entfernt. Sie setzte eine schon in 0.43 erledigte Rückmeldung erneut um
+  und überschrieb Ansicht und Angreifer; es gilt wieder `.seg button.on` (kräftig) und `.seg.cslots button.on` (ruhiger)
+
 ## 0.48.2 (12.11.2026)
 
 - `_optik`: Formen aus `formen_fehlen.json` (404 bei den PokéAPI-Sprites, z. B. `414-sandy`) weglassen; bleibt nur eine Form, kein Kasten

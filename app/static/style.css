@@ -921,8 +921,7 @@ button.danger:hover,dialog.ask button.danger:hover{background:#c4000f !important
 td.rst{white-space:nowrap;text-align:left}
 td.rst span{display:inline-block;min-width:2.8em;text-align:right;font-variant-numeric:tabular-nums}
 #foeclr[hidden]{display:none}
-/* 0.46: im Schadensrechner ist die Auswahl ruhiger (dunkel wie hell), damit die übrigen Einstellungen nicht untergehen */
-#calc .seg button.on{background:color-mix(in srgb,var(--accent) 18%,var(--card));color:var(--ink-hi);font-weight:600;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
+/* 0.48.3: die Regel aus 0.46 für #calc .seg ist wieder weg, es gilt der Stand von 0.43 (Segmente kräftig, Angreifer ruhiger) */
 #vs th.vsteam{vertical-align:bottom;text-align:left;font-size:12px;color:var(--muted);font-weight:600;cursor:pointer}
 #vs th.vsteam>.pinc{opacity:.8}
 /* 0.46: Aufträge mit senkrechten Linien, Erklärung zum Aufklappen */
