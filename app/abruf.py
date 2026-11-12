@@ -1344,6 +1344,7 @@ PKHEX_GAMES = {"brilliant-diamond-shining-pearl": ("legality/wild/Gen8/encounter
 DIAG_TIMEOUT = 20           # Sekunden ohne Antwort, dann gibt eine Abfrage im Verbindungstest auf
 DIAG_LIMIT = 60             # Sekunden insgesamt je Abfrage (große Seiten, die langsam tröpfeln)
 DIAG_HANG = 120             # Sekunden ohne jeden Fortschritt, dann beendet sich der Test trotz offener Abfragen
+DIAG_PARALLEL = 6           # so viele Abfragen gleichzeitig (mehr überlastete die Namensauflösung: „Errno -3 Try again“)
 DIAG_PAUSE = {"www.serebii.net": SEREBII_PAUSE, "www.pokewiki.de": WIKI_PAUSE, "mapgenie.io": MG_PAUSE}
 
 
@@ -1361,12 +1362,18 @@ def diagnose(proben=None, stand=None):
     html = {"Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"}
     lock, pools, futs = threading.Lock(), {}, []
 
+    gate = threading.Semaphore(DIAG_PARALLEL)
+
     def one(slot, name, url, info, raw, keep, headers, pause):
+        r = None
+        gate.acquire()
         with lock:
             stand["laeuft"].append(name)
-        r = None
         try:
             r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT)
+            if r["error"] and "Errno -3" in r["error"]:      # Namensauflösung kurz überlastet: einmal nachfassen
+                sleep(2)
+                r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT)
             if r["error"]:
                 lines[slot] = f"{name}: keine Verbindung ({r['error']})"
                 return None
@@ -1392,6 +1399,7 @@ def diagnose(proben=None, stand=None):
             with lock:
                 stand["laeuft"].remove(name)
                 stand["fertig"] += 1
+            gate.release()
             if r is not None and not r.get("error"):
                 sleep(pause)
 
@@ -1571,7 +1579,10 @@ def diagnose(proben=None, stand=None):
         return f"{g.get('sitename')} auf MediaWiki {g.get('generator', '?').split()[-1]}"
 
     def wiki_page(text):
-        p = json.loads(text)["parse"]
+        j = json.loads(text)
+        if "parse" not in j:
+            return f"Seite gibt es nicht ({(j.get('error') or {}).get('code', '?')})"
+        p = j["parse"]
         wt = p["wikitext"]["*"] if isinstance(p["wikitext"], dict) else p["wikitext"]
         return f"Seite „{p['title']}“, {len(wt)} Zeichen Wikitext, {wt.count('{{')} Vorlagen"
     probe("PokéWiki, API", POKEWIKI_API + "?action=query&meta=siteinfo&format=json", wiki_info)

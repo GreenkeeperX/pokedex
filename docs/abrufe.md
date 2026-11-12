@@ -123,7 +123,8 @@ den Fortschritt (`gesamt`, `fertig`, `laeuft`) und am Ende Start, Dauer und Zeil
 im Speicher; jeder neue Test ersetzt sie, auf der Platte sammelt sich nichts. Jede Abfrage gibt nach 20 Sekunden ohne
 Antwort (`DIAG_TIMEOUT`) auf; nach 60 Sekunden insgesamt (`DIAG_LIMIT`) wertet er aus, was bis dahin kam („nur der
 Anfang“). Der Abgleich selbst wartet ohne Gesamtlimit, bis eine Datei ganz da ist. Geht 120 Sekunden lang
-gar nichts voran (`DIAG_HANG`), endet der Test trotzdem und nennt die hängenden Abfragen.
+gar nichts voran (`DIAG_HANG`), endet der Test trotzdem und nennt die hängenden Abfragen. Höchstens sechs Abfragen
+laufen gleichzeitig (`DIAG_PARALLEL`); mehr überlastete auf dem Heimserver die Namensauflösung.
 
 - heutige Quellen: GitHub-API, eine CSV der PokéAPI, Showdown, ein Sprite,
 - Items: `items.csv` und `item_flavor_text.csv` der PokéAPI, `items.ts` von Showdown, deutsche Itemnamen aus PKHeX,

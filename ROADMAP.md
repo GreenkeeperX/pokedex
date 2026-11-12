@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.35.4 (12.11.2026)
+
+- Oberfläche: die Abfrage des Teststands versucht es nach einem Fehler weiter (bisher blieb die Anzeige stehen)
+- `abruf.diagnose`: höchstens `DIAG_PARALLEL` (6) Abfragen gleichzeitig; „Errno -3 Try again“ (DNS überlastet) bekommt
+  einen zweiten Versuch; fehlende Wiki-Seiten heißen „Seite gibt es nicht“
+
 ## 0.35.3 (12.11.2026)
 
 - `sources._read` liest mit `read1`: `read(n)` wartete, bis n Bytes beisammen waren, und umging so das Gesamtlimit

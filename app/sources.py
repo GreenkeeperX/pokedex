@@ -11,11 +11,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.35.3"
+VERSION = "0.35.4"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.35.4", "12.11.2026", [
+        "Verbindungstest: die Anzeige gibt nicht mehr auf, wenn eine Nachfrage beim Dienst ausbleibt",
+        "Höchstens sechs Abfragen gleichzeitig und ein zweiter Versuch, wenn die Namensauflösung kurz überlastet ist",
+    ]),
     ("0.35.3", "12.11.2026", [
         "Verbindungstest: das Zeitlimit greift jetzt auch bei tröpfelnden Seiten wirklich, und nach zwei Minuten ohne Fortschritt endet der Test trotzdem",
     ]),
