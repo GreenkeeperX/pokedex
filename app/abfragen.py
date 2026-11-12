@@ -1350,6 +1350,31 @@ def _areas_pokeapi(con, D, g):
 
 
 BALLS = (("Pokéball", 1), ("Superball", 1.5), ("Hyperball", 2))
+# 0.50: Bälle in Legenden: Arceus nach Bulbapedia (Catch rate): [Name, Faktor, Faktor verstärkt, wann verstärkt].
+# Schwer-Bälle verstärkt, wenn das Pokémon dich nicht bemerkt hat oder im Kampf; Feder-Bälle bei fliegenden Pokémon
+HISUI_BALLS = [["Pokéball", 0.75, 0.75, ""], ["Superball", 1.5, 1.5, ""], ["Hyperball", 2.25, 2.25, ""],
+               ["Schwerball", 1, 1.25, "unbemerkt"], ["Zentnerball", 1.75, 2, "unbemerkt"], ["Tonnenball", 2.5, 2.75, "unbemerkt"],
+               ["Federball", 1, 1.25, "fliegt"], ["Flügelball", 1.25, 2, "fliegt"], ["Düsenball", 2, 2.75, "fliegt"]]
+
+
+def catch_chance_la(rate, ball=0.75, hp_share=1.0, status=1.0, behavior=2.0, back=1.0, berry=1.0, rank=0, outbreak=False):
+    """0.50: Fangchance in % in Legenden: Arceus (Bulbapedia, Catch rate):
+    a = 0,75 × Fangrate (+10 im Massenausbruch) + 30 × (Rang + KP-Faktor × Status × Ball × Verhalten × Rücken × Beere),
+    Rang zwischen −5 und 0; a bis 255, b = 65535 × (1 − √(1 − a/255)), zwei Proben, eine muss gelingen."""
+    hp = (3 - 2 * hp_share) / 3
+    a = 0.75 * rate + (10 if outbreak else 0) + 30 * (max(-5, min(0, rank)) + hp * status * ball * behavior * back * berry)
+    if a < 0:
+        return 0.0
+    a = min(255, a)
+    b = 65535 * (1 - (1 - a / 255) ** 0.5)
+    return round(100 * (1 - (1 - b / 65536) ** 2), 1)
+
+
+def rank_la(level, alpha=False, player=10):
+    """Rang-Term in Legenden: Arceus: Rang des Spielers − Rang des Pokémon + 1, zwischen −5 und 0. Rang des Pokémon
+    ⌊(Level − 1)/10 + 1⌋, Alpha +4, höchstens 10."""
+    poke = min(10, int((level - 1) / 10 + 1) + (4 if alpha else 0))
+    return max(-5, min(0, player - poke + 1))
 # 0.48.7: Bälle in Legenden: Arceus (Faktoren wie in der Item-Liste, BALL_HISUI in app.js); die Schwer-Bälle zusätzlich mit dem
 # Faktor, wenn das Pokémon dich nicht bemerkt hat, der Düsenball bei fliegenden Pokémon. Urball (fängt immer) fehlt
 BALLS_HISUI = (("Pokéball", 1), ("Superball", 1.5), ("Hyperball", 2.25), ("Federball", 1), ("Flügelball", 1.5), ("Düsenball", 2),
@@ -1448,6 +1473,13 @@ def _more(con, f, g, gen):
     kennung = g["kennung"] if g else ""
     if sp["capture_rate"] is not None:
         out["fangrate"] = sp["capture_rate"]
+        if kennung == "legends-arceus":       # 0.50: eigene Fangrate und eigene Formel (Rechnung in app.js, catchHtmlLA)
+            try:
+                r = con.execute("SELECT rate FROM fangrate WHERE spiel = ? AND art = ?", (kennung, f["art"])).fetchone()
+            except Exception:
+                r = None
+            out["fangrate_la"] = r[0] if r else None
+            out["fang_hisui"] = HISUI_BALLS
         extra = ()
         if g and kennung != "legends-arceus":
             try:

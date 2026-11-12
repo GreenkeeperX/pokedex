@@ -317,6 +317,20 @@ class Leser(unittest.TestCase):
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
+    def test_0_50_fangen_legenden_arceus(self):
+        from app import abfragen, importer
+        # a = 0,75 × 255 + 30 × (0 + 1/3 × 0,75 × 2) = 206,25; b = 65535 × (1 − √(1 − a/255)); zwei Proben
+        a = 0.75 * 255 + 30 * (1 / 3 * 0.75 * 2)
+        b = 65535 * (1 - (1 - a / 255) ** 0.5)
+        self.assertEqual(abfragen.catch_chance_la(255), round(100 * (1 - (1 - b / 65536) ** 2), 1))
+        self.assertEqual(abfragen.catch_chance_la(3, rank=-5), 0.0)                     # a unter 0: kein Fang
+        self.assertGreater(abfragen.catch_chance_la(45, 2.75, back=1.75), abfragen.catch_chance_la(45, 2.75))
+        self.assertEqual((abfragen.rank_la(5), abfragen.rank_la(65, player=3), abfragen.rank_la(65, True, 3)), (0, -3, -5))
+        e = bytearray(importer.LA_PERSONAL_SIZE * 3)                                     # erfundene Einträge
+        e[importer.LA_PERSONAL_SIZE + 8], e[importer.LA_PERSONAL_SIZE + 0x21] = 190, 0x40
+        e[2 * importer.LA_PERSONAL_SIZE + 8] = 45                                         # nicht im Spiel
+        self.assertEqual(importer.pkhex_catch_la(bytes(e)), {1: 190})
+
     def test_tm_und_extras(self):
         from app import abfragen
         self.assertEqual(abfragen.machine_label("tm12"), "TM12")

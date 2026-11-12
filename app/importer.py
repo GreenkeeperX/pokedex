@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "25"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "26"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -722,6 +722,30 @@ def pkhex_shadow(text):
         who, _, where = note.partition("@")
         out.append((int(nr), int(sp.group(1)), int(lv.group(1)), moves, int(gauge), who.split(":", 1)[-1].strip(), where.strip()))
     return out
+
+
+LA_PERSONAL_SIZE = 0xB0         # PKHeX PersonalInfo8LA: Fangrate bei 0x08, „im Spiel“ in Bit 6 von 0x21
+
+
+def pkhex_catch_la(personal):
+    """Fangraten in Legenden: Arceus aus personal_la: {Art: Fangrate}, nur Arten im Spiel (Grundform)."""
+    out = {}
+    for art in range(1, len(personal) // LA_PERSONAL_SIZE):
+        e = personal[art * LA_PERSONAL_SIZE:(art + 1) * LA_PERSONAL_SIZE]
+        if len(e) == LA_PERSONAL_SIZE and (e[0x21] >> 6) & 1 and e[0x08]:
+            out[art] = e[0x08]
+        if art >= 1025:
+            break
+    return out
+
+
+def _derive_fangrate(con, pkhex):
+    """0.50: Tabelle fangrate (spiel, art, rate): eigene Fangraten der Spiele, die von der PokéAPI abweichen (bisher
+    Legenden: Arceus, aus PKHeX). Gibt die Zahl der Zeilen zurück."""
+    con.execute("CREATE TABLE fangrate (spiel TEXT, art INTEGER, rate INTEGER)")
+    rates = pkhex_catch_la(((pkhex or {}).get("_fang_la") or {}).get("personal") or b"")
+    con.executemany("INSERT INTO fangrate VALUES ('legends-arceus', ?, ?)", sorted(rates.items()))
+    return len(rates)
 
 
 def _derive_crypto(con, pkhex):
@@ -1512,6 +1536,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_fund = _derive_fundort(con, pkhex)
         n_raid = _derive_raid(con, pkhex)
         n_crypto = _derive_crypto(con, pkhex)
+        n_fangrate = _derive_fangrate(con, pkhex)
         n_spawn = _derive_spawn(con, spawns)
         pkx = (pkhex or {}).get("_items")
         n_item = _derive_item(con, pkx)
@@ -1544,7 +1569,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "species": con.execute("SELECT COUNT(DISTINCT art) FROM form").fetchone()[0],
                  "moves": con.execute("SELECT COUNT(*) FROM attacke").fetchone()[0],
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
-                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
+                 "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "fangraten": n_fangrate, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
                  "kartenobjekte": n_obj, "lernen": n_lernen, "abklingzeiten": n_abkling, "pokopia": n_pokopia, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez,
                  "texte": n_texte, "forschung": n_forschung, "auftraege": n_auftrag, "missionen": n_mission, "blaubeer": n_blaubeer, "trainer": n_trainer, "kuerzel_unbekannt": unbekannt, "check": why}
     finally:

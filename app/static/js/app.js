@@ -1754,9 +1754,60 @@ function researchHtml(d) {
     <p class="hint"><span ${tipRef(`<b>Punkte, wenn alle Stufen erreicht sind</b>${calc}`)}>Alle Stufen: ${all} Punkte</span>, Forschungslevel 10 ab 100.${have ? ` Erreicht: <b>${have}</b> Punkte${have >= 100 ? " (Level 10)" : `, noch ${Math.min(100, all) - have > 0 ? Math.min(100, all) - have : 0} bis Level 10`}.` : " Klick auf eine Zahl hakt die Stufe ab."} Quelle: PokéWiki.</p></div>`;
 }
 
+/* 0.50: Fangchance in Legenden: Arceus mit der Formel des Spiels (Bulbapedia, Catch rate), Lage über Schalter.
+   a = 0,75 × Fangrate (+10 Massenausbruch) + 30 × (Rang + KP × Status × Ball × Verhalten × Rücken × Beere) */
+const FLA_BEHAV = [["Standard", 2], ["frisst (auch Beere)", 2.5], ["ruht", 2.5], ["betäubt", 3], ["schläft", 4], ["frisst Kuchen", 4],
+  ["scheu oder angriffslustig", 1], ["flieht", 1]];
+const FLA = Object.assign({lv: 0, alpha: false, rang: 10, beh: 0, rueck: false, unb: false, fliegt: false, beere: false, aus: false}, store.get("fangla", {}));
+function fangLA(rate, ball, hp, st, o) {
+  const poke = Math.min(10, Math.floor((o.lv - 1) / 10 + 1) + (o.alpha ? 4 : 0)), rank = Math.max(-5, Math.min(0, o.rang - poke + 1));
+  const mult = (3 - 2 * hp) / 3 * st * ball * FLA_BEHAV[o.beh][1] * (o.rueck ? 1.75 : 1) * (o.beere ? 1.3 : 1);
+  const a0 = 0.75 * rate + (o.aus ? 10 : 0) + 30 * (rank + mult), a = Math.min(255, a0);
+  const b = a < 0 ? 0 : 65535 * (1 - Math.sqrt(1 - a / 255)), p = a < 0 ? 0 : Math.round(1000 * (1 - (1 - b / 65536) ** 2)) / 10;
+  return {p, a: a0, b, rank, poke, mult};
+}
+function catchHtmlLA(d) {
+  const m = d.mehr || {}, rate = m.fangrate_la ?? m.fangrate, o = FLA;
+  if (!o.lv) { const lv = [...JSON.stringify(d.fundorte || "").matchAll(/"level": ?"?(\d+)/g)].map((x) => +x[1]); o.lvAuto = lv.length ? Math.min(...lv) : 20; }
+  const opt = Object.assign({}, o, {lv: o.lv || o.lvAuto});
+  const pc = (v) => `<span style="color:${ramp(v / 100)}">${de(v)} %</span>`;
+  const cell = (b, f, hp, st, lbl) => { const r = fangLA(rate, f, hp, st, opt);
+    return `<td class="c" data-s="${r.p}" ${tipRef(`<div class="tt">${esc(b[0])}, ${esc(lbl)}</div>${calcRows([
+      ["Fangrate", `${rate} × 0,75`, m.fangrate_la != null ? "eigene Fangrate in Legenden: Arceus" : "Fangrate der Hauptspiele (eigene fehlt noch)"],
+      o.aus ? ["Massenausbruch", "+10", ""] : null,
+      ["Rang", r.rank, `dein Sternrang ${opt.rang} − Rang des Pokémon ${r.poke} + 1, zwischen −5 und 0`],
+      ["KP", `×${hp ? "⅓" : "1"}`, hp ? "volle KP" : "fast keine KP"], st !== 1 ? ["Status", "×2", "Statusproblem"] : null,
+      ["Ball", `×${de(f)}`, f !== b[1] ? (b[3] === "fliegt" ? "verstärkt: Pokémon fliegt" : "verstärkt: unbemerkt oder im Kampf") : ""],
+      ["Verhalten", `×${de(FLA_BEHAV[o.beh][1])}`, FLA_BEHAV[o.beh][0]], o.rueck ? ["Rücken", "×1,75", "Wurf in den Rücken"] : null,
+      o.beere ? ["Beere", "×1,3", "frisst eine Himmihbeere (Razz Berry)"] : null])}
+      <div class="tt">Fangwert a</div><div>0,75 × ${rate}${o.aus ? " + 10" : ""} + 30 × (${r.rank} + ${de(Math.round(r.mult * 100) / 100)}) = <b style="color:#fff">${de(Math.round(r.a * 10) / 10)}</b>${r.a > 255 ? " (bis 255)" : ""}</div>
+      <div class="tt">Chance je Wurf</div>${r.a < 0 ? "<div>a unter 0: kein Fang möglich</div>" : `<div>b = 65535 × (1 − √(1 − a/255)) = ${Math.round(r.b)}; zwei Proben, eine muss gelingen</div>`}
+      <div class="tt">Ergebnis</div><div><b>${de(r.p)} %</b></div>`)}>${pc(r.p)}</td>`; };
+  const rows = (m.fang_hisui || []).map((b) => { const boost = (b[3] === "unbemerkt" && o.unb) || (b[3] === "fliegt" && o.fliegt), f = boost ? b[2] : b[1];
+    return `<tr><td>${esc(b[0])}${boost && b[2] !== b[1] ? ` <span class="hint">verstärkt</span>` : ""}</td>${cell(b, f, 1, 1, "volle KP")}${cell(b, f, 0, 1, "1 KP")}${cell(b, f, 0, 2, "1 KP, Statusproblem")}</tr>`; }).join("");
+  const ck = (k, t, tip) => `<label data-tip="${esc(tip)}"><input type="checkbox" data-fla="${k}"${o[k] ? " checked" : ""}> ${t}</label>`;
+  return `<details class="box" id="fangla"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${rate}${m.fangrate_la != null && m.fangrate_la !== m.fangrate ? ` (Hauptspiele ${m.fangrate})` : ""}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
+    <div class="bar fla"><label data-tip="Level des wilden Pokémon. Sein Rang: ⌊(Level − 1)/10 + 1⌋">Level <input type="number" min="1" max="100" data-fla="lv" value="${opt.lv}" style="width:4.2em"></label>
+      ${ck("alpha", "Alpha", "Alpha-Pokémon: Rang +4 (höchstens 10)")}
+      <label data-tip="Dein Sternrang im Galaktik-Team. Liegt er unter dem Rang des Pokémon, sinkt die Chance">Sternrang <select data-fla="rang">${[...Array(11).keys()].map((i) => `<option${i === o.rang ? " selected" : ""}>${i}</option>`).join("")}</select></label>
+      <label>Verhalten <select data-fla="beh">${FLA_BEHAV.map(([t, v], i) => `<option value="${i}"${i === o.beh ? " selected" : ""}>${t} (×${de(v)})</option>`).join("")}</select></label></div>
+    <div class="bar fla">${ck("rueck", "in den Rücken", "Wurf in den Rücken: ×1,75, gilt auch im Kampf danach")}${ck("unb", "unbemerkt", "Pokémon hat dich nicht bemerkt (oder Kampf): Schwer-, Zentner- und Tonnenball verstärkt")}
+      ${ck("fliegt", "fliegt", "Pokémon fliegt: Feder-, Flügel- und Düsenball verstärkt (Federball laut Bulbapedia nur bei bestimmten fliegenden Begegnungen)")}${ck("beere", "Himmihbeere", "Pokémon frisst eine Himmihbeere (Razz Berry): ×1,3")}${ck("aus", "Massenausbruch", "Massenausbruch: +10 auf den Fangwert")}</div>
+    <table class="rows sort catch"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: dreimal so gut wie volle KP")}${thc("1 KP, Status", "Jedes Statusproblem: ×2")}</tr></thead><tbody>${rows}</tbody></table>
+    <p class="hint">Je Wurf, mit der Formel von Legenden: Arceus (Quelle: Bulbapedia). Der Urball fängt immer.</p></details>`;
+}
+document.addEventListener("change", (e) => {
+  const k = e.target.dataset?.fla;
+  if (!k || !DETAIL) return;
+  FLA[k] = e.target.type === "checkbox" ? e.target.checked : +e.target.value;
+  const {lvAuto, ...keep} = FLA; store.set("fangla", keep);
+  const box = $("#fangla");
+  if (box) { const open = box.open; box.outerHTML = catchHtmlLA(DETAIL); $("#fangla").open = open; }
+});
 function catchHtml(d) {
   const m = d.mehr || {};
   if (!m.fangen || BATTLE()) return "";
+  if (S.game === "legends-arceus" && m.fang_hisui) return catchHtmlLA(d);
   const pc = (v) => `<span style="color:${ramp(v / 100)}">${String(v).replace(".", ",")} %</span>`;
   const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
   return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
@@ -3265,9 +3316,10 @@ const BALL = {"Pokéball": [1, ""], "Superball": [1.5, ""], "Hyperball": [2, ""]
   "Schwerball": [1, "besser bei schweren Pokémon"], "Sympaball": [8, "×8 bei gleicher Art und anderem Geschlecht"], "Freundesball": [1, "startet mit hoher Freundschaft"],
   "Mondball": [4, "×4 bei Pokémon, die sich mit Mondstein entwickeln"], "Turnierball": [1.5, "nur beim Käferturnier"], "Parkball": [0, "fängt immer (Park)"],
   "Traumball": [4, "×4 bei schlafenden Pokémon"], "Ultraball": [5, "×5 bei Ultrabestien, sonst ×0,1"], "Kirschball": [1, ""], "Kirschenball": [1, ""]};
-const BALL_HISUI = {"Pokéball": [1, ""], "Superball": [1.5, ""], "Hyperball": [2.25, ""], "Federball": [1, "besser bei fliegenden Pokémon; fliegt weit"],
-  "Flügelball": [1.5, "besser bei fliegenden Pokémon; fliegt weiter"], "Düsenball": [2, "×2,75 bei fliegenden Pokémon; fliegt am weitesten"],
-  "Schwerball": [1, "×1,25, wenn das Pokémon dich nicht bemerkt hat; fliegt kurz"], "Zentnerball": [1.25, "×2, wenn das Pokémon dich nicht bemerkt hat"],
+// 0.50: Faktoren nach Bulbapedia (Catch rate)
+const BALL_HISUI = {"Pokéball": [0.75, ""], "Superball": [1.5, ""], "Hyperball": [2.25, ""], "Federball": [1, "×1,25 bei bestimmten fliegenden Pokémon; fliegt weit"],
+  "Flügelball": [1.25, "×2 bei fliegenden Pokémon; fliegt weiter"], "Düsenball": [2, "×2,75 bei fliegenden Pokémon; fliegt am weitesten"],
+  "Schwerball": [1, "×1,25, wenn das Pokémon dich nicht bemerkt hat; fliegt kurz"], "Zentnerball": [1.75, "×2, wenn das Pokémon dich nicht bemerkt hat"],
   "Tonnenball": [2.5, "×2,75, wenn das Pokémon dich nicht bemerkt hat"], "Urball": [0, "fängt immer"], "Rätselball": [1, ""]};
 const ballOf = (x) => { const h = / \(Hisui\)$/.test(x.name) || S.game === "legends-arceus"; const n = x.name.replace(/ \(Hisui\)$/, "");
   return (h ? BALL_HISUI[n] : null) || BALL[n] || null; };
