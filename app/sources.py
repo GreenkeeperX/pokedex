@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.47.6"
+VERSION = "0.47.7"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.47.7", "12.11.2026", [
+        "Favoriten im Team-Reiter: ohne ⇄-Knopf (ins Team oder tauschen geht über das Häkchen), Abstände wie im Pokémon-Reiter",
+    ]),
     ("0.47.6", "12.11.2026", [
         "Pokémon-Karten: das Bild sitzt wieder etwas höher (6 statt 8 Pixel tiefer)",
         "Häkchen auch bei vollem Team: ein Klick fragt, wen das Pokémon ersetzt, wie ⇄ bei den Favoriten",

@@ -410,7 +410,7 @@ tr.off td{opacity:.55}
 .tslot .note.small{font-size:12px;padding:2px 6px;margin:4px 0}
 .favd summary{margin-top:10px}
 .favlist{margin-top:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
-.list:has(.mon>.xs){row-gap:11px}   /* ⇄ ragt unten aus der Karte: Platz bis zur nächsten Reihe */
+.list:has(.mon>.xs){row-gap:11px}   /* ⇄ ragt unten aus der Karte (Sammlung): Platz bis zur nächsten Reihe; Favoriten seit 0.47.7 ohne ⇄, 8 px wie die Liste */
 .mon:has(>.xs:hover){z-index:3}
 .mvchip[draggable=true]{cursor:grab}
 .favd summary .ic,.box h2 .ic{display:inline-block;vertical-align:-2px;margin-right:2px}
