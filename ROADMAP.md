@@ -1,5 +1,16 @@
 # Roadmap
 
+## 0.47.0 (12.11.2026)
+
+- Auswertung des Verbindungstests vom 12.11.: Pokédens deckt nur die Naturzone ab; den Inhalt aller Nester liefert
+  schon das PKHeX Raid Plugin (`Nests/RaidTables.cs`, je Tabelle Art, Sterne, Form, Gigadynamax für Schwert und
+  Schild). `raidnester.tables`, `den_text`; je Nest normaler und seltener Strahl, deutsche Namen aus pokeapi.db, die
+  Pokémon erscheinen als Bilder im Kartenpunkt. Gamer Guides lieferte keine Punkte (GeoJSON leer), Pokémon Database 404
+- PokéWiki-Bildkarten: es gibt `XY-Map Kalos`, `USUM-Map Alola` (je Insel), `ORAS-Map Hoenn`; die Bilder sind nach den
+  Flächen nur etwa 312×200 bzw. 384×256 Pixel groß (Touchscreen-Karten). Neue Proben fragen die Größe aller Bilder
+  dazu ab und bei Bulbapedia die Regionskarten (`Kalos XY.png`, die Inselkarten Alolas, `Sinnoh BDSP.png`, `UGMAP.png`
+  u. a.); danach Entscheidung, welche Karte X/Y, SM und USUM bekommen
+
 ## 0.46.0 (12.11.2026)
 
 - Rückmeldung vom 12.11. zur Oberfläche: ein Klapp-Pfeil für `details>summary` und `[data-fold]` (CSS-Dreieck, gleiche

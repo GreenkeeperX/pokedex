@@ -1997,7 +1997,7 @@ class Server(TempData):
         ns = raidnester.nests("""            new NestHashDetail(0x1, 0x2, 0, 185, 977), //16 52
 //            new NestHashDetail(0x1, 0x2, 0, 1, 1),
             new NestHashDetail(0x3, 0x4, 33, 500, 800),""", names)
-        self.assertEqual(ns, [("wa", 185, 977, "Erfundenes Feld"), ("ct", 500, 800, "")])
+        self.assertEqual(ns, [("wa", 185, 977, "Erfundenes Feld", 1, 2), ("ct", 500, 800, "", 3, 4)])
         self.assertEqual((raidnester.area_of(16), raidnester.area_of(17), raidnester.area_of(43)), ("wa", "ioa", "ct"))
         r = raidnester.parse(ns, "wa", 458, 1064)
         self.assertEqual((r["slug"], len(r["orte"]), r["bilder"][0][5]), ("rn-wa", 2, "rn/wa.png"))
@@ -2308,6 +2308,47 @@ class MitDatenbank(TempData):
             self.assertEqual(mg["teile"][0]["teile"][0]["name"], "johto")
             self.assertIs(abruf.disk_usage(), r)            # zwischengespeichert
         abruf._disk.update(at=0.0, data=None)
+
+    def test_0_47_0_inhalt_der_raid_nester(self):
+        """Raid-Nester: Pokémon je Nest aus RaidTables.cs (erfundene Tabelle), als Bilder im Kartenpunkt."""
+        from app import abfragen, raidnester
+        cs = """        public readonly RaidTemplateTable[] SwordNests = {
+new RaidTemplateTable(0x1, 1, new []{
+new RaidTemplate(25, new[]{35u, 20u, 0u, 0u, 0u}, 1, 0, 3, 0, false, 0),
+new RaidTemplate(77, new[]{0u, 0u, 0u, 0u, 10u}, 4, 1, 4, 0, 25, true, 0),
+}),
+new RaidTemplateTable(0x2, 1, new []{
+new RaidTemplate(26, new[]{0u, 0u, 5u, 0u, 0u}, 3, 0, 3, 0, false, 0),
+}),
+ };
+        public readonly RaidTemplateTable[] ShieldNests = {
+new RaidTemplateTable(0x1, 2, new []{
+new RaidTemplate(25, new[]{35u, 20u, 0u, 0u, 0u}, 1, 0, 3, 0, false, 0),
+new RaidTemplate(77, new[]{0u, 0u, 0u, 0u, 10u}, 4, 1, 4, 0, 25, true, 0),
+}),
+new RaidTemplateTable(0x2, 2, new []{
+new RaidTemplate(25, new[]{0u, 0u, 5u, 0u, 0u}, 3, 0, 3, 0, false, 0),
+}),
+ };
+        public readonly RaidTemplateTable[] SwordNestsEvent =
+        {
+new RaidTemplateTable(0x1, 1, new []{
+new RaidTemplate(150, new[]{0u, 0u, 0u, 0u, 1u}, 5, 0, 3, 0, false, 0),
+}),
+ };"""
+        t = raidnester.tables(cs)
+        self.assertEqual(t["sw"][1], [(25, 0, 1, 2, False), (77, 1, 5, 5, True)])
+        self.assertNotIn(150, [r[0] for v in t["sw"].values() for r in v])          # Event-Tabellen zählen nicht
+        names = {25: "Pikachu", 26: "Raichu", 77: "Ponita"}
+        txt = raidnester.den_text(t, 1, 2, names)
+        self.assertEqual(txt.split("\n"), ["**Schwert und Schild:**", "Pikachu (1–2★), Ponita (Galar-Form, 5★, Gigadynamax)",
+                                           "**Schwert, seltener Strahl:**", "Raichu (3★)", "**Schild, seltener Strahl:**", "Pikachu (3★)"])
+        r = raidnester.parse([("wa", 10, 20, "Erfundenes Feld", 1, 2)], "wa", 458, 1064, tabs=t, names=names)
+        self.assertIn("Ponita (Galar-Form", r["orte"][0][5])
+        mons = {v: k for k, v in names.items()}
+        pk, _, rest = abfragen.point_pics(r["orte"][0][5], "", mons, abfragen.names_rx(mons, True), {}, None)
+        self.assertEqual(pk[1], [77, "Ponita", "Schwert und Schild", "Galar-Form, 5★, Gigadynamax"])
+        self.assertEqual(rest, "**Ort:** Erfundenes Feld")
 
 
 if __name__ == "__main__":

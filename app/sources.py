@@ -12,11 +12,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.46.0"
+VERSION = "0.47.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.47.0", "12.11.2026", [
+        "Schwert/Schild: jedes Raid-Nest auf den Karten zeigt jetzt, welche Pokémon dort erscheinen, mit Sternen, Galar-Form und Gigadynamax, getrennt nach normalem und seltenem Strahl und, wo es sich unterscheidet, nach Schwert und Schild (Naturzone, Insel der Rüstung, Schneelande; gilt nach dem nächsten Abgleich)",
+        "Verbindungstest: Größe der Kartenbilder im PokéWiki und bei Bulbapedia für X/Y, Sonne/Mond, Ultrasonne/Ultramond, ORAS und BDSP, damit die beste Karte gewählt werden kann",
+    ]),
     ("0.46.0", "12.11.2026", [
         "Klapp-Pfeile überall gleich: derselbe größere Pfeil in derselben Farbe vor allem, was sich aufklappen lässt (Detailseite, Team, Einstellungen, Karten)",
         "Pokémon-Karten: das Bild sitzt ein paar Pixel tiefer, die Nummer bleibt frei; die Favoriten im Team-Reiter stehen wieder so eng wie die Liste",
