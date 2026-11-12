@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.6 (12.11.2026)
+
+- Bild 6 px tiefer (8 px war zu viel, Entscheidung 12.11.2026); Häkchen bei vollem Team öffnet die Ersetzen-Wahl (`favswap`)
+
 ## 0.47.5 (12.11.2026)
 
 - Karten ohne „+“-Knopf (Entscheidung 12.11.2026); Häkchen grau, im Team grün. „Noch einmal ins Team“ bleibt auf der Detailseite
