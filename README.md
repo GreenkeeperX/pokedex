@@ -46,6 +46,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Was fehlt mir noch?** (Knopf in der Liste, `#fehlt`): die Arten des Spiel-Dex ohne gefangene Form, nach dem besten
   Weg geordnet (geht jetzt, wild, Geschenk oder einmalig, entwickeln, Tera-Raid, züchten, Tausch-Entwicklung, andere
   Edition), mit Wahl der eigenen Edition und Pokéball direkt auf der Karte.
+- **Sammelobjekte** (`#sammeln`): Geisterlichter, Icognito, Pflöcke, Schrauben und alles aus der Gruppe „Sammelobjekte“
+  aller Karten des Spiels mit Fortschritt; ein Klick öffnet die Karte mit nur dieser Ebene.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten, jede Tabelle hat ihren eigenen
   Typfilter, farbige Zählspalten (stark, schwach, ohne Wirkung bzw. Schwächen, ×4, Resistenzen, Immunitäten). „Mein Team“
   zeigt nur die Typen des Teams und dazu Verteidigung und Angriff je Mitglied.
