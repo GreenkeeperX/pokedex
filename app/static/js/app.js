@@ -235,7 +235,8 @@ const isShiny = (id) => S.shiny.has(id);
 const isAlpha = (id) => S.alpha.has(id);
 /* Alpha: nur in Spielen mit Alphas und nur für Pokémon, die es dort als Alpha gibt (oder schon so markiert sind) */
 const alphaBtn = (id) => S.alphaOk.has(id) || isAlpha(id) ? `<span class="a alp${isAlpha(id) ? " on" : ""}" data-act="alpha" data-id="${id}"
-  data-tip="${isAlpha(id) ? "Als Alpha gefangen; Klick: kein Alpha" : "Als Alpha gefangen markieren"}">α</span>` : "";
+  data-tip="${isAlpha(id) ? "Als Alpha gefangen; Klick: kein Alpha" : "Als Alpha gefangen markieren"}">α</span>`
+  : S.alphaOk.size ? `<span class="a alp ph"></span>` : "";   // 0.47.11: leerer Platz, damit die übrigen Knöpfe an ihrer Stelle bleiben
 // Pokéball: gefangen, schillernd gefangen (goldener Ball mit Funkeln) oder nichts
 const ball = (id, on = isCaught(id)) => icon("ball", on).replace('class="ic ic-ball on"', `class="ic ic-ball on${isShiny(id) ? " shiny" : ""}"`)
 ;

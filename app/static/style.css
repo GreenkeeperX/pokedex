@@ -166,9 +166,9 @@ td.nw{white-space:nowrap}
 .acts .a.alp:hover{color:#ff6b66}
 /* Knöpfe zum Setzen: beim Hovern unten auf dem Bild */
 .mon .sp{position:relative;flex:none;width:84px;display:flex;flex-direction:column;align-items:center}
-.mon .sp>.spr{width:84px;height:84px;position:relative;top:4px}   /* 0.46: 5 px, 0.47.3: 8 px und 0.47.6: 6 px zu tief, 0.47.8: 4 px */
+.mon .sp>.spr{width:84px;height:84px;position:relative;top:7px}   /* 0.47.8: 4 px; 0.47.11: Bild und Knöpfe zusammen 3 px tiefer */
 /* Zeile unter dem Bild: links das Häkchen fürs Team, dann Stern und Pokéball (gesetzt immer sichtbar, sonst nur beim Hovern) */
-.mon .acts{display:flex;justify-content:center;gap:1px;height:24px;margin-top:-4px;padding:0 4px;position:relative;z-index:1}   /* 0.47.10: über dem tiefer gesetzten Bild, sonst fängt das Bild die obere Hälfte der Knöpfe */
+.mon .acts{display:flex;justify-content:center;gap:1px;height:24px;margin-top:-4px;padding:0 4px;position:relative;top:3px;z-index:1}   /* 0.47.10: über dem tiefer gesetzten Bild, sonst fängt das Bild die obere Hälfte der Knöpfe */
 .mon .acts:has(.alp) .a{width:21px}
 .acts .a.team{border-color:transparent;background:none;cursor:pointer}
 .mon .acts .a{border-radius:4px}   /* rund schnitt die Ecken aus der Klickfläche */

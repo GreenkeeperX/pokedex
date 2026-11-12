@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.47.11 (12.11.2026)
+
+- Bild `top:7px`, Knopfzeile `top:3px`; in Spielen mit Alphas ein unsichtbarer Platzhalter statt des α-Knopfs
+- Geprüft: 228 von 248 Formen in LA gibt es als Alpha (PKHeX-Spieldaten, z. B. Massenausbrüche); ohne Alpha sind nur Legendäre/Mysteriöse und Alola-Vulpix/-Vulnona
+
 ## 0.47.10 (12.11.2026)
 
 - `.mon .acts` mit z-index über `.spr` (seit `top:4px` überdeckte das Bild etwa 40 % der Knopffläche)
