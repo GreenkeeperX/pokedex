@@ -458,6 +458,38 @@ class Leser(unittest.TestCase):
         self.assertEqual(abfragen._research(con, 399), [{"aufgabe": "Exemplare gefangen", "stufen": ["1", "3"], "doppelt": True}])
         con.close()
 
+    def test_0_37_0_auftraege(self):
+        import sqlite3
+        from app import bisafans
+        page = ("<ul><li><a href='#n1'>Nebenmission 1: Ein Testauftrag</a></li></ul>"
+                "<h3>Nebenmission 1: Ein Testauftrag</h3><ul><li><b>Beschreibung:</b> Jemand will ein <a>Bidiza</a> sehen.</li>"
+                "<li><b>Aufgabe:</b> Ein Bidiza zeigen</li><li><b>Wo:</b> <a>Jubeldorf</a></li>"
+                "<li><b>Lösung:</b> Bidiza lebt im Grasland, Bidifas auch.</li><li><b>Belohnung:</b> 3x Trank</li></ul><hr>"
+                "<h3>Nebenmission 2 – Zweiter Auftrag</h3><table><tr><td>Aufgabe</td><td>Etwas tun</td></tr>"
+                "<tr><td>Belohnung</td><td>10x Pokéball</td></tr><tr><td>2x Trank</td></tr></table>"
+                "<footer>Impressum &amp; mehr</footer>")
+        rows = bisafans.la_requests(page)
+        self.assertEqual([r["nr"] for r in rows], [1, 2])
+        self.assertEqual(rows[0], {"nr": 1, "name": "Ein Testauftrag", "beschreibung": "Jemand will ein Bidiza sehen.",
+                                   "aufgabe": "Ein Bidiza zeigen", "ort": "Jubeldorf",
+                                   "loesung": "Bidiza lebt im Grasland, Bidifas auch.", "belohnung": "3x Trank"})
+        self.assertEqual(rows[1]["belohnung"], "10x Pokéball 2x Trank")            # Fußzeile gehört nicht dazu
+        self.assertEqual(bisafans.la_requests(""), [])
+        con = sqlite3.connect(":memory:")
+        importer.import_csv(con, "pokemon_species_names",
+                            "pokemon_species_id,local_language_id,name\n399,6,Bidiza\n400,6,Bidifas\n25,6,Pikachu\n")
+        con.execute("CREATE TABLE spiel (id INTEGER, kennung TEXT)")
+        con.execute("INSERT INTO spiel VALUES (24, 'legends-arceus')")
+        con.execute("CREATE TABLE form (id INTEGER, art INTEGER)")
+        con.executemany("INSERT INTO form VALUES (?, ?)", [(399, 399), (400, 400), (25, 25)])
+        con.execute("CREATE TABLE spiel_form (spiel INTEGER, form INTEGER, nr INTEGER)")
+        con.executemany("INSERT INTO spiel_form VALUES (24, ?, 1)", [(399,), (400,)])
+        self.assertEqual(importer._derive_auftrag(con, {"la_auftraege": rows}), 2)
+        arten = con.execute("SELECT arten FROM auftrag WHERE nr = 1").fetchone()[0]
+        self.assertEqual(json.loads(arten), [399, 400])                          # Aufgabe zuerst, dann Lösung
+        self.assertEqual(importer._derive_auftrag(sqlite3.connect(":memory:"), None), 0)
+        con.close()
+
     def test_pokewiki_karte(self):
         from app import pokewiki
         mons = json.dumps({"Fukano": {"10.5,20.25": {"t": "default", "LvlMin": "3", "LvlMax": "5", "ALvlMin": "18", "ALvlMax": "20",

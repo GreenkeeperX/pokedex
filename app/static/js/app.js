@@ -652,7 +652,7 @@ function versionsDialog() {
 }
 function nav(tab) {
   $("#nav").innerHTML = TABS.map(([k, n]) => k === "karte" && BATTLE() ? ["kampf", "Kampf"] : [k, n])
-    .flatMap((x) => x[0] === "karte" && TERA() ? [x, ["raids", "Raids"]] : [x])
+    .flatMap((x) => x[0] === "karte" && TERA() ? [x, ["raids", "Raids"]] : x[0] === "karte" && S.game === "legends-arceus" ? [x, ["auftraege", "Aufträge"]] : [x])
     .map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
 }
 // Zweiter Klick auf den offenen Reiter: nach oben
@@ -673,9 +673,10 @@ async function route() {
   if (tab === "karte" && BATTLE()) { location.replace("#kampf"); return; }
   if (tab === "kampf" && !BATTLE()) { location.replace("#karte"); return; }   // Spielwechsel: Kampf gibt es nur in Champions
   if (tab === "raids" && !TERA()) { location.replace("#karte"); return; }    // Raids nur in Karmesin/Purpur
+  if (tab === "auftraege" && S.game !== "legends-arceus") { location.replace("#karte"); return; }   // Aufträge nur in Legenden: Arceus
   try {
     if (!S.meta?.has_data && tab !== "einstellungen") return noData();
-    await Promise.all([loadChart(), loadFavs(), loadCaught()]);
+    await Promise.all([loadChart(), loadFavs(), loadCaught(), S.game === "legends-arceus" ? loadReqDone() : null]);
     if (tab === "pokemon" && arg) await detailView(+arg, arg2 === undefined ? null : +arg2);
     else if (tab === "pokemon") await listView();
     else if (tab === "team") await teamView();
@@ -685,6 +686,7 @@ async function route() {
     else if (tab === "initiative") await speedView();
     else if (tab === "kampf") await battleView();
     else if (tab === "raids") await raidsView(arg);
+    else if (tab === "auftraege") await requestsView();
     else if (tab === "items") await itemsView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
     else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);
@@ -1259,7 +1261,7 @@ async function detailView(id, slot = null) {
       </div>
       <div class="stack">
         <div class="box"><h2>Entwicklung</h2>${evo ? `<div class="evo">${evo}</div>` : `<p class="hint">${esc(d.name)} entwickelt sich nicht.</p>`}</div>
-        ${catchHtml(d)}${researchHtml(d)}${partnerHtml(d)}
+        ${catchHtml(d)}${researchHtml(d)}${requestsHtml(d)}${partnerHtml(d)}
         ${raidHtml(d)}
         ${cryptoHtml(d)}
         ${heldHtml(d)}${pokopiaHtml(d)}
@@ -1501,6 +1503,69 @@ async function raidsView(arg) {
         <td class="hint">${esc(x.gebiet)}</td></tr>`; }).join("")}</tbody></table></div>`
     : `<p class="hint">Keine Raids gefunden. Der nächste Abgleich holt sie aus PKHeX.</p>`;
 }
+/* Aufträge in Legenden: Arceus (BisaFans): Liste mit Suche und Haken für erledigte; erledigt liegt beim Server
+   in „gefunden“ unter der Karte „auftrag“ */
+let REQ_DONE = new Set();
+let REQ_REDRAW = null;
+async function loadReqDone() {
+  const r = await api("/api/gefunden?" + qs({spiel: "legends-arceus", karte: "auftrag"})).catch(() => ({}));
+  REQ_DONE = new Set((r.auftrag || []).map(String));
+}
+const reqCheck = (nr) => `<span class="a req${REQ_DONE.has(String(nr)) ? " on" : ""}" data-act="reqdone" data-id="${nr}" data-tip="${REQ_DONE.has(String(nr)) ? "Erledigt; Klick: wieder offen" : "Als erledigt markieren"}">${REQ_DONE.has(String(nr)) ? "✓" : "○"}</span>`;
+const reqMons = (x) => x.pokemon.map((m) => `<a href="#pokemon/${m.id}" data-hc="${m.id}">${esc(m.name)}</a>`).join(", ");
+const reqTip = (x) => [x.beschreibung, x.loesung ? "Lösung: " + x.loesung : ""].filter(Boolean).join("\n\n");
+
+async function requestsView() {
+  const rid = RID, q = store.get("reqQ", ""), mode = store.get("reqMode", "offen");
+  main.innerHTML = `<div class="box"><div class="bar"><b>Aufträge in</b> <select class="gamesel"></select>
+      <input id="reqq" type="search" placeholder="Suchen: Name, Pokémon, Ort, Belohnung" value="${esc(q)}">
+      <span class="seg">${[["offen", "Offen"], ["alle", "Alle"], ["erledigt", "Erledigt"]].map(([k, n]) => `<button class="${k === mode ? "on" : ""}" data-reqmode="${k}">${n}</button>`).join("")}</span>
+      <span id="reqn" class="hint"></span></div>
+    <p class="hint">Nebenmissionen aus Legenden: Arceus auf Deutsch (Quelle: BisaFans). Fährst du über einen Auftrag, siehst du Beschreibung und Lösung.
+      ○ markiert ihn als erledigt.</p>
+    <div id="reqlist"><p class="hint">Lädt …</p></div></div>`;
+  header();
+  const [r] = await Promise.all([api("/api/auftraege?" + qs({spiel: S.game})), loadReqDone()]);
+  if (rid !== RID) return;
+  const draw = () => {
+    const ql = ($("#reqq")?.value || "").trim().toLowerCase(), m = store.get("reqMode", "offen");
+    const xs = r.rows.filter((x) => (m === "alle" || (m === "erledigt") === REQ_DONE.has(String(x.nr)))
+      && (!ql || [x.name, x.aufgabe, x.ort, x.belohnung, x.beschreibung, ...x.pokemon.map((p) => p.name)].join(" ").toLowerCase().includes(ql)));
+    $("#reqn").textContent = `${REQ_DONE.size} von ${r.rows.length} erledigt`;
+    $("#reqlist").innerHTML = !r.rows.length ? `<p class="hint">Noch keine Aufträge. Der nächste Abgleich holt sie von BisaFans.</p>`
+      : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Auftrag")}${th("Aufgabe", "", true)}${th("Ort")}${th("Belohnung")}${th("Pokémon", "", true)}${th("", "", true)}</tr></thead>
+        <tbody>${xs.map((x) => `<tr class="${REQ_DONE.has(String(x.nr)) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${x.nr}</td>
+          <td data-s="${esc(x.name)}"><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b></td><td class="why">${esc(x.aufgabe)}</td>
+          <td data-s="${esc(x.ort)}">${esc(x.ort)}</td><td data-s="${esc(x.belohnung)}">${esc(x.belohnung)}</td><td>${reqMons(x)}</td><td class="c">${reqCheck(x.nr)}</td></tr>`).join("")
+          || `<tr><td colspan="7" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
+  };
+  draw();
+  $("#reqq").addEventListener("input", () => { store.set("reqQ", $("#reqq").value); draw(); });
+  main.querySelectorAll("[data-reqmode]").forEach((b) => b.addEventListener("click", () => {
+    store.set("reqMode", b.dataset.reqmode); main.querySelectorAll("[data-reqmode]").forEach((x) => x.classList.toggle("on", x === b)); draw(); }));
+  REQ_REDRAW = draw;
+}
+async function toggleReq(nr) {
+  const k = String(nr), on = !REQ_DONE.has(k);
+  const paint = () => $$(`[data-act="reqdone"][data-id="${nr}"]`).forEach((el) => { el.outerHTML = reqCheck(nr); });
+  if (on) REQ_DONE.add(k); else REQ_DONE.delete(k);
+  paint();
+  if (location.hash.startsWith("#auftraege") && REQ_REDRAW) REQ_REDRAW();
+  await api("/api/gefunden", {spiel: "legends-arceus", karte: "auftrag", objekt: k, an: on}).catch(() => {
+    if (on) REQ_DONE.delete(k); else REQ_DONE.add(k);
+    paint();
+  });
+}
+/* Detailseite: Aufträge, in denen das Pokémon vorkommt */
+function requestsHtml(d) {
+  const xs = d.auftraege || [];
+  if (!xs.length) return "";
+  return `<div class="box"><h2>Aufträge mit ${esc(d.name)}</h2><table class="rows"><tbody>${xs.map((x) => `<tr class="${REQ_DONE.has(String(x.nr)) ? "off" : ""}">
+      <td class="c num hint">${x.nr}</td><td><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b><div class="why">${esc(x.aufgabe)}</div></td>
+      <td class="hint">${esc(x.ort)}</td><td>${esc(x.belohnung)}</td><td class="c">${reqCheck(x.nr)}</td></tr>`).join("")}</tbody></table>
+    <p class="hint">Quelle: BisaFans. Alle Aufträge stehen unter <a href="#auftraege">Aufträge</a>.</p></div>`;
+}
+
 /* Pokopia (Serebii): Nummer im Pokédex und Spezialitäten */
 function pokopiaHtml(d) {
   const xs = d.pokopia || [];
@@ -3678,6 +3743,7 @@ document.addEventListener("click", async (e) => {
       if (slot !== null && location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${id}/${slot}`;
     } else if (act === "teamdel") { removeSlot(+b.dataset.slot); if (location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${DETAIL?.id || ""}`; }
     else if (act === "fav") await toggleFav(id);
+    else if (act === "reqdone") await toggleReq(id);
     else if (act === "cmpclear") { store.set("cmpMerk", []); redrawMarks(); compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "cmpmark") { cmpToggle(id); redrawMarks(); if (location.hash.startsWith("#vergleich")) compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "favadd") { $("#pick").hidden = true; await toggleFav(id, true); }

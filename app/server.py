@@ -623,6 +623,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, found(q.get("spiel"), q.get("karte")))
             elif path == "/api/raids":
                 self._send(200, abfragen.raid_list(q))
+            elif path == "/api/auftraege":
+                self._send(200, abfragen.request_list(q))
             elif path == "/api/kampftagebuch":
                 self._send(200, battle_log(q.get("spiel")))
             elif path == "/api/export":

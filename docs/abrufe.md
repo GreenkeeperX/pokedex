@@ -49,6 +49,9 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Runde, Attacken und Fähigkeiten ohne Text noch einmal als „Name (Attacke)“ bzw. „Name (Fähigkeit)“. Gespeichert in
    `pokewiki_texte.json` mit den Kürzeln der Vorlagen; `importer._derive_texts` ordnet sie über `pokewiki.per_game` den
    Spielen zu (Tabellen `spieltext` und `forschung`) und meldet unbekannte Kürzel im Protokoll.
+   **BisaFans** (`app/bisafans.py`): die Seite der Nebenmissionen von Legenden: Arceus, einmal je Abgleich mit
+   3 Sekunden Pause; ohne Treffer gilt `bisafans.json` vom letzten Lauf. `importer._derive_auftrag` legt die Aufträge in
+   `auftrag` und sucht darin die Namen der Arten aus dem Hisui-Pokédex.
    **PLA Companion** (software-notion.de, `app/companion.py`): je Karte `/apps/pla-companion/map/<Karte>/data?lang=de`
    mit 2 Sekunden Pause; Schnellreise und Lager, ausgerichtet an Geisterlichtern und Icognito von Altissimo
    (`companion.fit`, `importer._derive_companion`). Das Protokoll zählt alle Arten von Einträgen.
