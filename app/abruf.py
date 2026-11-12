@@ -1481,6 +1481,20 @@ DIAG_PARALLEL = 6           # so viele Abfragen gleichzeitig (mehr überlastete 
 DIAG_PAUSE = {"www.serebii.net": SEREBII_PAUSE, "www.pokewiki.de": WIKI_PAUSE, "mapgenie.io": MG_PAUSE}
 
 
+def tile_patterns(t, limit=50):
+    """Kachelmuster wie „…/{z}/{x}/{y}.png“ in einer Seite. Sucht nur rund um jedes „{z}“: ein Muster mit führendem
+    [\\w…]* über die ganze Seite braucht bei langen Wortketten (Base64 in großen Seiten) quadratisch lange und hielt
+    mit dem GIL den ganzen Dienst fest."""
+    out, i = set(), t.find("{z}")
+    while i >= 0 and len(out) < limit:
+        win = t[max(0, i - 200):i + 200]
+        m = re.search(r"[\w/.:-]{0,200}\{z\}[\w/.{}-]{0,200}", win)
+        if m:
+            out.add(m.group(0))
+        i = t.find("{z}", i + 3)
+    return sorted(out)
+
+
 def diagnose(proben=None, stand=None):
     """Verbindung testen: jede Quelle einmal abfragen und beschreiben, was zurückkommt. Speichert nichts.
     proben: dict, in das Probe-Seiten (gekürzt) kommen, damit sich Leser für neue Quellen bauen lassen.
@@ -1970,7 +1984,7 @@ def diagnose(proben=None, stand=None):
                       ("RankedBoost, HG/SS (ganz)", "https://rankedboost.com/pokemon/location/heartgold-soulsilver/"),
                       ("DittoBase, Kristall (ganz)", "https://www.dittobase.com/crystal/map"),
                       ("PokéTools, Smaragd (ganz)", "https://www.poketools.com/emerald/map")):
-        probe(name, url, lambda t: looks(t) + "; Muster: " + ", ".join(sorted(set(re.findall(r'[\w/.:-]*\{z\}[\w/.{}-]*', t)))[:5])
+        probe(name, url, lambda t: looks(t) + "; Muster: " + ", ".join(tile_patterns(t)[:5])
               + "; JSON-Adressen: " + ", ".join(sorted(set(re.findall(r'https?://[^"\' ]+\.json', t)))[:8]),
               keep=1_600_000, headers=html)
 

@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.37.1 (12.11.2026)
+
+- Verbindungstest: `abruf.tile_patterns` sucht Kachelmuster nur rund um „{z}“. Das alte Muster `[\w/.:-]*\{z\}…` über
+  die ganze Seite lief bei langen Wortketten (RankedBoost HG/SS, rund 6 MB) quadratisch, hielt den GIL und damit den
+  Webserver und alle anderen Abfragen fest; der Wächter brach dann 110 Abfragen ab
+
 ## 0.37.0 (12.11.2026)
 
 - Neue Quelle BisaFans (`app/bisafans.py`, `abruf._bisafans`, `bisafans.json` im Datenordner): die Nebenmissionen von

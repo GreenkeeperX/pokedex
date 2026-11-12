@@ -458,6 +458,15 @@ class Leser(unittest.TestCase):
         self.assertEqual(abfragen._research(con, 399), [{"aufgabe": "Exemplare gefangen", "stufen": ["1", "3"], "doppelt": True}])
         con.close()
 
+    def test_0_37_1_kachelmuster_schnell(self):
+        import time
+        from app import abruf
+        page = ("A" * 200_000 + " ") * 30 + 'x "https://a.example/tiles/{z}/{x}/{y}.png" ' + "B" * 100_000
+        t = time.monotonic()
+        self.assertEqual(abruf.tile_patterns(page), ["https://a.example/tiles/{z}/{x}/{y}.png"])
+        self.assertLess(time.monotonic() - t, 1)          # das alte Muster brauchte für so eine Seite Stunden
+        self.assertEqual(abruf.tile_patterns("nichts"), [])
+
     def test_0_37_0_auftraege(self):
         import sqlite3
         from app import bisafans
