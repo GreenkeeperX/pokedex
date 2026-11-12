@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "23"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "24"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -1374,6 +1374,31 @@ def _derive_auftrag_spiel(con, spiel, rows):
     return len(rows)
 
 
+def _derive_blaubeer(con, bisa):
+    """Blaubeer-Missionen (Indigoblaue Scheibe, PokéWiki) in die Tabelle blaubeer. Gibt die Zahl zurück."""
+    con.execute("CREATE TABLE blaubeer (nr INTEGER PRIMARY KEY, bereich TEXT, art TEXT, text TEXT, bp INTEGER)")
+    rows = (bisa or {}).get("blaubeer") or []
+    for i, r in enumerate(rows, 1):
+        con.execute("INSERT INTO blaubeer VALUES (?, ?, ?, ?, ?)", (i, r.get("bereich", ""), r.get("art", ""), r.get("text", ""), r.get("bp")))
+    return len(rows)
+
+
+def _derive_trainer(con, teams):
+    """Teams der wichtigen Trainer (PokéWiki) in die Tabelle trainer: je Spiel und Kampf eine Zeile, team als JSON mit
+    der Nummer im Nationaldex. Gibt die Zahl der Zeilen zurück."""
+    con.execute("CREATE TABLE trainer (id INTEGER PRIMARY KEY, spiel TEXT, name TEXT, seite TEXT, rolle TEXT, titel TEXT, "
+                "hinweis TEXT, rueckkampf INTEGER, level INTEGER, team TEXT)")
+    n = 0
+    for t in teams or []:
+        lv = max([m.get("lvl") or 0 for m in t.get("team") or []] or [0])
+        for spiel in t.get("spiele") or []:
+            n += 1
+            con.execute("INSERT INTO trainer VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (n, spiel, t.get("name", ""), t.get("seite", ""), t.get("rolle", ""), t.get("titel", ""), t.get("hinweis", ""),
+                         1 if t.get("rueckkampf") else 0, lv, json.dumps(t.get("team") or [], ensure_ascii=False)))
+    return n
+
+
 def _derive_mission(con, bisa):
     """Hauptmissionen in Legenden: Arceus (BisaFans, Komplettlösung) und Z-A (PokéWiki; Dimensions-Missionen als 101 …)
     in die Tabelle mission. Gibt die Zahl zurück."""
@@ -1485,6 +1510,8 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_texte, n_forschung, unbekannt = _derive_texts(con, wiki)
         n_auftrag = _derive_auftrag(con, (wiki or {}).get("bisafans"))
         n_mission = _derive_mission(con, (wiki or {}).get("bisafans"))
+        n_blaubeer = _derive_blaubeer(con, (wiki or {}).get("bisafans"))
+        n_trainer = _derive_trainer(con, (wiki or {}).get("trainer"))
         n_abkling, n_pokopia = _derive_serebii(con, (wiki or {}).get("serebii"))
         n_wiki_karte = _derive_wiki_karte(con, wiki)
         n_orte = _derive_companion(con, alt)
@@ -1506,7 +1533,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
                  "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
                  "kartenobjekte": n_obj, "lernen": n_lernen, "abklingzeiten": n_abkling, "pokopia": n_pokopia, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez,
-                 "texte": n_texte, "forschung": n_forschung, "auftraege": n_auftrag, "missionen": n_mission, "kuerzel_unbekannt": unbekannt, "check": why}
+                 "texte": n_texte, "forschung": n_forschung, "auftraege": n_auftrag, "missionen": n_mission, "blaubeer": n_blaubeer, "trainer": n_trainer, "kuerzel_unbekannt": unbekannt, "check": why}
     finally:
         con.close()
     return stats

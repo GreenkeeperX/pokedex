@@ -20,7 +20,9 @@ dem Vorbild von VR-Navigator und eShopKompass.
   schillerndes Artwork und animiertes Sprite, Ruf, getragene Items, Links ins PokéWiki. Pokédex-Eintrag und
   Fähigkeitstexte auf Deutsch für das gewählte Spiel (PokéAPI, ergänzt aus dem PokéWiki), in Legenden: Arceus die
   Forschungsaufgaben und die Aufträge, in denen das Pokémon vorkommt.
-- **Aufträge** (Legenden: Arceus und Legenden: Z-A): alle Neben- und Hauptmissionen auf Deutsch mit Aufgabe, Ort, Belohnung und Lösung, Suche,
+- **Trainer als Gegner** (Reiter Team): Arenaleiter, Top Vier, Champs und Rivalen jedes Hauptspiels mit Team, Level und
+  Attacken (PokéWiki); eine Rolle zur Zeit, nach Level sortiert, mit Suche.
+- **Aufträge** (Legenden: Arceus und Legenden: Z-A; in Karmesin/Purpur die Blaubeer-Missionen): alle Neben- und Hauptmissionen auf Deutsch mit Aufgabe, Ort, Belohnung und Lösung, Suche,
   Haken für erledigte.
 - **Attacken je Pokémon und Spiel**: Wertung mit Gründen (Stärke, Genauigkeit, Eigentyp-Bonus, passender
   Angriffswert, Aussetzen, Anlauf, Rückstoß, Vorrang), Werte des gewählten Spiels, Filter „bis Level“ und ein

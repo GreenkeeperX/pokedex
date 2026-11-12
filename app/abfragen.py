@@ -1492,6 +1492,14 @@ def _missions(con, spiel=LA):
 
 ZA = "legends-za"
 QUEST_GAMES = {LA: LA, ZA: ZA, "mega-dimension": ZA}       # Spiel → Spiel, unter dem Aufträge und Haken liegen
+BBQ_GAMES = ("scarlet-violet", "the-teal-mask", "the-indigo-disk")   # Blaubeer-Missionen (Indigoblaue Scheibe)
+
+
+def _blaubeer(con):
+    try:
+        return [dict(r) for r in con.execute("SELECT nr, bereich, art, text, bp FROM blaubeer ORDER BY nr")]
+    except Exception:
+        return []
 QUEST_INFO = {
     LA: {"kapitel": ["Erste Schritte in einer fremden Welt", "Wächter und Könige in Hisui", "Abenteuer im Sumpfland",
                      "Gemeinsamkeit und Stärke", "Der Berg ruft!", "Eisige Abenteuer im Frostland", "Unerwartete Unterstützung",
@@ -1540,6 +1548,13 @@ def request_list(p):
     """Aufträge und Missionen eines Spiels mit Aufträgen (QUEST_GAMES): {"spiel", "rows": [...], "missionen": [...],
     "kapitel", "quelle", "karte": {auftrag: {Nr: [Karte, Ort-id]}, mission: {...}}} (leer in anderen Spielen)."""
     D = data()
+    if D and p.get("spiel") in BBQ_GAMES:
+        con = db.game()
+        try:
+            return {"spiel": "the-indigo-disk", "rows": [], "missionen": [], "blaubeer": _blaubeer(con),
+                    "quelle": "Blaubeer-Missionen aus dem PokéWiki"}
+        finally:
+            con.close()
     spiel = QUEST_GAMES.get(p.get("spiel") or LA)
     if not D or not spiel:
         return {"rows": [], "missionen": []}
@@ -1969,6 +1984,60 @@ def _furthest(pot, D, skip):
     return [r for _, r in best.values()]
 
 
+# Erweiterungen und Schwester-Editionen zeigen die Trainer ihres Hauptspiels
+TRAINER_SHARE = {"the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet", "the-isle-of-armor": "sword-shield",
+                 "the-crown-tundra": "sword-shield", "mega-dimension": "legends-za", "red-green-japan": "red-blue", "blue-japan": "red-blue"}
+TRAINER_ROLLEN = ("Arenaleiter", "Top Vier", "Champ", "Rivale")
+
+
+def trainer_list(p):
+    """Wichtige Trainer eines Spiels mit Team (PokéWiki): {"spiel", "rollen", "trainer": [{id, name, rolle, titel, hinweis,
+    rueckkampf, level, team: [{id, name, lvl, item, faehigkeit, attacken}]}]}, nach Level (etwa die Reihenfolge im Spiel)."""
+    D = data()
+    if not D:
+        return {"trainer": []}
+    g, _, _ = game_of(D, p.get("spiel"))
+    spiel = TRAINER_SHARE.get(g["kennung"], g["kennung"]) if g else ""
+    std = {}
+    for f in D.forms.values():
+        if f["standard"]:
+            std.setdefault(f["art"], f)
+    con = db.game()
+    try:
+        rows = con.execute("SELECT id, name, seite, rolle, titel, hinweis, rueckkampf, level, team FROM trainer WHERE spiel = ? "
+                           "ORDER BY level, id", (spiel,)).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        con.close()
+    out = []
+    for r in rows:
+        team = []
+        for m in json.loads(r["team"] or "[]"):
+            f = std.get(m.get("nr"))
+            if f:
+                team.append({"id": f["id"], "name": f["name"], "lvl": m.get("lvl"), "item": m.get("item") or "",
+                             "faehigkeit": m.get("faehigkeit") or "", "attacken": m.get("attacken") or []})
+        if team:
+            out.append({"id": r["id"], "name": r["name"], "seite": r["seite"], "rolle": r["rolle"] or "Sonstige", "titel": r["titel"],
+                        "hinweis": r["hinweis"], "rueckkampf": bool(r["rueckkampf"]), "level": r["level"], "team": team})
+    rollen = [x for x in TRAINER_ROLLEN if any(t["rolle"] == x for t in out)] + sorted({t["rolle"] for t in out} - set(TRAINER_ROLLEN))
+    return {"spiel": spiel, "rollen": rollen, "trainer": out}
+
+
+def _move_types(D, names):
+    """Typen der Schadensattacken unter den deutschen Namen (Status-Attacken zählen nicht)."""
+    by = getattr(D, "_move_by_name", None)
+    if by is None:
+        by = D._move_by_name = {m["name"].lower(): m for m in D.moves.values() if m.get("name")}
+    out = []
+    for n in names or []:
+        m = by.get(str(n).lower())
+        if m and m.get("klasse") != 1 and m.get("staerke") and m["typ"] not in out:
+            out.append(m["typ"])
+    return out
+
+
 def team_matchup(body):
     """Wer im Team gegen einen Gegner passt. gegner: eine ID oder eine Liste (Gegner-Team); typen: nur Typen."""
     D = data()
@@ -1979,10 +2048,15 @@ def team_matchup(body):
     ms = _members(D, body.get("ids"), g, gen, body.get("details"))
     foes = []
     raw = body.get("gegner")
+    atk = body.get("gegner_attacken") or {}           # bekannte Attacken der Gegner (Trainerteams): {ID: [Namen]}
     for i in _ints(raw if isinstance(raw, list) else [raw] if raw is not None else []):
         if i in D.forms:
             ef = D.forms[i]
-            foes.append({"id": i, "typen": form_types(D, ef, gen), "init": ef["init"], "name": ef["name"]})
+            e = {"id": i, "typen": form_types(D, ef, gen), "init": ef["init"], "name": ef["name"]}
+            at = _move_types(D, atk.get(str(i)) if isinstance(atk, dict) else None)
+            if at:
+                e["angriffstypen"] = at
+            foes.append(e)
     if not foes and _ints(body.get("typen")):
         foes.append({"id": None, "typen": _ints(body.get("typen")), "init": None, "name": "Typen"})
     out = []
@@ -2469,9 +2543,12 @@ def damage_view(body):
         a_item = a_abil = ""
     rows, used = [], []
     vdet = body.get("verteidiger_details") if isinstance(body.get("verteidiger_details"), list) else []
+    d_level0 = d_level
     for k, vid in enumerate(_ints(body.get("verteidiger"))[:60]):
         v = D.forms.get(vid)
         vd = vdet[k] if k < len(vdet) and isinstance(vdet[k], dict) else {}
+        # Level je Gegner (Trainerteams), sonst das gemeinsame
+        d_level = min(100, max(1, _int(vd.get("level")))) if _int(vd.get("level")) and not champ else d_level0
         v_item = names["items"].get(_int(vd.get("item")), ("", ""))[0] if _int(vd.get("item")) and not art and gen >= 2 else ""
         if not v or mv["klasse"] not in (2, 3) or not mv["staerke"]:
             continue

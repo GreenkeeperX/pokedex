@@ -14,8 +14,10 @@ from . import mapgenie
 
 BASE = "https://rankedboost.com/"
 CDN = "https://img.rankedboost.com"
-GAMES = {"lets-go-pikachu-lets-go-eevee": "lets-go-pikachu-eevee", "firered-leafgreen": "fire-red-leaf-green"}   # Spiel → Kennung
-TITEL = {"lets-go-pikachu-lets-go-eevee": "Kanto (RankedBoost)", "firered-leafgreen": "Kanto und Sevii-Inseln (RankedBoost)"}
+GAMES = {"lets-go-pikachu-lets-go-eevee": "lets-go-pikachu-eevee", "firered-leafgreen": "fire-red-leaf-green",
+         "scarlet-violet": "scarlet-violet", "legends-za": "legends-z-a"}   # Spiel → Kennung
+TITEL = {"lets-go-pikachu-lets-go-eevee": "Kanto (RankedBoost)", "firered-leafgreen": "Kanto und Sevii-Inseln (RankedBoost)",
+         "scarlet-violet": "Paldea (RankedBoost)", "legends-za": "Illumina City (RankedBoost)"}
 TILE = 256
 LEVELS = 4                  # so viele Stufen weiter weg als die volle Auflösung
 _JSON = re.compile(r"https?://img\.rankedboost\.com/wp-content/plugins/k-Pokemon/assets/cache/megamap-[a-z0-9-]+\.json")
@@ -25,10 +27,13 @@ METHODE = {"grass": "Gras", "walk": "Gras", "walking": "Gras", "surf": "Surfer",
 
 
 PAGES = {"lets-go-pikachu-lets-go-eevee": ("pokemon/location/letsgo-pikachu-eevee/", "pokemon-lets-go-pikachu-eevee/map/"),
-         "firered-leafgreen": ("pokemon/location/firered-leafgreen/", "pokemon/location/fire-red-leaf-green/", "pokemon-fire-red-leaf-green/map/")}
+         "firered-leafgreen": ("pokemon/location/firered-leafgreen/", "pokemon/location/fire-red-leaf-green/", "pokemon-fire-red-leaf-green/map/"),
+         "scarlet-violet": ("pokemon/location/scarlet-violet/", "pokemon-scarlet-violet/map/"),
+         "legends-za": ("pokemon/location/legends-z-a/", "pokemon-legends-z-a/map/")}
 # zuletzt gesehene Adressen der Kartendaten (die Prüfsumme wechselt mit jedem Stand; erst die Seite, dann diese)
 KNOWN = {"lets-go-pikachu-lets-go-eevee": CDN + "/wp-content/plugins/k-Pokemon/assets/cache/megamap-lets-go-pikachu-eevee-791ae0729e4a.json",
-         "firered-leafgreen": CDN + "/wp-content/plugins/k-Pokemon/assets/cache/megamap-fire-red-leaf-green-84d92005e6ed.json"}
+         "firered-leafgreen": CDN + "/wp-content/plugins/k-Pokemon/assets/cache/megamap-fire-red-leaf-green-84d92005e6ed.json",
+         "scarlet-violet": CDN + "/wp-content/plugins/k-Pokemon/assets/cache/megamap-scarlet-violet-ca85664731f4.json"}
 
 
 def page_urls(spiel):

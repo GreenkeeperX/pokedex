@@ -1,5 +1,20 @@
 # Roadmap
 
+## 0.42.0 (12.11.2026)
+
+- Trainerteams aus dem PokéWiki (`abruf._trainer`, `pokewiki.trainer_teams`, Vorlagen `Team/Kopf` und `Team/Zeile`,
+  Kategorien Arenaleiter, Top Vier, Champ, Rivale; `pokewiki_trainer.json`, alle 7 Tage neu), Tabelle `trainer`
+  (`importer.VERSION` 24), `/api/trainer` (`abfragen.trainer_list`, Erweiterungen zeigen ihr Hauptspiel)
+- Reiter Team, „Gegen Gegner“: Auswahl „Trainer als Gegner“ (eine Rolle zur Zeit, nach Level, Rückkämpfe ausgeblendet,
+  Suche über alle Rollen); `team_matchup` nimmt `gegner_attacken` (Typen der Schadensattacken), der Schadensrechner
+  das Level je Gegner (`verteidiger_details[].level`)
+- Blaubeer-Missionen (PokéWiki, Seite Blaubeer-Punkte, `pokewiki.bbq_missions` mit rowspan), Tabelle `blaubeer`,
+  im Reiter Aufträge für Karmesin/Purpur und die Erweiterungen (ohne Haken, weil wiederholbar)
+- RankedBoost für Karmesin/Purpur und Legenden: Z-A
+- Verbindungstest: Trainerteams, Blaubeer-Missionen, Kategorie Arenaleiter
+- Recherche bessere Karten: Auftrag an einen Recherche-Agenten vorbereitet (nicht im Repo)
+- Offen: Inhalte der Raid-Nester in Schwert/Schild, Aufträge 95 bis 122 auf der Karte von Legenden: Arceus
+
 ## 0.41.0 (12.11.2026)
 
 - Aufträge für mehrere Spiele (`abfragen.QUEST_GAMES`: Legenden: Arceus, Legenden: Z-A, Mega-Dimension teilt mit Z-A):

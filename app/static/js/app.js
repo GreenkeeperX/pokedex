@@ -1537,7 +1537,8 @@ async function raidsView(arg) {
 let REQ_DONE = new Set();
 let REQ_REDRAW = null, REQ_OK = false;
 // Spiele mit Aufträgen und Missionen; Mega-Dimension teilt sie mit Legenden: Z-A
-const REQ_GAMES = {"legends-arceus": "legends-arceus", "legends-za": "legends-za", "mega-dimension": "legends-za"};
+const REQ_GAMES = {"legends-arceus": "legends-arceus", "legends-za": "legends-za", "mega-dimension": "legends-za",
+  "scarlet-violet": "the-indigo-disk", "the-teal-mask": "the-indigo-disk", "the-indigo-disk": "the-indigo-disk"};
 const REQ_GAME = () => REQ_GAMES[S.game] || "";
 async function loadReqDone(force = false) {      // einmal je Seitenaufruf und Spiel; die Haken ändert die Oberfläche selbst
   if (REQ_OK === REQ_GAME() && !force) return;
@@ -1565,6 +1566,7 @@ async function requestsView() {
   header();
   const [r] = await Promise.all([api("/api/auftraege?" + qs({spiel: S.game})), loadReqDone(true)]);
   if (rid !== RID) return;
+  if (r.blaubeer) return blaubeerView(r);
   const K = r.karte || {}, KAP = r.kapitel || [];
   $("#reqsrc").textContent = `${gameName(r.spiel || REQ_GAME())} auf Deutsch (Quelle: ${r.quelle || "BisaFans"}).`;
   const pin = (k, nr) => K[k]?.[nr] ? ` <a class="reqpin" href="#karte/mg/${esc(K[k][nr][0])}/${K[k][nr][1]}" data-tip="Auf der Karte zeigen">📍</a>` : "";
@@ -1599,6 +1601,27 @@ async function requestsView() {
     store.set("reqArt", b.dataset.reqart); main.querySelectorAll("[data-reqart]").forEach((x) => x.classList.toggle("on", x === b)); draw(); }));
   main.querySelectorAll("[data-reqmode]").forEach((b) => b.addEventListener("click", () => {
     store.set("reqMode", b.dataset.reqmode); main.querySelectorAll("[data-reqmode]").forEach((x) => x.classList.toggle("on", x === b)); draw(); }));
+  REQ_REDRAW = draw;
+}
+/* Karmesin/Purpur: Blaubeer-Missionen der Indigoblauen Scheibe (wiederholbar, daher ohne Haken), nach Bereich und Art */
+function blaubeerView(r) {
+  $("#reqsrc").textContent = `Blaubeer-Missionen der Indigoblauen Scheibe (Quelle: ${r.quelle}). Sie wechseln und lassen sich wiederholen, deshalb ohne Haken.`;
+  $$("[data-reqart], [data-reqmode]").forEach((b) => { b.closest(".seg").hidden = true; });
+  const bs = [...new Set(r.blaubeer.map((x) => x.bereich))];
+  const draw = () => {
+    const ql = ($("#reqq")?.value || "").trim().toLowerCase(), b = store.get("bbqBereich", "");
+    const xs = r.blaubeer.filter((x) => (!b || x.bereich === b) && (!ql || [x.art, x.text, x.bereich].join(" ").toLowerCase().includes(ql)));
+    $("#reqn").textContent = `${xs.length} von ${r.blaubeer.length}`;
+    $("#reqlist").innerHTML = !r.blaubeer.length ? `<p class="hint">Noch keine Blaubeer-Missionen. Der nächste Abgleich holt sie.</p>`
+      : `<div class="bar"><span class="seg">${[["", "Alle"], ...bs.map((x) => [x, x])].map(([k, n]) => `<button class="${k === b ? "on" : ""}" data-bbq="${esc(k)}">${esc(n)}</button>`).join("")}</span></div>
+      <div class="scroll sticky"><table class="rows sort"><thead><tr>${th("Bereich")}${th("Art")}${th("Aufgabe", "", true)}${thc("BP")}</tr></thead>
+        <tbody>${xs.map((x) => `<tr><td class="hint">${esc(x.bereich)}</td><td data-s="${esc(x.art)}">${esc(x.art)}</td><td class="why">${esc(x.text)}</td>
+          <td class="c num" data-s="${x.bp || 0}">${x.bp ?? ""}</td></tr>`).join("") || `<tr><td colspan="4" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
+    $$("[data-bbq]").forEach((e) => e.addEventListener("click", () => { store.set("bbqBereich", e.dataset.bbq); draw(); }));
+  };
+  draw();
+  $("#reqq").placeholder = "Suchen: Aufgabe, Art";
+  $("#reqq").addEventListener("input", draw);
   REQ_REDRAW = draw;
 }
 async function toggleReq(nr) {
@@ -2011,6 +2034,7 @@ async function teamView() {
     <div class="box"><h2 data-fold="tmu">Gegen Gegner</h2>
       <div class="bar"><div class="ac grow"><input id="foe" type="search" placeholder="Gegner hinzufügen (bis zu 6, etwa die Pokémon eines Arenaleiters)" style="width:100%"></div>
         ${S.foes.length ? `<button data-act="foeclear">Gegner leeren</button>` : ""}</div>
+      <div id="trpick"></div>
       <div id="mu"><p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p></div></div>
     ${!BATTLE() && GEN() >= 3 ? `<details class="box" id="calcbox"${store.get("calcOpen", false) ? " open" : ""}><summary><h2 style="display:inline">Schadensrechner</h2>
       <span class="hint">wie viel eine Attacke deines Teams den Gegnern abzieht</span></summary><div id="calc"><p class="hint">Lädt …</p></div></details>` : ""}`;
@@ -2058,6 +2082,7 @@ async function teamView() {
   });
   await Promise.all([teamsP, teamRefresh()]);
   if (S.foes.length) matchup();
+  trainerPick();
   const cb = $("#calcbox");
   if (cb) { cb.addEventListener("toggle", () => { store.set("calcOpen", cb.open); if (cb.open) calcBox(); }); if (cb.open) calcBox(); }
   $("#findbox")?.addEventListener("toggle", (e) => store.set("findOpen", e.target.open));
@@ -2145,15 +2170,69 @@ async function optimize() {
     <div class="why">${t.mitglieder.map((m) => now.has(m.id) ? esc(m.name) : `<b>${esc(m.name)}</b>`).join(", ")}${t.offen.length ? " · offen: " + t.offen.map(tname).join(", ") : ""}</div></div>`).join("");
   S.lastOpt = r.teams;
 }
+/* Trainer als Gegner: Arenaleiter, Top Vier, Champs und Rivalen des Spiels (PokéWiki). Damit die vielen Teams nicht
+   erschlagen: eine Rolle zur Zeit, nach Level sortiert (etwa die Reihenfolge im Spiel), Rückkämpfe erst auf Wunsch;
+   die Suche findet Trainer, Orte und Pokémon über alle Rollen. Gewählt: sein Team wird zu den Gegnern (mit Level und
+   Attacken für die Rechnung) */
+const TRAINERS = {};
+const foeTrainer = () => { const t = store.get("foeTrainer:" + S.game, null); return t && S.foes.length && S.foes.every((id) => t.team.some((m) => m.id === id)) ? t : null; };
+const foeMember = (id) => foeTrainer()?.team.find((m) => m.id === id) || null;
+const trTip = (t) => [t.name + (t.titel ? " · " + t.titel : ""), t.hinweis, ...t.team.map((m) => `${m.name}${m.lvl ? " Lv " + m.lvl : ""}${m.item ? " · " + m.item : ""}${m.attacken.length ? "\n   " + m.attacken.join(", ") : ""}`)].filter(Boolean).join("\n");
+async function trainerPick(keepOpen) {
+  const el = $("#trpick"), g = S.game;
+  if (!el) return;
+  const d = TRAINERS[g] || (TRAINERS[g] = await api("/api/trainer?" + qs({spiel: g})).catch(() => ({trainer: [], rollen: []})));
+  if (!$("#trpick") || S.game !== g) return;
+  if (!d.trainer.length) { el.innerHTML = ""; return; }
+  const o = Object.assign({rolle: d.rollen[0], rk: false}, store.get("trOpt", {}));
+  if (!d.rollen.includes(o.rolle)) o.rolle = d.rollen[0];
+  const cur = foeTrainer(), wasOpen = keepOpen ?? el.querySelector("details")?.open ?? false;
+  const q = (el.querySelector("#trq")?.value || "").trim().toLowerCase();
+  const n = (r) => d.trainer.filter((t) => t.rolle === r && (o.rk || !t.rueckkampf)).length;
+  el.innerHTML = `<details class="trp"${wasOpen ? " open" : ""}><summary>Trainer als Gegner: <b>${cur ? esc(cur.name) + (cur.titel ? ` <span class="hint">${esc(cur.titel)}</span>` : "") : "wählen"}</b>
+      <span class="hint">${d.trainer.length} Teams aus Arenen, Top Vier, Champs und Rivalen</span></summary>
+    <div class="bar"><span class="seg">${d.rollen.map((r) => `<button class="${r === o.rolle && !q ? "on" : ""}" data-trrolle="${esc(r)}">${esc(r)} <span class="hint">${n(r)}</span></button>`).join("")}</span>
+      <input id="trq" type="search" placeholder="Trainer, Ort oder Pokémon" value="${esc(q)}" style="width:200px">
+      <label data-tip="Rückkämpfe und weitere Kämpfe derselben Trainer zeigen"><input type="checkbox" id="trrk"${o.rk ? " checked" : ""}> Rückkämpfe</label></div>
+    <div class="trgrid" id="trgrid"></div></details>`;
+  const grid = () => {
+    const ql = ($("#trq")?.value || "").trim().toLowerCase();
+    const xs = d.trainer.filter((t) => ql ? [t.name, t.titel, t.hinweis, ...t.team.map((m) => m.name)].join(" ").toLowerCase().includes(ql) && (o.rk || !t.rueckkampf)
+      : t.rolle === o.rolle && (o.rk || !t.rueckkampf));
+    $("#trgrid").innerHTML = xs.slice(0, 60).map((t) => `<button class="trc${cur && cur.id === t.id ? " on" : ""}" data-act="trpick" data-id="${t.id}" data-tip="${esc(trTip(t))}">
+        <span class="trn"><b>${esc(t.name)}</b>${t.level ? `<span class="hint">Lv ${t.level}</span>` : ""}</span>
+        <span class="hint trt">${esc(t.titel || t.rolle)}</span><span class="trm">${t.team.map((m) => img(m.id)).join("")}</span></button>`).join("")
+      || `<p class="hint">Nichts gefunden.</p>`;
+    $$("#trpick [data-trrolle]").forEach((b) => b.classList.toggle("on", !ql && b.dataset.trrolle === o.rolle));
+  };
+  grid();
+  $("#trq").addEventListener("input", grid);
+  $$("#trpick [data-trrolle]").forEach((b) => b.addEventListener("click", () => { o.rolle = b.dataset.trrolle; store.set("trOpt", o); $("#trq").value = ""; grid(); }));
+  $("#trrk").addEventListener("change", (e) => { o.rk = e.target.checked; store.set("trOpt", o); trainerPick(true); });
+}
+function pickTrainer(id) {
+  const t = (TRAINERS[S.game]?.trainer || []).find((x) => x.id === id);
+  if (!t) return;
+  S.foes = [...new Set(t.team.map((m) => m.id))].slice(0, 6);
+  store.set("foes", S.foes);
+  store.set("foeTrainer:" + S.game, {id: t.id, name: t.name, titel: t.titel, team: t.team});
+  VPIN.c = null;
+  trainerPick(false);
+  matchup();
+}
+
 async function matchup() {
   const box = $("#mu");
   if (!box) return;
   if (!S.foes.length) { box.innerHTML = `<p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p>`; return; }
-  const foeCard = (id, r) => `<div class="foe" draggable="true" data-foe="${id}" data-hc="${id}">${img(id, "", true)}<b>${esc(r?.name || "#" + id)}</b><div>${tchips(r?.typen || [])}</div>
-    <button class="small x" data-act="foedel" data-id="${id}" data-tip="Gegner entfernen">✕</button></div>`;
+  const foeCard = (id, r) => { const fm = foeMember(id);
+    return `<div class="foe" draggable="true" data-foe="${id}" data-hc="${id}">${img(id, "", true)}<b>${esc(r?.name || "#" + id)}</b>${fm?.lvl ? ` <span class="hint">Lv ${fm.lvl}</span>` : ""}<div>${tchips(r?.typen || [])}</div>
+    ${fm?.attacken?.length ? `<div class="hint foeatk">${esc(fm.attacken.join(", "))}</div>` : ""}
+    <button class="small x" data-act="foedel" data-id="${id}" data-tip="Gegner entfernen">✕</button></div>`; };
   if (!S.team.ids.length) { box.innerHTML = `<div class="foes">${S.foes.map((id) => foeCard(id, ROWS[id])).join("")}</div><p class="hint">Erst ein Team zusammenstellen.</p>`; return; }
   const miss = S.foes.filter((id) => !ROWS[id]?.werte);
-  const [r, extra] = await Promise.all([api("/api/team/gegner", {spiel: S.game, ids: S.team.ids, gegner: S.foes, details: S.team.details}),
+  const [r, extra] = await Promise.all([api("/api/team/gegner", {spiel: S.game, ids: S.team.ids, gegner: S.foes, details: S.team.details,
+      gegner_attacken: Object.fromEntries((foeTrainer()?.team || []).map((m) => [m.id, m.attacken]))}),
     miss.length ? api("/api/team/bewerten", {spiel: S.game, ids: miss, kurz: 1}) : null]);
   (extra?.mitglieder || []).forEach((m) => { ROWS[m.id] = Object.assign(ROWS[m.id] || {}, m); });
   if (!$("#mu")) return;
@@ -2165,7 +2244,7 @@ async function matchup() {
     <div class="scroll"><table class="vs" id="vs"><thead><tr><th></th>${r.einzeln.map((x, i) => `<th class="foeh" data-c="${i + 1}" data-pc="${i + 1}" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
       ${r.uebersicht.filter((m) => !seen.has(m.id) && seen.add(m.id)).map((m, k) => `<tr data-r="${k}"><th class="r" data-pr="${k}" data-hc="${m.id}">${img(m.id)} ${esc(m.name)}</th>${r.einzeln.map((x, i) => { const v = verdict[`${m.id}:${x.gegner.id}`], u = VERDICT[v.urteil];
         return `<td data-c="${i + 1}" class="v-${v.urteil}" data-tip="${esc(`${m.name} gegen ${x.gegner.name}: ${u[1]}\n${v.gruende.map((g) => "· " + g).join("\n")}`)}">${u[0]}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
-    <p class="hint">Vorteil: teilt mehr aus, als es einsteckt (Typen und Initiative). Nachteil: steckt mehr ein, als es austeilt. Die Attacken des Gegners zählen über seine Typen, deine über die gewählten Attacken; eine Attacke ohne Eigentyp-Bonus (×1,5) zählt dabei ein Drittel weniger. Zelle hovern für die Rechnung; Klick hält Zeile oder Spalte fest. Gegner lassen sich oben per Ziehen umsortieren.</p>`;
+    <p class="hint">Vorteil: teilt mehr aus, als es einsteckt (Typen und Initiative). Nachteil: steckt mehr ein, als es austeilt. Die Attacken des Gegners zählen über seine Typen (beim Team eines Trainers über seine echten Attacken), deine über die gewählten Attacken; eine Attacke ohne Eigentyp-Bonus (×1,5) zählt dabei ein Drittel weniger. Zelle hovern für die Rechnung; Klick hält Zeile oder Spalte fest. Gegner lassen sich oben per Ziehen umsortieren.</p>`;
   crossTable($("#vs"), VPIN);
   foeDrag(box);
 }
@@ -3317,13 +3396,13 @@ async function calcBox() {
     autocomplete($("#cfoeq"), (x) => { store.set(ownKey, [x.id]); calcBox(); });
     return;
   }
-  const r = await api("/api/schaden", {spiel: S.game, ids: t.ids, details: t.details, slot: o.slot, attacke: o.move, verteidiger: foes, verteidiger_details: o.gegen === "team" ? t.details : null,
+  const r = await api("/api/schaden", {spiel: S.game, ids: t.ids, details: t.details, slot: o.slot, attacke: o.move, verteidiger: foes, verteidiger_details: o.gegen === "team" ? t.details : o.gegen === "foes" && foeTrainer() ? foes.map((id) => ({level: foeMember(id)?.lvl || ""})) : null,
     vert: o.vert, krit: o.krit ? 1 : "", flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null,
     level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv, wetter: o.wetter || ""});
   if (rid !== RID || !el()) return;
   if (r.hinweis) { el().innerHTML = `${CH()}<p class="hint">${esc(r.hinweis)}</p>`; return; }
   // Übersicht: je Mitglied gegen jeden Gegner die stärkste seiner gewählten Attacken
-  const all = o.ansicht === "alle" ? await api("/api/schaden/uebersicht", {spiel: S.game, ids: t.ids, details: t.details, verteidiger: foes, verteidiger_details: o.gegen === "team" ? t.details : null, vert: o.vert, krit: o.krit ? 1 : "",
+  const all = o.ansicht === "alle" ? await api("/api/schaden/uebersicht", {spiel: S.game, ids: t.ids, details: t.details, verteidiger: foes, verteidiger_details: o.gegen === "team" ? t.details : o.gegen === "foes" && foeTrainer() ? foes.map((id) => ({level: foeMember(id)?.lvl || ""})) : null, vert: o.vert, krit: o.krit ? 1 : "",
     flaeche: champ ? (o.flaeche === "auto" ? null : o.flaeche === "ja") : false, tera_vert: o.tera && (champ || TERA()) ? +o.tera : null, level: champ ? "" : o.level, level_vert: champ ? "" : o.lvv, wetter: o.wetter || ""}) : null;
   if (rid !== RID || !el()) return;
   const pct = (x) => String(x).replace(".", ",");
@@ -3883,7 +3962,8 @@ document.addEventListener("click", async (e) => {
       S.team = normTeam({ids: S.team.ids, fest: S.team.fest, details: S.team.details});
       store.set("team", S.team); dock(); teamView();
     } else if (act === "foedel") { S.foes = S.foes.filter((x) => x !== id); store.set("foes", S.foes); matchup(); }
-    else if (act === "foeclear") { S.foes = []; store.set("foes", S.foes); teamView(); }
+    else if (act === "foeclear") { S.foes = []; store.set("foes", S.foes); store.set("foeTrainer:" + S.game, null); teamView(); }
+    else if (act === "trpick") pickTrainer(+b.dataset.id);
     else if (act === "logpick") { const id = +b.dataset.id, i = LOGPICK.indexOf(id); if (i >= 0) LOGPICK.splice(i, 1); else if (LOGPICK.length < 6) LOGPICK.push(id); logBox(); }
     else if (act === "logadd") { await api("/api/kampftagebuch", {spiel: S.game, ergebnis: b.dataset.res, team: S.team.ids, gegner: LOGPICK, notiz: $("#lognote")?.value || ""}); LOGPICK = []; logBox(); }
     else if (act === "logdel") { await api("/api/kampftagebuch/loeschen", {id: +b.dataset.id}); logBox(); }

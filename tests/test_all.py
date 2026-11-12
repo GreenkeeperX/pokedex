@@ -1624,6 +1624,63 @@ class Server(TempData):
             self.assertEqual(_q.quest_nr(name), nr)
         self.assertEqual((_q.quest_kind("Side Missions"), _q.quest_kind("Main Mission"), _q.quest_kind("Shop")), ("auftrag", "mission", None))
 
+    def test_0_42_0_trainer_und_blaubeer(self):
+        """PokéWiki: Trainerteams (Team/Kopf, Team/Zeile) und Blaubeer-Missionen mit rowspan (erfundene Seiten)."""
+        import sqlite3
+        from app import pokewiki, importer
+        wt = """== In den Spielen ==
+{{Team/Kopf|Überschrift={{sk|FR|BG}} [[Erfundene Arena]]}}
+{{Team/Zeile|Edition=FRBG|Trainerklasse=Leiter|Trainername=Erfundo|Gewinn=1400
+|id1=074|lvl1=12|atk1_1=Tackle|atk1_2=[[Steinwurf]]
+|id2=095|lvl2=14|item2={{Item|Tsitrubeere|sp=FRBG}}|fähigkeit2=Steinhaupt}}
+</div>
+{{Team/Kopf|Überschrift={{sk|Stadium}} Arena}}
+{{Team/Zeile|Edition=Sta|Trainername=Erfundo|id1=074|lvl1=50}}
+{{Team/Kopf|Überschrift={{sk|HG|SS}} [[Erfundene Arena]] (Rückkampf)}}
+{{Team/Zeile|Edition=HGSS|Trainerklasse=Arenaleiter|Trainername=Erfundo|Rückkampf=ja|id1=076|lvl1=60}}"""
+        ts = pokewiki.trainer_teams(wt, "Erfundo", "Arenaleiter")
+        self.assertEqual([(t["spiele"], t["rolle"], t["rueckkampf"]) for t in ts],
+                         [(["firered-leafgreen"], "Arenaleiter", False), (["heartgold-soulsilver"], "Arenaleiter", True)])
+        self.assertEqual(ts[0]["titel"], "Erfundene Arena")
+        self.assertEqual(ts[0]["team"][0], {"nr": 74, "lvl": 12, "item": "", "faehigkeit": "", "attacken": ["Tackle", "Steinwurf"]})
+        self.assertEqual((ts[0]["team"][1]["item"], ts[0]["team"][1]["faehigkeit"]), ("Tsitrubeere", "Steinhaupt"))
+        self.assertEqual(pokewiki.ed_games("DPPt"), ["diamond-pearl", "platinum"])
+        self.assertEqual(pokewiki.category_members('{"query": {"categorymembers": [{"title": "A"}]}, "continue": {"cmcontinue": "x"}}'), (["A"], "x"))
+        bbq = """== Blaubeer-Missionen ==
+{| class="spiele__table"
+! colspan="2" | Art
+! Beschreibung
+! Belohnung
+|-
+! style="x" colspan="4" | Solo-Missionen
+|-
+| rowspan="2" | [[Datei:Fang.png]]
+| rowspan="2" | Erfundene Fang-Mission
+| Fange 1 Pokémon vom Typ Normal!
+| rowspan="2" | 40 BP
+|-
+| Fange 1 Pokémon vom Typ Feuer!
+|-
+! colspan="4" | Gruppen-Missionen
+|-
+| [[Datei:X.png]]
+| Erfundene Gruppen-Mission
+| Macht etwas zusammen!
+| 500 BP
+|}
+== Verwendungszwecke ==
+"""
+        xs = pokewiki.bbq_missions(bbq)
+        self.assertEqual([(x["bereich"], x["art"], x["text"], x["bp"]) for x in xs],
+                         [("Solo-Missionen", "Erfundene Fang-Mission", "Fange 1 Pokémon vom Typ Normal!", 40),
+                          ("Solo-Missionen", "Erfundene Fang-Mission", "Fange 1 Pokémon vom Typ Feuer!", 40),
+                          ("Gruppen-Missionen", "Erfundene Gruppen-Mission", "Macht etwas zusammen!", 500)])
+        con = sqlite3.connect(":memory:")
+        self.assertEqual(importer._derive_trainer(con, ts + [dict(ts[0], spiele=["red-blue", "yellow"])]), 4)
+        self.assertEqual(con.execute("SELECT spiel, level FROM trainer ORDER BY id").fetchall(),
+                         [("firered-leafgreen", 14), ("heartgold-soulsilver", 60), ("red-blue", 14), ("yellow", 14)])
+        self.assertEqual(importer._derive_blaubeer(con, {"blaubeer": xs}), 3)
+
     def test_0_41_0_pokearth(self):
         """Serebii PokéEarth: Bildkarte der Region → Karte mit einem Bild und einem Punkt je Ort (erfundene Seite)."""
         from app import pokearth
