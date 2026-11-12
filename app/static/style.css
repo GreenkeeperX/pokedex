@@ -260,10 +260,11 @@ button.tb.out{opacity:1;border-color:var(--brand);box-shadow:0 0 0 1px var(--car
 .fx{display:inline-flex;gap:2px;align-items:center}
 .hc-mv{font-size:12px;line-height:22px;margin-top:2px}
 /* Auswahl aus den Favoriten */
-#pick{position:absolute;z-index:28;width:300px;max-height:360px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.22)}
+#pick{position:absolute;z-index:28;width:300px;max-height:360px;overflow:auto;background:var(--hcbg);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.22)}   /* 0.47.9: Hintergrund wie die Hover-Karte */
 #pick button{display:flex;gap:6px;align-items:center;width:100%;border:0;border-radius:6px;padding:2px 6px;text-align:left;background:none}
 #pick button:hover{background:var(--hov)}
-#pick button span{flex:1}
+#pick button>span:not(.t){flex:1}   /* nur der Name dehnt sich, die Typ-Schilder bleiben so breit wie ihr Text */
+#pick button>.t{flex:none}
 #pick .spr{width:36px;height:36px}
 /* Team-Leiste unten */
 #dock{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.12)}

@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.9 (12.11.2026)
+
+- `#pick`: Hintergrund `--hcbg`; `flex:1` nur für den Namen, nicht für die Typ-Schilder
+
 ## 0.47.8 (12.11.2026)
 
 - Bild in den Karten 4 px tiefer (Entscheidung 12.11.2026; 6 und 8 px waren zu tief)

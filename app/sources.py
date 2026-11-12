@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.47.8"
+VERSION = "0.47.9"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.47.9", "12.11.2026", [
+        "Menü „… ersetzt …“: Hintergrund wie die Hover-Karten, Typ-Schilder nur so breit wie ihr Text",
+    ]),
     ("0.47.8", "12.11.2026", [
         "Pokémon-Karten: das Bild sitzt 4 Pixel tiefer als ursprünglich (6 war zu tief)",
     ]),
