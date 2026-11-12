@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.48.4 (12.11.2026)
+
+- Proben für Shiny-Sperren: Bulbapedia „List of unobtainable Shiny Pokémon“, „Shiny-locked“, „Shiny Pokémon“ und PokéWiki
+  „Schillernde Pokémon“, „Shiny-Lock“ (Wikitext). Nächster Schritt: Leser je Spiel mit drei Stufen (fangbar, nur per Übertragung,
+  gar nicht); der Pokéball lässt „schillernd“ nur dort aus, wo es das im Spiel auf keinem Weg gibt
+
 ## 0.48.3 (12.11.2026)
 
 - Schadensrechner: Regel `#calc .seg button.on` aus 0.46 entfernt. Sie setzte eine schon in 0.43 erledigte Rückmeldung erneut um
