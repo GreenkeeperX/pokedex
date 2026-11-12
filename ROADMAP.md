@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.35.2 (12.11.2026)
+
+- `sources.request(limit=…)` gibt nach Ablauf den Anfang zurück (`teil`), der Verbindungstest wertet ihn aus und behält
+  ihn als Probe. Der Abgleich selbst hat weiter kein Gesamtlimit
+
 ## 0.35.1 (12.11.2026)
 
 - `sources.request(limit=…)`: Gesamtzeit je Abfrage; `timeout` galt nur je Lesevorgang, ein tröpfelnder Server hielt den
