@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.43.0"
+VERSION = "0.44.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.44.0", "12.11.2026", [
+        "HeartGold/SoulSilver: große Karten von Johto und Kanto mit allen Häusern und Höhlen, dazu über 400 Trainer mit Level und über 400 Items (HGSS IronMON Map). Beim ersten Öffnen wandelt der Browser das große Bild einmal in Kacheln um (etwa eine Minute), danach lädt die Karte schnell",
+        "Schwert/Schild: Karten mit allen 276 Raid-Nestern der Naturzone, der Insel der Rüstung und der Schneelande; die Erweiterungen haben damit erstmals eine eigene Karte",
+        "Verbindungstest: Gamer Guides (Untergrund in Strahlender Diamant/Leuchtende Perle, Indigoblaue Scheibe) und Pokédens (Inhalt der Raid-Nester)",
+    ]),
     ("0.43.0", "12.11.2026", [
         "Karten: Zoom-Regler und feinere Stufen (auch auf den Einzelkarten), Startausschnitt je Spiel angepasst, schneller durch Bilder nur im sichtbaren Bereich; zu Beginn nur Orte und Schnellreise sichtbar",
         "Karten: Pokémon und Items in den Punkten als Bilder, Namen und häufige Sätze auf Deutsch; „Übersicht mit Bildern“ und „Häufig auf dieser Karte“ auch auf der Gesamtkarte",

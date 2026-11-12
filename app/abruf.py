@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, bisafans, companion, db, dittobase, ign, importer, mapgenie, pkcompletion, pokearth, pokewiki, rankedboost, serebii, smogon, sources, store
+from . import altissimo, bisafans, companion, db, dittobase, ign, importer, ironmon, mapgenie, pkcompletion, pokearth, pokewiki, raidnester, rankedboost, serebii, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus und Z-A)", "trainer": "PokéWiki (Trainerteams)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "ironmon": "HGSS IronMON Map (Karte HeartGold/SoulSilver)", "raidnester": "PKHeX Raid Plugin (Raid-Nester Schwert/Schild)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus und Z-A)", "trainer": "PokéWiki (Trainerteams)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -582,7 +582,7 @@ def _media_tiles(st, log, settings, at):
 
 
 def _media_mg(st, log, at):
-    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign), ("dittobase", _dittobase), ("rankedboost", _rankedboost), ("pokearth", _pokearth)):
+    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign), ("dittobase", _dittobase), ("rankedboost", _rankedboost), ("ironmon", _ironmon), ("raidnester", _raidnester), ("pokearth", _pokearth)):
         if db.has_data() and not _resting(st, key, at):
             res = run(log)
             st["sources"][key] = res
@@ -1139,6 +1139,117 @@ def _rankedboost(log):
     return src.result(dateien=found)
 
 
+def _ironmon(log):
+    """HeartGold/SoulSilver aus der HGSS IronMON Map (GitHub): je Region Trainer und Items (TypeScript) und einmal das
+    große Bild (kacheln/im/<Region>.webp, Kacheln daraus macht der Browser, tile_upload); mapgenie/<Spiel>.im.json."""
+    src = _Source("ironmon", log, pause=PAUSE)
+    found = 0
+    for spiel, regs in ironmon.GAMES.items():
+        maps = []
+        for reg in regs:
+            STATE["step"] = f"HGSS IronMON Map: {ironmon.REGION.get(reg, reg)}"
+            bild, tr, it = ironmon.urls(reg)
+            f = mg_dir("kacheln", "im", reg + ".webp")
+            if not os.path.isfile(f):
+                body = src.get(bild, raw=True, absent=(404,))
+                if body and ironmon.webp_size(body[:64]):
+                    os.makedirs(os.path.dirname(f), exist_ok=True)
+                    with open(f + ".neu", "wb") as fh:
+                        fh.write(body)
+                    os.replace(f + ".neu", f)
+            ts = [src.get(u, absent=(404,)) or "" for u in (tr, it)]
+            if src.stopped:
+                break
+            if not os.path.isfile(f):
+                log(f"HGSS IronMON Map: {reg} ohne Kartenbild")
+                continue
+            with open(f, "rb") as fh:
+                size = ironmon.webp_size(fh.read(64))
+            m = ironmon.parse(reg, *(size or (0, 0)), ironmon.objects(ts[0]), ironmon.objects(ts[1]))
+            if m:
+                maps.append(m)
+        if maps:
+            _save_maps(spiel, "im", maps)
+            found += 1
+            log("HGSS IronMON Map: " + ", ".join(f"{m['titel']} mit {len(m['orte'])} Punkten" for m in maps))
+        if src.stopped:
+            break
+    return src.result(dateien=found)
+
+
+def _raidnester(log):
+    """Raid-Nester in Schwert/Schild aus dem PKHeX Raid Plugin (GitHub): Lage je Nest, Gebietsnamen und einmal die
+    Bilder der drei Teile (kacheln/rn/<Teil>.png); je Spiel mapgenie/<Spiel>.rn.json."""
+    src = _Source("raidnester", log, pause=PAUSE)
+    ns = raidnester.nests(src.get(raidnester.NESTS, absent=(404,)) or "",
+                          raidnester.location_names(src.get(raidnester.NAMES, absent=(404,)) or ""))
+    if not ns:
+        if not src.stopped:
+            log("PKHeX Raid Plugin: keine Raid-Nester gelesen")
+        return src.result(dateien=0)
+    found = 0
+    for area, (spiel, bild, _, _) in raidnester.AREAS.items():
+        STATE["step"] = f"PKHeX Raid Plugin: {area}"
+        f = mg_dir("kacheln", "rn", area + ".png")
+        if not os.path.isfile(f) and not src.stopped:
+            body = src.get(raidnester.BASE + bild, raw=True, absent=(404,))
+            if body and raidnester.png_size(body):
+                os.makedirs(os.path.dirname(f), exist_ok=True)
+                with open(f + ".neu", "wb") as fh:
+                    fh.write(body)
+                os.replace(f + ".neu", f)
+        if not os.path.isfile(f):
+            continue
+        with open(f, "rb") as fh:
+            m = raidnester.parse(ns, area, *(raidnester.png_size(fh.read(32)) or (0, 0)))
+        if m:
+            _save_maps(spiel, "rn", [m])
+            found += 1
+    log(f"PKHeX Raid Plugin: {len(ns)} Raid-Nester auf {found} Karten")
+    return src.result(dateien=found)
+
+
+def tile_convert_state(spiel, karte):
+    """Umwandlung einer Bildkarte in Kacheln (HGSS IronMON Map): {fertig, bild, w, h, z, min, kachel, fehlen} oder None."""
+    m = _mg_map(spiel, karte)
+    if not m or m.get("quelle") != "ironmon":
+        return None
+    d = mg_dir("kacheln", "im", m["region"])
+    fehlen = 0
+    for z in range(m["min_zoom"], m["max_zoom"] + 1):
+        nx, ny = ironmon.tile_range(m, z)
+        fehlen += sum(1 for x in range(nx) for y in range(ny) if not os.path.isfile(os.path.join(d, str(z), f"{x}-{y}.png")))
+    return {"fertig": not fehlen, "fehlen": fehlen, "bild": mg_image(spiel, karte, 0) is not None, "w": m["dim"]["w"],
+            "h": m["dim"]["h"], "z": m["bild_z"], "min": m["min_zoom"], "kachel": m["kachel"]}
+
+
+TILE_UPLOAD_MAX = 400_000      # Bytes je Kachel (PNG); eine Kachel der Karte hat meist unter 100 KB
+
+
+def tile_upload(b):
+    """Kacheln, die der Browser aus dem Bild einer Karte geschnitten hat: {spiel, karte, kacheln: [[z, x, y, PNG als
+    Base64]]}. Nur Karten, deren Bild der Server selbst geholt hat, nur Kacheln innerhalb der Karte, nur PNG."""
+    import base64
+    m = _mg_map(str(b.get("spiel") or ""), str(b.get("karte") or ""))
+    if not m or m.get("quelle") != "ironmon":
+        raise ValueError("keine Karte zum Umwandeln")
+    n = 0
+    for k in (b.get("kacheln") or [])[:64]:
+        if not (isinstance(k, list) and len(k) == 4 and all(isinstance(v, int) for v in k[:3]) and isinstance(k[3], str)):
+            raise ValueError("Kachel ungültig")
+        rel = ironmon.tile(m, *k[:3])
+        body = base64.b64decode(k[3], validate=True) if rel and len(k[3]) < TILE_UPLOAD_MAX * 4 // 3 + 4 else b""
+        if not rel or body[:8] != b"\x89PNG\r\n\x1a\n" or len(body) > TILE_UPLOAD_MAX:
+            raise ValueError("Kachel ungültig")
+        f = mg_dir("kacheln", *rel[0].split("/"))
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        with open(f + ".neu", "wb") as fh:
+            fh.write(body)
+        os.replace(f + ".neu", f)
+        n += 1
+    return {"gespeichert": n}
+
+
 def _pokearth(log):
     """Regionskarten von Serebii (PokéEarth) für die Spiele in pokearth.GAMES: je Region die Seite und einmal das Bild
     (kacheln/se/<Region>.<Endung>), dann je Spiel die Karten seiner Regionen (mapgenie/<Spiel>.se.json)."""
@@ -1180,7 +1291,7 @@ def mg_image(spiel, karte, nr):
     """Pfad eines Bilds einer Bildkarte (RankedBoost: Ortsbilder, Serebii: Regionsbild) im Datenordner oder None. Ohne
     Netz: die Bilder holt der Abgleich."""
     m = _mg_map(spiel, karte)
-    b = next((b for b in (m or {}).get("bilder") or [] if b[0] == nr), None)
+    b = next((b for b in ((m or {}).get("bilder") or []) + ([m["quellbild"]] if (m or {}).get("quellbild") else []) if b[0] == nr), None)
     if not b:
         return None
     rel = b[5] if len(b) > 5 and re.fullmatch(r"[a-z]{2}/[\w.-]+", str(b[5])) and ".." not in b[5] else f"rb/{m['slug']}/{nr}.webp"
@@ -1188,8 +1299,8 @@ def mg_image(spiel, karte, nr):
     return f if os.path.isfile(f) else None
 
 
-MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES, *dittobase.GAMES, *rankedboost.GAMES, *pokearth.GAMES)))   # Spiele mit eigener Karte
-MAP_FILES = ("", ".pc", ".ign", ".db", ".rb", ".se")   # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
+MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES, *dittobase.GAMES, *rankedboost.GAMES, *ironmon.GAMES, *raidnester.GAMES, *pokearth.GAMES)))   # Spiele mit eigener Karte
+MAP_FILES = ("", ".pc", ".ign", ".rn", ".db", ".rb", ".im", ".se")   # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
 
 
 def mg_maps(spiel):
@@ -1230,7 +1341,7 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": "", "rest_rankedboost": "", "rest_pokearth": ""}
+_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": "", "rest_rankedboost": "", "rest_ironmon": "", "rest_raidnester": "", "rest_pokearth": ""}
 
 
 def _miss_load():
@@ -1407,7 +1518,7 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE, stock=False):
         return f
 
 
-TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign, "dittobase": dittobase, "rankedboost": rankedboost, "pokearth": pokearth}     # Kartenquellen mit eigenem Kachelschema
+TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign, "dittobase": dittobase, "rankedboost": rankedboost, "ironmon": ironmon, "raidnester": raidnester, "pokearth": pokearth}     # Kartenquellen mit eigenem Kachelschema
 
 
 def _cdn_tile(rel, url, f, pause, quelle):
@@ -2403,6 +2514,24 @@ def diagnose(proben=None, stand=None):
     for g in ("firered", "ruby", "crystal", "platinum", "heartgold"):
         probe(f"PokéTools, Karte {g}", f"https://www.poketools.com/{g}/map",
               lambda t: f"{t.count('kind')}× kind, Titel {(re.findall(r'<title>(.*?)</title>', t) or ['–'])[0][:80]}", headers=html)
+
+    section("Kartenquellen aus der Recherche vom 12.11. (Gamer Guides, Pokédens)")
+
+    def geojson(text):
+        d = json.loads(text)
+        fs = d.get("features") or []
+        kinds = sorted({str((f.get("properties") or {}).get("category") or (f.get("properties") or {}).get("type") or "?") for f in fs})[:12]
+        geo = sorted({(f.get("geometry") or {}).get("type", "?") for f in fs})
+        return f"{len(fs)} Punkte ({', '.join(geo)}), Arten: {', '.join(kinds)}; Schlüssel: {', '.join(list((fs[0].get('properties') or {}))[:12]) if fs else '–'}"
+    # Gamer Guides: Kartendaten als GeoJSON; die Kartenseiten nennen Bild bzw. Kacheln (Muster und Größe stehen im HTML)
+    for n, name in ((49, "BDSP Untergrund"), (238, "Indigoblaue Scheibe")):
+        probe(f"Gamer Guides, Punkte {name}", f"https://www.gamerguides.com/map/{n}/geojson", geojson, keep=True)
+    for path, name in (("pokemon-brilliant-diamond-and-shining-pearl/maps/grand-underground", "BDSP Untergrund"),
+                       ("pokemon-scarlet-and-violet/maps/the-indigo-disk", "Indigoblaue Scheibe")):
+        probe(f"Gamer Guides, Kartenseite {name}", f"https://www.gamerguides.com/{path}",
+              lambda t: f"Muster: {', '.join(tile_patterns(t)[:5]) or '–'}; {t.count('max_zoom')}× max_zoom", keep=True, headers=html)
+    probe("Pokédens, Raid-Nester Schwert/Schild (Inhalt je Nest)", "https://pokedens.github.io/data.json",
+          lambda t: (lambda d: f"{type(d).__name__} mit {len(d)} Einträgen; Schlüssel: {', '.join(list(d)[:8]) if isinstance(d, dict) else ', '.join(list(d[0])[:8]) if d and isinstance(d[0], dict) else '–'}")(json.loads(t)), keep=True)
 
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",

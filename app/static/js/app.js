@@ -2459,11 +2459,71 @@ function mgMd(text, slug) {
 const MGSTART = {"red-blue": 2, yellow: 2, "legends-arceus": 2, "firered-leafgreen": [2, 0.36, 0.36],
   "gold-silver": 0, crystal: 0, "heartgold-soulsilver": 0, "omega-ruby-alpha-sapphire": 0, "lets-go-pikachu-lets-go-eevee": 0,
   "sword-shield": 0, "the-isle-of-armor": 0, "the-crown-tundra": 0,
-  "ruby-sapphire": -1, emerald: -1, "diamond-pearl": [-1, 0.5, 0.4], platinum: [-1, 0.5, 0.4]};
+  "ruby-sapphire": -1, emerald: -1, "diamond-pearl": [-1, 0.5, 0.4], platinum: [-1, 0.5, 0.4],
+  "heartgold-soulsilver/im-johto": 1, "heartgold-soulsilver/im-kanto": 1,   // große Weltkarten (IronMON): bildfüllend
+  "sword-shield/rn-wa": 0, "the-isle-of-armor/rn-ioa": 0, "the-crown-tundra/rn-ct": 0};   // Raid-Nester: ganzes Gebiet
 const mgProj = (lat, lng, z) => {
   const s = 256 * 2 ** z, r = Math.PI / 180, sy = Math.sin(lat * r);
   return [(lng + 180) / 360 * s, (0.5 - Math.log((1 + sy) / (1 - sy)) / (4 * Math.PI)) * s];
 };
+/* Bildkarte (HGSS IronMON Map) einmal in Kacheln umwandeln: der Server kann das große WebP-Bild ohne Zusatzbibliothek
+   nicht zerlegen, der Browser schon. Stufe für Stufe ein halb so großes Bild, daraus die Kacheln, je einige auf einmal
+   zum Server. Danach lädt die Karte wie jede andere nur, was sie zeigt */
+const blobB64 = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(b); });
+let MGCONV = null, MGCONV_MSG = "";
+async function mgConvert(d, slug, rid) {
+  const st = await api("/api/kacheln/umwandeln?" + qs({spiel: d.spiel, karte: slug})).catch(() => null);
+  // die Meldung steht auf der Karte, solange sie offen ist (auch nach einem Wechsel hin und zurück)
+  const here = () => $("#mgwarn")?.dataset.slug === slug;
+  const say = (t, warn) => { MGCONV_MSG = `<div class="note${warn ? " warn" : ""}">${t}</div>`; if (here()) $("#mgwarn").innerHTML = MGCONV_MSG; };
+  if (!st || st.fertig) return;
+  if (!st.bild) { say("Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich)."); return; }
+  if (MGCONV) { if (MGCONV === slug && here()) $("#mgwarn").innerHTML = MGCONV_MSG; return; }
+  MGCONV = slug;
+  say("Die Karte wird einmalig in Kacheln umgewandelt. Dazu lädt das große Bild einmal (gut 10 MB), danach geht es schnell …");
+  try {
+    const img = new Image();
+    img.src = `/mgbild/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/0`;
+    await img.decode();
+    const T = st.kachel, c = document.createElement("canvas"), g = c.getContext("2d");
+    c.width = c.height = T;
+    let src = img, total = 0, done = 0, batch = [], size = 0;
+    for (let z = st.z; z >= st.min; z--) { const k = T * 2 ** (st.z - z); total += Math.ceil(st.w / k) * Math.ceil(st.h / k); }
+    const send = async () => { if (batch.length) await api("/api/kacheln/umwandeln", {spiel: d.spiel, karte: slug, kacheln: batch}); batch = []; size = 0; };
+    for (let z = st.z; z >= st.min; z--) {
+      const k = 2 ** (st.z - z), w = Math.ceil(st.w / k), h = Math.ceil(st.h / k);
+      if (z < st.z) {                  // halb so groß aus der Stufe davor (glatter als aus dem Original)
+        const s = document.createElement("canvas"), sg = s.getContext("2d");
+        s.width = w; s.height = h;
+        sg.imageSmoothingQuality = "high";
+        sg.drawImage(src, 0, 0, w, h);
+        if (src !== img) src.width = src.height = 0;
+        src = s;
+      }
+      for (let y = 0; y * T < h; y++) for (let x = 0; x * T < w; x++) {
+        const sw = Math.min(T, w - x * T), sh = Math.min(T, h - y * T);
+        g.clearRect(0, 0, T, T);
+        g.drawImage(src, x * T, y * T, sw, sh, 0, 0, sw, sh);
+        const b64 = await blobB64(await new Promise((ok) => c.toBlob(ok, "image/png")));
+        batch.push([z, x, y, b64]);
+        size += b64.length;
+        done++;
+        if (size > 3_000_000 || batch.length >= 60) {
+          await send();
+          say(`Die Karte wird einmalig in Kacheln umgewandelt: ${Math.round(done / total * 100)} % …`);
+        }
+      }
+    }
+    await send();
+    if (src !== img) src.width = src.height = 0;
+    MGCONV_MSG = "";
+    if (here()) route();
+  } catch (e) {
+    say(`Umwandeln hat nicht geklappt (${esc(e.message || String(e))}). Beim nächsten Öffnen der Karte geht es weiter.`, true);
+  } finally {
+    MGCONV = null;
+  }
+}
 async function mgView(slug, want) {
   const rid = RID;
   const lst = await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({karten: []}));
@@ -2530,7 +2590,7 @@ async function mgView(slug, want) {
         <span class="hint">|</span> <button class="link" data-gfold="1" data-tip="alle Gruppen aufklappen">auf</button> · <button class="link" data-gfold="0" data-tip="alle Gruppen zuklappen">zu</button></span></div>
         ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
-    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN", dittobase: "DittoBase (aus den Spieldaten gezeichnet; Häuser und Höhlen stehen an ihrem Eingang)", pokearth: "Serebii PokéEarth (Karte der Region; je Ort die Pokémon aus den Fundorten des Spiels)", rankedboost: "RankedBoost (je Ort ein Bild an seiner Stelle, ein Punkt je Ort mit seinen Pokémon)"})[d.quelle] || "Map Genie"}${["pokemoncompletion", "dittobase"].includes(d.quelle) && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
+    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN", dittobase: "DittoBase (aus den Spieldaten gezeichnet; Häuser und Höhlen stehen an ihrem Eingang)", pokearth: "Serebii PokéEarth (Karte der Region; je Ort die Pokémon aus den Fundorten des Spiels)", raidnester: "dem PKHeX Raid Plugin (Lage der Raid-Nester aus den Spieldaten)", ironmon: "der HGSS IronMON Map (ganze Welt mit Häusern und Höhlen, Trainer mit Level, Items; je Ort die Pokémon aus den Fundorten des Spiels)", rankedboost: "RankedBoost (je Ort ein Bild an seiner Stelle, ein Punkt je Ort mit seinen Pokémon)"})[d.quelle] || "Map Genie"}${["pokemoncompletion", "dittobase"].includes(d.quelle) && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
   header();
   const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box), old = $(".mgold", box), ld = $(".mgload", box);
   const tileUrl = (k) => `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
@@ -2681,10 +2741,12 @@ async function mgView(slug, want) {
       : v.fertig && v.ganz ? `alle ${v.da} Kacheln liegen auf dem Server, die Karte braucht kein Netz mehr`
       : `${v.da} von ${v.alle} Kacheln bis Stufe ${v.bis} liegen auf dem Server; der Rest kommt im Hintergrund`;
   }).catch(() => {});
+  $("#mgwarn").dataset.slug = slug;
+  if (d.quelle === "ironmon") mgConvert(d, slug, rid);
   // fehlen Kacheln, sagt die Karte warum (Map Genie ruht nach 403/429 einen Tag; ein Neustart des Dienstes hebt das auf)
   let troubleT = 0;
   const tileTrouble = () => {
-    if (troubleT) return;
+    if (troubleT || d.quelle === "ironmon") return;      // dort fehlen Kacheln nur bis zur Umwandlung (mgConvert)
     troubleT = setTimeout(async () => {
       const st = (await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({}))).kacheln || {};
       if (rid !== RID || !$("#mgwarn")) return;
