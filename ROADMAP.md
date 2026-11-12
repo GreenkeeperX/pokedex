@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.55.0 (12.11.2026)
+
+- Sammelobjekte: `abfragen.collectibles` (`/api/sammeln?spiel=…`) liest alle zusammengeführten Karten des Spiels
+  (`server._map_body`, also aus dem Kartencache) und zählt je Kategorie der Gruppe „Sammelobjekte“ oder mit Namen nach
+  `COLLECT_RX` die Punkte und die Haken aus `gefunden`. `point_key` bildet den Schlüssel wie `mgView` (Map Genie `mg:Id`,
+  Spieldaten `Art:x:z` mit Math.round, Aufträge `auftrag|Nr`).
+- `#karte/mg/<Karte>/k:<Kategorie>` öffnet die Karte mit nur dieser Ebene.
+- Damit ist die Reihe vom 12.11.2026 fertig (Maschinen, „Was fehlt mir noch“, Sammelobjekte). Offen bleiben die Alola-Karten
+  und die Editionsexklusiven in Karmesin/Purpur und SDLP.
+
 ## 0.54.0 (12.11.2026)
 
 - „Was fehlt mir noch“: `abfragen.missing` (`/api/fehlt?spiel=…&edition=…`), je Art des Spiel-Dex ohne gefangene Form die Wege:
@@ -9,7 +19,6 @@
 - Begegnungsarten 18–66 der PokéAPI deutsch (`METHOD_DE`), auch in Karte › Gebiete und auf der Detailseite.
 - Offen: Editionsexklusive in Spielen nur mit PKHeX-Daten (Karmesin/Purpur, Strahlender Diamant/Leuchtende Perle) fehlen noch;
   Raid-Nester Schwert/Schild als Weg.
-- Als Nächstes: Sammelobjekte mit Fortschritt.
 
 ## 0.53.0 (12.11.2026)
 

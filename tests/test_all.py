@@ -317,6 +317,23 @@ class Leser(unittest.TestCase):
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
+    def test_0_55_sammelobjekte(self):
+        """Sammelobjekte: Gruppe „Sammelobjekte“ und Icognito zählen, Haken wie auf der Karte (Map Genie mg:Id, Spieldaten Art:x:z)."""
+        from app import abfragen
+        karte = {"gruppen": [{"titel": "Sammelobjekte", "kategorien": [{"id": 7, "titel": "Geisterlichter", "en": "Wisp"}]},
+                             {"titel": "Besondere Pokémon", "kategorien": [{"id": "o:icognito", "titel": "Icognito", "en": ""},
+                                                                           {"id": 9, "titel": "Alpha-Pokémon", "en": "Alpha Pokemon"}]},
+                             {"titel": "Orte", "kategorien": [{"id": 1, "titel": "Lager", "en": "Camp"}]}],
+                 "punkte": [{"c": 7, "id": 101}, {"c": 7, "id": 102, "o": {"k": "welt", "art": "irrlicht", "x": 2.5, "z": -3.5}},
+                            {"c": 7, "id": 103}, {"c": "o:icognito", "o": {"k": "welt", "art": "icognito", "x": 10.4, "z": 20.6}},
+                            {"c": 9, "id": 104}, {"c": 1, "id": 105}]}
+        self.assertEqual(abfragen.point_key(karte["punkte"][3], "la"), ("welt", "icognito:10:21"))
+        self.assertEqual(abfragen.point_key({"o": {"k": "w", "art": "a", "x": 2.5, "z": -3.5}}, "la"), ("w", "a:3:-3"))   # wie Math.round
+        got = {"mg-la": ["mg:101"], "welt": ["irrlicht:3:-3", "icognito:10:21"]}
+        r = abfragen.collectibles({"spiel": "legends-arceus", "karten": [{"slug": "la", "titel": "Hisui"}]}, lambda m: karte, got)
+        self.assertEqual([(x["titel"], x["gefunden"], x["n"]) for x in r["sachen"]], [("Geisterlichter", 2, 3), ("Icognito", 1, 1)])
+        self.assertEqual(r["sachen"][0]["karten"], [{"slug": "la", "karte": "Hisui", "kat": 7, "n": 3, "gefunden": 2}])
+
     def test_0_54_begegnungsarten(self):
         from app import abfragen
         self.assertIn("Geschenk", abfragen.FIXED_METHODS)

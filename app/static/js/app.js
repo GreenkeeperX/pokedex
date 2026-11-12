@@ -743,6 +743,7 @@ async function route() {
     else if (tab === "auftraege") await requestsView();
     else if (tab === "items") await itemsView();
     else if (tab === "fehlt") await missingView();
+    else if (tab === "sammeln") await collectView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
     else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);
     else if (tab === "karte") await mapView(arg, arg2 === undefined ? null : +arg2);
@@ -2675,6 +2676,7 @@ async function mgView(slug, want) {
       ${regions.length ? `<select id="mggo" aria-label="Gehe zu"><option value="">Gehe zu …</option>${regions.map((r, i) => `<option value="${i}">${esc(r[0])}</option>`).join("")}</select>` : ""}
       ${S.game === "legends-arceus" ? `<a class="btn" href="#karte/obsidianfieldlands" data-tip="Einzelkarten je Gebiet mit Tageszeit- und Wetterfilter">Einzelkarten</a>` : ""}
       <a class="btn" href="#karte/gebiete" data-tip="Alle Orte mit ihren Pokémon als Liste">Gebiete</a>
+      <a class="btn" href="#sammeln" data-tip="Sammelobjekte aller Karten des Spiels mit deinem Fortschritt (Haken per Rechtsklick)">Sammelobjekte</a>
       <input id="mgq" type="search" placeholder="Ort, Symbol oder Pokémon suchen" style="width:240px">
       <label class="mgot" data-tip="Was du als erledigt markiert hast (Rechtsklick oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> erledigte ausblenden</label>
       ${HEATP.some((x) => x.length) ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="mgheat" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto häufiger; rechts die häufigsten. Mit Suche nur das gesuchte Pokémon">▦ Übersicht mit Bildern</button>` : ""}
@@ -2983,8 +2985,33 @@ async function mgView(slug, want) {
   if (heatOn && !want) heatSide();
   let qt;
   $("#mgq").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); pins(); listHits(); }, 150); });
+  // #karte/mg/<Karte>/k:<Kategorie>: nur diese Ebene zeigen (aus „Sammelobjekte“)
+  if (want && want.startsWith("k:")) {
+    const k = catKey(decodeURIComponent(want.slice(2)));
+    if (cats[k]) { Object.values(cats).forEach((c) => { if (c.id === k) hide.delete(c.id); else hide.add(c.id); }); saveHide(); }
+    return;
+  }
   // #karte/mg/<Karte>/<Ort>: direkt dorthin
   if (want) { const i = pts.findIndex((p) => p.t === "mg" && String(p.id) === String(want)); if (i >= 0) jump(i); }
+}
+/* 0.55: Sammelobjekte (Geisterlichter, Icognito, Pflöcke, Schrauben …) aus allen Karten des Spiels mit Fortschritt; die
+   Haken sind dieselben wie auf der Karte (Rechtsklick oder „als gefunden markieren“) */
+async function collectView() {
+  const rid = RID;
+  const d = await api("/api/sammeln?" + qs({spiel: S.game})).catch(() => ({sachen: []}));
+  if (rid !== RID) return;
+  const xs = d.sachen || [];
+  const bar = (f, n) => `<span class="cbar" data-tip="${f} von ${n}"><span style="width:${n ? Math.round(100 * f / n) : 0}%"></span></span>`;
+  const all = xs.reduce((a, x) => [a[0] + x.gefunden, a[1] + x.n], [0, 0]);
+  main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Sammelobjekte</h2><span class="hint">Spiel</span><select class="gamesel"></select>
+      <span class="hint grow">${xs.length ? `${all[0]} von ${all[1]} gefunden` : ""}</span><a class="btn small" href="#karte">Zur Karte</a><a class="btn small" href="#fehlt">Was fehlt mir noch?</a></div>
+    ${xs.length ? `<table class="ctab"><thead><tr><th>Was</th><th class="c">Fortschritt</th><th></th><th>Auf der Karte</th></tr></thead><tbody>${xs.map((x) =>
+      `<tr class="${x.gefunden >= x.n ? "done" : ""}"><td><b>${esc(x.titel)}</b></td><td class="c num">${x.gefunden} / ${x.n}</td><td>${bar(x.gefunden, x.n)}</td>
+        <td>${x.karten.map((k) => `<a href="#karte/mg/${esc(k.slug)}/k:${encodeURIComponent(k.kat)}" data-tip="Karte mit nur dieser Ebene öffnen">${esc(k.karte)}</a>${x.karten.length > 1 ? ` <span class="hint">${k.gefunden}/${k.n}</span>` : ""}`).join(" · ")}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="hint">Für ${esc(gameName())} gibt es auf den Karten keine Sammelobjekte (oder noch keine Karte).</p>`}
+    <p class="hint">Gezählt aus den Karten: was in der Gruppe „Sammelobjekte“ steht, dazu Icognito und ähnliche. Abhaken auf der Karte per Rechtsklick
+      auf ein Symbol oder mit „als gefunden markieren“ in den Details.</p></div>`;
+  header();
 }
 /* 0.54: Was fehlt mir noch: Arten des Spiel-Dex ohne gefangene Form, gruppiert nach dem besten Weg dorthin */
 const WEG = {jetzt: ["Geht jetzt", "Du hast eine Vorstufe (entwickeln) oder eine Weiterentwicklung (Ei)"],
@@ -3000,7 +3027,7 @@ async function missingView() {
   if (rid !== RID) return;
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Was fehlt mir noch?</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <span id="fed"></span><input id="fq" type="search" placeholder="Pokémon oder Ort" style="width:200px"><span class="hint grow" id="fcnt"></span>
-      <a class="btn small" href="#pokemon">Zur Liste</a></div>
+      <a class="btn small" href="#sammeln">Sammelobjekte</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
     <div class="bar"><span class="seg" id="fseg"></span></div><div id="fbody"></div>
     <p class="hint">Gezählt wird je Art: eine gefangene Form (Pokéball) reicht. Wege aus den Fundorten des Spiels (Spieldaten oder PokéAPI), den Entwicklungen und,
       wo es Zucht gibt, den Eiern einer Weiterentwicklung. Den Pokéball auf einer Karte kannst du gleich hier setzen.</p></div>`;

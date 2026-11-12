@@ -764,6 +764,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, marked("gefangen", q.get("spiel")))
             elif path == "/api/schillernd":
                 self._send(200, marked("schillernd", q.get("spiel")))
+            elif path == "/api/sammeln":
+                d = abruf.mg_maps(q.get("spiel"))
+                self._send(200, abfragen.collectibles(d, lambda m: json.loads(_map_body(m, d["spiel"], d["am"])),
+                                                      found(d["spiel"]) if d else {}))
             elif path == "/api/tmorte":
                 d = abruf.mg_maps(q.get("spiel"))
                 self._send(200, abfragen.tm_places(d, lambda m: json.loads(_map_body(m, d["spiel"], d["am"]))))

@@ -4,6 +4,7 @@ Was oft gebraucht wird (Typen, Formen, Attacken, Spiele), hält Daten im Speiche
 Abgleich eine neue pokeapi.db gebaut hat. Lernlisten, Fundorte und Entwicklungen kommen je Anfrage aus der Datenbank.
 """
 import json
+import math
 import os
 import re
 import sqlite3
@@ -601,6 +602,68 @@ def tm_key(text):
     if not m:
         return None
     return ({"HM": "VM", "TR": "TP"}.get(m.group(1), m.group(1)), int(m.group(2)))
+
+
+# 0.55: Sammelobjekte auf den Karten: alles in der Gruppe „Sammelobjekte“ und Kategorien mit diesen Namen (englisch oder deutsch)
+COLLECT_RX = re.compile(r"(?i)\b(wisps?|geisterlicht|unown|icognito|old verse|gedicht|stakes?|pflock|pflöcke|colou?rful screws?|"
+                        r"schraube|diglett|digda|lost satchel|verlorene tasche|shrines?|schrein|mega stones?|megastein|flags?|fahne)")
+
+
+def _js_round(v):
+    """Math.round wie im Browser (x.5 rundet auf), für Schlüssel, die die Oberfläche bildet."""
+    return math.floor(v + 0.5)
+
+
+def point_key(p, slug):
+    """Schlüssel eines Kartenpunkts in user.db gefunden, wie mgView ihn bildet: (Karte, Objekt) oder None."""
+    if p.get("aq"):
+        k, _, o = p["aq"].partition("|")
+        return k, o
+    if p.get("id") and not p.get("sp"):
+        return "mg-" + slug, f"mg:{p['id']}"
+    o = p.get("o")
+    if o:
+        return o.get("k"), f"{o.get('art')}:{_js_round(o.get('x') or 0)}:{_js_round(o.get('z') or 0)}"
+    return None
+
+
+def collectibles(maps, load, got):
+    """Sammelobjekte je Karte mit Fortschritt. maps: abruf.mg_maps, load(m): zusammengeführte Karte, got: {Karte: [Objekt]}
+    (server.found). Gibt {spiel, sachen: [{titel, n, gefunden, karten: [{slug, karte, kat, n, gefunden}]}]}, je Titel über
+    alle Karten des Spiels zusammengezählt."""
+    have = {(k, str(o)) for k, os in (got or {}).items() for o in os}
+    by = {}
+    for m in (maps or {}).get("karten", []):
+        try:
+            d = load(m)
+        except Exception:
+            continue
+        cats = {}
+        for G in d.get("gruppen", []):
+            for C in G.get("kategorien", []):
+                if G.get("titel") == "Sammelobjekte" or COLLECT_RX.search(C.get("en") or "") or COLLECT_RX.search(C.get("titel") or ""):
+                    cats[C["id"]] = C
+        if not cats:
+            continue
+        cnt = {}
+        for p in d.get("punkte", []):
+            if p.get("c") not in cats:
+                continue
+            k = point_key(p, m["slug"])
+            ok = k in have if k else False
+            if not ok and p.get("o") and p.get("id"):       # früher als Symbol der Spieldaten markiert
+                ok = point_key({"o": p["o"]}, m["slug"]) in have
+            n = cnt.setdefault(p["c"], [0, 0])
+            n[0] += 1
+            n[1] += ok
+        for cid, (n, f) in cnt.items():
+            t = cats[cid]["titel"]
+            e = by.setdefault(t, {"titel": t, "n": 0, "gefunden": 0, "karten": []})
+            e["n"] += n
+            e["gefunden"] += f
+            e["karten"].append({"slug": m["slug"], "karte": m.get("titel") or m["slug"], "kat": cid, "n": n, "gefunden": f})
+    out = sorted(by.values(), key=lambda e: (e["gefunden"] >= e["n"], -e["n"], e["titel"]))
+    return {"spiel": (maps or {}).get("spiel"), "sachen": out}
 
 
 def tm_places(maps, load=None):

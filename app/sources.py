@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.54.0"
+VERSION = "0.55.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.55.0", "12.11.2026", [
+        "Sammelobjekte (Knopf auf der Karte und bei „Was fehlt mir noch?“): Geisterlichter, Icognito, Pflöcke, Schrauben, "
+        "Digda und alles andere aus der Gruppe „Sammelobjekte“ der Karten, je mit Fortschritt wie 23 / 107",
+        "Ein Klick auf eine Karte dort öffnet sie mit nur dieser Ebene; die Haken sind dieselben wie auf der Karte (Rechtsklick)",
+    ]),
     ("0.54.0", "12.11.2026", [
         "Was fehlt mir noch? (Knopf in der Pokémon-Liste): alle Arten des Spiel-Dex, die du noch nicht gefangen hast, "
         "geordnet nach dem besten Weg: geht jetzt (Vorstufe oder Weiterentwicklung gefangen), wild, Geschenk oder einmalig, "
