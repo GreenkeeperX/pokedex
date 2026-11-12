@@ -48,7 +48,8 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/rankedboost.py`: Megakarten von RankedBoost (Ortsbilder statt Kacheln, Pokémon je Ort), ohne Netz
 - `app/ironmon.py`: Weltkarten HeartGold/SoulSilver (HGSS IronMON Map, Trainer und Items), ohne Netz; Kacheln macht der Browser
 - `app/raidnester.py`: Raid-Nester Schwert/Schild (PKHeX Raid Plugin, Bildkarten je Teil), ohne Netz
-- `app/pokearth.py`: Regionskarten von Serebii (PokéEarth, ein Bild und ein Punkt je Ort) für die übrigen Spiele, ohne Netz
+- `app/pokearth.py`: Regionskarten von Serebii (PokéEarth, ein Bild und ein Punkt je Ort) für die übrigen Spiele, für Kalos
+  aus einer PokéWiki-Bildkarte mit großem Bild von Bulbapedia, ohne Netz
 - `app/bisafans.py`: Seiten von BisaFans lesen (Aufträge und Hauptmissionen in Legenden: Arceus, Nebenmissionen in Z-A), ohne Netz
 - `app/serebii.py`: Seiten von Serebii lesen (Abklingzeiten in Legenden: Z-A, Pokédexe von Pokopia), ohne Netz
 - `tests/test_all.py`: Tests ohne Netz; mit `POKEAPI_DB=/pfad/pokeapi.db` auch gegen eine gebaute Datenbank

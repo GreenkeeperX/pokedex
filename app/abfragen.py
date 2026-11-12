@@ -1118,6 +1118,8 @@ def _pokearth_mons(r, spiel):
     en2de = {}
     for k, n in en.items():
         en2de.setdefault(n.lower(), de.get(k) or n)
+    for n in de.values():                  # 0.48: Karten aus dem PokéWiki nennen die Orte schon deutsch
+        en2de.setdefault(n.lower(), n)
     for p in r["punkte"]:
         if p.get("text"):              # „Ort: Cherrygrove“ (Trainer, Items) → deutscher Ortsname
             p["text"] = re.sub(r"(\*\*Ort:\*\* )([^\n(]+?)(?=\s*\(|\n|$)", lambda x: x.group(1) + (

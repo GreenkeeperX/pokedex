@@ -93,7 +93,9 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 7. **Serebii PokéEarth** (`app/pokearth.py`, Quelle „pokearth“): je Region in `pokearth.GAMES` die Regionsseite
    (`/pokearth/<Region>/`, 2 Sekunden Pause) mit Bildkarte; das Bild einmal nach `mapgenie/kacheln/se/<Region>.png`, je
    Spiel die Karten seiner Regionen nach `mapgenie/<Spiel>.se.json`. Die Pokémon je Ort setzt `abfragen._pokearth_mons`
-   beim Anzeigen aus den Fundorten des Spiels ein.
+   beim Anzeigen aus den Fundorten des Spiels ein. Hat Serebii keine Bildkarte (Kalos, seit 0.48), kommen die Orte aus der
+   PokéWiki-Vorlage in `pokearth.PW_MAPS` (`<imagemap>`, deutsche Namen) und das Bild in groß von Bulbapedia, wenn es
+   dasselbe Seitenverhältnis hat wie das kleine PokéWiki-Bild (sonst das kleine); Adressen über `imageinfo`.
 7. **HGSS IronMON Map** (`app/ironmon.py`, Quelle „ironmon“, GitHub): je Region Trainer und Items (`src/data/*.ts`) und
    einmal das Bild (`src/assets/Full<Region>.webp`) nach `mapgenie/kacheln/im/<Region>.webp`; Karten nach
    `mapgenie/heartgold-soulsilver.im.json`. Kacheln macht der Browser beim ersten Öffnen (`/api/kacheln/umwandeln`),

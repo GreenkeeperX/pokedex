@@ -1354,6 +1354,8 @@ def _pokearth(log):
         d = pokearth.extract(src.get(pokearth.page_url(reg), absent=(404,)) or "")
         if src.stopped:
             break
+        if not d and reg in pokearth.PW_MAPS:      # 0.48: Bildkarte aus dem PokéWiki, großes Bild von Bulbapedia
+            d = _pw_region(src, reg)
         m = pokearth.parse(d, reg)
         if not m:
             log(f"Serebii PokéEarth: {reg} ohne Bildkarte")
@@ -1379,6 +1381,22 @@ def _pokearth(log):
     if have:
         log(f"Serebii PokéEarth: {len(have)} Regionen mit {sum(len(m['orte']) for m in have.values())} Orten für {found} Spiele")
     return src.result(dateien=found)
+
+
+def _pw_region(src, reg):
+    """Regionskarte aus einer PokéWiki-Vorlage (Orte) mit dem kleinen Bild von dort oder dem großen von Bulbapedia."""
+    cfg = pokearth.PW_MAPS[reg]
+    try:
+        wt = next(iter(pokewiki.pages(src.get(pokearth.pw_template_url(reg)) or "{}").values()), "")
+    except ValueError:
+        wt = ""
+    orte = pokearth.pw_areas(wt)
+    small = pokearth.imageinfo(src.get(pokearth.imageinfo_url(pokearth.PW_API, cfg["bild"])))
+    big = pokearth.imageinfo(src.get(pokearth.imageinfo_url(pokearth.BULBA_API, cfg["gross"]))) if cfg.get("gross") else None
+    d = pokearth.pw_map(orte, small, big)
+    src.log(f"PokéWiki-Bildkarte {pokearth.REGION.get(reg, reg)}: {len(orte)} Orte, Bild "
+            + (f"{d['w']}×{d['h']} von {'Bulbapedia' if 'bulbagarden' in d['bild'] else 'PokéWiki'}" if d else "fehlt"))
+    return d
 
 
 def mg_image(spiel, karte, nr):
