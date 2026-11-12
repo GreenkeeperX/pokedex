@@ -3613,7 +3613,8 @@ async function diag(start = true) {
     if (my !== diagPoll) return;
     const d = await api("/api/diag").catch(() => null);
     const el = $("#diag"), sub = $("#diagsub");
-    if (!el || !d) return;
+    if (!el) return;                           // andere Seite: beim nächsten Öffnen der Einstellungen weiter
+    if (!d) { setTimeout(poll, 3000); return; } // Dienst gerade beschäftigt oder Netz weg: nicht aufgeben
     const hint = $("summary .hint", sub);
     if (d.running) {
       const pc = d.gesamt ? Math.round(d.fertig / d.gesamt * 100) : 0;
