@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.12 (12.11.2026)
+
+- `.sp` streckt sich über die Kartenhöhe, Bild mittig darüber, Knöpfe unten; Bild `top:5px`, Knöpfe `top:1px`; α-Hover weiß
+
 ## 0.47.11 (12.11.2026)
 
 - Bild `top:7px`, Knopfzeile `top:3px`; in Spielen mit Alphas ein unsichtbarer Platzhalter statt des α-Knopfs

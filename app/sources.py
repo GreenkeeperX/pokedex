@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.47.11"
+VERSION = "0.47.12"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.47.12", "12.11.2026", [
+        "Pokémon-Karten: Bild und Knöpfe 2 Pixel höher; die Knöpfe stehen immer unten am Kartenrand (auch bei höheren Karten legendärer Pokémon); α leuchtet beim Hovern weiß wie die anderen",
+    ]),
     ("0.47.11", "12.11.2026", [
         "Pokémon-Karten: Bild und Knöpfe zusammen 3 Pixel tiefer; in Legenden: Arceus stehen Häkchen, Stern und Pokéball auch ohne Alpha-Knopf an derselben Stelle",
     ]),
