@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.1 (12.11.2026)
+
+- Favoriten-Reihen wieder 11 px, ⇄ wieder 24 px (Entscheidung 12.11.2026: so war es richtig)
+
 ## 0.47.0 (12.11.2026)
 
 - Auswertung des Verbindungstests vom 12.11.: Pokédens deckt nur die Naturzone ab; den Inhalt aller Nester liefert
