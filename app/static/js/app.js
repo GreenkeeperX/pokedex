@@ -158,10 +158,10 @@ const de = (v) => String(v).replace(".", ",");
 const calcRows = (rows) => `<table class="ctip">${rows.filter(Boolean).map(([l, v, h]) => `<tr><td>${esc(l)}</td><td class="n">${v}</td><td class="muted">${esc(h || "")}</td></tr>`).join("")}</table>`;
 /* Fangchance: a = (3 − 2 × KP-Anteil) / 3 × Fangrate × Ball × Status, dann je nach Generation */
 function catchTip(m, f, hpLabel, share, st, stLabel, v) {
-  const gen = m.fang_gen || 9, rate = m.fangrate, a = (3 - 2 * share) / 3 * rate * f.faktor * st;
+  const gen = m.fang_gen || 9, rate = Math.max(1, m.fangrate + (f.plus || 0)), a = (3 - 2 * share) / 3 * rate * f.faktor * st;
   const n = gen === 5 ? 3 : 4, b = a < 255 && a > 0 ? Math.floor(65536 / (255 / a) ** 0.1875) : 0;
   return `<div class="tt">${esc(f.ball)}, ${esc(hpLabel)}${stLabel ? ", " + esc(stLabel) : ""}</div>
-    ${calcRows([["Fangrate", rate, "der Art, 3 bis 255"], ["KP", `×${share ? "⅓" : "1"}`, share ? "volle KP: (3 − 2) / 3" : "fast keine KP: (3 − 0) / 3"],
+    ${calcRows([["Fangrate", rate, f.plus ? `der Art ${m.fangrate}, Schwerball ${f.plus > 0 ? "+" : ""}${f.plus}` : "der Art, 3 bis 255"], ["KP", `×${share ? "⅓" : "1"}`, share ? "volle KP: (3 − 2) / 3" : "fast keine KP: (3 − 0) / 3"],
       ["Ball", `×${de(f.faktor)}`, ""], st !== 1 ? ["Status", `×${de(st)}`, stLabel] : null])}
     <div class="tt">Fangwert a</div><div>(3 × KP<sub>max</sub> − 2 × KP) / (3 × KP<sub>max</sub>) × Fangrate × Ball × Status</div>
     <div class="muted">= ${share ? "⅓" : "1"} × ${rate} × ${de(f.faktor)}${st !== 1 ? " × " + de(st) : ""} = <b style="color:#fff">${de(Math.round(a * 10) / 10)}</b></div>

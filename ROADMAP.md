@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.48.9 (12.11.2026)
+
+- `abfragen.ball_rows`: Bälle aus der Item-Liste des Spiels (Tasche „Bälle“) mit Faktor je Generation; der Schwerball als
+  Zuschlag auf die Fangrate nach Gewicht (Tabelle ab Gen. 7 und davor). Nestball mit Level 10 als Beispiel.
+  Ohne Safari-, Turnier- und Parkball (nur an einem Ort)
+
 ## 0.48.8 (12.11.2026)
 
 - Proben: Bulbapedia „Catch rate“ und die Seiten aller Hisui-Bälle, PokéWiki „Fangchance“ und „Fangrate“. Danach die

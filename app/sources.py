@@ -12,11 +12,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.48.8"
+VERSION = "0.48.9"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.48.9", "12.11.2026", [
+        "Fangchance in den übrigen Spielen mit allen Bällen des Spiels: Netz-, Turbo-, Mond-, Schwer- und Ultraball, wo sie beim Pokémon wirken, "
+        "dazu Tauch-, Finster-, Flott-, Timer-, Nest-, Wieder-, Köder-, Traum-, Level- und Sympaball mit ihrer Bedingung; Faktoren je Generation",
+    ]),
     ("0.48.8", "12.11.2026", [
         "Verbindungstest: Proben für die echte Fangformel in Legenden: Arceus (Bulbapedia „Catch rate“ und alle Hisui-Bälle, PokéWiki „Fangchance“)",
     ]),
