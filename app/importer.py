@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "20"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "21"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -1257,7 +1257,8 @@ def _derive_wiki(con, wiki):
                 continue
             for x in xs:
                 con.execute("INSERT INTO getragen VALUES (?, ?, ?, ?, ?, ?)",
-                            (spiel, art, x["item"], items.get(pokewiki.item_key(x["item"])), x.get("prozent", ""), int(bool(x.get("elite")))))
+                            (spiel, art, pokewiki.plain(x["item"]), items.get(pokewiki.item_key(pokewiki.plain(x["item"]))), x.get("prozent", ""),
+                             int(bool(x.get("elite")))))
                 n_items += 1
     return n_moves, n_items
 

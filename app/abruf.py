@@ -47,6 +47,9 @@ NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "p
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
+MISS_FILE = "mapgenie/kacheln/fehlt.json"     # Kacheln, die es nicht gibt (Rand, Meer), mit Datum: nicht wieder fragen
+VORRAT_FILE = "mapgenie/kacheln/vorrat.json"  # Stand des Kachelvorrats, übersteht den Neustart
+MISS_DAYS = 30
 MG_403_MAX = 8              # so viele 403 nacheinander, dann ruht Map Genie (einzelne 403: Kachel gibt es nicht)
 WIKI_PAUSE = 2.0            # Sekunden zwischen zwei Anfragen an das PokéWiki (je Anfrage bis zu 50 Seiten)
 WIKI_GAMES = ("legends-arceus",)    # Spiele, deren Attacken und Pokémon im PokéWiki gelesen werden
@@ -1090,26 +1093,33 @@ MAP_FILES = ("", ".pc", ".ign", ".db")          # je Spiel eine Datei je Quelle;
 
 def mg_maps(spiel):
     """Gespeicherte Karten eines Spiels aus allen Quellen (Erweiterungen und Schwester-Editionen: die des Hauptspiels)
-    als {spiel, am, karten} oder None."""
-    spiel = mapgenie.SHARE.get(spiel) or pkcompletion.SHARE.get(spiel) or spiel
-    if spiel not in MAP_GAMES:
-        return None
+    als {spiel, am, karten} oder None. Hat die Schwester-Edition eigene Karten (Gold/Silber bei DittoBase), stehen sie
+    vorn; vom Hauptspiel kommen dann nur Karten anderer Quellen dazu."""
+    share = mapgenie.SHARE.get(spiel) or pkcompletion.SHARE.get(spiel)
     fs = []
-    for suf in MAP_FILES:
-        try:
-            fs.append((suf, os.path.getmtime(mg_dir(spiel + suf + ".json"))))
-        except OSError:
-            pass
+    for g in dict.fromkeys((spiel, share)):
+        for suf in MAP_FILES if g in MAP_GAMES else ():
+            try:
+                fs.append((g, suf, os.path.getmtime(mg_dir(g + suf + ".json"))))
+            except OSError:
+                pass
     if not fs:
         return None
-    hit = _mg_cache.get(spiel)
+    key = spiel if fs[0][0] == spiel else fs[0][0]
+    hit = _mg_cache.get(key)
     if not hit or hit[0] != fs:
-        out = {"spiel": spiel, "am": "", "karten": []}
-        for suf, _ in fs:
-            d = store.load_json(os.path.join("mapgenie", spiel + suf + ".json"), {}) or {}
-            out["karten"] += d.get("karten") or []
+        out = {"spiel": key, "am": "", "karten": []}
+        own = set()
+        for g, suf, _ in fs:
+            d = store.load_json(os.path.join("mapgenie", g + suf + ".json"), {}) or {}
+            ks = d.get("karten") or []
+            if g == key:
+                own |= {k.get("quelle") or "mapgenie" for k in ks}
+            else:
+                ks = [k for k in ks if (k.get("quelle") or "mapgenie") not in own]
+            out["karten"] += ks
             out["am"] = max(out["am"], str(d.get("am") or ""))
-        hit = _mg_cache[spiel] = (fs, out if out["karten"] else None)
+        hit = _mg_cache[key] = (fs, out if out["karten"] else None)
     return hit[1]
 
 
@@ -1120,9 +1130,40 @@ _mg_lock = threading.Lock()
 _mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": ""}
 
 
+def _miss_load():
+    """Fehlende Kacheln vom letzten Lauf (höchstens MISS_DAYS alt) und den Stand des Vorrats einmal je Start lesen."""
+    if _mg.get("miss_da"):
+        return
+    _mg["miss_da"] = True
+    old = _iso(now() - timedelta(days=MISS_DAYS))[:10]
+    got = store.load_json(MISS_FILE, {}) or {}
+    _mg["miss_am"] = {k: v for k, v in got.items() if isinstance(v, str) and v >= old}
+    _mg["miss"] |= set(_mg["miss_am"])
+    for k, v in (store.load_json(VORRAT_FILE, {}) or {}).items():
+        _mg["vorrat"].setdefault(k, v)
+
+
+def _miss_add(rel, kept=True):
+    _mg["miss"].add(rel)
+    if kept:
+        _mg.setdefault("miss_am", {})[rel] = _iso(now())[:10]
+        if time.monotonic() - _mg.get("miss_t", 0) > 60:
+            _miss_save()
+
+
+def _miss_save():
+    _mg["miss_t"] = time.monotonic()
+    try:
+        store.save_json(MISS_FILE, dict(_mg.get("miss_am") or {}))
+        store.save_json(VORRAT_FILE, dict(_mg["vorrat"]))
+    except OSError as e:
+        print("Kachelvorrat speichern:", e, file=sys.stderr)
+
+
 def mg_status():
     """Zustand der Kacheln für die Oberfläche: ruht bis (ISO oder leer), letzter Fehler, Vorrat je Karte
     {"<Spiel>/<Karte>": {"da": n, "alle": m, "bis": Zoom}} und ob der Vorrat gerade lädt."""
+    _miss_load()
     return {"ruht": _mg["rest"] if _mg["rest"] > _iso(now()) else "", "fehler": _mg["fehler"],
             "vorrat": dict(_mg["vorrat"]), "laedt": _mg["laeuft"]}
 
@@ -1139,6 +1180,7 @@ def mg_stock():
     if _mg["laeuft"]:
         return
     _mg["laeuft"] = True
+    _miss_load()
     try:
         jobs = [(spiel, m, top) for top in (1, 0) for spiel in MAP_GAMES for m in (mg_maps(spiel) or {}).get("karten", [])]
         for spiel, m, top in jobs:
@@ -1150,11 +1192,20 @@ def mg_stock():
                 if _mg["rest_" + q if q in TILE_SRC else "rest"] > _iso(now()):
                     break
                 rel = _tile_of(m, z, x, y)[0]
-                if rel and (os.path.isfile(mg_dir("kacheln", *rel.split("/"))) or mg_tile(spiel, m["slug"], z, x, y, pause=MG_STOCK_PAUSE)):
+                if not rel or rel in _mg["miss"]:
+                    pass
+                elif os.path.isfile(mg_dir("kacheln", *rel.split("/"))):
                     have += 1
+                else:
+                    # die Pause des Vorrats außerhalb der Sperre: Kacheln, die die Karte gerade braucht, warten nicht
+                    if m.get("quelle") not in TILE_SRC or _tile_of(m, z, x, y)[1]:
+                        sleep(MG_STOCK_PAUSE)
+                    if mg_tile(spiel, m["slug"], z, x, y, pause=MG_TILE_PAUSE, stock=True):
+                        have += 1
                 if i % 50 == 0 or i == len(ts) - 1:
                     _mg["vorrat"][key] = {"da": have, "alle": len(ts), "bis": m["max_zoom"] - top, "fertig": i == len(ts) - 1,
                                           "ganz": not top}
+            _miss_save()
     except Exception as e:          # der Vorrat darf den Dienst nicht stören
         print("Kachelvorrat:", e, file=sys.stderr)
     finally:
@@ -1193,10 +1244,11 @@ def _tile_of(m, z, x, y):
     return rel, mapgenie.TILES + rel
 
 
-def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
+def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE, stock=False):
     """Pfad einer Kachel im Datenordner; fehlt sie, einmal bei der Quelle holen (eine Anfrage zur Zeit, kurze Pause).
     Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“; erst viele nacheinander oder 429 lassen die Quelle
-    24 Stunden ruhen. pokemoncompletion ruht schon nach einem 403 oder 429. None, wenn es sie nicht gibt."""
+    24 Stunden ruhen. pokemoncompletion ruht schon nach einem 403 oder 429. None, wenn es sie nicht gibt.
+    Hat der Vorrat die Karte ganz durchgesehen, fragt die Oberfläche nicht mehr nach: was fehlt, gibt es nicht."""
     m = _mg_map(spiel, karte)
     rel, url = _tile_of(m, z, x, y) if m else (None, None)
     if not rel:
@@ -1204,6 +1256,11 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
     f = mg_dir("kacheln", *rel.split("/"))
     if os.path.isfile(f):
         return f
+    _miss_load()
+    sp = (mg_maps(spiel) or {}).get("spiel", spiel)
+    v = _mg["vorrat"].get(f"{sp}/{karte}") or {}
+    if not stock and v.get("fertig") and v.get("ganz"):
+        return None
     if m.get("quelle") in TILE_SRC:
         return _cdn_tile(rel, url, f, pause, m["quelle"]) if url else None      # ohne Adresse: selbst gezeichnet
     with _mg_lock:
@@ -1221,17 +1278,24 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
             _mg["n403"] = _mg["n403"] + 1 if e.status == 403 else 0
             if e.status == 403 and _mg["n403"] >= MG_403_MAX and _mg_probe():
                 _mg["n403"] = 0          # bekannte Kachel kommt noch: am Rand gibt es eben viele leere Kacheln
+                _mg["r403"] = []
             if e.status == 429 or _mg["n403"] >= MG_403_MAX:
                 _mg["rest"] = _iso(now() + timedelta(hours=REST_H))
+                for r in _mg.get("r403") or []:            # das war eine Sperre, keine fehlenden Kacheln
+                    _mg["miss"].discard(r)
+                    (_mg.get("miss_am") or {}).pop(r, None)
+                _mg["r403"] = []
             elif e.status:
-                _mg["miss"].add(rel)
+                _mg.setdefault("r403", []).append(rel)
+                _miss_add(rel, e.status in (403, 404))
             return None
         finally:
             _mg["last"] = time.monotonic()
         _mg["n403"] = 0
+        _mg["r403"] = []
         _mg["ok"] = rel
         if not (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff" or body[8:12] == b"WEBP"):
-            _mg["miss"].add(rel)
+            _miss_add(rel)
             return None
         os.makedirs(os.path.dirname(f), exist_ok=True)
         with open(f + ".neu", "wb") as fh:
@@ -1260,12 +1324,12 @@ def _cdn_tile(rel, url, f, pause, quelle):
             if e.status in (403, 429):
                 _mg["rest_" + quelle] = _iso(now() + timedelta(hours=REST_H))
             elif e.status:
-                _mg["miss"].add(rel)
+                _miss_add(rel, e.status == 404)
             return None
         finally:
             _mg["last"] = time.monotonic()
         if not (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff"):
-            _mg["miss"].add(rel)
+            _miss_add(rel)
             return None
         os.makedirs(os.path.dirname(f), exist_ok=True)
         with open(f + ".neu", "wb") as fh:

@@ -122,6 +122,17 @@ function radar(werte, size = 78, big = false) {
   });
   return s + "</svg>";
 }
+/* Netz der Werte (Effort Levels, IV/EV): wie das große Radar, Basiswert grau, dazu Level hell, jetzt rot, Ziel gestrichelt */
+function statNet(rows, top, part) {
+  const S0 = 230, c = S0 / 2, R = c - 40;
+  const pt = (k, f) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [c + Math.cos(a) * R * f, c + Math.sin(a) * R * f]; };
+  const ring = (f, cls) => `<polygon class="${cls}" points="${RADAR_ORDER.map((_, k) => pt(k, f).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`;
+  const poly = (fn, cls) => `<polygon class="${cls}" points="${RADAR_ORDER.map((i, k) => pt(k, Math.max(0.03, Math.min(1, fn(rows[i]) / top))).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`;
+  return `<svg class="radar elnet" width="${S0}" height="${S0}" viewBox="0 0 ${S0} ${S0}" aria-hidden="true">${ring(1, "rg")}${ring(0.25, "rg1")}${ring(0.75, "rg1")}${ring(0.5, "rg2")}
+    ${RADAR_ORDER.map((_, k) => `<line x1="${c}" y1="${c}" x2="${pt(k, 1)[0].toFixed(1)}" y2="${pt(k, 1)[1].toFixed(1)}" class="rs"/>`).join("")}
+    ${poly((x) => x.wert_ziel, "n-z")}${poly((x) => x.wert, "n-e")}${poly((x) => x.wert - x.teile[part], "n-l")}${poly((x) => x.teile.basis, "n-b")}
+    ${RADAR_ORDER.map((i, k) => { const [x, y] = pt(k, 1.3); return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${STAT_K[i]} <tspan class="v">${rows[i].wert}</tspan></text>`; }).join("")}</svg>`;
+}
 /* Rechenweg als Tooltip: der HTML-Text liegt in TIPM, das Element trägt nur die Nummer (data-tip-calc) */
 let TIPN = 0;
 const TIPM = new Map();
@@ -447,6 +458,8 @@ function showCard(el) {
    Zeilen tragen data-r, Zellen data-c; Kopfzellen data-pc (Spalte) oder data-pr (Zeile). Hovern hebt Zeile und Spalte
    hervor, Klick auf einen Kopf hält Zeile oder Spalte fest, Klick auf eine Zelle beides (nochmal: löst). pin = {r, c}
    gehört dem Aufrufer und bleibt über Neuzeichnen erhalten. */
+const PIN_COL = `<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="4.5" y="0.5" width="3" height="11" fill="currentColor"/></svg>`;
+const PIN_ROW = `<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="0.5" y="4.5" width="11" height="3" fill="currentColor"/></svg>`;
 function crossTable(table, pin, onChange) {
   table.classList.add("cross");
   // Sortierbare Spaltenköpfe: der Klick auf den Namen sortiert, das kleine Zeichen daneben hält die Spalte fest
@@ -454,8 +467,10 @@ function crossTable(table, pin, onChange) {
   if (hdr) [...hdr.cells].forEach((h, i) => {
     if (h.dataset.pc || !$(`td[data-c="${i}"]`, table)) return;   // auch nicht sortierbare Spalten (z. B. Beschreibung)
     h.dataset.c = i;
-    h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${i}" data-tip="Spalte markieren${h.dataset.sort === undefined ? "" : " (Klick auf den Titel sortiert)"}"><svg viewBox="0 0 12 12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="4.5" y="0.5" width="3" height="11" fill="currentColor"/></svg></span>`);
+    h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${i}" data-tip="Spalte markieren${h.dataset.sort === undefined ? "" : " (Klick auf den Titel sortiert)"}">${PIN_COL}</span>`);
   });
+  $$("th[data-pc]", table).forEach((h) => { if (!$(":scope > .pinc", h)) h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${h.dataset.pc}" data-tip="Spalte markieren">${PIN_COL}</span>`); });
+  $$("th[data-pr]", table).forEach((h) => { if (!$(":scope > .pinc", h)) h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pr="${h.dataset.pr}" data-tip="Zeile markieren">${PIN_ROW}</span>`); });
   const paint = (hr, hc) => {
     $$(".hl,.fix", table).forEach((x) => x.classList.remove("hl", "fix"));
     const mark = (r, c, cls) => {
@@ -466,7 +481,7 @@ function crossTable(table, pin, onChange) {
     mark(hr, hc, "hl");
     if (onChange) onChange();
   };
-  const cellOf = (e) => e.target.closest("td[data-c],[data-pc],[data-pr]");
+  const cellOf = (e) => e.target.closest("td[data-c],[data-pc],[data-pr],tr[data-r]>td");
   table.addEventListener("mouseover", (e) => {
     const cell = cellOf(e);
     if (!cell) return paint(null, null);
@@ -481,7 +496,7 @@ function crossTable(table, pin, onChange) {
     if (cell.dataset.pr) pin.r = pin.r === cell.dataset.pr ? null : cell.dataset.pr;
     else if (cell.dataset.pc) pin.c = pin.c === cell.dataset.pc ? null : cell.dataset.pc;
     else {
-      const row = cell.closest("tr").dataset.r, c = cell.dataset.c;
+      const row = cell.closest("tr").dataset.r, c = cell.dataset.c ?? null;
       if (pin.r === row && pin.c === c) { pin.r = null; pin.c = null; } else { pin.r = row; pin.c = c; }
     }
     paint(null, null);
@@ -660,8 +675,28 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("#nav a");
   if (a && a.getAttribute("href") === (location.hash || "#pokemon")) { e.preventDefault(); window.scrollTo({top: 0, behavior: "smooth"}); }
 });
+/* Einklappbare Boxen: <h2 data-fold="schlüssel"> klappt die Box zu, <div class="fsec"><h3 data-fold> nur den Abschnitt.
+   Der Zustand steht im Browser; neue Überschriften bekommen ihn, sobald sie im Bild sind */
+const foldBox = (h) => h.closest(".fsec, .box") || h.parentElement;
+function applyFolds(root = main) {
+  $$("[data-fold]:not([data-fi])", root).forEach((h) => {
+    h.dataset.fi = "1";
+    if (!h.dataset.tip) h.title = "Klick: ein- oder ausklappen";
+    foldBox(h).classList.toggle("zu", !!store.get("zu:" + h.dataset.fold, false));
+  });
+}
+new MutationObserver(() => applyFolds()).observe(main, {childList: true, subtree: true});
+document.addEventListener("click", (e) => {
+  const h = e.target.closest("[data-fold]");
+  if (!h || e.target.closest("a, button, input, select, label")) return;
+  const zu = !foldBox(h).classList.contains("zu");
+  foldBox(h).classList.toggle("zu", zu);
+  store.set("zu:" + h.dataset.fold, zu);
+});
 let RID = 0;                // jede neue Adresse zählt hoch; ältere Antworten schreiben dann nichts mehr
 let HERE = "", FROM = "";   // aktuelle und vorige Adresse, für „Zurück“ auf der Detailseite
+let VIEW = "";              // welche Ansicht gerade steht (Reiter, Detailseite, Kartenart)
+let busyT = 0;
 async function route() {
   RID++;
   clearTimeout(cardTimer); clearTimeout(tipTimer);
@@ -674,6 +709,11 @@ async function route() {
   if (tab === "kampf" && !BATTLE()) { location.replace("#karte"); return; }   // Spielwechsel: Kampf gibt es nur in Champions
   if (tab === "raids" && !TERA()) { location.replace("#karte"); return; }    // Raids nur in Karmesin/Purpur
   if (tab === "auftraege" && S.game !== "legends-arceus") { location.replace("#karte"); return; }   // Aufträge nur in Legenden: Arceus
+  // neue Ansicht: der alte Reiter verschwindet sofort; dieselbe Ansicht mit anderem Inhalt bleibt stehen, oben läuft ein Balken
+  const view = tab + (tab === "pokemon" && arg ? "/d" : tab === "karte" ? "/" + (arg === "gebiete" ? "g" : !arg || arg === "mg" ? "mg" : "pla") : "");
+  if (view !== VIEW && VIEW) main.innerHTML = `<p class="hint loading">Lädt …</p>`;
+  VIEW = view;
+  clearTimeout(busyT); busyT = setTimeout(() => { if (rid === RID) document.body.classList.add("busy"); }, 120);
   try {
     if (!S.meta?.has_data && tab !== "einstellungen") return noData();
     await Promise.all([loadChart(), loadFavs(), loadCaught(), S.game === "legends-arceus" ? loadReqDone() : null]);
@@ -698,6 +738,7 @@ async function route() {
     if (rid === RID) main.innerHTML = `<div class="note stop">Fehler: ${esc(e.message)}</div>`;
     else console.warn(e);
   }
+  if (rid === RID) { clearTimeout(busyT); document.body.classList.remove("busy"); }
   dock();
 }
 async function loadFavs(force = false) {
@@ -1249,18 +1290,16 @@ async function detailView(id, slot = null) {
         ${GEN() <= 3 ? `<p class="hint">Bis Generation 3 hängt physisch oder speziell am Typ der Attacke: Normal, Kampf, Flug, Gift, Boden, Gestein, Käfer, Geist und Stahl sind physisch, die übrigen speziell.${GEN() === 1 ? " In Generation 1 gab es statt Sp.-Angriff und Sp.-Verteidigung einen gemeinsamen Spezial-Wert." : ""}</p>` : ""}
       </div>
       <div class="stack">
-        <div class="box"><h2 data-tip="Verteidigung: so stark treffen Attacken eines Typs ${esc(d.name)}">Verteidigung: Typwirkung gegen ${esc(d.name)}</h2>
+        <div class="box"><h2 data-fold="def" data-tip="Verteidigung: so stark treffen Attacken eines Typs ${esc(d.name)}">Verteidigung: Typwirkung gegen ${esc(d.name)}</h2>
           ${d.faehigkeit_wirkt ? `<p class="hint">Mit Fähigkeit eingerechnet.</p>` : ""}
           ${defHtml(Object.fromEntries(Object.entries(d.wirkung).map(([t, f]) => [t, f])))}
           ${inTeam && TERA() ? (() => { const tt = S.team.details[DSLOT]?.tera; return `<div class="bar slim" style="margin-top:8px"><label data-tip="Tera-Typ dieses Team-Platzes: nach der Terakristallisierung zählt nur noch er für die Verteidigung; Attacken vom Tera-Typ bekommen den Eigentyp-Bonus">Tera-Typ
               <select id="terasel"><option value="">–</option>${Object.entries(S.types).map(([k, n]) => `<option value="${k}"${String(tt) === k ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label></div>
             ${tt ? `<h3>Terakristallisiert: ${tchip(String(tt))}</h3>${defHtml(defense([String(tt)]))}` : ""}`; })() : ""}</div>
-        <div class="box"><h2 data-tip="Typ-Duell: wie gut ${esc(d.name)} gegen Pokémon eines Typs steht. Austeilen = bester eigener Typ, einstecken = beide eigenen Typen zusammengerechnet. Hovern zeigt die Rechnung.">Im Duell gegen Typen</h2>
+        <div class="box"><h2 data-fold="duel" data-tip="Typ-Duell: wie gut ${esc(d.name)} gegen Pokémon eines Typs steht. Austeilen = bester eigener Typ, einstecken = beide eigenen Typen zusammengerechnet. Hovern zeigt die Rechnung.">Im Duell gegen Typen</h2>
           <p class="hint">${DUEL_LEGEND}</p>
           ${duelHtml(d.name, d.typen)}</div>
-      </div>
-      <div class="stack">
-        <div class="box"><h2>Entwicklung</h2>${evo ? `<div class="evo">${evo}</div>` : `<p class="hint">${esc(d.name)} entwickelt sich nicht.</p>`}</div>
+        <div class="box"><h2 data-fold="evo">Entwicklung</h2>${evo ? `<div class="evo">${evo}</div>` : `<p class="hint">${esc(d.name)} entwickelt sich nicht.</p>`}</div>
         ${catchHtml(d)}${researchHtml(d)}${requestsHtml(d)}${partnerHtml(d)}
         ${raidHtml(d)}
         ${cryptoHtml(d)}
@@ -1268,7 +1307,7 @@ async function detailView(id, slot = null) {
         ${optikHtml(d)}
       </div>
     </div>
-    <div class="box" style="margin-top:12px"><h2>Fundorte in ${esc(gameName())}</h2>${encHtml(d)}</div>
+    <div class="box" style="margin-top:12px"><h2 data-fold="enc">Fundorte in ${esc(gameName())}</h2>${encHtml(d)}</div>
     <div class="box" id="mbox"></div>`;
   header();
   renderMoves(d.attacken, level);
@@ -1302,7 +1341,7 @@ async function elBox(d, slot) {
   el.innerHTML = `<details class="sub" id="eldet"${open ? " open" : ""}><summary><h3 style="display:inline">Effort Levels</h3> <span class="hint">${slot !== null ? `Platz ${slot + 1}, Level ${lv}` : `zum Ausprobieren, Level ${lv}`}</span></summary>
     <p class="hint">In Legenden: Arceus ersetzen Effort Levels (0 bis 10 je Wert) die EVs. Jede Stufe gibt Bonuspunkte, die großen Sprünge kommen bei 4, 7 und 10.
       Ein frisch gefangenes Pokémon startet nach seinen DVs (31: Stufe 3, ab 26: 2, ab 20: 1).${slot === null ? " Im Team merkt sich jeder Platz seine Stufen." : ""}</p>
-    <div class="bar slim"><label>Wesen <select id="elnat"><option value="">neutral</option>${r.wesen_liste.filter((w) => w.mod).map((w) => `<option value="${w.id}"${w.id === r.wesen ? " selected" : ""}>${esc(w.name)} (+${STAT[w.mod[0]]} −${STAT[w.mod[1]]})</option>`).join("")}</select></label>
+    <div class="bar slim"><label data-tip="Mit einer Minze: das Wesen wählen, dessen Werte die Minze gibt. Sie ändert, welchen Wert das Wesen hebt und senkt; das Wesen selbst bleibt">Wesen (oder Minze) <select id="elnat"><option value="">neutral</option>${r.wesen_liste.filter((w) => w.mod).map((w) => `<option value="${w.id}"${w.id === r.wesen ? " selected" : ""}>${esc(w.name)} (+${STAT[w.mod[0]]} −${STAT[w.mod[1]]})</option>`).join("")}</select></label>
       ${slot !== null ? `<span class="hint">Level wie unten bei den Attacken</span>` : `<label>Level <input type="number" id="ellv" min="1" max="100" value="${lv}" style="width:64px"></label>`}</div>
     ${elChart(r.rows, lv)}
     <table class="rows eltab"><tr><th>Wert</th><th class="c" data-tip="Basiswert der Art: fest, hängt nicht vom Level ab. Aus ihm, dem Level, dem Effort Level und dem Wesen rechnet das Spiel den Wert">Basis</th>
@@ -1346,15 +1385,10 @@ async function statBox(d, slot) {
   const seg = (cls, v) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%"></i>` : "";            // Rechenweg am ganzen Balken
   const bars = r.rows.map((x, i) => { const t = x.teile, extra = x.ev_ziel_teil - t.ev;
     return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" ${tipRef(tipH(x, i))}>${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-i", t.iv, `${IV} ${x.iv}: +${t.iv}`)}${seg("e-e", t.ev, `${EV} ${x.ev}: +${t.ev}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (${x.ziel} ${EV}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
-  const S0 = 150, c = S0 / 2, R = c - 24;
-  const pt = (k, f) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [c + Math.cos(a) * R * f, c + Math.sin(a) * R * f]; };
-  const poly = (fn, cls) => `<polygon class="${cls}" points="${RADAR_ORDER.map((i, k) => pt(k, Math.max(0.03, Math.min(1, fn(r.rows[i]) / top))).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`;
-  const net = `<svg class="elnet" width="${S0}" height="${S0}" viewBox="0 0 ${S0} ${S0}" aria-hidden="true">${[1, 0.5].map((f) => `<polygon class="rg${f < 1 ? "2" : ""}" points="${RADAR_ORDER.map((_, k) => pt(k, f).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`).join("")}
-    ${poly((x) => x.wert_ziel, "n-z")}${poly((x) => x.wert, "n-e")}${poly((x) => x.wert - x.teile.ev, "n-l")}${poly((x) => x.teile.basis, "n-b")}
-    ${RADAR_ORDER.map((i, k) => { const [x, y] = pt(k, 1.22); return `<text x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="middle">${STAT_K[i]}</text>`; }).join("")}</svg>`;
+  const net = statNet(r.rows, top, "ev");
   el.innerHTML = `<details class="sub" id="stdet"${open ? " open" : ""}><summary><h3 style="display:inline">Werte</h3> <span class="hint">${slot !== null ? `Platz ${slot + 1}, Level ${lv}` : `zum Ausprobieren, Level ${lv}`}</span></summary>
     <p class="hint">${old ? "Bis Generation 2: DVs 0 bis 15 und Stat Exp bis 65535 je Wert (aus besiegten Pokémon und Vitaminen); es gibt kein Wesen." : lg ? "Let's Go: statt EVs gibt es AVs (Punkte aus Bonbons), 0 bis 200 je Wert und ohne Grenze für die Summe; jeder AV ist ein Punkt. Den Freundschafts-Bonus (bis +10 %) rechnet das Diagramm nicht ein." : `IVs 0 bis 31 (angeboren), EVs bis 252 je Wert und ${r.ev_gesamt} zusammen, aus besiegten Pokémon, Vitaminen (+10) und Federn (+1).${r.minzen ? " Minzen ändern, welchen Wert das Wesen hebt und senkt." : ""}`}${slot === null ? " Im Team merkt sich jeder Platz seine Werte." : ""}</p>
-    <div class="bar slim">${old ? "" : `<label>Wesen <select id="stnat"><option value="">neutral</option>${r.wesen_liste.filter((w) => w.mod).map((w) => `<option value="${w.id}"${w.id === r.wesen ? " selected" : ""}>${esc(w.name)} (+${STAT[w.mod[0]]} −${STAT[w.mod[1]]})</option>`).join("")}</select></label>`}
+    <div class="bar slim">${old ? "" : `<label${r.minzen ? ` data-tip="Mit einer Minze: das Wesen wählen, dessen Werte die Minze gibt. Sie ändert, welchen Wert das Wesen hebt und senkt; das Wesen selbst bleibt"` : ""}>Wesen${r.minzen ? " (oder Minze)" : ""} <select id="stnat"><option value="">neutral</option>${r.wesen_liste.filter((w) => w.mod).map((w) => `<option value="${w.id}"${w.id === r.wesen ? " selected" : ""}>${esc(w.name)} (+${STAT[w.mod[0]]} −${STAT[w.mod[1]]})</option>`).join("")}</select></label>`}
       ${slot !== null ? `<span class="hint">Level wie unten bei den Attacken</span>` : `<label>Level <input type="number" id="stlv" min="1" max="100" value="${lv}" style="width:64px"></label>`}</div>
     <div class="elchart"><div class="elbars">${bars}</div><div>${net}</div></div>
     <p class="hint ellg"><span class="e-b"></span>Basiswert <span class="e-l"></span>durch das Level <span class="e-i"></span>${IV} <span class="e-e"></span>${EV} <span class="e-w"></span>Wesen + <span class="e-m"></span>Wesen − <span class="e-z"></span>bis zum Ziel</p>
@@ -1400,12 +1434,7 @@ function elChart(rows, lv) {
   const bars = rows.map((x, i) => { const t = x.teile, extra = x.el_ziel_teil - t.el;
     return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" ${tipRef(elTipHtml(x, i, lv))}>${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-e", t.el, `durch Effort Level ${x.el}: +${t.el}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (Stufe ${x.ziel}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
   // Netz: Schichten von außen nach innen (Ziel, jetzt, ohne Effort Levels, Basiswert)
-  const S0 = 150, c = S0 / 2, R = c - 24;
-  const pt = (k, f) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [c + Math.cos(a) * R * f, c + Math.sin(a) * R * f]; };
-  const poly = (fn, cls) => `<polygon class="${cls}" points="${RADAR_ORDER.map((i, k) => pt(k, Math.max(0.03, Math.min(1, fn(rows[i]) / top))).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`;
-  const net = `<svg class="elnet" width="${S0}" height="${S0}" viewBox="0 0 ${S0} ${S0}" aria-hidden="true">${[1, 0.5].map((f) => `<polygon class="rg${f < 1 ? "2" : ""}" points="${RADAR_ORDER.map((_, k) => pt(k, f).map((v) => v.toFixed(1)).join(",")).join(" ")}"/>`).join("")}
-    ${poly((x) => x.wert_ziel, "n-z")}${poly((x) => x.wert, "n-e")}${poly((x) => x.wert - x.teile.el, "n-l")}${poly((x) => x.teile.basis, "n-b")}
-    ${RADAR_ORDER.map((i, k) => { const [x, y] = pt(k, 1.22); return `<text x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="middle">${STAT_K[i]}</text>`; }).join("")}</svg>`;
+  const net = statNet(rows, top, "el");
   return `<div class="elchart"><div class="elbars">${bars}</div><div>${net}</div></div>
     <p class="hint ellg"><span class="e-b"></span>Basiswert <span class="e-l"></span>durch das Level <span class="e-e"></span>durch Effort Levels <span class="e-w"></span>Wesen + <span class="e-m"></span>Wesen − <span class="e-z"></span>bis zum Ziel</p>`;
 }
@@ -1506,10 +1535,13 @@ async function raidsView(arg) {
 /* Aufträge in Legenden: Arceus (BisaFans): Liste mit Suche und Haken für erledigte; erledigt liegt beim Server
    in „gefunden“ unter der Karte „auftrag“ */
 let REQ_DONE = new Set();
-let REQ_REDRAW = null;
-async function loadReqDone() {
-  const r = await api("/api/gefunden?" + qs({spiel: "legends-arceus", karte: "auftrag"})).catch(() => ({}));
+let REQ_REDRAW = null, REQ_OK = false;
+async function loadReqDone(force = false) {      // einmal je Seitenaufruf; die Haken ändert die Oberfläche selbst
+  if (REQ_OK && !force) return;
+  const r = await api("/api/gefunden?" + qs({spiel: "legends-arceus", karte: "auftrag"})).catch(() => null);
+  if (!r) return;
   REQ_DONE = new Set((r.auftrag || []).map(String));
+  REQ_OK = true;
 }
 const reqCheck = (nr) => `<span class="a req${REQ_DONE.has(String(nr)) ? " on" : ""}" data-act="reqdone" data-id="${nr}" data-tip="${REQ_DONE.has(String(nr)) ? "Erledigt; Klick: wieder offen" : "Als erledigt markieren"}">${REQ_DONE.has(String(nr)) ? "✓" : "○"}</span>`;
 const reqMons = (x) => x.pokemon.map((m) => `<a href="#pokemon/${m.id}" data-hc="${m.id}">${esc(m.name)}</a>`).join(", ");
@@ -1525,7 +1557,7 @@ async function requestsView() {
       ○ markiert ihn als erledigt.</p>
     <div id="reqlist"><p class="hint">Lädt …</p></div></div>`;
   header();
-  const [r] = await Promise.all([api("/api/auftraege?" + qs({spiel: S.game})), loadReqDone()]);
+  const [r] = await Promise.all([api("/api/auftraege?" + qs({spiel: S.game})), loadReqDone(true)]);
   if (rid !== RID) return;
   const draw = () => {
     const ql = ($("#reqq")?.value || "").trim().toLowerCase(), m = store.get("reqMode", "offen");
@@ -1578,7 +1610,7 @@ function pokopiaHtml(d) {
 function heldHtml(d) {
   const xs = d.getragen || [];
   if (!xs.length) return "";
-  return `<div class="box"><h2>Getragene Items</h2><table class="rows held"><tbody>${xs.map((x) => `<tr>
+  return `<div class="box"><h2 data-fold="held">Getragene Items</h2><table class="rows held"><tbody>${xs.map((x) => `<tr>
     <td>${x.id ? `<img class="ibild sm" src="itembild/${x.id}" alt="" loading="lazy" onerror="this.remove()">` : ""}</td><td><b>${wikiLink(x.item)}</b>${x.elite ? ` <span class="alpha" data-tip="Nur Elite-Pokémon (Alpha)">Elite</span>` : ""}</td>
     <td class="c num">${esc(x.prozent)}</td><td class="hint">${x.editionen?.length ? "nur " + esc(x.editionen.join(", ")) : ""}</td></tr>`).join("")}</tbody></table>
     <p class="hint">Trägt ein wildes Pokémon mit dieser Wahrscheinlichkeit; du bekommst das Item, wenn du es fängst (oder mit Raub, Trick). Aus ${esc(xs[0].quelle || "PokéWiki")}.</p></div>`;
@@ -1620,7 +1652,7 @@ function researchHtml(d) {
   const pts = (a) => a.stufen.length * (a.doppelt ? 20 : 10);
   const all = xs.reduce((n, a) => n + pts(a), 0);
   const calc = calcRows(xs.map((a) => [a.aufgabe, `${a.stufen.length} × ${a.doppelt ? 20 : 10} = ${pts(a)}`]).concat([["Alle Stufen", `${all} Punkte`]]));
-  return `<div class="box"><h2 data-tip="Aufgaben im Pokédex von Hisui. Jede erreichte Stufe bringt 10 Punkte, doppelt zählende 20. Ab 100 Punkten ist der Forschungslevel 10 erreicht.">Forschungsaufgaben</h2>
+  return `<div class="box"><h2 data-fold="research" data-tip="Aufgaben im Pokédex von Hisui. Jede erreichte Stufe bringt 10 Punkte, doppelt zählende 20. Ab 100 Punkten ist der Forschungslevel 10 erreicht.">Forschungsaufgaben</h2>
     <table class="rows"><tbody>${xs.map((a) => `<tr><td>${esc(a.aufgabe)}${a.doppelt ? ' <span class="cls tm" data-tip="Zählt doppelt: 20 statt 10 Punkte je Stufe">×2</span>' : ""}</td><td class="c">${a.stufen.map(esc).join(" · ")}</td></tr>`).join("")}</tbody></table>
     <p class="hint"><span ${tipRef(`<b>Punkte, wenn alle Stufen erreicht sind</b>${calc}`)}>Alle Stufen: ${all} Punkte</span>, Forschungslevel 10 ab 100. Quelle: PokéWiki.</p></div>`;
 }
@@ -1730,7 +1762,7 @@ function renderMoves(A, level) {
       <td class="c num">${r?.wertung ? `<b style="color:${scoreColor(r.wertung)}">${r.wertung}</b>` : ""}</td>
       <td><button class="link" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✕</button></td></tr>`;
   };
-  $("#mbox").innerHTML = `<h2>Attacken${A.spiel_name ? " in " + esc(A.spiel_name) : ""}</h2>
+  $("#mbox").innerHTML = `<h2 data-fold="moves">Attacken${A.spiel_name ? " in " + esc(A.spiel_name) : ""}</h2>
     ${A.hinweis ? `<div class="note info">${esc(A.hinweis)}</div>` : ""}
     <div class="bar"><label>${inTeam ? "Level im Team" : "Bis Level"} <input id="lvl" type="number" min="1" max="100" style="width:70px" value="${esc(level || "")}"></label>
       <span class="hint">${inTeam ? "Gilt für diesen Platz im Team und filtert die Attacken." : "Leer: alle erlernbaren. Mit Level zählen nur Attacken, die bis dahin gehen."}</span></div>
@@ -1749,10 +1781,10 @@ function renderMoves(A, level) {
         ${A.moveset.length ? `<button class="small" data-act="mvtake" style="margin-top:6px">Als eigene Auswahl übernehmen</button>` : ""}
         ${setsHtml(A, mine)}</div>
     </div>
-    <h3>Schadens-Attacken nach Wertung</h3>
+    <div class="fsec"><h3 data-fold="rank">Schadens-Attacken nach Wertung</h3>
     <p class="hint">Wertung = Stärke × Genauigkeit × Eigentyp-Bonus × passender Angriffswert, mit Zu- und Abschlägen (Aussetzen, Anlauf, Rückstoß, Werte senken, Vorrang). Spalten zum Sortieren anklicken; deine Auswahl ist hinterlegt.</p>
     <div class="scroll"><table class="sort fixed mvt">${MVCOLS}<thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.", "Genauigkeit in Prozent; – trifft immer")}${thc("Wertung")}${thc("Weg", "Wie das Pokémon die Attacke lernt")}${th("Gründe", "", true)}<th></th></tr></thead>
-      <tbody>${A.attacken.map((m) => mrow(m)).join("") || `<tr><td colspan="9" class="hint">Keine Lernliste.</td></tr>`}</tbody></table></div>
+      <tbody>${A.attacken.map((m) => mrow(m)).join("") || `<tr><td colspan="9" class="hint">Keine Lernliste.</td></tr>`}</tbody></table></div></div>
     ${A.status.length ? `<details open><summary>Status-Attacken (${A.status.length})</summary><div class="scroll"><table class="sort fixed mvt">${MVCOLS}<thead><tr>${th("Attacke")}${thc("Typ")}${thc("Klasse")}${thc("Stärke")}${thc("Gen.")}${thc("Wertung", "Status-Attacken haben keine Wertung")}${thc("Weg")}${th("Wirkung", "", true)}<th></th></tr></thead>
       <tbody>${A.status.map((m) => mrow(m, true)).join("")}</tbody></table></div></details>` : ""}`;
   $("#lvl").addEventListener("change", async (e) => {
@@ -1896,17 +1928,17 @@ async function caughtBox() {
   if (rid !== RID || !$("#gef")) return;
   [...r.alternativen, ...r.potential].forEach((x) => { ROWS[x.id] = Object.assign(ROWS[x.id] || {}, x); if (x.wird) ROWS[x.wird.id] = Object.assign(ROWS[x.wird.id] || {}, x.wird); });
   const where = (x) => x.slot === null || x.slot === undefined ? "auf einen freien Platz" : `statt ${esc(x.statt)} (Platz ${x.slot + 1})`;
-  const line = (x, extra = "") => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><div class="grow"><b>${esc(x.name)}</b> ${favStar(x.id)} ${tchips(x.typen)}
+  const line = (x, extra = "") => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><div class="grow"><b>${esc(x.name)}</b> ${favStar(x.id)}<div class="tl">${tchips(x.typen)}</div>
     <div class="why">${extra}<b class="plus">+${x.plus}</b> Teamwertung ${where(x)}</div></div>
     <button class="small" data-act="${x.slot === null || x.slot === undefined ? "teamadd" : "pickfav"}" data-id="${x.id}" data-slot="${x.slot ?? ""}">${x.slot === null || x.slot === undefined ? "Ins Team" : "Tauschen"}</button></div>`;
   el.innerHTML = `<p class="hint">${S.caught.size} gefangen in ${esc(gameName())}.</p>
-    <h3 data-tip="Ein Tausch mit einem Mitglied (oder ein freier Platz) hebt die Teamwertung jetzt">Bessere Alternative</h3>
-    ${r.alternativen.map((x) => line(x)).join("") || `<p class="hint">Nichts aus deiner Sammlung hebt das Team im Moment.</p>`}
-    <h3 data-tip="Noch nicht voll entwickelt (gefangen oder schon im Team): die Endstufe würde das Team deutlich mehr heben als das Pokémon heute. Je Endstufe zählt die weiteste Stufe, die du hast">Langfristig mehr Potential</h3>
+    <div class="fsec"><h3 data-fold="talt" data-tip="Ein Tausch mit einem Mitglied (oder ein freier Platz) hebt die Teamwertung jetzt">Bessere Alternative</h3>
+    ${r.alternativen.map((x) => line(x)).join("") || `<p class="hint">Nichts aus deiner Sammlung hebt das Team im Moment.</p>`}</div>
+    <div class="fsec"><h3 data-fold="tpot" data-tip="Noch nicht voll entwickelt (gefangen oder schon im Team): die Endstufe würde das Team deutlich mehr heben als das Pokémon heute. Je Endstufe zählt die weiteste Stufe, die du hast">Langfristig mehr Potential</h3>
     ${r.potential.map((x) => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><span class="arrow">→</span><a href="#pokemon/${x.wird.id}" data-hc="${x.wird.id}">${img(x.wird.id)}</a>
-      <div class="grow"><b>${esc(x.name)}</b> → <b>${esc(x.wird.name)}</b> ${favStar(x.wird.id)} ${tchips(x.wird.typen)}<div class="why">als ${esc(x.wird.name)}: <b class="plus">+${x.plus}</b> Teamwertung
+      <div class="grow"><b>${esc(x.name)}</b> → <b>${esc(x.wird.name)}</b> ${favStar(x.wird.id)}<div class="tl">${tchips(x.wird.typen)}</div><div class="why">als ${esc(x.wird.name)}: <b class="plus">+${x.plus}</b> Teamwertung
         ${x.im_team ? `auf seinem Platz (${x.slot + 1}), ${esc(x.name)} steht schon im Team` : where(x)}</div></div></div>`).join("")
-      || `<p class="hint">Nichts aus deiner Sammlung, das entwickelt deutlich mehr bringt.</p>`}
+      || `<p class="hint">Nichts aus deiner Sammlung, das entwickelt deutlich mehr bringt.</p>`}</div>
     <p class="hint">„Bestes Team suchen“ mit „nur aus deiner Sammlung“ im Filter baut ein Team nur aus Pokémon, die du als gefangen markiert hast.</p>`;
 }
 async function teamView() {
@@ -1948,11 +1980,11 @@ async function teamView() {
       <h3>Vorschläge für den nächsten Platz</h3><div id="sug" class="sugs"><p class="hint">Mit mindestens einem Mitglied.</p></div>
     </details>
     <div class="cols">
-      <div class="box"><h2>Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
-      <div class="box"><h2>Verbesserungen</h2><div id="imp"></div></div>
-      <div class="box dropmark" data-drop="gef"><h2>${icon("ball")} Aus deiner Sammlung</h2><div id="gef"><p class="hint">Lädt …</p></div></div>
+      <div class="box"><h2 data-fold="tev">Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
+      <div class="box"><h2 data-fold="timp">Verbesserungen</h2><div id="imp"></div></div>
+      <div class="box dropmark" data-drop="gef"><h2 data-fold="tgef">${icon("ball")} Aus deiner Sammlung</h2><div id="gef"><p class="hint">Lädt …</p></div></div>
     </div>
-    <div class="box"><h2>Gegen Gegner</h2>
+    <div class="box"><h2 data-fold="tmu">Gegen Gegner</h2>
       <div class="bar"><div class="ac grow"><input id="foe" type="search" placeholder="Gegner hinzufügen (bis zu 6, etwa die Pokémon eines Arenaleiters)" style="width:100%"></div>
         ${S.foes.length ? `<button data-act="foeclear">Gegner leeren</button>` : ""}</div>
       <div id="mu"><p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p></div></div>
@@ -2181,7 +2213,7 @@ async function movesView() {
         <td class="c num">${m.lernen || ""}</td><td class="c num">${m.gen || ""}</td><td class="kurz">${kurzHtml(m.kurz || (m.klasse === 1 ? m.text || "" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
     const tb = $("#mv table");
     // Name: Zeilenkopf (markiert nur die Zeile), die übrigen Zellen markieren Zeile und Spalte
-    $$("tbody tr", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.c = i; if (!i) td.dataset.pr = tr.dataset.r; }));
+    $$("tbody tr", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { if (!td.classList.contains("kurz")) td.dataset.c = i; if (!i) td.dataset.pr = tr.dataset.r; }));
     crossTable(tb, APIN);
   };
   const load = async () => {
@@ -2350,7 +2382,8 @@ async function mgView(slug, want) {
     <div class="mapwrap"><div class="mapcol"><div id="mgmap" class="map mgmap"><div class="mgold"></div><div class="mgtiles"></div><div class="mgpins"></div><div class="mgload" hidden></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
       <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für den Namen, klicke für Einzelheiten. Rechtsklick markiert ihn als erledigt. Die Suche listet die Treffer hier; ein Klick springt hin.</p></aside>
-      <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button></span></div>
+      <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button>
+        <span class="hint">|</span> <button class="link" data-gfold="1" data-tip="alle Gruppen aufklappen">auf</button> · <button class="link" data-gfold="0" data-tip="alle Gruppen zuklappen">zu</button></span></div>
         ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
     <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN", dittobase: "DittoBase (aus den Spieldaten gezeichnet; Häuser und Höhlen stehen an ihrem Eingang)"})[d.quelle] || "Map Genie"}${["pokemoncompletion", "dittobase"].includes(d.quelle) && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
@@ -2362,13 +2395,14 @@ async function mgView(slug, want) {
   const zmin = d.min_zoom, zmax = d.max_zoom;
   const bb = d.bounds || (() => { const la = pts.map((p) => p.la), lo = pts.map((p) => p.lo); return [Math.min(...lo), Math.min(...la), Math.max(...lo), Math.max(...la)]; })();
   let z = zmin, cx = 0, cy = 0;
-  const fitBox = (b) => {          // [west, süd, ost, nord] ins Bild, größte passende Zoomstufe
+  const fitBox = (b, closer = 0) => {          // [west, süd, ost, nord] ins Bild, größte passende Zoomstufe (closer: so viele näher)
     const w = box.clientWidth, h = box.clientHeight;
     z = zmin;
     for (let t = zmax; t >= zmin; t--) {
       const [x1, y1] = mgProj(b[3], b[0], t), [x2, y2] = mgProj(b[1], b[2], t);
       if (x2 - x1 <= w * 0.92 && y2 - y1 <= h * 0.92) { z = t; break; }
     }
+    z = Math.min(zmax, z + closer);
     const [x1, y1] = mgProj(b[3], b[0], z), [x2, y2] = mgProj(b[1], b[2], z);
     cx = (x1 + x2) / 2; cy = (y1 + y2) / 2;
   };
@@ -2467,7 +2501,7 @@ async function mgView(slug, want) {
     [cx, cy] = mgProj(p.la, p.lo, z);
     sel = i; redraw(); side(i);
   };
-  fitBox(bb); tiles(); pins();
+  fitBox(bb, 1); tiles(); pins();
   let drag = null, moved = false;
   box.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; drag = {x: e.clientX, y: e.clientY, cx, cy}; moved = false; });
   box.addEventListener("pointermove", (e) => {
@@ -2542,6 +2576,7 @@ async function mgView(slug, want) {
   }));
   $$("[data-all]").forEach((b) => b.addEventListener("click", () => { Object.values(cats).forEach((c) => { if (b.dataset.all === "1") hide.delete(c.id); else hide.add(c.id); }); saveHide(); }));
   $$("details.mgg").forEach((x) => x.addEventListener("toggle", () => { if (x.open) open.add(x.dataset.gid); else open.delete(x.dataset.gid); store.set("mgOpen", [...open]); }));
+  $$("[data-gfold]").forEach((b) => b.addEventListener("click", () => $$("details.mgg").forEach((x) => { x.open = b.dataset.gfold === "1"; })));
   $("#gothide").addEventListener("change", (e) => { gotHide = e.target.checked; store.set("mapGotHide", gotHide); pins(); });
   let qt;
   $("#mgq").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); pins(); listHits(); }, 150); });
@@ -2624,8 +2659,9 @@ async function mapView(karte, fid) {
   const lays = [...(pts.length ? [["pokemon", "Spawnpunkte", pts.length]] : []), ...Object.entries(arten).map(([k, v]) => [k, v[1], objs.filter((o) => o.art === k).length])];
   const known = new Set(MGROUPS.flatMap((g) => g[1]));
   const groups = [...MGROUPS.map(([n, ks]) => [n, ks.map((k) => lays.find((l) => l[0] === k)).filter(Boolean)]), ["Weitere", lays.filter((l) => !known.has(l[0]))]].filter((g) => g[1].length);
-  const layerBar = groups.map(([n, ls], gi) => `<div class="mgg"><div class="mgg-h">${esc(n)} <span class="hint">${ls.reduce((a, l) => a + l[2], 0)}</span>
-    <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></div><div class="mlays">${ls.map((l) => layerBtn(...l)).join("")}</div></div>`).join("");
+  const mopen = new Set(store.get("mapOpen", groups.map((g) => g[0])));
+  const layerBar = groups.map(([n, ls], gi) => `<details class="mgg"${mopen.has(n) ? " open" : ""} data-gid="${esc(n)}"><summary>${esc(n)} <span class="hint">${ls.reduce((a, l) => a + l[2], 0)}</span>
+    <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${ls.map((l) => layerBtn(...l)).join("")}</div></details>`).join("");
   const hasCond = pts.some((p) => p.mons.some((m) => m.c));
   const condSel = (key, label, names, v) => `<label class="mcond">${label} <select data-cond="${key}"><option value="-1">alle</option>${names.map((x, i) => `<option value="${i}"${i === v ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>`;
   main.innerHTML = `<div class="box mapbox">
@@ -2646,7 +2682,8 @@ async function mapView(karte, fid) {
     <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
       <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">${pts.length ? "Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha." : "Fahre über ein Symbol für Einzelheiten, klicke für die Liste."}${objs.length ? " Rechtsklick auf ein Symbol markiert es als gefunden." : ""}</p></aside>
-      ${lays.length ? `<div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button></span></div>${layerBar}</div>` : ""}</div></div>
+      ${lays.length ? `<div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button>
+        <span class="hint">|</span> <button class="link" data-gfold="1" data-tip="alle Gruppen aufklappen">auf</button> · <button class="link" data-gfold="0" data-tip="alle Gruppen zuklappen">zu</button></span></div>${layerBar}</div>` : ""}</div></div>
     <p class="hint">Kartenbild: ${d.bild ? "Altissimo" : "Serebii"}${pts.length ? "; Spawnpunkte und Tabellen: PLA-Live-Map und JS-Finder (GPL-3.0), aus den Spieldaten" : ""}${objs.length ? "; Symbole und Sammelobjekte: Altissimo (GPL-3.0)" : ""}${objs.some((o) => MOBJMON.has(o.art) || o.art === "boden") ? "; Kristalle, Verzerrungen, Massenauftreten, Bäume, Alphas und Items am Boden: PokéWiki (CC BY-SA 3.0)" : ""}${objs.some((o) => o.art === "reise" || o.art === "lager") ? "; Schnellreise und Lager: PLA Companion (software-notion.de)" : ""}.</p></div>`;
   const pick = $("#mapmon") || document.createElement("div"), pickM = $(".pickm", pick) || document.createElement("div");
   const pickOpen = (on) => { pickM.hidden = !on; $(".pickbtn", pick).setAttribute("aria-expanded", on); if (on) { const f = $("input", pickM); f.value = ""; pickFilter(""); f.focus(); $("a.on", pickM)?.scrollIntoView({block: "center"}); } };
@@ -2734,7 +2771,10 @@ async function mapView(karte, fid) {
     store.set("mapHide", [...hide]);
     layBtns(); showLayers();
   }));
-  $$("[data-grp]").forEach((b) => b.addEventListener("click", () => {
+  $$("details.mgg").forEach((x) => x.addEventListener("toggle", () => { if (x.open) mopen.add(x.dataset.gid); else mopen.delete(x.dataset.gid); store.set("mapOpen", [...mopen]); }));
+  $$("[data-gfold]").forEach((b) => b.addEventListener("click", () => $$("details.mgg").forEach((x) => { x.open = b.dataset.gfold === "1"; })));
+  $$("[data-grp]").forEach((b) => b.addEventListener("click", (e) => {
+    e.preventDefault();
     const ks = groups[+b.dataset.grp][1].map((l) => l[0]), anyOn = ks.some((k) => !hide.has(k));
     ks.forEach((k) => { if (anyOn) hide.add(k); else hide.delete(k); });
     store.set("mapHide", [...hide]);
@@ -2755,7 +2795,7 @@ async function mapView(karte, fid) {
       ox = r.width / 2 - (Math.min(...xs) + Math.max(...xs)) / 2 * scale;
       oy = r.height / 2 - (Math.min(...ys) + Math.max(...ys)) / 2 * scale;
     } else {
-      scale = Math.min(r.width, r.height) / WORLD;
+      scale = Math.min(r.width, r.height) / WORLD * 1.6;           // etwas näher als die ganze Karte
       ox = (r.width - WORLD * scale) / 2; oy = (r.height - WORLD * scale) / 2;
     }
   };
@@ -2975,7 +3015,7 @@ async function itemsView() {
       + (xs.length ? "" : `<tr><td colspan="${cols.length}" class="hint">Nichts gefunden.</td></tr>`)}</tbody></table>`;
     $$("#itemseg button").forEach((x) => x.classList.toggle("on", x.dataset.t === pocket));
     const tb = $("#itembox table");
-    $$("tbody tr[data-r]", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.c = i; if (!i) td.dataset.pr = tr.dataset.r; }));
+    $$("tbody tr[data-r]", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { if (!td.classList.contains("why")) td.dataset.c = i; if (!i) td.dataset.pr = tr.dataset.r; }));
     crossTable(tb, IPIN);
   };
   $("#itemq").addEventListener("input", (e) => { q = e.target.value.trim(); draw(); });
@@ -2990,7 +3030,7 @@ const typePick = (key, ts) => new Set(store.get(key, []).filter((t) => ts.includ
 const typeFilter = (key, ts, pick, tip) => `<div class="bar tpick" data-tip="${esc(tip)}"><span class="hint">Filter</span>${ts.map((t) =>
   `<button class="tpk${pick.has(t) ? " on" : ""}" data-tf="${key}" data-tpk="${t}">${tchip(t)}</button>`).join("")}${pick.size ? `<button class="small" data-tf="${key}" data-tpkx>alle</button>` : ""}</div>`;
 /* Zählspalte farbig: gut grün, schlecht rot, kräftiger je mehr (bezogen auf max); 0 bleibt blass */
-const cntTd = (v, good, max, c, tip = "") => `<td class="c num cnt${v ? (good ? " cg" : " cb") : " zero"}" data-c="${c}" data-s="${v}"${tip ? ` data-tip="${esc(`${tip}: ${v}`)}"` : ""}${v ? ` style="background:color-mix(in srgb,var(${good ? "--go" : "--stop"}) ${Math.round(4 + 14 * Math.min(1, v / max))}%,transparent)"` : ""}>${v}</td>`;
+const cntTd = (v, good, max, c, tip = "") => `<td class="c num cnt${v ? (good ? " cg" : " cb") : " zero"}" data-c="${c}" data-s="${v}"${tip ? ` data-tip="${esc(`${tip}: ${v}`)}"` : ""}>${v}</td>`;
 // Zählung je Zeile aus den Faktoren: Verteidigung [Schw., ×4, Res., Imm.], Angriff [stark, schwach, ohne Wirkung]
 const defCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f >= 4).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
 const attCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
@@ -3461,18 +3501,18 @@ function combosHtml(ch) {
     const cnt = att ? attCnt(fs) : defCnt(fs);
     // als Verteidiger ist ½ gut (grün), als Angreifer ist 2 gut: dann Farben umdrehen
     return `<tr data-r="${c.join(",")}"><th class="r" data-pr="${c.join(",")}" data-s="${esc(c.map(tname).join(" "))}">${tchips(c)}</th>
-      ${cntCells(att ? ATTC : DEFC, cnt, 1)}
-      ${fs.map((f, j) => `<td class="c" data-c="${j + cnt.length + 1}" data-s="${f}">${f === 1 ? "" : `<span class="f ${att && f ? fcls(1 / f) : fcls(f)}">${fl(f)}</span>`}</td>`).join("")}</tr>`;
+      ${fs.map((f, j) => `<td class="c" data-c="${j + 1}" data-s="${f}">${f === 1 ? "" : `<span class="f ${att && f ? fcls(1 / f) : fcls(f)}">${fl(f)}</span>`}</td>`).join("")}
+      ${cntCells(att ? ATTC : DEFC, cnt, ts.length + 1)}</tr>`;
   }).join("");
   const heads = (att ? ATTC : DEFC).map(([n, tip]) => thc(n, tip)).join("");
   return `<details class="box combos"${store.get("combosOpen", false) ? " open" : ""}><summary><h2 style="display:inline">Alle Typkombinationen</h2> <span class="hint">${shown.length} von ${combos.length} Kombinationen</span></summary>
     <div class="bar"><label data-tip="Verteidiger: so viel steckt ein Pokémon mit diesen Typen ein. Angreifer: so gut treffen Attacken seiner beiden Eigentypen zusammen">Sicht
         <select id="cbsicht"><option value="def"${att ? "" : " selected"}>als Verteidiger</option><option value="att"${att ? " selected" : ""}>als Angreifer</option></select></label>
       <span class="hint">${att ? "Spalte: verteidigender Typ, es zählt der bessere der beiden Eigentypen (wie die Typtabelle oben, nur je Kombination)." : "Spalte: angreifender Typ, so stark trifft er ein Pokémon mit diesen Typen."}
-        Klick auf eine Überschrift sortiert, das Zeichen davor markiert die Spalte; Klick auf die Typen markiert die Zeile. Zählung: grün hilft, rot schadet, kräftiger je mehr.</span></div>
+        Klick auf eine Überschrift sortiert, das Zeichen davor markiert die Spalte; Klick auf die Typen markiert die Zeile. Zählung rechts: grün hilft, rot schadet.</span></div>
     ${typeFilter("combosPick", ts, pick, "Typen wählen: nur Kombinationen, die alle gewählten Typen enthalten")}
-    <div class="scroll sticky"><table class="chart sort cbt"><thead><tr>${th("Typen")}${heads}
-      ${ts.map((t) => `<th class="v c" data-sort><span>${tchip(t)}</span></th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
+    <div class="scroll sticky"><table class="chart sort cbt"><thead><tr>${th("Typen")}
+      ${ts.map((t) => `<th class="v c" data-sort><span>${tchip(t)}</span></th>`).join("")}${heads}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 
 /* ------------------------------------------------------------------ Einstellungen */

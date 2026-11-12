@@ -936,6 +936,7 @@ def mg_overlay(m, stamp=None):
 
 
 _MERGED = {}
+MERGED_MAX = 12             # so viele zusammengeführte Karten hält der Server bereit (Wechsel zwischen Karten ohne Wartezeit)
 
 
 def mg_names():
@@ -962,14 +963,17 @@ def mg_names():
 def mg_map(m, spiel, stamp=None):
     """Eine Karte von Map Genie als eine Datenbank mit den eigenen Daten (mapgenie.merge): deutsche Ebenen, gleiche
     Stellen verschmolzen. Für Legenden: Arceus kommen Spawnpunkte und Symbole aus den Spieldaten dazu."""
-    key = (spiel, m.get("id"), stamp, _stamp())
-    if _MERGED.get("map", (None,))[0] == key:
-        return _MERGED["map"][1]
+    key = (spiel, m.get("id"), m.get("slug"), stamp, _stamp())
+    hit = _MERGED.setdefault("maps", {})
+    if key in hit:
+        return hit[key]
     own = mg_overlay(m, stamp) if spiel == "legends-arceus" else None
     r = mapgenie.merge(m, own, mg_names())
     out = {k: v for k, v in m.items() if k not in ("orte", "gruppen")}
     out.update(r, spiel=spiel, am=stamp, bounds=mapgenie.bounds_of(m))
-    _MERGED["map"] = (key, out)
+    while len(hit) >= MERGED_MAX:            # die ältesten zuerst weg
+        hit.pop(next(iter(hit)))
+    hit[key] = out
     return out
 
 

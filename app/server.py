@@ -469,8 +469,47 @@ def meta():
 
 # ------------------------------------------------------------------ HTTP
 
+_PACKED = {}
+_GZ = {}
+
+
+def _packed(obj):
+    """Große, unveränderte Antworten (zusammengeführte Karten) nur einmal in JSON wandeln; das Objekt selbst ist der
+    Schlüssel (abfragen hält es, solange es gilt)."""
+    hit = _PACKED.get(id(obj))
+    if hit and hit[0] is obj:
+        return hit[1]
+    body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+    if len(_PACKED) >= 16:
+        _PACKED.clear()
+    _PACKED[id(obj)] = (obj, body)
+    return body
+
+
+_WARM = set()
+
+
+def _prewarm(d):
+    """Die Karten eines Spiels im Hintergrund zusammenführen und packen, sobald die Oberfläche die Liste holt: der
+    Wechsel zwischen ihnen wartet dann nicht mehr auf den Server."""
+    key = (d["spiel"], d.get("am"), len(d["karten"]))
+    if key in _WARM:
+        return
+    _WARM.add(key)
+
+    def run():
+        for m in d["karten"][:abfragen.MERGED_MAX - 2]:
+            try:
+                _packed(abfragen.mg_map(m, d["spiel"], d["am"]))
+            except Exception as e:
+                print("Karte vorbereiten:", e, file=sys.stderr)
+    threading.Thread(target=run, daemon=True, name="karten-vorbereiten").start()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "pokedex"
+    protocol_version = "HTTP/1.1"    # Verbindungen bleiben offen: die vielen Kacheln der Karte kommen ohne neuen Aufbau
+    timeout = 60                     # ungenutzte Verbindungen schließen
 
     def log_message(self, fmt, *args):
         pass
@@ -480,7 +519,16 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(body, ensure_ascii=False).encode("utf-8")
         packed = len(body) > 20_000 and ctype.startswith(("application/json", "text/")) and "gzip" in (self.headers.get("Accept-Encoding") or "")
         if packed:
-            body = gzip.compress(body, compresslevel=5)
+            hit = _GZ.get(id(body))
+            if hit and hit[0] is body:
+                body = hit[1]
+            else:
+                gz = gzip.compress(body, compresslevel=5)
+                if any(body is b for _, b in _PACKED.values()):   # gleiche große Antwort: nur einmal packen
+                    if len(_GZ) >= 16:
+                        _GZ.clear()
+                    _GZ[id(body)] = (body, gz)
+                body = gz
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         if packed:
@@ -491,6 +539,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        if self.close_connection:
+            self.send_header("Connection", "close")
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -512,6 +562,7 @@ class Handler(BaseHTTPRequestHandler):
     def _foreign(self):
         if host_allowed(self.headers.get("Host")):
             return False
+        self.close_connection = True
         self._send(421, {"error": "Unbekannte Adresse. Erlaubte Namen stehen in ALLOWED_HOSTS (siehe README)."})
         return True
 
@@ -567,8 +618,8 @@ class Handler(BaseHTTPRequestHandler):
                 f = abruf.mg_tile(m.group(1), m.group(2), *(int(m.group(i)) for i in (3, 4, 5)))
                 if f:
                     self._file(f, "max-age=2592000")
-                else:
-                    self._send(404, {"error": "keine Kachel"})
+                else:                # fehlende Kacheln (Rand, Meer) fragt der Browser eine Stunde nicht wieder
+                    self._send(404, {"error": "keine Kachel"}, extra={"Cache-Control": "max-age=3600"})
             elif path == "/api/smogon":
                 self._send(200, abfragen.smogon_view(q.get("spiel")))
             elif path == "/api/mapgenie/eigene":
@@ -581,10 +632,15 @@ class Handler(BaseHTTPRequestHandler):
                 d = abruf.mg_maps(q.get("spiel"))
                 if d and q.get("karte"):
                     m = next((m for m in d["karten"] if m["slug"] == q["karte"]), None)
-                    self._send(200 if m else 404, abfragen.mg_map(m, d["spiel"], d["am"]) if m else {"error": "keine Karte"})
+                    if m:
+                        self._send(200, _packed(abfragen.mg_map(m, d["spiel"], d["am"])))
+                    else:
+                        self._send(404, {"error": "keine Karte"})
                 else:
                     self._send(200, {"karten": [{"slug": m["slug"], "titel": m["titel"], "orte": len(m["orte"])} for m in (d or {}).get("karten", [])],
                                      "kacheln": abruf.mg_status()})
+                    if d:
+                        _prewarm(d)
             elif path == "/api/gebiete":
                 d = abfragen.areas(q)
                 self._send(200 if d else 404, d or {"error": "keine Gebiete"})
@@ -692,10 +748,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             fn = self.POST.get(path)
             if not fn:
+                self.close_connection = True      # Rumpf ungelesen: die Verbindung nicht weiter nutzen
                 self._send(404, {"error": "nicht gefunden"})
                 return
             self._send(200, fn(self._body(8_000_000 if path == "/api/restore" else 200_000)))
         except ValueError as e:
+            self.close_connection = True
             self._send(400, {"error": str(e)})
         except Exception as e:
             self._fail(path, e)
@@ -703,6 +761,8 @@ class Handler(BaseHTTPRequestHandler):
     def _fail(self, path, e):
         print(f"Fehler bei {path}:", file=sys.stderr)
         traceback.print_exception(e, file=sys.stderr)
+        if self.command == "POST":
+            self.close_connection = True
         self._send(500, {"error": f"Interner Fehler ({type(e).__name__}), Einzelheiten im Protokoll des Containers"})
 
 

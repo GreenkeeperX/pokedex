@@ -19,8 +19,8 @@ from . import mapgenie
 
 BASE = "https://www.dittobase.com/"
 # Spiel (Kennung wie in der PokéAPI) → Kennung bei DittoBase
-GAMES = {"crystal": "crystal"}
-TITEL = {"crystal": "Johto und Kanto (DittoBase)"}
+GAMES = {"crystal": "crystal", "gold-silver": "gold-silver"}      # Spiel → Kennung bei DittoBase
+TITEL = {"crystal": "Johto und Kanto (DittoBase)", "gold-silver": "Johto und Kanto, Gold/Silber (DittoBase)"}
 BLOCK = 32                   # Pixel je Block
 STEP = 16                    # Pixel je Schritt (Lage der Punkte)
 TILE = 256
