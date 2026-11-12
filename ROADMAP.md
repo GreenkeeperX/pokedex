@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.10 (12.11.2026)
+
+- `.mon .acts` mit z-index über `.spr` (seit `top:4px` überdeckte das Bild etwa 40 % der Knopffläche)
+
 ## 0.47.9 (12.11.2026)
 
 - `#pick`: Hintergrund `--hcbg`; `flex:1` nur für den Namen, nicht für die Typ-Schilder
