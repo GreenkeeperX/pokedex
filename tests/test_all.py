@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import time
+import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
@@ -950,6 +951,31 @@ class Abgleich(TempData):
         heute = lines.index("== Heutige Quellen")
         self.assertTrue(lines[heute + 1].startswith("GitHub-API, Dateiliste PokéAPI: HTTP 404"))
         self.assertFalse(any(x.endswith(": keine Antwort") for x in lines))
+
+    def test_verbindungstest_endet_trotz_haenger(self):
+        stop = threading.Event()
+        def fake(url, timeout=40, encoding="", headers=None, raw=False, limit=None):
+            if "types.csv" in url:
+                stop.wait(30)                               # hängt, bis der Test fertig ist
+            return {"error": "", "status": 404, "server": "x", "text": "", "body": b""}
+        try:
+            with mock.patch.object(sources, "request", fake), mock.patch.object(abruf, "sleep", lambda s: None), \
+                 mock.patch.object(abruf, "DIAG_HANG", 0.3):
+                lines = abruf.diagnose({}, {})
+        finally:
+            stop.set()
+        self.assertTrue(any(x.startswith("PokéAPI, types.csv") and "hängt" in x for x in lines))
+        self.assertTrue(lines[-1].startswith("Abgebrochen:"))
+
+    def test_lesen_wartet_nicht_auf_volle_stuecke(self):
+        class R:                                        # read1 gibt, was da ist; read(n) würde warten
+            def __init__(self):
+                self.parts = [b"a", b"b", b""]
+            def read1(self, n):
+                return self.parts.pop(0)
+            def read(self, n):
+                raise AssertionError("read statt read1")
+        self.assertEqual(sources._read(R(), None), (b"ab", True))
 
     def test_tropfende_antwort_bricht_ab(self):
         class Slow:                                     # sendet endlos kleine Stücke, nie einen Abschluss

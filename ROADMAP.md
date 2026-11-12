@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.35.3 (12.11.2026)
+
+- `sources._read` liest mit `read1`: `read(n)` wartete, bis n Bytes beisammen waren, und umging so das Gesamtlimit
+- `abruf.diagnose`: Wächter, nach `DIAG_HANG` (120 s) ohne Fortschritt endet der Test, offene Abfragen stehen als
+  „hängt“ im Ergebnis
+
 ## 0.35.2 (12.11.2026)
 
 - `sources.request(limit=…)` gibt nach Ablauf den Anfang zurück (`teil`), der Verbindungstest wertet ihn aus und behält

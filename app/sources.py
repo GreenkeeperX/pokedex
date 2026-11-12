@@ -11,11 +11,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.35.2"
+VERSION = "0.35.3"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.35.3", "12.11.2026", [
+        "Verbindungstest: das Zeitlimit greift jetzt auch bei tröpfelnden Seiten wirklich, und nach zwei Minuten ohne Fortschritt endet der Test trotzdem",
+    ]),
     ("0.35.2", "12.11.2026", [
         "Verbindungstest: eine Seite, die nach 60 Sekunden noch tröpfelt, wird mit dem bis dahin Geladenen ausgewertet statt verworfen",
     ]),
@@ -489,8 +492,10 @@ def _read(resp, deadline):
     nur je Lesevorgang: ein Server, der tröpfchenweise sendet, hielt die Abfrage sonst beliebig lange fest).
     Gibt (Bytes, vollständig) zurück: nach Ablauf der Zeit das, was bis dahin kam."""
     parts, n = [], 0
+    # read1: kommt zurück, sobald etwas da ist; read(n) wartet, bis n Bytes beisammen sind (tröpfelt es, ewig)
+    rd = getattr(resp, "read1", None) or resp.read
     while True:
-        chunk = resp.read(1 << 16)
+        chunk = rd(1 << 16)
         if not chunk:
             return b"".join(parts), True
         parts.append(chunk)

@@ -1343,6 +1343,7 @@ PKHEX_GAMES = {"brilliant-diamond-shining-pearl": ("legality/wild/Gen8/encounter
 # Pausen im Verbindungstest je Server (sonst PAUSE): wer beim Abgleich langsamer abgefragt wird, auch hier
 DIAG_TIMEOUT = 20           # Sekunden ohne Antwort, dann gibt eine Abfrage im Verbindungstest auf
 DIAG_LIMIT = 60             # Sekunden insgesamt je Abfrage (große Seiten, die langsam tröpfeln)
+DIAG_HANG = 120             # Sekunden ohne jeden Fortschritt, dann beendet sich der Test trotz offener Abfragen
 DIAG_PAUSE = {"www.serebii.net": SEREBII_PAUSE, "www.pokewiki.de": WIKI_PAUSE, "mapgenie.io": MG_PAUSE}
 
 
@@ -1783,7 +1784,10 @@ def diagnose(proben=None, stand=None):
     ign_js = set()
     for name, url in (("IGN, Galar (ganz)", "https://www.ign.com/maps/pokemon-sword-shield/galar"),
                       ("IGN, Let’s Go Kanto (ganz)", "https://www.ign.com/maps/pokemon-lets-go-pikachu-eevee/kanto")):
-        r = probe(name, url, ign_info, keep=600_000, headers=html).result()
+        try:
+            r = probe(name, url, ign_info, keep=600_000, headers=html).result(timeout=DIAG_HANG)
+        except cf.TimeoutError:
+            r = None
         if r:
             ign_js.update(u for u in re.findall(r'<script src="(https://kraken\.ignimgs\.com/_next/static/chunks/[^"]+\.js)"', r["text"])
                           if "polyfills" not in u and "framework" not in u)
@@ -1815,9 +1819,25 @@ def diagnose(proben=None, stand=None):
     probe("Showdown, Random-Battle-Sets Gen 9", SD_RAW + "random-battles/gen9/sets.json",
           lambda t: f"{len(json.loads(t))} Pokémon mit Rollen und Attacken")
     probe("Showdown, abilities.ts", SD_RAW + "abilities.ts", lambda t: f"{t.count('num:')} Fähigkeiten mit Wirkung im Code")
-    cf.wait(futs)
+    # Wächter: rührt sich DIAG_HANG Sekunden lang nichts, gelten die offenen Abfragen als hängend; der Test endet trotzdem
+    seen, last = -1, time.monotonic()
+    while True:
+        done, todo = cf.wait(futs, timeout=min(5, DIAG_HANG))
+        if not todo:
+            break
+        if stand["fertig"] != seen:
+            seen, last = stand["fertig"], time.monotonic()
+        elif time.monotonic() - last > DIAG_HANG:
+            with lock:
+                hung = list(stand["laeuft"])
+            for k, x in enumerate(lines):
+                if x and x.endswith(": keine Antwort") and x[:-len(": keine Antwort")] in hung:
+                    lines[k] = x + f" (hängt nach {DIAG_HANG} s ohne Fortschritt, abgebrochen)"
+            lines.append("")
+            lines.append(f"Abgebrochen: {len(todo)} Abfragen kamen nicht mehr dran oder hingen ({', '.join(hung)}).")
+            break
     for p in pools.values():
-        p.shutdown()
+        p.shutdown(wait=False, cancel_futures=True)
     if proben:
         lines.append("")
         lines.append(f"{len(proben)} Probe-Seiten zum Herunterladen (Knopf „Proben herunterladen“).")
