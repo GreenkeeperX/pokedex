@@ -171,7 +171,10 @@ td.nw{white-space:nowrap}
 .mon .acts{display:flex;justify-content:center;gap:1px;height:24px;margin-top:-4px;padding:0 4px}
 .mon .acts:has(.alp) .a:not(.plus){width:21px}
 .mon .acts .a.plus,.mon .acts .a.ph:last-child{position:absolute;right:-8px;top:2px}
-.acts .a.team{border-color:transparent;background:none;color:var(--go);cursor:default}
+.acts .a.team{border-color:transparent;background:none;color:var(--go);cursor:pointer}
+#toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:40;display:flex;gap:12px;align-items:center;background:var(--tipbg);color:#eef2f1;
+  border:1px solid var(--tipline);border-radius:8px;padding:8px 12px;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:14px}
+#toast[hidden]{display:none}
 .acts .a:not(.on),.acts .a.plus{opacity:0;transition:opacity .15s}
 .acts .a.on{border-color:transparent;background:none}
 .acts .a.ph{visibility:hidden}
@@ -332,7 +335,9 @@ table.mine th[data-dir=desc]::after{content:" ▼";font-size:10px}
 .jump a{color:var(--ink);text-decoration:none}
 .jump a:hover{text-decoration:underline}
 .jump .foldall{margin-left:auto;color:var(--muted);white-space:nowrap}
-details.fold>summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+details.fold>summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;list-style:none}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::before{content:"▸";color:var(--muted)}details.fold[open]>summary::before{content:"▾"}
 details.fold>summary h2{margin:0}
 details.fold:not([open]){padding-bottom:10px}
 details.fold[open]>summary{margin-bottom:8px}
@@ -407,7 +412,7 @@ tr.off td{opacity:.55}
 .tslot .note.small{font-size:12px;padding:2px 6px;margin:4px 0}
 .favd summary{margin-top:10px}
 .favlist{margin-top:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
-.list:has(.mon>.xs){row-gap:14px}   /* ⇄ ragt unten aus der Karte: Platz bis zur nächsten Reihe */
+.list:has(.mon>.xs){row-gap:11px}   /* ⇄ ragt unten aus der Karte: Platz bis zur nächsten Reihe */
 .mon:has(>.xs:hover){z-index:3}
 .mvchip[draggable=true]{cursor:grab}
 .favd summary .ic,.box h2 .ic{display:inline-block;vertical-align:-2px;margin-right:2px}
@@ -646,7 +651,8 @@ a.bm:active{cursor:grabbing}
 .mgg-h{display:flex;align-items:center;gap:6px;padding:4px 0;font-weight:600}
 .mgg-h .link{margin-left:auto;font-size:12.5px;font-weight:400}
 .mgcats .bar{justify-content:space-between;margin-bottom:4px}
-.mgg summary{cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;font-weight:600}
+.mgg summary{cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;font-weight:600;list-style:none}
+.mgg summary::-webkit-details-marker{display:none}.mgg summary::before{content:"▸";color:var(--muted);font-weight:400}.mgg[open] summary::before{content:"▾"}
 .mgg summary .hint{font-weight:400}
 .mgg summary .link{margin-left:auto;font-size:12.5px}
 .mgg .mlays{display:flex;flex-wrap:wrap;gap:4px;padding:2px 0 8px}
@@ -676,6 +682,12 @@ a.bm:active{cursor:grabbing}
 .mapbox .bar{flex-wrap:wrap}
 .mapzoom{position:absolute;right:10px;top:10px;z-index:4;display:flex;flex-direction:column;gap:4px}
 .mapzoom button{width:34px;height:34px;padding:0;font-size:19px;line-height:1;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.mgheat{position:absolute;left:0;top:0;width:0;height:0}
+.mgk{grid-template-columns:repeat(auto-fill,minmax(86px,1fr))}
+.mgits{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0}
+.mgit{display:inline-flex;align-items:center;gap:4px;font-size:13px}
+.mgit img{width:24px;height:24px;object-fit:contain;image-rendering:auto}
+.mapzoom input[type=range]{writing-mode:vertical-lr;direction:rtl;width:34px;height:120px;margin:0;accent-color:var(--acc,#4fbf8f)}
 .mapwrap .mapcol{position:relative;min-width:0}
 @media (max-width:820px){.mapwrap{grid-template-columns:1fr}.map{height:60vh}.mgside{height:auto}.mgside .mapside{flex:none;max-height:50vh}}
 .maplink{font-size:12px;margin-left:4px}
@@ -828,15 +840,20 @@ table.items tr.odd td{opacity:.6}
 .cmppick .cmpquick{justify-content:flex-start}.cmpgrid.sel{margin-top:12px}
 .eltab select{padding:1px 4px}
 .elchart{display:flex;gap:14px;align-items:center;margin:6px 0 4px;flex-wrap:wrap}
-.elbars{flex:1 1 260px;display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:12.5px}
-.elb{display:flex;height:12px;border-radius:4px;background:var(--chip);overflow:hidden}
+.elbars{flex:1 1 260px;display:grid;grid-template-columns:auto 36px 1fr auto;gap:3px 8px;align-items:center;font-size:13px}
+.elb{display:flex;height:9px;border-radius:5px;background:var(--chip);overflow:hidden}
 .elb i{display:block;height:100%}
-.elb-n{color:var(--muted)}
-.elb-v{min-width:64px;font-variant-numeric:tabular-nums}
-.e-b{background:#7d8c8f}.e-l{background:#5b8fc7}.e-e{background:#4fbf8f}.e-w{background:#e0b341}.e-i{background:#a07fd6}
+.elb-n{color:var(--ink)}
+.elb-v{text-align:right;font-variant-numeric:tabular-nums}
+.elb-z{min-width:48px;font-variant-numeric:tabular-nums;font-size:12px}
+.elb-s{margin-top:3px;font-weight:600}
+/* Teile eines Werts in Stufen der Farbe seines Basiswerts (--h), wie die Balken der Basiswerte; die Legende in Grün */
+.elb,.ellg{--h:100}
+.e-b{background:hsl(var(--h) 45% 27%)}.e-l{background:hsl(var(--h) 55% 38%)}.e-i{background:hsl(var(--h) 60% 48%)}
+.e-e{background:hsl(var(--h) 62% 56%)}.e-w{background:hsl(var(--h) 70% 70%)}
 .stab input{width:58px}
 .e-m{background:repeating-linear-gradient(135deg,#e0605a 0 3px,var(--chip) 3px 6px)}
-.e-z{background:repeating-linear-gradient(90deg,color-mix(in srgb,#4fbf8f 55%,transparent) 0 4px,transparent 4px 7px)}
+.e-z{background:repeating-linear-gradient(90deg,hsl(var(--h) 62% 56% / .55) 0 4px,transparent 4px 7px)}
 .ellg span{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
 .ellg span:first-child{margin-left:0}
 /* Netz wie das große Radar: Gitter von .radar, jetzt in Rot, Level hell, Basis grau, Ziel gestrichelt */
@@ -858,8 +875,9 @@ body.busy::before{content:"";position:fixed;z-index:60;top:0;left:0;right:0;heig
 .hint.loading{padding:24px 4px}
 /* 0.39: einklappbare Boxen und Abschnitte */
 [data-fold]{cursor:pointer;user-select:none}
-[data-fold]::after{content:"▾";display:inline-block;margin-left:6px;color:var(--muted);font-size:.75em;font-weight:400;transition:transform .15s}
-.zu>[data-fold]::after{transform:rotate(-90deg)}
+/* Klapp-Pfeil überall vor dem Text (0.43) */
+[data-fold]:not(button)::before{content:"▾";display:inline-block;width:1em;margin-right:4px;color:var(--muted);font-size:.75em;font-weight:400;transition:transform .15s;text-align:center}
+.zu>[data-fold]::before{transform:rotate(-90deg)}
 .zu>:not([data-fold]){display:none !important}
 .box.zu>[data-fold]{margin-bottom:0}
 .fsec.zu{margin-bottom:6px}
@@ -869,7 +887,8 @@ table.lines td,table.lines th.r,table.vs th.r,table.matrix td,table.matrix th{ve
 th.r>.pinc{margin-right:6px}
 button.danger{background:#e60012;border-color:#e60012;color:#fff}
 button.danger:hover{background:#c4000f;border-color:#c4000f}
-.seg button.on{background:color-mix(in srgb,var(--accent) 16%,var(--card));color:var(--ink-hi);box-shadow:inset 0 0 0 1px var(--accent)}
+/* 0.43: Auswahl in Segmenten wieder kräftig; nur die Angreifer im Schadensrechner (mit Bildern) ruhiger, ohne Rahmenlinie */
+.seg.cslots button.on{background:color-mix(in srgb,var(--accent) 26%,var(--card));color:var(--ink-hi);font-weight:600;box-shadow:none}
 /* 0.40: Aufträge mit Sprung zur Karte */
 .reqpin{text-decoration:none;margin-left:4px;font-size:13px;opacity:.75}.reqpin:hover{opacity:1}
 .mgtiles img.mgimg{position:absolute;image-rendering:pixelated;max-width:none}

@@ -67,7 +67,14 @@ const gameName = (k = S.game) => (S.meta?.spiele || []).find((g) => g.kennung ==
 const tname = (t) => S.types[t] || String(t);
 const fl = (f) => ({0: "0", 0.25: "¼", 0.5: "½", 1: "1", 2: "2", 4: "4"}[f] ?? String(f));
 const fcls = (f) => f === 0 ? "f0" : f >= 4 ? "f4" : f > 1 ? "f2" : f <= 0.25 ? "f025" : f < 1 ? "f05" : "f1";
-const statColor = (v) => `hsl(${Math.min(v, 150) * 0.85} 62% 44%)`;
+const statHue = (v) => Math.min(v, 150) * 0.85;
+const statColor = (v) => `hsl(${statHue(v)} 62% 44%)`;
+/* Zeile im Werte- und Effort-Diagramm wie bei den Basiswerten: Name, Wert, Balken in der Farbe des Basiswerts (die Teile
+   in Stufen derselben Farbe), dahinter der Wert am Ziel. Darunter die Summe */
+const elRow = (k, x, segs, tip, extra) => `<div class="elb-n">${k}</div><div class="elb-v"><b>${x.wert}</b></div><div class="elb" style="--h:${statHue(x.basis)}" ${tip}>${segs}</div>`
+  + `<div class="elb-z">${extra > 0 ? `<span class="hint">→ ${x.wert_ziel}</span>` : ""}</div>`;
+const elSum = (rows) => { const s = rows.reduce((a, x) => a + x.wert, 0), z = rows.reduce((a, x) => a + (x.wert_ziel ?? x.wert), 0);
+  return `<div class="elb-n elb-s">Summe</div><div class="elb-v elb-s"><b>${s}</b></div><div></div><div class="elb-z elb-s">${z > s ? `<span class="hint">→ ${z}</span>` : ""}</div>`; };
 // Basiswerte-Summe: von Rot (um 200) bis Grün (um 680), wie die Wertungen im VR-Navigator
 const sumColor = (v) => `hsl(${Math.max(0, Math.min(1, (v - 200) / 480)) * 125} 70% 38%)`;
 
@@ -246,7 +253,9 @@ function marks(id) {
 }
 function acts(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
-  return `<span class="acts">${inTeam ? `<span class="a team on" data-tip="Im Team">${icon("team")}</span>` : `<span class="a team ph"></span>`}`
+  // Haken: im Team (Klick nimmt es heraus); sonst blass, Klick füllt einen freien Platz
+  return `<span class="acts">${inTeam ? `<span class="a team on" data-act="teamdel" data-slot="${S.team.ids.indexOf(id)}" data-tip="Im Team; Klick: aus dem Team">${icon("team")}</span>`
+    : teamFull() ? `<span class="a team ph"></span>` : `<span class="a team" data-act="teamadd" data-id="${id}" data-tip="Ins Team (auf den nächsten freien Platz)">${icon("team")}</span>`}`
     + `<span class="a${fav ? " on" : ""}" data-act="fav" data-id="${id}" data-tip="${fav ? "Favorit; Klick: aus den Favoriten" : "Zu den Favoriten (Kader zum schnellen Tauschen)"}">${icon("fav", fav)}</span>`
     + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${ballTip(id)}">${ball(id, got)}</span>` + alphaBtn(id)
     + `${teamFull() ? `<span class="a ph"></span>` : `<span class="a plus" data-act="teamadd" data-id="${id}" data-tip="${inTeam ? "Noch einmal ins Team" : "Ins Team"}">${icon("plus")}</span>`}</span>`;
@@ -254,7 +263,7 @@ function acts(id) {
 // mode: true = Sammlung (⇄ wählt zum Übertragen aus), "swap" = Favoriten im Team (⇄ nimmt ins Team oder tauscht)
 function monCard(r, mode = false) {
   const xmode = mode === true, inTeam = S.team.ids.includes(r.id), xs = xmode && XSEL.has(r.id);
-  return `<a class="mon${inTeam ? " inteam" : ""}${xs ? " xon" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="nr">#${r.nr ?? r.art}</span>${xmode
+  return `<a class="mon${inTeam ? " inteam" : ""}${xs ? " xon" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="nr"${r.dexk ? ` data-tip="Nummer im ${r.dex + 1}. Pokédex des Spiels"` : ""}>#${r.dexk || ""}${r.nr ?? r.art}</span>${xmode
     ? `<span class="xs${xs ? " on" : ""}" data-act="xsel" data-id="${r.id}" data-tip="${xs ? "Ausgewählt zum Übertragen; Klick: abwählen" : "Zum Übertragen auswählen"}">⇄</span>`
     : mode === "swap" ? `<span class="xs" data-act="favswap" data-id="${r.id}" data-tip="${teamFull() ? "Ins Team tauschen: wähle, wen es ersetzt" : "Ins Team aufnehmen"}">⇄</span>` : ""}<span class="sp">${img(r.id)}${acts(r.id)}</span>
     <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span></span><span class="ty">${tchips(r.typen)}</span>
@@ -446,7 +455,7 @@ function showCard(el) {
   const d = defense(r.typen);
   const det = slot !== null ? S.team.details[slot] || {} : null;
   const mv = det ? (det.attacken || []).map((x) => MOVES[x]).filter(Boolean) : [];
-  card.innerHTML = `<div class="hc-head">${img(r.id, "art", true)}<div><b>${esc(r.name)}</b> <span class="muted">#${r.nr ?? r.art}</span><div>${tchips(r.typen)}</div>
+  card.innerHTML = `<div class="hc-head">${img(r.id, "art", true)}<div><b>${esc(r.name)}</b> <span class="muted">#${r.dexk || ""}${r.nr ?? r.art}</span><div>${tchips(r.typen)}</div>
       <div class="muted">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b>${r.legendaer ? " · legendär" : ""}${r.endstufe ? " · Endstufe" : ""}</div>
       ${det ? `<div class="muted">${det.level ? "Level " + det.level : "ohne Level"}</div><div class="hc-mv">${mv.map((m) => `${tchip(m.typ)} ${esc(m.name)}`).join("<br>")}</div>` : ""}</div></div>
     <div class="hc-body">${radar(r.werte, 190, true)}<div class="hc-eff">${glanceHtml(r.typen, d)}</div></div>`;
@@ -470,7 +479,8 @@ function crossTable(table, pin, onChange) {
     h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${i}" data-tip="Spalte markieren${h.dataset.sort === undefined ? "" : " (Klick auf den Titel sortiert)"}">${PIN_COL}</span>`);
   });
   $$("th[data-pc]", table).forEach((h) => { if (!$(":scope > .pinc", h)) h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${h.dataset.pc}" data-tip="Spalte markieren">${PIN_COL}</span>`); });
-  $$("th[data-pr]", table).forEach((h) => { if (!$(":scope > .pinc", h)) h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pr="${h.dataset.pr}" data-tip="Zeile markieren">${PIN_ROW}</span>`); });
+  // Zeilenköpfe markieren schon per Klick; das Zeichen nur, wo die Tabelle es will (data-rowpin="0": ohne)
+  if (table.dataset.rowpin !== "0") $$("th[data-pr]", table).forEach((h) => { if (!$(":scope > .pinc", h)) h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pr="${h.dataset.pr}" data-tip="Zeile markieren">${PIN_ROW}</span>`); });
   const paint = (hr, hc) => {
     $$(".hl,.fix", table).forEach((x) => x.classList.remove("hl", "fix"));
     const mark = (r, c, cls) => {
@@ -486,7 +496,7 @@ function crossTable(table, pin, onChange) {
     const cell = cellOf(e);
     if (!cell) return paint(null, null);
     const row = cell.closest("tr")?.dataset.r ?? null;
-    paint(cell.dataset.pc ? null : row, cell.dataset.pr ? null : cell.dataset.c ?? null);
+    paint(cell.dataset.pc ? null : row, cell.dataset.pr || cell.classList.contains("nohc") ? null : cell.dataset.c ?? null);
   });
   table.addEventListener("mouseleave", () => paint(null, null));
   table.addEventListener("click", (e) => {
@@ -496,7 +506,7 @@ function crossTable(table, pin, onChange) {
     if (cell.dataset.pr) pin.r = pin.r === cell.dataset.pr ? null : cell.dataset.pr;
     else if (cell.dataset.pc) pin.c = pin.c === cell.dataset.pc ? null : cell.dataset.pc;
     else {
-      const row = cell.closest("tr").dataset.r, c = cell.dataset.c ?? null;
+      const row = cell.closest("tr").dataset.r, c = cell.classList.contains("nohc") ? null : cell.dataset.c ?? null;
       if (pin.r === row && pin.c === c) { pin.r = null; pin.c = null; } else { pin.r = row; pin.c = c; }
     }
     paint(null, null);
@@ -752,6 +762,18 @@ async function toggleFav(id, on = !isFav(id)) {
   await loadFavs(true);
   redrawMarks();
   if (location.hash.startsWith("#team")) favBox();
+  if (!on) undoToast(`${ROWS[id]?.name || "Pokémon"} ist kein Favorit mehr.`, () => toggleFav(id, true));
+}
+/* kurze Nachricht unten mit „Rückgängig“ (8 Sekunden); eine neue ersetzt die alte */
+let toastT = 0;
+function undoToast(text, undo) {
+  let el = $("#toast");
+  if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+  el.innerHTML = `<span>${esc(text)}</span><button class="small" type="button">Rückgängig</button>`;
+  el.hidden = false;
+  clearTimeout(toastT);
+  toastT = setTimeout(() => { el.hidden = true; }, 8000);
+  $("button", el).addEventListener("click", () => { el.hidden = true; clearTimeout(toastT); undo(); });
 }
 async function loadCaught(force = false) {
   if (!force && S.caughtGame === S.game) return;
@@ -863,7 +885,7 @@ function filterBar(f, id, opts = {}) {
       <span class="seg" data-tip="Mehrere gewählte Typen: „und“ = alle zugleich, „oder“ = einer davon reicht">
         <button data-fm="und" class="${f.modus === "und" ? "on" : ""}">und</button><button data-fm="oder" class="${f.modus === "oder" ? "on" : ""}">oder</button></span>
       <select data-f="formen" data-tip="${esc(FORMEN_TIP)}"><option value="relevant">Formen mit eigenen Werten</option><option value="standard">nur Standardform</option><option value="alle">alle Formen</option></select>
-      ${opts.sort === false ? "" : `<select data-f="sort"><option value="nr">Nummer</option><option value="name">Name</option><option value="summe">Basiswerte</option>
+      ${opts.sort === false ? "" : `<select data-f="sort"><option value="nr" data-tip="Nummer im Pokédex des Spiels; Spiele mit mehreren Dexen der Reihe nach">Nummer</option><option value="nat">Nationale Nummer</option><option value="name">Name</option><option value="summe">Basiswerte</option>
         <option value="ang">Angriff</option><option value="spang">Sp.-Angriff</option><option value="init">Initiative</option><option value="kp">KP</option><option value="vert">Verteidigung</option></select>`}
       <button data-act="freset" data-fid="${id}">Zurücksetzen</button></div>
     <div class="bubbles">${bub}</div>
@@ -1384,7 +1406,7 @@ async function statBox(d, slot) {
   const top = Math.max(...r.rows.map((x) => x.max), 1), pc = (v) => (Math.max(0, v) / top * 100).toFixed(2);
   const seg = (cls, v) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%"></i>` : "";            // Rechenweg am ganzen Balken
   const bars = r.rows.map((x, i) => { const t = x.teile, extra = x.ev_ziel_teil - t.ev;
-    return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" ${tipRef(tipH(x, i))}>${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-i", t.iv, `${IV} ${x.iv}: +${t.iv}`)}${seg("e-e", t.ev, `${EV} ${x.ev}: +${t.ev}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (${x.ziel} ${EV}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
+    return elRow(STAT_K[i], x, `${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-i", t.iv, `${IV} ${x.iv}: +${t.iv}`)}${seg("e-e", t.ev, `${EV} ${x.ev}: +${t.ev}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (${x.ziel} ${EV}): +${extra}`)}`, tipRef(tipH(x, i)), extra); }).join("") + elSum(r.rows);
   const net = statNet(r.rows, top, "ev");
   el.innerHTML = `<details class="sub" id="stdet"${open ? " open" : ""}><summary><h3 style="display:inline">Werte</h3> <span class="hint">${slot !== null ? `Platz ${slot + 1}, Level ${lv}` : `zum Ausprobieren, Level ${lv}`}</span></summary>
     <p class="hint">${old ? "Bis Generation 2: DVs 0 bis 15 und Stat Exp bis 65535 je Wert (aus besiegten Pokémon und Vitaminen); es gibt kein Wesen." : lg ? "Let's Go: statt EVs gibt es AVs (Punkte aus Bonbons), 0 bis 200 je Wert und ohne Grenze für die Summe; jeder AV ist ein Punkt. Den Freundschafts-Bonus (bis +10 %) rechnet das Diagramm nicht ein." : `IVs 0 bis 31 (angeboren), EVs bis 252 je Wert und ${r.ev_gesamt} zusammen, aus besiegten Pokémon, Vitaminen (+10) und Federn (+1).${r.minzen ? " Minzen ändern, welchen Wert das Wesen hebt und senkt." : ""}`}${slot === null ? " Im Team merkt sich jeder Platz seine Werte." : ""}</p>
@@ -1432,7 +1454,7 @@ function elChart(rows, lv) {
   const top = Math.max(...rows.map((x) => x.max), 1), pc = (v) => (Math.max(0, v) / top * 100).toFixed(2);
   const seg = (cls, v, tip) => v > 0 ? `<i class="${cls}" style="width:${pc(v)}%" data-tip="${esc(tip)}"></i>` : "";
   const bars = rows.map((x, i) => { const t = x.teile, extra = x.el_ziel_teil - t.el;
-    return `<div class="elb-n">${STAT_K[i]}</div><div class="elb" ${tipRef(elTipHtml(x, i, lv))}>${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-e", t.el, `durch Effort Level ${x.el}: +${t.el}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (Stufe ${x.ziel}): +${extra}`)}</div><div class="elb-v"><b>${x.wert}</b>${extra > 0 ? `<span class="hint">→${x.wert_ziel}</span>` : ""}</div>`; }).join("");
+    return elRow(STAT_K[i], x, `${seg("e-b", t.basis, `Basiswert ${t.basis}`)}${seg("e-l", t.level, `durch Level ${lv}: +${t.level}`)}${seg("e-e", t.el, `durch Effort Level ${x.el}: +${t.el}`)}${seg("e-w", t.wesen, `Wesen: +${t.wesen}`)}${t.wesen < 0 ? `<i class="e-m" style="width:${pc(-t.wesen)}%;margin-left:-${pc(-t.wesen)}%"></i>` : ""}${seg("e-z", extra, `bis zum Ziel (Stufe ${x.ziel}): +${extra}`)}`, tipRef(elTipHtml(x, i, lv)), extra); }).join("") + elSum(rows);
   // Netz: Schichten von außen nach innen (Ziel, jetzt, ohne Effort Levels, Basiswert)
   const net = statNet(rows, top, "el");
   return `<div class="elchart"><div class="elbars">${bars}</div><div>${net}</div></div>
@@ -1561,7 +1583,7 @@ async function requestsView() {
       <span class="seg">${[["offen", "Offen"], ["alle", "Alle"], ["erledigt", "Erledigt"]].map(([k, n]) => `<button class="${k === mode ? "on" : ""}" data-reqmode="${k}">${n}</button>`).join("")}</span>
       <span id="reqn" class="hint"></span></div>
     <p class="hint"><span id="reqsrc"></span> Fährst du über einen Eintrag, siehst du
-      Beschreibung und Lösung. ○ markiert ihn als erledigt, auch auf der Karte (und umgekehrt); 📍 springt zur Stelle auf der Karte.</p>
+      Beschreibung und Lösung. ○ markiert ihn als erledigt, auch auf der Karte (und umgekehrt); 📍 ganz rechts springt zur Stelle auf der Karte.</p>
     <div id="reqlist"><p class="hint">Lädt …</p></div></div>`;
   header();
   const [r] = await Promise.all([api("/api/auftraege?" + qs({spiel: S.game})), loadReqDone(true)]);
@@ -1569,7 +1591,10 @@ async function requestsView() {
   if (r.blaubeer) return blaubeerView(r);
   const K = r.karte || {}, KAP = r.kapitel || [];
   $("#reqsrc").textContent = `${gameName(r.spiel || REQ_GAME())} auf Deutsch (Quelle: ${r.quelle || "BisaFans"}).`;
-  const pin = (k, nr) => K[k]?.[nr] ? ` <a class="reqpin" href="#karte/mg/${esc(K[k][nr][0])}/${K[k][nr][1]}" data-tip="Auf der Karte zeigen">📍</a>` : "";
+  // Sprung zur Karte: eigene Spalte ganz rechts, hinter „erledigt“
+  const pin = (k, nr) => `<td class="c">${K[k]?.[nr] ? `<a class="reqpin" href="#karte/mg/${esc(K[k][nr][0])}/${K[k][nr][1]}" data-tip="Auf der Karte zeigen">📍</a>` : ""}</td>`;
+  const pinTh = Object.keys(K).length ? th("", "Auf der Karte zeigen", true) : "";
+  const pinTd = (k, nr) => pinTh ? pin(k, nr) : "";
   const late = (x) => r.karte_bis && x.nr > r.karte_bis ? `<span class="hint" data-tip="${esc(r.spaet || "")}">nach dem Spiel</span>` : "";
   const draw = () => {
     const ql = ($("#reqq")?.value || "").trim().toLowerCase(), m = store.get("reqMode", "offen");
@@ -1578,22 +1603,22 @@ async function requestsView() {
       const xs = ms.filter((x) => (m === "alle" || (m === "erledigt") === done(x)) && (!ql || [x.name, x.text].join(" ").toLowerCase().includes(ql)));
       $("#reqn").textContent = `${ms.filter(done).length} von ${ms.length} erledigt`;
       $("#reqlist").innerHTML = !ms.length ? `<p class="hint">Noch keine Hauptmissionen. Der nächste Abgleich holt sie.</p>`
-        : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Mission")}${th("Kapitel")}${th("Weg", "", true)}${th("", "", true)}</tr></thead>
+        : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Mission")}${th("Kapitel")}${th("Weg", "", true)}${th("", "", true)}${pinTh}</tr></thead>
           <tbody>${xs.map((x) => `<tr class="${done(x) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${esc(x.label || String(x.nr))}</td>
-            <td data-s="${esc(x.name)}"><b data-tip="${esc(x.text)}">${esc(x.name)}</b>${pin("mission", x.nr)}</td><td class="hint" data-s="${x.kapitel}">${x.kapitel ? esc(KAP.length > 2 ? `${x.kapitel}. ${KAP[x.kapitel - 1] || ""}` : KAP[x.kapitel - 1] || "") : ""}</td>
-            <td class="why">${esc(x.text.split("\n").slice(0, 2).join(" "))}</td><td class="c">${reqCheck("m" + x.nr)}</td></tr>`).join("")
-            || `<tr><td colspan="5" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
+            <td data-s="${esc(x.name)}"><b data-tip="${esc(x.text)}">${esc(x.name)}</b></td><td class="hint" data-s="${x.kapitel}">${x.kapitel ? esc(KAP.length > 2 ? `${x.kapitel}. ${KAP[x.kapitel - 1] || ""}` : KAP[x.kapitel - 1] || "") : ""}</td>
+            <td class="why">${esc(x.text.split("\n").slice(0, 2).join(" "))}</td><td class="c">${reqCheck("m" + x.nr)}</td>${pinTd("mission", x.nr)}</tr>`).join("")
+            || `<tr><td colspan="6" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
       return;
     }
     const xs = r.rows.filter((x) => (m === "alle" || (m === "erledigt") === REQ_DONE.has(String(x.nr)))
       && (!ql || [x.name, x.aufgabe, x.ort, x.belohnung, x.beschreibung, ...x.pokemon.map((p) => p.name)].join(" ").toLowerCase().includes(ql)));
     $("#reqn").textContent = `${r.rows.filter((x) => REQ_DONE.has(String(x.nr))).length} von ${r.rows.length} erledigt`;
     $("#reqlist").innerHTML = !r.rows.length ? `<p class="hint">Noch keine Aufträge. Der nächste Abgleich holt sie.</p>`
-      : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Auftrag")}${th("Aufgabe", "", true)}${th("Ort")}${th("Belohnung")}${th("Pokémon", "", true)}${th("", "", true)}</tr></thead>
+      : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Auftrag")}${th("Aufgabe", "", true)}${th("Ort")}${th("Belohnung")}${th("Pokémon")}${th("", "", true)}${pinTh}</tr></thead>
         <tbody>${xs.map((x) => `<tr class="${REQ_DONE.has(String(x.nr)) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${x.nr}</td>
-          <td data-s="${esc(x.name)}"><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b>${pin("auftrag", x.nr)}</td><td class="why">${esc(x.aufgabe)}</td>
-          <td data-s="${esc(x.ort)}">${esc(x.ort) || (K.auftrag?.[x.nr] ? `<span class="hint">siehe Karte</span>` : late(x))}</td><td data-s="${esc(x.belohnung)}">${esc(x.belohnung)}</td><td>${reqMons(x)}</td><td class="c">${reqCheck(x.nr)}</td></tr>`).join("")
-          || `<tr><td colspan="7" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
+          <td data-s="${esc(x.name)}"><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b></td><td class="why">${esc(x.aufgabe)}</td>
+          <td data-s="${esc(x.ort)}">${esc(x.ort) || (K.auftrag?.[x.nr] ? `<span class="hint">siehe Karte</span>` : late(x))}</td><td data-s="${esc(x.belohnung)}">${esc(x.belohnung)}</td><td data-s="${esc(x.pokemon.map((p) => p.name).join(", "))}">${reqMons(x)}</td><td class="c">${reqCheck(x.nr)}</td>${pinTd("auftrag", x.nr)}</tr>`).join("")
+          || `<tr><td colspan="8" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
   };
   draw();
   $("#reqq").addEventListener("input", () => { store.set("reqQ", $("#reqq").value); draw(); });
@@ -1639,7 +1664,7 @@ async function toggleReq(nr) {
 function requestsHtml(d) {
   const xs = d.auftraege || [];
   if (!xs.length) return "";
-  return `<div class="box"><h2>Aufträge mit ${esc(d.name)}</h2><table class="rows"><tbody>${xs.map((x) => `<tr class="${REQ_DONE.has(String(x.nr)) ? "off" : ""}">
+  return `<div class="box"><h2 data-fold="reqmon">Aufträge mit ${esc(d.name)}</h2><table class="rows"><tbody>${xs.map((x) => `<tr class="${REQ_DONE.has(String(x.nr)) ? "off" : ""}">
       <td class="c num hint">${x.nr}</td><td><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b><div class="why">${esc(x.aufgabe)}</div></td>
       <td class="hint">${esc(x.ort)}</td><td>${esc(x.belohnung)}</td><td class="c">${reqCheck(x.nr)}</td></tr>`).join("")}</tbody></table>
     <p class="hint">Quelle: BisaFans. Alle Aufträge stehen unter <a href="#auftraege">Aufträge</a>.</p></div>`;
@@ -1922,7 +1947,7 @@ function autocomplete(el, onPick) {
   document.addEventListener("click", (e) => { if (!box.contains(e.target)) menu.hidden = true; });
 }
 let TEAMS = [];
-const TSORT = {nr: ["Nummer", (r) => r.nr ?? r.art], level: ["Level", (r, d) => -(d.level || 0)], summe: ["Basiswerte", (r) => -r.summe],
+const TSORT = {nr: ["Nummer", (r) => (r.dex || 0) * 10000 + (r.nr ?? r.art)], level: ["Level", (r, d) => -(d.level || 0)], summe: ["Basiswerte", (r) => -r.summe],
   kp: ["KP", (r) => -r.werte[0]], ang: ["Angriff", (r) => -r.werte[1]], vert: ["Verteidigung", (r) => -r.werte[2]],
   spa: ["Sp.-Angriff", (r) => -r.werte[3]], spv: ["Sp.-Verteidigung", (r) => -r.werte[4]], init: ["Initiative", (r) => -r.werte[5]]};
 function sortTeam(k) {
@@ -2035,9 +2060,9 @@ async function teamView() {
       <div class="bar"><div class="ac grow"><input id="foe" type="search" placeholder="Gegner hinzufügen (bis zu 6, etwa die Pokémon eines Arenaleiters)" style="width:100%"></div>
         ${S.foes.length ? `<button data-act="foeclear">Gegner leeren</button>` : ""}</div>
       <div id="trpick"></div>
-      <div id="mu"><p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p></div></div>
-    ${!BATTLE() && GEN() >= 3 ? `<details class="box" id="calcbox"${store.get("calcOpen", false) ? " open" : ""}><summary><h2 style="display:inline">Schadensrechner</h2>
-      <span class="hint">wie viel eine Attacke deines Teams den Gegnern abzieht</span></summary><div id="calc"><p class="hint">Lädt …</p></div></details>` : ""}`;
+      <div id="mu"><p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p></div>
+      ${!BATTLE() && GEN() >= 3 ? `<details class="sub" id="calcbox"${store.get("calcOpen", false) ? " open" : ""}><summary><h3 style="margin:0">Schadensrechner</h3>
+        <span class="hint">wie viel eine Attacke deines Teams den Gegnern abzieht</span></summary><div id="calc"><p class="hint">Lädt …</p></div></details>` : ""}</div>`;
   header();
   teamBar();
   favBox();
@@ -2190,7 +2215,7 @@ async function trainerPick(keepOpen) {
   const q = (el.querySelector("#trq")?.value || "").trim().toLowerCase();
   const n = (r) => d.trainer.filter((t) => t.rolle === r && (o.rk || !t.rueckkampf)).length;
   el.innerHTML = `<details class="trp"${wasOpen ? " open" : ""}><summary>Trainer als Gegner: <b>${cur ? esc(cur.name) + (cur.titel ? ` <span class="hint">${esc(cur.titel)}</span>` : "") : "wählen"}</b>
-      <span class="hint">${d.trainer.length} Teams aus Arenen, Top Vier, Champs und Rivalen</span></summary>
+      <span class="hint">${d.trainer.length} Teams aus Arenen, Top Vier, Champs, Rivalen und von Routen</span></summary>
     <div class="bar"><span class="seg">${d.rollen.map((r) => `<button class="${r === o.rolle && !q ? "on" : ""}" data-trrolle="${esc(r)}">${esc(r)} <span class="hint">${n(r)}</span></button>`).join("")}</span>
       <input id="trq" type="search" placeholder="Trainer, Ort oder Pokémon" value="${esc(q)}" style="width:200px">
       <label data-tip="Rückkämpfe und weitere Kämpfe derselben Trainer zeigen"><input type="checkbox" id="trrk"${o.rk ? " checked" : ""}> Rückkämpfe</label></div>
@@ -2199,9 +2224,10 @@ async function trainerPick(keepOpen) {
     const ql = ($("#trq")?.value || "").trim().toLowerCase();
     const xs = d.trainer.filter((t) => ql ? [t.name, t.titel, t.hinweis, ...t.team.map((m) => m.name)].join(" ").toLowerCase().includes(ql) && (o.rk || !t.rueckkampf)
       : t.rolle === o.rolle && (o.rk || !t.rueckkampf));
-    $("#trgrid").innerHTML = xs.slice(0, 60).map((t) => `<button class="trc${cur && cur.id === t.id ? " on" : ""}" data-act="trpick" data-id="${t.id}" data-tip="${esc(trTip(t))}">
+    $("#trgrid").innerHTML = xs.slice(0, 120).map((t) => `<button class="trc${cur && cur.id === t.id ? " on" : ""}" data-act="trpick" data-id="${t.id}" data-tip="${esc(trTip(t))}">
         <span class="trn"><b>${esc(t.name)}</b>${t.level ? `<span class="hint">Lv ${t.level}</span>` : ""}</span>
         <span class="hint trt">${esc(t.titel || t.rolle)}</span><span class="trm">${t.team.map((m) => img(m.id)).join("")}</span></button>`).join("")
+      + (xs.length > 120 ? `<p class="hint">… und ${xs.length - 120} weitere: die Suche findet sie (Ort, Trainer oder Pokémon).</p>` : "")
       || `<p class="hint">Nichts gefunden.</p>`;
     $$("#trpick [data-trrolle]").forEach((b) => b.classList.toggle("on", !ql && b.dataset.trrolle === o.rolle));
   };
@@ -2241,8 +2267,8 @@ async function matchup() {
   const seen = new Set();
   box.innerHTML = `<div class="foes">${r.einzeln.map((x) => foeCard(x.gegner.id, ROWS[x.gegner.id])).join("")}</div>
     ${r.ohne_antwort.length ? `<div class="note warn">Niemand im Team ist klar im Vorteil gegen: ${esc(r.ohne_antwort.join(", "))}</div>` : `<div class="note go">Gegen jeden Gegner hast du mindestens einen guten Kandidaten.</div>`}
-    <div class="scroll"><table class="vs" id="vs"><thead><tr><th></th>${r.einzeln.map((x, i) => `<th class="foeh" data-c="${i + 1}" data-pc="${i + 1}" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
-      ${r.uebersicht.filter((m) => !seen.has(m.id) && seen.add(m.id)).map((m, k) => `<tr data-r="${k}"><th class="r" data-pr="${k}" data-hc="${m.id}">${img(m.id)} ${esc(m.name)}</th>${r.einzeln.map((x, i) => { const v = verdict[`${m.id}:${x.gegner.id}`], u = VERDICT[v.urteil];
+    <div class="scroll"><table class="vs" id="vs" data-rowpin="0"><thead><tr><th class="corner" data-c="0" data-pc="0"></th>${r.einzeln.map((x, i) => `<th class="foeh" data-c="${i + 1}" data-pc="${i + 1}" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
+      ${r.uebersicht.filter((m) => !seen.has(m.id) && seen.add(m.id)).map((m, k) => `<tr data-r="${k}"><th class="r" data-pr="${k}" data-c="0" data-hc="${m.id}">${img(m.id)} ${esc(m.name)}</th>${r.einzeln.map((x, i) => { const v = verdict[`${m.id}:${x.gegner.id}`], u = VERDICT[v.urteil];
         return `<td data-c="${i + 1}" class="v-${v.urteil}" data-tip="${esc(`${m.name} gegen ${x.gegner.name}: ${u[1]}\n${v.gruende.map((g) => "· " + g).join("\n")}`)}">${u[0]}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
     <p class="hint">Vorteil: teilt mehr aus, als es einsteckt (Typen und Initiative). Nachteil: steckt mehr ein, als es austeilt. Die Attacken des Gegners zählen über seine Typen (beim Team eines Trainers über seine echten Attacken), deine über die gewählten Attacken; eine Attacke ohne Eigentyp-Bonus (×1,5) zählt dabei ein Drittel weniger. Zelle hovern für die Rechnung; Klick hält Zeile oder Spalte fest. Gegner lassen sich oben per Ziehen umsortieren.</p>`;
   crossTable($("#vs"), VPIN);
@@ -2316,7 +2342,8 @@ async function movesView() {
         <td class="c num">${m.lernen || ""}</td><td class="c num">${m.gen || ""}</td><td class="kurz">${kurzHtml(m.kurz || (m.klasse === 1 ? m.text || "" : ""))}</td></tr>`).join("")}</tbody></table></div>`;
     const tb = $("#mv table");
     // Name: Zeilenkopf (markiert nur die Zeile), die übrigen Zellen markieren Zeile und Spalte
-    $$("tbody tr", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { if (!td.classList.contains("kurz")) td.dataset.c = i; if (!i) td.dataset.pr = tr.dataset.r; }));
+    // Wirkung: Hovern und Klick markieren nur die Zeile; das Zeichen im Kopf hält die Spalte trotzdem fest
+    $$("tbody tr", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.c = i; if (td.classList.contains("kurz")) td.classList.add("nohc"); if (!i) td.dataset.pr = tr.dataset.r; }));
     crossTable(tb, APIN);
   };
   const load = async () => {
@@ -2428,6 +2455,11 @@ function mgMd(text, slug) {
   if (list) out.push(`</${list}>`);
   return out.join("");
 }
+// Anfangszoom je Spiel (oder Spiel/Karte): Stufen näher als „ganze Karte im Bild“, als Liste mit der Mitte in Anteilen
+const MGSTART = {"red-blue": 2, yellow: 2, "legends-arceus": 2, "firered-leafgreen": [2, 0.36, 0.36],
+  "gold-silver": 0, crystal: 0, "heartgold-soulsilver": 0, "omega-ruby-alpha-sapphire": 0, "lets-go-pikachu-lets-go-eevee": 0,
+  "sword-shield": 0, "the-isle-of-armor": 0, "the-crown-tundra": 0,
+  "ruby-sapphire": -1, emerald: -1, "diamond-pearl": [-1, 0.5, 0.4], platinum: [-1, 0.5, 0.4]};
 const mgProj = (lat, lng, z) => {
   const s = 256 * 2 ** z, r = Math.PI / 180, sy = Math.sin(lat * r);
   return [(lng + 180) / 360 * s, (0.5 - Math.log((1 + sy) / (1 - sy)) / (4 * Math.PI)) * s];
@@ -2439,7 +2471,7 @@ async function mgView(slug, want) {
   if (!lst.karten.length) return S.game === "legends-arceus" ? mapView() : areasView();
   const kk = "mgKarte:" + S.game;
   // Schwester-Editionen teilen sich ein Spiel bei Map Genie: anfangs die Karte, deren Kennung zur Edition passt (Gelb: yellow)
-  const mine = lst.karten.find((k) => S.game.split("-").some((w) => w.length > 3 && k.slug.includes(w))) || lst.karten[0];
+  const mine = lst.karten.find((k) => !/^(rb|se)-/.test(k.slug) && S.game.split("-").some((w) => w.length > 3 && k.slug.includes(w))) || lst.karten[0];
   if (!slug || !lst.karten.some((k) => k.slug === slug)) slug = store.get(kk, mine.slug);
   if (!lst.karten.some((k) => k.slug === slug)) slug = lst.karten[0].slug;
   store.set(kk, slug);
@@ -2463,9 +2495,12 @@ async function mgView(slug, want) {
   // Aufträge und Hauptmissionen: der Haken liegt wie im Reiter Aufträge unter auftrag|Nr bzw. mission|Nr
   const gkey = (p) => p.aq || (p.t === "mg" ? gk + "|mg:" + p.id : p.t === "ob" ? okeyOf(p) : "");
   const isGot = (p) => got.has(gkey(p)) || (p.t === "mg" && p.o && got.has(okeyOf(p)));
-  const hk = "mgEbenen:" + d.spiel;
-  // anfangs aus: die vielen Materialien und Spawnpunkte (an- und abschaltbar je Ebene)
-  const hide0 = groups.filter((g) => /^(Materialien|Pokémon$)/.test(g.titel)).flatMap((g) => g.kategorien.map((c) => c.id));
+  const hk = "mgEbenen2:" + d.spiel;
+  /* anfangs nur zur Orientierung: die Gruppe „Orte“ (Städte, Routen, Schnellreise, Lager); alles andere schaltet man dazu.
+     Hat eine Karte keine solche Gruppe, bleibt ihre erste an */
+  const keep0 = groups.filter((g) => /^Orte/.test(g.titel));
+  const hide0 = groups.filter((g) => !(keep0.length ? keep0 : groups.slice(0, 1)).includes(g)).flatMap((g) => g.kategorien.map((c) => c.id))
+    .filter((k) => !/^(Schnellreise|Lager)$/.test(cats[k]?.titel || ""));
   const hide = new Set(store.get(hk, hide0).map((k) => (isNaN(+k) ? k : +k)));
   let gotHide = store.get("mapGotHide", false), q = "", sel = -1;
   const open = new Set(store.get("mgOpen", groups.filter((g) => g.kategorien.length <= 12).map((g) => String(g.id))).map(String));
@@ -2473,6 +2508,10 @@ async function mgView(slug, want) {
   const dot = (c) => c.id === "sp" ? `<span class="mpin-l"></span>` : c.art ? `<span class="mobj o-${c.art}">${MOBJ[c.art] || "•"}</span>` : `<span class="mgdot" style="--c:${esc(c.g.farbe)}">${esc(c.titel[0] || "•")}</span>`;
   const catBtn = (c) => `<button class="mlay${hide.has(c.id) ? "" : " on"}" data-cat="${esc(c.id)}">${dot(c)}${esc(c.titel)} <span class="hint" data-cnt="${esc(c.id)}">${cnt(c)}</span></button>`;
   const regions = d.gebiete || [];
+  // Pokémon je Punkt mit Gewicht (Spawnpunkt: sein Anteil; Liste eines Orts: zu gleichen Teilen) für die Übersicht
+  const HEATP = pts.map((p) => p.t === "sp" ? (p.mons || []).filter((m) => m.max > 0).map((m) => [m.id, m.name.replace(/ \(.*\)$/, ""), m.max / 100])
+    : (p.pk || []).map(([id, n], _, a) => [id, n, 1 / a.length]));
+  let heatOn = store.get("mgHeat", false);
   main.innerHTML = `<div class="box mapbox">
     <div class="bar"><h2 style="margin:0">Karte</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       ${lst.karten.length > 1 ? `<span class="seg">${lst.karten.map((k) => `<a class="btn${k.slug === slug ? " on" : ""}" href="#karte/mg/${esc(k.slug)}">${esc(k.titel)}</a>`).join("")}</span>` : ""}
@@ -2481,10 +2520,11 @@ async function mgView(slug, want) {
       <a class="btn" href="#karte/gebiete" data-tip="Alle Orte mit ihren Pokémon als Liste">Gebiete</a>
       <input id="mgq" type="search" placeholder="Ort, Symbol oder Pokémon suchen" style="width:240px">
       <label class="mgot" data-tip="Was du als erledigt markiert hast (Rechtsklick oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> erledigte ausblenden</label>
+      ${HEATP.some((x) => x.length) ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="mgheat" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto häufiger; rechts die häufigsten. Mit Suche nur das gesuchte Pokémon">▦ Übersicht mit Bildern</button>` : ""}
       <span class="hint grow" id="mgn"></span></div>
     <div id="mgwarn"></div>
     <div class="mapwrap"><div class="mapcol"><div id="mgmap" class="map mgmap"><div class="mgold"></div><div class="mgtiles"></div><div class="mgpins"></div><div class="mgload" hidden></div></div>
-      <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
+      <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><input type="range" id="mgz" aria-label="Zoom" data-tip="Zoom stufenlos; das Mausrad zoomt in halben Stufen"><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
       <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">Fahre über einen Punkt für den Namen, klicke für Einzelheiten. Rechtsklick markiert ihn als erledigt. Die Suche listet die Treffer hier; ein Klick springt hin.</p></aside>
       <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button>
         <span class="hint">|</span> <button class="link" data-gfold="1" data-tip="alle Gruppen aufklappen">auf</button> · <button class="link" data-gfold="0" data-tip="alle Gruppen zuklappen">zu</button></span></div>
@@ -2496,20 +2536,29 @@ async function mgView(slug, want) {
   const tileUrl = (k) => `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
   let oldZ = null, pending = 0, warm = new Set();
   const TS = d.kachel || 256;        // Kachelgröße: Map Genie 256, pokemoncompletion 512
+  const IMGS = d.bilder || null;     // RankedBoost, Serebii: keine Kacheln, je Ort bzw. Region ein Bild
   const zmin = d.min_zoom, zmax = d.max_zoom;
+  /* stufenloser Zoom: z darf zwischen den Stufen liegen; die Kacheln kommen von der nächsten Stufe (tz) und der Browser
+     skaliert sie. Unter der weitesten Stufe zeigt die Karte deren Kacheln verkleinert (zwei Stufen weiter weg) */
+  const zlo = IMGS ? zmin : zmin - 2, zhi = zmax + (IMGS ? 0 : 1);
+  let floorZ = zmin;      // erste Stufe, für die es Kacheln gibt (manche Karten beginnen später; merkt sich die Seite)
+  const tz = () => Math.max(floorZ, Math.min(zmax, Math.ceil(z - 0.25)));
   const bb = d.bounds || (() => { const la = pts.map((p) => p.la), lo = pts.map((p) => p.lo); return [Math.min(...lo), Math.min(...la), Math.max(...lo), Math.max(...la)]; })();
   let z = zmin, cx = 0, cy = 0;
-  const fitBox = (b, closer = 0) => {          // [west, süd, ost, nord] ins Bild, größte passende Zoomstufe (closer: so viele näher)
+  const fitBox = (b, closer = 0, fx = 0.5, fy = 0.5) => {   // [west, süd, ost, nord] ins Bild, größte passende Stufe (closer: so viele näher)
     const w = box.clientWidth, h = box.clientHeight;
-    z = zmin;
-    for (let t = zmax; t >= zmin; t--) {
+    z = zlo;
+    for (let t = zhi; t >= zlo; t--) {
       const [x1, y1] = mgProj(b[3], b[0], t), [x2, y2] = mgProj(b[1], b[2], t);
       if (x2 - x1 <= w * 0.92 && y2 - y1 <= h * 0.92) { z = t; break; }
     }
-    z = Math.min(zmax, z + closer);
+    z = Math.max(zlo, Math.min(zhi, z + closer));
     const [x1, y1] = mgProj(b[3], b[0], z), [x2, y2] = mgProj(b[1], b[2], z);
-    cx = (x1 + x2) / 2; cy = (y1 + y2) / 2;
+    cx = x1 + (x2 - x1) * fx; cy = y1 + (y2 - y1) * fy;
   };
+  const zr = $("#mgz");
+  Object.assign(zr, {min: zlo, max: zhi, step: 0.25});
+  const zshow = () => { zr.value = z; };
   const ql = () => q.toLowerCase();
   const match = (p) => { if (!q) return true; const c = cats[p.c], l = ql();
     return [p.name, p.en, c.titel, c.en, p.items].some((x) => (x || "").toLowerCase().includes(l)); };
@@ -2525,6 +2574,40 @@ async function mgView(slug, want) {
     let n = 0;
     pl.innerHTML = pts.map((p, i) => { if (!vis(p)) return ""; n++; return pinHtml(p, i); }).join("");
     $("#mgn").textContent = `${n} von ${pts.length} Punkten`;
+    heat();
+  };
+  /* Übersicht mit Bildern: die Karte in Felder (110 px) geteilt; je Feld bis zu drei Pokémon, so groß, wie sie
+     dort häufig sind (Summe der Gewichte), im Schwerpunkt ihrer Stellen. Mit Suche nur passende Pokémon */
+  const hl = document.createElement("div");
+  hl.className = "heat mgheat";
+  const heatTot = () => {
+    const tot = {};
+    HEATP.forEach((xs) => xs.forEach(([id, n, w]) => { const t = tot[id] ||= {id, name: n, w: 0, n: 0}; t.w += w; t.n++; }));
+    return Object.values(tot).sort((a, b) => b.w - a.w);
+  };
+  const heat = () => {
+    hl.hidden = !heatOn;
+    if (!heatOn) { hl.innerHTML = ""; return; }
+    hl.style.transform = pl.style.transform;
+    const G = 110, cells = {}, l = ql();
+    HEATP.forEach((xs, i) => {
+      if (!xs.length) return;
+      const p = pts[i], [x, y] = mgProj(p.la, p.lo, z);
+      const c = cells[Math.floor(x / G) + "," + Math.floor(y / G)] ||= {};
+      xs.forEach(([id, n, wt]) => { if (l && !n.toLowerCase().includes(l)) return;
+        const s = c[id] ||= {id, name: n, w: 0, n: 0, sx: 0, sy: 0}; s.w += wt; s.n++; s.sx += x * wt; s.sy += y * wt; });
+    });
+    const wmax = Math.max(0.01, ...Object.values(cells).flatMap((c) => Object.values(c).map((s) => s.w)));
+    hl.innerHTML = Object.values(cells).map((c) => { const xs = Object.values(c).sort((a, b) => b.w - a.w), top = xs[0]?.w || 0;
+      return xs.filter((s, i) => i < 3 && s.w >= top * 0.3).map((s) => { const px = Math.round(30 + 46 * Math.sqrt(s.w / wmax));
+        return `<a class="hspr" draggable="false" href="#pokemon/${s.id}" style="left:${(s.sx / s.w).toFixed(1)}px;top:${(s.sy / s.w).toFixed(1)}px;width:${px}px;height:${px}px;margin:-${px / 2}px 0 0 -${px / 2}px" data-tip="${esc(heatTip(s))}">${img(s.id)}</a>`; }).join(""); }).join("");
+  };
+  const heatSide = () => {
+    const xs = heatTot().slice(0, 40), m = xs[0]?.w || 1;
+    $("#mapside").innerHTML = `<h3>Häufig auf dieser Karte</h3><table class="rows heatl">${xs.map((s) => `<tr><td>${img(s.id, "sm")}</td><td><button class="link" data-heatq="${esc(s.name)}">${esc(s.name)}</button>
+      <span class="hbar"><i style="width:${Math.max(3, s.w / m * 100)}%"></i></span></td><td class="num hint" data-tip="Stellen auf der Karte">${s.n}</td></tr>`).join("")}</table>
+      <p class="hint">Balken: Summe der Anteile über alle Spawnpunkte und Orte; ein Maß dafür, wie viele man antrifft. Klick sucht das Pokémon auf der Karte.</p>`;
+    $$("[data-heatq]").forEach((b) => b.addEventListener("click", () => { const f = $("#mgq"); f.value = b.dataset.heatq; f.dispatchEvent(new Event("input")); }));
   };
   // Kacheln im Bild bei Zoomstufe zz (mit Rand von pad Kacheln); nur innerhalb der Karte, außerhalb gibt es keine
   const view = (zz, pad = 0) => {
@@ -2534,34 +2617,48 @@ async function mgView(slug, want) {
       for (let ty = Math.max(Math.floor(gy0 / TS), Math.floor(oy / TS) - pad); ty <= Math.min(Math.floor((gy1 - 1e-6) / TS), Math.floor((oy + h * f) / TS) + pad); ty++) out.push(`${zz}/${tx}/${ty}`);
     return out;
   };
-  // RankedBoost: keine Kacheln, je Ort ein Bild in Weltpixeln der Stufe bild_z (der Browser skaliert)
-  const IMGS = d.bilder || null;
-  let imgZ = null;
+  // RankedBoost, Serebii: je Ort ein Bild in Weltpixeln der Stufe bild_z (der Browser skaliert); nur die Bilder im Blick
+  const shown = new Map();
   const images = () => {
     if (old.firstChild) { old.innerHTML = ""; oldZ = null; }   // die Bilder skaliert der Browser, das alte Bild braucht es nicht
-    const w = box.clientWidth, h = box.clientHeight;
-    tl.style.transform = pl.style.transform = `translate(${-(cx - w / 2)}px,${-(cy - h / 2)}px)`;
-    if (imgZ === z && tl.firstChild) return;
-    imgZ = z;
-    const f = 2 ** (z - d.bild_z), [ox, oy] = mgProj(bb[3], bb[0], z);
-    tl.innerHTML = IMGS.map(([n, x, y, iw, ih]) => `<img class="mgimg" alt="" draggable="false" src="/mgbild/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${n}"
-      style="left:${(ox + x * f).toFixed(1)}px;top:${(oy + y * f).toFixed(1)}px;width:${(iw * f).toFixed(1)}px;height:${(ih * f).toFixed(1)}px" onerror="this.style.visibility='hidden'">`).join("");
+    const w = box.clientWidth, h = box.clientHeight, vx = cx - w / 2, vy = cy - h / 2;
+    tl.style.transform = pl.style.transform = hl.style.transform = `translate(${-vx}px,${-vy}px)`;
+    const f = 2 ** (z - d.bild_z), [ox, oy] = mgProj(bb[3], bb[0], z), keep = new Set();
+    IMGS.forEach(([n, x, y, iw, ih]) => {
+      const l = ox + x * f, t = oy + y * f, ww = iw * f, hh = ih * f;
+      if (l > vx + w * 1.5 || t > vy + h * 1.5 || l + ww < vx - w / 2 || t + hh < vy - h / 2) return;
+      keep.add(n);
+      let im = shown.get(n);
+      if (!im) {
+        im = new Image(); im.className = "mgimg"; im.alt = ""; im.draggable = false; im.decoding = "async";
+        im.onerror = () => { im.style.visibility = "hidden"; };
+        im.src = `/mgbild/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${n}`;
+        shown.set(n, im); tl.appendChild(im);
+      }
+      Object.assign(im.style, {left: l.toFixed(1) + "px", top: t.toFixed(1) + "px", width: ww.toFixed(1) + "px", height: hh.toFixed(1) + "px"});
+    });
+    shown.forEach((im, n) => { if (!keep.has(n)) { im.remove(); shown.delete(n); } });
   };
   const progress = () => {
     if (IMGS) { ld.hidden = true; old.innerHTML = ""; oldZ = null; return; }
     ld.hidden = !pending; ld.textContent = pending ? `Kacheln laden … noch ${pending}` : "";
     if (pending) return;
     old.innerHTML = ""; oldZ = null;           // alles da: das vergrößerte alte Bild weg
+    // auf dieser Stufe gab es keine einzige Kachel (die Karte beginnt erst weiter innen): ab jetzt die nächste nehmen
+    const T = tz(), lv = lvl[T];
+    if (lv && !lv.ok && lv.bad > 0 && T < zmax) { floorZ = T + 1; redraw(T); return; }
     // danach still vorladen: Nachbarschaft und die nächste Stufe hinein und hinaus (der Browser hebt sie auf)
-    [...view(z, 1), ...(z < zmax ? view(z + 1) : []), ...(z > zmin ? view(z - 1) : [])].slice(0, 120)
+    [...view(T, 1), ...(T < zmax ? view(T + 1) : []), ...(T > floorZ ? view(T - 1) : [])].slice(0, 120)
       .forEach((k) => { if (!warm.has(k)) { warm.add(k); new Image().src = tileUrl(k); } });
   };
+  const lvl = {};
   const tiles = () => {
     if (IMGS) return images();
-    const w = box.clientWidth, h = box.clientHeight, ox = cx - w / 2, oy = cy - h / 2;
-    tl.style.transform = pl.style.transform = `translate(${-ox}px,${-oy}px)`;
+    const w = box.clientWidth, h = box.clientHeight, ox = cx - w / 2, oy = cy - h / 2, T = tz();
+    tl.style.transform = `translate(${-ox}px,${-oy}px) scale(${2 ** (z - T)})`;
+    pl.style.transform = hl.style.transform = `translate(${-ox}px,${-oy}px)`;
     if (oldZ !== null) old.style.transform = `translate(${-ox}px,${-oy}px) scale(${2 ** (z - oldZ)})`;
-    const wantT = new Set(view(z));
+    const wantT = new Set(view(T)), lv = lvl[T] ||= {ok: 0, bad: 0};
     $$("img", tl).forEach((im) => { if (!wantT.has(im.dataset.k)) { if (im.onload) pending--; im.onload = im.onerror = null; im.src = ""; im.remove(); } else wantT.delete(im.dataset.k); });
     wantT.forEach((k) => {
       const [, tx, ty] = k.split("/").map(Number), im = new Image();
@@ -2569,8 +2666,8 @@ async function mgView(slug, want) {
       im.style.left = tx * TS + "px"; im.style.top = ty * TS + "px";
       if (TS !== 256) im.style.width = im.style.height = TS + "px";
       pending++;
-      im.onload = () => { im.onload = im.onerror = null; pending--; progress(); };
-      im.onerror = () => { im.onload = im.onerror = null; pending--; im.style.visibility = "hidden"; tileTrouble(); progress(); };
+      im.onload = () => { im.onload = im.onerror = null; pending--; lv.ok++; progress(); };
+      im.onerror = () => { im.onload = im.onerror = null; pending--; lv.bad++; im.style.visibility = "hidden"; tileTrouble(); progress(); };
       im.src = tileUrl(k); warm.add(k);
       tl.appendChild(im);
     });
@@ -2596,21 +2693,26 @@ async function mgView(slug, want) {
     }, 1500);
   };
   /* neue Zoomstufe: das bisherige Bild bleibt vergrößert stehen, bis die neuen Kacheln da sind (kein schwarzes Bild) */
-  const redraw = (prevZ) => {
-    if (prevZ !== undefined && prevZ !== z) {
-      if (!pending || oldZ === null) { old.innerHTML = ""; $$("img", tl).forEach((im) => { if (im.complete && im.style.visibility !== "hidden") old.appendChild(im); }); oldZ = prevZ; }
+  let curT = null;
+  const redraw = (prevT) => {
+    const T = tz();
+    zshow();
+    if (IMGS) { tiles(); pins(); return; }
+    if (prevT !== undefined && prevT === T && curT === T) { tiles(); pins(); return; }   // gleiche Stufe: nur skalieren
+    if (prevT !== undefined && prevT !== T) {
+      if (!pending || oldZ === null) { old.innerHTML = ""; $$("img", tl).forEach((im) => { if (im.complete && im.style.visibility !== "hidden") old.appendChild(im); }); oldZ = prevT; }
     } else { old.innerHTML = ""; oldZ = null; }
-    $$("img", tl).forEach((im) => { im.onload = im.onerror = null; im.src = ""; }); tl.innerHTML = ""; pending = 0; tiles(); pins();
+    $$("img", tl).forEach((im) => { im.onload = im.onerror = null; im.src = ""; }); tl.innerHTML = ""; pending = 0; curT = T; tiles(); pins();
   };
   const zoomTo = (nz, px, py) => {
-    nz = Math.max(zmin, Math.min(zmax, nz));
-    if (nz === z) return;
-    const pz = z;
+    nz = Math.max(zlo, Math.min(zhi, Math.round(nz * 4) / 4));
+    if (Math.abs(nz - z) < 1e-6) return;
+    const pT = tz();
     const w = box.clientWidth, h = box.clientHeight;
     px ??= w / 2; py ??= h / 2;
     const f = 2 ** (nz - z), wx = cx - w / 2 + px, wy = cy - h / 2 + py;
     cx = wx * f - px + w / 2; cy = wy * f - py + h / 2; z = nz;
-    redraw(pz);
+    redraw(pT);
   };
   /* zu einem Punkt springen: hinzoomen, mittig, ausgewählt, Einzelheiten rechts */
   const jump = (i) => {
@@ -2620,7 +2722,10 @@ async function mgView(slug, want) {
     [cx, cy] = mgProj(p.la, p.lo, z);
     sel = i; redraw(); side(i);
   };
-  fitBox(bb, 1); tiles(); pins();
+  /* Anfang: ganze Karte im Bild plus eine Stufe näher; je Spiel angepasst (Zahl: Stufen näher; dazu die Mitte als Anteil) */
+  const st0 = MGSTART[d.spiel + "/" + slug] ?? MGSTART[S.game] ?? MGSTART[d.spiel] ?? 1;
+  const [sc, sfx, sfy] = Array.isArray(st0) ? st0 : [st0, 0.5, 0.5];
+  fitBox(bb, sc, sfx, sfy); redraw();
   let drag = null, moved = false;
   box.addEventListener("pointerdown", (e) => { if (e.button !== 0) return; drag = {x: e.clientX, y: e.clientY, cx, cy}; moved = false; });
   box.addEventListener("pointermove", (e) => {
@@ -2633,10 +2738,18 @@ async function mgView(slug, want) {
   const stop = () => { drag = null; box.classList.remove("grab"); };
   box.addEventListener("pointerup", stop);
   box.addEventListener("pointercancel", stop);
-  box.addEventListener("wheel", (e) => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomTo(z + (e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+  // Mausrad: eine Raste eine halbe Stufe, Touchpad fein; mehrere Ereignisse je Bild zusammengefasst
+  let wz = 0, wxy = null, wraf = 0;
+  box.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY, r = box.getBoundingClientRect();
+    wz += Math.max(-0.5, Math.min(0.5, -dy / 200)); wxy = [e.clientX - r.left, e.clientY - r.top];
+    if (!wraf) wraf = requestAnimationFrame(() => { wraf = 0; const dz = wz; wz = 0; zoomTo(z + dz, ...wxy); });
+  }, {passive: false});
   box.addEventListener("dblclick", (e) => { const r = box.getBoundingClientRect(); zoomTo(z + 1, e.clientX - r.left, e.clientY - r.top); });
-  $$("[data-mz]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mz === "0") { const pz = z; fitBox(bb); redraw(pz); } else zoomTo(z + +b.dataset.mz); }));
-  $("#mggo")?.addEventListener("change", (e) => { const r = regions[+e.target.value]; if (r) { const pz = z; fitBox(r.slice(1)); redraw(pz); } e.target.value = ""; });
+  $$("[data-mz]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mz === "0") { const pT = tz(); fitBox(bb); redraw(pT); } else zoomTo(z + +b.dataset.mz * 0.5); }));
+  zr.addEventListener("input", () => zoomTo(+zr.value));
+  $("#mggo")?.addEventListener("change", (e) => { const r = regions[+e.target.value]; if (r) { const pT = tz(); fitBox(r.slice(1)); redraw(pT); } e.target.value = ""; });
   const side = (i) => {
     const p = pts[i], c = cats[p.c], on = isGot(p);
     const gotBtn = p.t === "sp" ? "" : `<p><button class="btn gotbtn${on ? " on" : ""}" id="gotbtn">${on ? "✓ erledigt" : "als erledigt markieren"}</button></p>`;
@@ -2644,6 +2757,13 @@ async function mgView(slug, want) {
     let body = "";
     if (p.t === "sp") body = `<table class="rows"><tr><th></th><th>Pokémon</th><th>Anteil</th><th>Tageszeit</th><th>Wetter</th></tr>${p.mons.map((m) => `<tr><td>${img(m.id, "sm")}</td>
       <td><a href="#pokemon/${m.id}">${m.alpha ? `<span class="alpha">Alpha</span> ` : ""}${esc(m.name)}</a></td><td>bis ${mpct(m.max)}</td><td>${esc(m.zeit)}</td><td>${esc(m.wetter)}</td></tr>`).join("")}</table>`;
+    if (p.pk) {
+      const by = {};
+      p.pk.forEach(([id, n, lab, x]) => (by[lab || "Pokémon"] ||= []).push([id, n, x]));
+      body += Object.entries(by).map(([lab, xs]) => `<h4>${esc(MGVALS[lab] || lab)}</h4><div class="ggrid mgk">${xs.map(([id, n, x]) =>
+        `<a class="gmon${isCaught(id) ? " got" : ""}" href="#pokemon/${id}">${img(id)}${isCaught(id) ? `<span class="gball">${ball(id)}</span>` : ""}<b>${esc(n)}</b>${x ? `<span class="hint">${esc(x)}</span>` : ""}</a>`).join("")}</div>`).join("");
+    }
+    if (p.it?.length) body += `<div class="mgits">${p.it.map(([id, n]) => `<span class="mgit"><img src="itembild/${id}" alt="" loading="lazy" onerror="this.remove()">${esc(n)}</span>`).join("")}</div>`;
     if (p.text) body += `<div class="mgdesc">${mgMd(p.text, slug)}</div>`;
     if (p.o) body += (p.o.items.length ? (p.text ? `<h4>Items an dieser Stelle</h4>` : "") + itemRows(p.o.items) : "")
       + (p.o.menge ? `<p class="hint">${esc(p.o.menge)} Stück je Mal.</p>` : "") + (!p.text && !p.o.items.length && MOBJHINT[p.o.art] ? `<p class="hint">${esc(MOBJHINT[p.o.art])}</p>` : "");
@@ -2698,6 +2818,10 @@ async function mgView(slug, want) {
   $$("details.mgg").forEach((x) => x.addEventListener("toggle", () => { if (x.open) open.add(x.dataset.gid); else open.delete(x.dataset.gid); store.set("mgOpen", [...open]); }));
   $$("[data-gfold]").forEach((b) => b.addEventListener("click", () => $$("details.mgg").forEach((x) => { x.open = b.dataset.gfold === "1"; })));
   $("#gothide").addEventListener("change", (e) => { gotHide = e.target.checked; store.set("mapGotHide", gotHide); pins(); });
+  pl.before(hl);
+  hl.addEventListener("click", (e) => { if (moved) e.preventDefault(); });
+  $("#mgheat")?.addEventListener("click", (e) => { heatOn = !heatOn; store.set("mgHeat", heatOn); e.currentTarget.classList.toggle("on", heatOn); heat(); if (heatOn && sel < 0 && !q) heatSide(); });
+  if (heatOn && !want) heatSide();
   let qt;
   $("#mgq").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); pins(); listHits(); }, 150); });
   // #karte/mg/<Karte>/<Ort>: direkt dorthin
@@ -2800,7 +2924,7 @@ async function mapView(karte, fid) {
     ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus. <a href="#karte/gebiete">Gebiete von ${esc(gameName())}</a></div>` : ""}
     ${d.kacheln || d.bild ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
     <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
-      <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
+      <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><input type="range" id="mapz" aria-label="Zoom" data-tip="Zoom stufenlos"><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
       <div class="mgside"><aside id="mapside" class="mapside"><p class="hint">${pts.length ? "Fahre über einen Punkt für die Pokémon dort, klicke für Details. Rot: Alpha." : "Fahre über ein Symbol für Einzelheiten, klicke für die Liste."}${objs.length ? " Rechtsklick auf ein Symbol markiert es als gefunden." : ""}</p></aside>
       ${lays.length ? `<div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-layall="1" data-tip="alle Ebenen einblenden">alle</button> · <button class="link" data-layall="0" data-tip="alle Ebenen ausblenden">keine</button>
         <span class="hint">|</span> <button class="link" data-gfold="1" data-tip="alle Gruppen aufklappen">auf</button> · <button class="link" data-gfold="0" data-tip="alle Gruppen zuklappen">zu</button></span></div>${layerBar}</div>` : ""}</div></div>
@@ -2956,15 +3080,19 @@ async function mapView(karte, fid) {
   };
   const zoomAt = (f, cx, cy) => {
     const ns = Math.max(0.15, Math.min(4, scale * f));
-    ox = cx - (cx - ox) * ns / scale; oy = cy - (cy - oy) * ns / scale; scale = ns; draw();
+    ox = cx - (cx - ox) * ns / scale; oy = cy - (cy - oy) * ns / scale; scale = ns; draw(); zsync();
   };
   if (MAPPOS && MAPPOS.key === key && MAPPOS.fid === fid) ({scale, ox, oy} = MAPPOS); else fit();
   MAPPOS = null;
   draw();
+  // Zoomregler wie auf der großen Karte (log. Maßstab); das Rad zoomt fein
+  const zr = $("#mapz"), zsync = () => { if (zr) zr.value = Math.log2(scale); };
+  if (zr) { Object.assign(zr, {min: Math.log2(0.15), max: 2, step: 0.05}); zsync();
+    zr.addEventListener("input", () => { const r = box.getBoundingClientRect(); zoomAt(2 ** +zr.value / scale, r.width / 2, r.height / 2); }); }
   box.addEventListener("wheel", (e) => {
     e.preventDefault();
-    const r = box.getBoundingClientRect();
-    zoomAt(e.deltaY < 0 ? 1.25 : 0.8, e.clientX - r.left, e.clientY - r.top);
+    const r = box.getBoundingClientRect(), dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+    zoomAt(2 ** Math.max(-0.5, Math.min(0.5, -dy / 200)), e.clientX - r.left, e.clientY - r.top);
   }, {passive: false});
   $$("[data-mz]").forEach((b) => b.addEventListener("click", () => {
     const r = box.getBoundingClientRect();
@@ -3135,7 +3263,7 @@ async function itemsView() {
       + (xs.length ? "" : `<tr><td colspan="${cols.length}" class="hint">Nichts gefunden.</td></tr>`)}</tbody></table>`;
     $$("#itemseg button").forEach((x) => x.classList.toggle("on", x.dataset.t === pocket));
     const tb = $("#itembox table");
-    $$("tbody tr[data-r]", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { if (!td.classList.contains("why")) td.dataset.c = i; if (!i) td.dataset.pr = tr.dataset.r; }));
+    $$("tbody tr[data-r]", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.c = i; if (td.classList.contains("why")) td.classList.add("nohc"); if (!i) td.dataset.pr = tr.dataset.r; }));
     crossTable(tb, IPIN);
   };
   $("#itemq").addEventListener("input", (e) => { q = e.target.value.trim(); draw(); });

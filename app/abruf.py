@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün, Karmesin/Purpur, Z-A)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus und Z-A)", "trainer": "PokéWiki (Trainerteams)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus und Z-A)", "trainer": "PokéWiki (Trainerteams)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -1200,6 +1200,8 @@ def mg_maps(spiel):
     fs = []
     for g in dict.fromkeys((spiel, share)):
         for suf in MAP_FILES if g in MAP_GAMES else ():
+            if suf == ".rb" and g not in rankedboost.GAMES:
+                continue                 # frühere Karte einer Quelle, die für dieses Spiel nicht mehr gilt
             try:
                 fs.append((g, suf, os.path.getmtime(mg_dir(g + suf + ".json"))))
             except OSError:
@@ -1706,8 +1708,8 @@ TRAINER_DAYS = 7           # so oft holt der Abgleich die Trainerseiten neu (sie
 
 
 def _trainer(st, log, at):
-    """Teams der Arenaleiter, Top Vier, Champs und Rivalen aller Hauptspiele aus dem PokéWiki (Kategorien, dann die
-    Seiten zu je 50): {"am", "teams": [...]} in pokewiki_trainer.json. Jünger als TRAINER_DAYS: der letzte Lauf gilt."""
+    """Teams der Arenaleiter, Top Vier, Champs und Rivalen aller Hauptspiele aus dem PokéWiki, dazu die Trainer auf den
+    Ortsseiten (Routen, Höhlen, Städte); Kategorien, dann die Seiten zu je 50: {"am", "teams": [...]} in pokewiki_trainer.json. Jünger als TRAINER_DAYS: der letzte Lauf gilt."""
     old = store.load_json("pokewiki_trainer.json", {}) or {}
     if old.get("teams") and old.get("am", "") > _iso(now() - timedelta(days=TRAINER_DAYS)):
         return old
@@ -1717,7 +1719,7 @@ def _trainer(st, log, at):
     roles = {}
     for cat, rolle in pokewiki.TRAINER_CATS.items():
         cont, n = None, 0
-        while n < 5 and not src.stopped:
+        while n < 10 and not src.stopped:
             STATE.update(step=f"PokéWiki: Trainer ({cat})")
             t = src.get(pokewiki.category_url(cat, cont), absent=(404,))
             try:
@@ -1741,6 +1743,7 @@ def _trainer(st, log, at):
             got = {}
         for title, wt in got.items():
             teams += pokewiki.trainer_teams(wt, title, roles.get(title, ""))
+    teams = pokewiki.dedupe_teams(teams)
     st["sources"]["trainer"] = src.result(trainer=len(names), teams=len(teams))
     if src.blocked:
         st["rest"]["pokewiki"] = _iso(now() + timedelta(hours=REST_H))

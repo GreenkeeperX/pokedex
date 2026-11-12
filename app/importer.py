@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "24"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "25"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -119,6 +119,12 @@ def game_name(names):
     return " / ".join(names)
 
 
+# Kürzel weiterer Regional-Dexe eines Spiels vor der Nummer (der erste Dex hat keins)
+DEX_KURZ = {"kalos-coastal": "K", "kalos-mountain": "B", "original-melemele": "M", "original-akala": "A", "original-ulaula": "U",
+            "original-poni": "P", "updated-melemele": "M", "updated-akala": "A", "updated-ulaula": "U", "updated-poni": "P",
+            "isle-of-armor": "R", "crown-tundra": "K", "kitakami": "K", "blueberry": "B", "hyperspace": "H"}
+
+
 def _derive_spiel_form(con):
     """Welche Formen es in welchem Spiel gibt, mit Nummer im Regional-Dex. Grundlage: die Regional-Dexe des Spiels;
     je Art die Formen mit eigener Lernliste im Spiel, sonst die Standardform. Spiele ohne Regional-Dex
@@ -129,27 +135,34 @@ def _derive_spiel_form(con):
         forms.setdefault(art, []).append((fid, std))
     dex = {}
     if _has(con, "pokedex_version_groups") and _has(con, "pokemon_dex_numbers"):
-        q = ("SELECT pvg.version_group_id, n.species_id, MIN(n.pokedex_number) FROM pokedex_version_groups pvg "
+        # mehrere Regional-Dexe (X/Y, Sonne/Mond mit Inseln, Schwert/Schild mit Erweiterungen …): die Nummer aus dem ersten
+        # Dex des Spiels, in dem die Art steht; dazu welcher Dex (0 = der erste) und sein Kürzel
+        q = ("SELECT pvg.version_group_id, n.species_id, n.pokedex_number, d.identifier FROM pokedex_version_groups pvg "
              "JOIN pokemon_dex_numbers n ON n.pokedex_id = pvg.pokedex_id JOIN pokedexes d ON d.id = pvg.pokedex_id "
-             "WHERE d.identifier != 'national' GROUP BY pvg.version_group_id, n.species_id")
-        for vg, sp, nr in con.execute(q):
-            dex.setdefault(vg, {})[sp] = nr
+             "WHERE d.identifier != 'national' ORDER BY pvg.version_group_id, d.id, n.pokedex_number")
+        order = {}
+        for vg, sp, nr, ident in con.execute(q):
+            k = order.setdefault(vg, [])
+            if ident not in k:
+                k.append(ident)
+            dex.setdefault(vg, {}).setdefault(sp, (nr, k.index(ident), DEX_KURZ.get(ident, "") if k.index(ident) else ""))
     rows = []
     for vg, in con.execute("SELECT id FROM spiel"):
         species = dex.get(vg)
         if species:
-            for sp, nr in species.items():
+            for sp, (nr, di, dk) in species.items():
                 fs = forms.get(sp) or []
                 own = [f for f, _ in fs if (f, vg) in learn]
                 for f in own or [f for f, std in fs if std]:
-                    rows.append((vg, f, nr))
+                    rows.append((vg, f, nr, di, dk))
         else:
             for sp, fs in forms.items():
                 for f, _ in fs:
                     if (f, vg) in learn:
-                        rows.append((vg, f, None))
-    con.execute("CREATE TABLE spiel_form (spiel INTEGER, form INTEGER, nr INTEGER, PRIMARY KEY (spiel, form))")
-    con.executemany("INSERT OR IGNORE INTO spiel_form VALUES (?, ?, ?)", rows)
+                        rows.append((vg, f, None, 0, ""))
+    con.execute("CREATE TABLE spiel_form (spiel INTEGER, form INTEGER, nr INTEGER, dex INTEGER DEFAULT 0, dexk TEXT DEFAULT '', "
+                "PRIMARY KEY (spiel, form))")
+    con.executemany("INSERT OR IGNORE INTO spiel_form VALUES (?, ?, ?, ?, ?)", rows)
 
 
 def _derive_form(con):
@@ -1442,7 +1455,7 @@ def _derive_serebii(con, ser):
             con.execute("INSERT INTO pokopia VALUES (?, ?, ?, ?, ?, ?)",
                         (dex, r.get("nr"), art, fid, str(r.get("name") or "")[:80], json.dumps(r.get("spezial") or [])))
             if dex == "haupt" and pk:
-                con.execute("INSERT OR IGNORE INTO spiel_form VALUES (?, ?, ?)", (pk[0], fid, r.get("nr")))
+                con.execute("INSERT OR IGNORE INTO spiel_form VALUES (?, ?, ?, 0, '')", (pk[0], fid, r.get("nr")))
             n_pk += 1
     return n_moves, n_pk
 

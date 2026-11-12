@@ -64,6 +64,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Reiter „Karte“ in „Kampf“ um, leitet `#karte` dorthin und macht aus „gefangen“ „im Kader“ (ohne Schillernd, ohne Fangchance).
 - Map Genie: nur Kacheln innerhalb von `bounds`; `#mgwarn` erklärt fehlende Kacheln (`kacheln` in `/api/mapgenie`);
   `mgMd` für Beschreibungen (Markdown, Feldnamen deutsch über `MGWORDS`, Werte über `MGVALS`).
+  Seit 0.43.0: gebrochener Zoom (Kachelstufe `tz()`, Kacheln per CSS skaliert), Regler `#mgz`, Startausschnitt `MGSTART`,
+  Bildebenen nur im sichtbaren Bereich; Punkte bringen `pk`/`it` mit (Bilder in der Seitenleiste), Übersicht `#mgheat`.
 - Vergleich (`compareView`, `#vergleich/<A>/<B>`, „-“ = leer): zwei Suchfelder mit Schnellwahl (gemerkte `cmpMerk`, bis 8,
   und Favoriten), Artwork und Netz wie die Hover-Karte, Werte mit Unterschied, „Kurz gesagt“ (Initiative Lv 50, bester
   Eigentyp-Faktor, physisch/speziell, Schwächen), Verteidigung je Angriffstyp, Fähigkeiten, Attacken (nur A, beide, nur B).

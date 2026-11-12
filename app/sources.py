@@ -12,11 +12,21 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.42.0"
+VERSION = "0.43.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.43.0", "12.11.2026", [
+        "Karten: Zoom-Regler und feinere Stufen (auch auf den Einzelkarten), Startausschnitt je Spiel angepasst, schneller durch Bilder nur im sichtbaren Bereich; zu Beginn nur Orte und Schnellreise sichtbar",
+        "Karten: Pokémon und Items in den Punkten als Bilder, Namen und häufige Sätze auf Deutsch; „Übersicht mit Bildern“ und „Häufig auf dieser Karte“ auch auf der Gesamtkarte",
+        "Karmesin/Purpur und Z-A zeigen wieder Map Genie (die Megakarten von RankedBoost überlagerten sich)",
+        "Pokémon: Nummer im Regional-Dex des Spiels, bei mehreren Dexen mit Kürzel (etwa #K12 in X/Y); Sortierung auch nach nationaler Nummer",
+        "Trainer als Gegner jetzt auch von Routen, Höhlen und Städten (PokéWiki); Schadensrechner in der Karte „Gegen Gegner“",
+        "Team: Haken in den Favoriten setzt ins Team, Favorit entfernen lässt sich rückgängig machen, engere Zeilen",
+        "Detailseite: Effort-Level-Diagramm wie die Basiswerte, mit Summe; „Aufträge mit …“ klappbar; Klapppfeile überall vor dem Text",
+        "Attacken und Items: Wirkung und Beschreibung wieder markierbar (nur die Zeile); Aufträge: Pokémon sortierbar, Kartensprung als eigene Spalte",
+    ]),
     ("0.42.0", "12.11.2026", [
         "Trainer als Gegner: im Reiter Team unter „Gegen Gegner“ die Teams der Arenaleiter, Top Vier, Champs und Rivalen des Spiels (PokéWiki), je Rolle nach Level sortiert, Rückkämpfe auf Wunsch, Suche nach Trainer, Ort oder Pokémon. Ein Klick setzt das Team als Gegner, mit Level und Attacken",
         "Die Bewertung gegen ein Trainerteam rechnet mit dessen echten Attacken, der Schadensrechner mit dessen Level",

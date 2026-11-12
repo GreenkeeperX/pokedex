@@ -1,5 +1,23 @@
 # Roadmap
 
+## 0.43.0 (12.11.2026)
+
+- Karten (`mgView`): gebrochener Zoom (Kacheln der nächsten Stufe, per CSS skaliert), Regler, Mausrad in halben Stufen,
+  Startausschnitt je Spiel (`MGSTART`), untere Grenze je Sitzung, wenn eine Stufe keine Kachel lädt (Pokopia); Bildebenen
+  nur im sichtbaren Bereich; Standard-Ebenen nur Orte, Schnellreise und Lager (`mgEbenen2`)
+- Kartenpunkte: `mapgenie.text_de` (Namen, häufige Sätze, Überschriften), `abfragen.point_pics` (Pokémon und Items als
+  Bilder, `pk`/`it`); Übersicht mit Bildern und „Häufig auf dieser Karte“ auf der Gesamtkarte
+- RankedBoost nur noch Let's Go und Feuerrot/Blattgrün (`rankedboost.GAMES`); Karmesin/Purpur und Z-A zurück zu Map Genie
+- `spiel_form.dex`/`dexk` (`importer.DEX_KURZ`, `importer.VERSION` 25): Nummer aus dem ersten Regional-Dex, in dem die Art
+  steht (vorher das Minimum über alle Dexe); Sortierung `nr` je Dex, neu `nat`
+- Trainer von Ortsseiten (Kategorie „Ort aus einem Hauptspiel“, Rolle Trainer, `pokewiki.dedupe_teams`); Schadensrechner
+  als Unterabschnitt von „Gegen Gegner“
+- Oberfläche: Klapppfeile vor dem Text, Effort-Diagramm im Stil der Basiswerte mit Summe, Favoriten-Haken setzt ins Team,
+  Rückgängig beim Entfernen eines Favoriten, Wirkung/Beschreibung markieren nur die Zeile (`nohc`), „Gegen Gegner“ ohne
+  Zeilen-Pins (`data-rowpin="0"`), Aufträge mit Kartenspalte; Aktiv-Markierung der Knöpfe wieder wie vorher, nur die
+  Teamplätze eigen
+- Offen: freie englische Sätze in Kartentexten, bessere Karten für Kalos und Alola
+
 ## 0.42.0 (12.11.2026)
 
 - Trainerteams aus dem PokéWiki (`abruf._trainer`, `pokewiki.trainer_teams`, Vorlagen `Team/Kopf` und `Team/Zeile`,

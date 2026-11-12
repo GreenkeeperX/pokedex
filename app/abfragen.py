@@ -86,9 +86,15 @@ class Data:
                 self.types_past.setdefault(pid, {}).setdefault(gen, []).append(tid)
         except Exception:
             pass
-        self.in_game = {}
-        for sp, fid, nr in con.execute("SELECT spiel, form, nr FROM spiel_form"):
+        self.in_game, self.in_dex = {}, {}
+        try:
+            sf = con.execute("SELECT spiel, form, nr, dex, dexk FROM spiel_form").fetchall()
+        except Exception:                      # Datenbank vor 0.43: ohne Dex je Nummer
+            sf = [(*r, 0, "") for r in con.execute("SELECT spiel, form, nr FROM spiel_form")]
+        for sp, fid, nr, di, dk in sf:
             self.in_game.setdefault(sp, {})[fid] = nr
+            if di:
+                self.in_dex.setdefault(sp, {})[fid] = (di, dk or "")
         # Gebiete je Spiel (PKHeX) mit den Formen, die dort fest vorkommen (ohne Massenauftreten)
         self.areas = {}
         try:
@@ -216,13 +222,14 @@ def row(D, f, g, gen, nr=None):
     if nr is None and g:
         nr = D.in_game.get(g["id"], {}).get(f["id"])
     w, s = form_stats(D, f, gen)
-    return {"id": f["id"], "art": f["art"], "nr": nr if nr is not None else f["art"], "name": f["name"],
+    di, dk = D.in_dex.get(g["id"], {}).get(f["id"], (0, "")) if g and nr is not None else (0, "")
+    return {"id": f["id"], "art": f["art"], "nr": nr if nr is not None else f["art"], "dex": di, "dexk": dk, "name": f["name"],
             "typen": form_types(D, f, gen), "werte": w, "summe": s, "gen": f["gen"], "werte_alt": w is not f["werte"],
             "legendaer": f["legendaer"] or f["mysterioes"], "endstufe": f["endstufe"], "kampfform": f["kampfform"],
             "standard": f["standard"], "relevant": f["relevant"]}
 
 
-SORTS = {"nr": lambda r: (r["nr"] or 99999, r["id"]), "name": lambda r: (r["name"].lower(), r["id"]),
+SORTS = {"nr": lambda r: (r.get("dex", 0), r["nr"] or 99999, r["id"]), "nat": lambda r: (r["art"], r["id"]), "name": lambda r: (r["name"].lower(), r["id"]),
          "summe": lambda r: (-r["summe"], r["id"]), "init": lambda r: (-r["werte"][5], r["id"]),
          "ang": lambda r: (-r["werte"][1], r["id"]), "spang": lambda r: (-r["werte"][3], r["id"]),
          "kp": lambda r: (-r["werte"][0], r["id"]), "vert": lambda r: (-r["werte"][2] - r["werte"][4], r["id"])}
@@ -960,6 +967,108 @@ def mg_names():
     return out
 
 
+def names_rx(names, tail=False):
+    """Regulärer Ausdruck für ganze Namen (längste zuerst); tail: dazu, was dahinter steht ((Level, Form), *[Bedingung]*)."""
+    if not names:
+        return None
+    t = r"((?:\s*\([^)]{1,30}\)|\s*[*_]\[?[^\]*_\n]{1,30}\]?[*_])*)" if tail else ""
+    return re.compile(r"(?<![\w-])(" + "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True)) + r")(?![\w-])" + t)
+
+
+def _pic_names():
+    """{deutscher Name: Art-Nr.} und {deutscher Itemname: Item-Nr.} für Bilder in den Kartendetails."""
+    key = _stamp()
+    if _MERGED.get("pics", (None,))[0] == key:
+        return _MERGED["pics"][1]
+    mons, items = {}, {}
+    con = db.game()
+    try:
+        try:
+            mons = {n: i for i, n in con.execute("SELECT pokemon_species_id, name FROM pokemon_species_names WHERE local_language_id = 6") if n}
+        except Exception:
+            pass
+        try:
+            items = {n: i for i, n in con.execute("SELECT id, name FROM item WHERE name IS NOT NULL") if n and len(n) >= 4}
+        except Exception:
+            pass
+    finally:
+        con.close()
+    out = (mons, names_rx(mons, True), items, names_rx(items))
+    _MERGED["pics"] = (key, out)
+    return out
+
+
+PIC_VALS = {"Night only": "nur nachts", "Day only": "nur tagsüber", "Shake trees": "Bäume schütteln", "Plant Cloak": "Pflanzenumhang",
+            "Sandy Cloak": "Sandumhang", "Trash Cloak": "Lumpenumhang", "Rare": "selten", "Common": "häufig", "Very Rare": "sehr selten",
+            "Uncommon": "gelegentlich", "Walking": "zu Fuß", "Surfing": "Surfen", "Fishing": "Angeln", "Day": "tagsüber", "Night": "nachts"}
+
+
+def point_pics(text, names, mons, mrx, items, irx):
+    """Pokémon und Items in einem Text eines Kartenpunkts: ([[Nr, Name, Fangart, Zusatz]], [[Item-Nr, Name]], Rest des
+    Texts). Fangart ist die Überschrift bzw. Bezeichnung vor dem Doppelpunkt (auch Tageszeit), Zusatz was in Klammern
+    folgt (Level, Anteil). Zeilen, die nur Pokémon aufzählen, fallen aus dem Rest (sie stehen dann als Bilder da)."""
+    pk, it, rest, head = [], [], [], ""
+    seen = set()
+    for raw in (text or "").split("\n"):
+        ln = raw.strip()
+        h = re.fullmatch(r"\*\*(.+?):?\*\*:?", ln)
+        if h:
+            head = h.group(1).strip()
+            rest.append(raw)
+            continue
+        body, lab = re.sub(r"^[-*]\s+", "", ln), head
+        m = re.match(r"^\*\*([^*]{1,40}?):?\*\*:?\s*(.*)$", body) or re.match(r"^([^:*«»\[\]]{2,30}):\s+(.*)$", body)
+        if m:
+            lab, body = m.group(1).strip(), m.group(2)
+        found, left = [], body
+        if mrx and body:
+            # Name, dahinter vielleicht (Level, Form) und *[Bedingung]*; nur Zeilen, die allein Pokémon aufzählen, zählen
+            left = mrx.sub(lambda x: found.append((x.group(1), x.group(2))) or "", body)
+        if found and not re.sub(r"[\s,;/()\d–\-%.·Lvl]+", "", left):
+            for n, tail in found:
+                extra = " · ".join(PIC_VALS.get(v.strip(), v.strip()) for v in re.findall(r"\(([^)]+)\)|[*_]\[?([^\]*_]+)\]?[*_]", tail) for v in v if v)
+                k = (mons[n], lab, extra)
+                if k not in seen:
+                    seen.add(k)
+                    pk.append([mons[n], n, PIC_VALS.get(lab, lab), extra])
+            continue                              # nur Pokémon (mit Level): die Bilder zeigen es
+        for x in (irx.finditer(body) if irx and body else ()):
+            if x.group(1) not in mons and items[x.group(1)] not in {i[0] for i in it}:
+                it.append([items[x.group(1)], x.group(1)])
+        rest.append(raw)
+    while rest and re.fullmatch(r"\*\*.+\*\*:?|\s*", rest[-1].strip()):
+        rest.pop()                                 # Überschriften ohne Inhalt am Ende
+    out, hd = [], re.compile(r"\*\*[^*]+\*\*:?")
+    for i, ln in enumerate(rest):                  # Überschrift ohne eigenen Inhalt (danach nur eine weitere) auch weg
+        if hd.fullmatch(ln.strip()):
+            nxt = next((x.strip() for x in rest[i + 1:] if x.strip()), "")
+            if not nxt or hd.fullmatch(nxt) or re.match(r"\*\*[^*]+\*\*:?\s*\S", nxt):
+                continue
+        out.append(ln)
+    return pk, it, "\n".join(out).strip()
+
+
+def _point_pics(r):
+    """Kartenpunkte: Pokémon und Items aus dem Text als Bilder (pk, it); was der Text sonst sagt, bleibt."""
+    mons, mrx, items, irx = _pic_names()
+    if not (mrx or irx):
+        return
+    for p in r["punkte"]:
+        if p.get("sp"):
+            continue
+        names = " ".join([p.get("name") or ""] + [i[0] for i in (p.get("o") or {}).get("items") or []])
+        pk, it, rest = point_pics(p.get("text") or "", names, mons, mrx, items, irx)
+        if irx:                                    # der Punkt selbst ist ein Item (Name) oder hat Items aus den Spieldaten
+            for x in irx.finditer(names):
+                if x.group(1) not in mons and items[x.group(1)] not in {i[0] for i in it}:
+                    it.append([items[x.group(1)], x.group(1)])
+        if pk:
+            p["pk"] = pk
+            p["text"] = rest
+        if it:
+            p["it"] = it[:24]
+
+
 def _quests_de(r, spiel=LA):
     """Aufträge und Hauptmissionen auf der Karte: deutscher Name und Text von BisaFans vor dem englischen von Map Genie;
     „aq“ nennt den Schlüssel, unter dem der Haken liegt (wie im Reiter Aufträge)."""
@@ -1045,6 +1154,7 @@ def mg_map(m, spiel, stamp=None):
         _quests_de(r, spiel)
     if m.get("quelle") == "pokearth":
         _pokearth_mons(r, spiel)
+    _point_pics(r)
     out = {k: v for k, v in m.items() if k not in ("orte", "gruppen")}
     out.update(r, spiel=spiel, am=stamp, bounds=mapgenie.bounds_of(m))
     while len(hit) >= MERGED_MAX:            # die ältesten zuerst weg
@@ -1987,7 +2097,7 @@ def _furthest(pot, D, skip):
 # Erweiterungen und Schwester-Editionen zeigen die Trainer ihres Hauptspiels
 TRAINER_SHARE = {"the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet", "the-isle-of-armor": "sword-shield",
                  "the-crown-tundra": "sword-shield", "mega-dimension": "legends-za", "red-green-japan": "red-blue", "blue-japan": "red-blue"}
-TRAINER_ROLLEN = ("Arenaleiter", "Top Vier", "Champ", "Rivale")
+TRAINER_ROLLEN = ("Arenaleiter", "Top Vier", "Champ", "Rivale", "Trainer")
 
 
 def trainer_list(p):

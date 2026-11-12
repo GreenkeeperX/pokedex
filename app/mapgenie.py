@@ -279,6 +279,60 @@ NAMEN_DE = ((r"^(.+ Berry) Tree$", "Beerenbaum ({de})"), (r"^Apricorn Tree$", "A
             (r"^Alpha (.+)$", "Alpha-{de}"))
 
 
+# Häufige Sätze in den Texten von Map Genie → deutsch (Muster, Ersatz); Namen übersetzt text_de vorher
+SAETZE = ((r"\bSpeak (?:with|to) ", "Sprich mit "), (r"\bTalk to ", "Sprich mit "), (r"\bReport back to ", "Berichte "), (r"\babout your progress\b", "von deinem Fortschritt"), (r"\bUse the Ursaluna mount\.", "Reite auf Ursaluna."),
+          (r"\bInteract with the ", "Benutze das "), (r"^Exit to the (north|south|east|west)$", lambda m: "Ausgang nach " + {
+              "north": "Norden", "south": "Süden", "east": "Osten", "west": "Westen"}[m.group(1)]),
+          (r"\bOn top of the cliff\.", "Oben auf der Klippe."), (r"\bOn top of a small hill\.", "Auf einem kleinen Hügel."),
+          (r"\bBetween the two nearby cliffs\.", "Zwischen den beiden Klippen in der Nähe."),
+          (r"\bNew items added to the Clothier\.", "Neue Kleidung in der Schneiderei."),
+          (r"\bNew styles added to the Hairdresser\.", "Neue Frisuren beim Friseur."),
+          (r"\bNew options added at the photography studio\.", "Neue Möglichkeiten im Fotostudio."),
+          (r"\bMore fields available for farming\.", "Mehr Felder zum Anbauen."), (r"\bA new base camp\.", "Ein neues Lager."),
+          (r"\bComplete \[", "Schließe ab: ["), (r"\bStart \[", "Beginne ["), (r"\bVisit the ", "Besuche "),
+          (r"\bBurst (\d+) balloons within the time limit", r"Lass \1 Ballons in der Zeit platzen"),
+          (r"\bthe balloon race", "das Ballonrennen"), (r"\bthe general store", "dem Laden"), (r"\bStory Mission #", "Hauptmission #"),
+          (r"\bRequest #", "Auftrag #"), (r"\b(\d+)x ", r"\1× "), (r"\bHidden item\b", "Verstecktes Item"),
+          (r"\bon the first floor of ", "im ersten Stock von "), (r"\bto share what you(?:’|')ve learned", ", was du herausgefunden hast"),
+          (r"\bWalking - Day or Night\b", "Zu Fuß, Tag und Nacht"), (r"\bWalking - Day only\b", "Zu Fuß, nur tagsüber"),
+          (r"\bWalking - Night only\b", "Zu Fuß, nur nachts"), (r"(?<=\*\*)Walking(?=:?\*\*)", "Zu Fuß"), (r"(?<=\*\*)Trees(?=:?\*\*)", "Bäume"),
+          (r"(?<=\*\*)Surfing(?=:?\*\*)", "Surfen"), (r"(?<=\*\*)Fishing(?=:?\*\*)", "Angeln"), (r"(?<=\*\*)Ore deposits?(?=:?\*\*)", "Erzbrocken"),
+          (r"\bSpace-time distortion\b", "Raum-Zeit-Verzerrung"), (r"(?<=\*\*)Objectives(?=:?\*\*)", "Ziele"),
+          (r"(?<=\*\*)How to start(?=:?\*\*)", "Start"))
+_SAETZE = [(re.compile(p, re.M), r) for p, r in SAETZE]
+_NAMES_RX = {}
+
+
+def _names_rx(de):
+    """Regulärer Ausdruck aller englischen Namen (Items, Pokémon) eines Wörterbuchs, längste zuerst."""
+    key = id(de)
+    hit = _NAMES_RX.get(key)
+    if hit and hit[0] is de:
+        return hit[1]
+    names = sorted((n for n in de if n and len(n) >= 3 and de[n] != n), key=len, reverse=True)
+    rx = re.compile(r"(?<![\w-])(" + "|".join(re.escape(n) for n in names) + r")(?![\w-])") if names else None
+    _NAMES_RX.clear()
+    _NAMES_RX[key] = (de, rx)
+    return rx
+
+
+def text_de(text, de):
+    """Englischen Text von Map Genie eindeutschen, soweit es geht: Namen von Items und Pokémon (nicht in Adressen),
+    häufige Sätze und Überschriften. Ganze freie Sätze bleiben englisch."""
+    if not text:
+        return text
+    rx = _names_rx(de)
+    parts = re.split(r"(\]\([^)\s]+\))", text)       # Adressen der Verweise unangetastet lassen
+    for i in range(0, len(parts), 2):
+        t = parts[i]
+        if rx:
+            t = rx.sub(lambda m: de.get(m.group(1), m.group(1)), t)
+        for p, r in _SAETZE:
+            t = p.sub(r, t)
+        parts[i] = t
+    return "".join(parts)
+
+
 def name_de(t, de):
     """Name eines Orts von Map Genie auf Deutsch, soweit bekannt (sonst wie dort)."""
     if t in KAT_DE or t in de:
@@ -350,7 +404,7 @@ def merge(m, own=None, de=None):
     qname = QUELLE.get(m.get("quelle"), "Map Genie")
     for o in m.get("orte") or []:
         if o[1] in cat:
-            text = re.sub(r"«([^»]+)»", lambda x: de.get(x.group(1), x.group(1)), o[5]) if "«" in o[5] else o[5]
+            text = re.sub(r"«([^»]+)»", lambda x: de.get(x.group(1), x.group(1)), o[5]) if "«" in o[5] else text_de(o[5], de)
             p = {"id": o[0], "c": o[1], "la": o[2], "lo": o[3], "name": name_de(o[4], de), "text": text, "q": [qname]}
             if p["name"] != o[4]:
                 p["en"] = o[4]
