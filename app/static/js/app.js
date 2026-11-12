@@ -2353,7 +2353,7 @@ async function mgView(slug, want) {
       <div class="mgcats"><div class="bar"><b>Ebenen</b><span class="mlay-all"><button class="link" data-all="1">alle</button> · <button class="link" data-all="0">keine</button></span></div>
         ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
-    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN"})[d.quelle] || "Map Genie"}${d.quelle === "pokemoncompletion" && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
+    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN", dittobase: "DittoBase (aus den Spieldaten gezeichnet; Häuser und Höhlen stehen an ihrem Eingang)"})[d.quelle] || "Map Genie"}${["pokemoncompletion", "dittobase"].includes(d.quelle) && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
   header();
   const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box), old = $(".mgold", box), ld = $(".mgload", box);
   const tileUrl = (k) => `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
@@ -2498,7 +2498,7 @@ async function mgView(slug, want) {
     const quelle = p.t === "sp" ? "Spieldaten" : (p.q || []).join(" und ");
     $("#mapside").innerHTML = `<h3>${dot(c)} ${esc(p.t === "sp" ? (p.alpha ? "Alpha-Spawnpunkt" : "Spawnpunkt") : p.name || c.titel)}</h3>
       <p class="hint">${esc(c.g.titel)} · ${esc(c.titel)}${p.k && own.gebiete[p.k] ? " · " + esc(own.gebiete[p.k]) : ""}</p>${gotBtn}${body}
-      ${quelle ? `<p class="hint" data-tip="${esc(p.q?.length > 1 ? "Map Genie und die Spieldaten haben hier dasselbe; beides ist zu einem Punkt zusammengeführt." : "")}">Quelle: ${esc(quelle)}${p.text ? " (Text von Map Genie, Begriffe übersetzt)" : ""}</p>` : ""}`;
+      ${quelle ? `<p class="hint" data-tip="${esc(p.q?.length > 1 ? "Map Genie und die Spieldaten haben hier dasselbe; beides ist zu einem Punkt zusammengeführt." : "")}">Quelle: ${esc(quelle)}${p.text ? ` (Text von ${esc(p.q?.[0] || "Map Genie")}, Begriffe übersetzt)` : ""}</p>` : ""}`;
     $("#gotbtn")?.addEventListener("click", () => toggle(i));
   };
   const listHits = () => {

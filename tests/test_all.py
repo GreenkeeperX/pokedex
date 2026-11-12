@@ -458,6 +458,153 @@ class Leser(unittest.TestCase):
         self.assertEqual(abfragen._research(con, 399), [{"aufgabe": "Exemplare gefangen", "stufen": ["1", "3"], "doppelt": True}])
         con.close()
 
+    def test_0_38_0_png(self):
+        import struct
+        import zlib
+        from app import png
+        w, h = 5, 3
+        rgba = b"".join(bytes([x * 40, y * 80, (x + y) * 20, 255 if x % 2 else 128]) for y in range(h) for x in range(w))
+        self.assertEqual(png.decode(png.encode(w, h, rgba)), (w, h, rgba))
+
+        def chunk(k, b):
+            return struct.pack(">I", len(b)) + k + b + struct.pack(">I", zlib.crc32(k + b))
+
+        def make(ctype, depth, rows, pal=b"", trns=b""):
+            body = png.SIG + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, depth, ctype, 0, 0, 0))
+            if pal:
+                body += chunk(b"PLTE", pal)
+            if trns:
+                body += chunk(b"tRNS", trns)
+            return body + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
+        # RGB mit allen Filtern: Zeile 0 Sub, Zeile 1 Up, Zeile 2 Paeth (Durchschnitt in einer eigenen Zeile unten)
+        rgb = [bytes([x * 40, y * 80, (x + y) * 20]) for y in range(h) for x in range(w)]
+        line = lambda y: b"".join(rgb[y * w:(y + 1) * w])
+
+        def sub(cur):
+            return bytes([cur[i] if i < 3 else (cur[i] - cur[i - 3]) & 255 for i in range(len(cur))])
+
+        def up(cur, prev):
+            return bytes([(a - b) & 255 for a, b in zip(cur, prev)])
+
+        def paeth(cur, prev):
+            out = []
+            for i in range(len(cur)):
+                a = cur[i - 3] if i >= 3 else 0
+                b = prev[i]
+                c = prev[i - 3] if i >= 3 else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                out.append((cur[i] - (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255)
+            return bytes(out)
+
+        def avg(cur, prev):
+            return bytes([(cur[i] - (((cur[i - 3] if i >= 3 else 0) + prev[i]) >> 1)) & 255 for i in range(len(cur))])
+        rows = [b"\1" + sub(line(0)), b"\2" + up(line(1), line(0)), b"\4" + paeth(line(2), line(1))]
+        want = b"".join(px + b"\xff" for px in rgb)
+        self.assertEqual(png.decode(make(2, 8, rows))[2], want)
+        rows = [b"\0" + line(0), b"\3" + avg(line(1), line(0)), b"\0" + line(2)]
+        self.assertEqual(png.decode(make(2, 8, rows))[2], want)
+        # Palette mit 4 Bit und Transparenz: Index = x
+        pal = b"".join(bytes([i * 10, i * 20, i * 30]) for i in range(5))
+        rows = [b"\0" + bytes([0x01, 0x23, 0x40]) for _ in range(h)]
+        out = png.decode(make(3, 4, rows, pal, b"\0"))[2]
+        self.assertEqual(out[:8], bytes([0, 0, 0, 0, 10, 20, 30, 255]))
+        self.assertEqual(out[16:20], bytes([40, 80, 120, 255]))
+        with self.assertRaises(png.PNGError):
+            png.decode(b"kein Bild")
+
+    def test_0_38_0_dittobase(self):
+        import base64
+        from app import dittobase, mapgenie as _mg
+        mon = {"species": "ONIX", "slug": "onix", "name": "Onix", "level": 11, "moves": [{"name": "Tackle"}]}
+        props = {"data": {"overworld": {"width": 128, "height": 64}, "maps": {
+            "Stadt": {"name": "Erfundenstadt", "width": 2, "height": 1, "overworld": {"x": 0, "y": 0}},
+            "Weg": {"name": "Erfundenweg", "width": 2, "height": 2, "overworld": {"x": 64, "y": 0}},
+            "Hoehle": {"name": "Erfundenhöhle", "width": 2, "height": 2, "overworld": None},
+            "Tief": {"name": "Erfundenhöhle UG", "width": 2, "height": 2, "overworld": None}},
+            "markers": {"Stadt": [{"kind": "item", "x": 1, "y": 0, "name": "Potion"},
+                                  {"kind": "door", "x": 2, "y": 1, "name": "Höhle", "door": {"to": "Hoehle"}},
+                                  {"kind": "sign", "x": 0, "y": 0, "name": "Sign"}],
+                        "Hoehle": [{"kind": "door", "x": 0, "y": 0, "name": "zurück", "door": {"to": "Stadt"}},
+                                   {"kind": "door", "x": 1, "y": 1, "name": "tiefer", "door": {"to": "Tief"}},
+                                   {"kind": "trainer", "x": 1, "y": 1, "name": "Wanderer Erfunden",
+                                    "trainer": {"team": [mon, mon], "prize": 352}}],
+                        "Tief": [{"kind": "hidden-item", "x": 0, "y": 0, "name": "Ether"}],
+                        "Weg": [{"kind": "npc", "x": 0, "y": 0, "name": "Fruit Tree"}]}},
+            "pixi": {"tilesets": {"satz": {"image": "https://assets.dittobase.com/game-maps/crystal-maps/pixi/tilesets/satz.png",
+                                           "columns": 2}},
+                     "maps": {"Stadt": {"tileset": "satz", "blocks": base64.b64encode(bytes([0, 1])).decode()},
+                              "Weg": {"tileset": "satz", "blocks": base64.b64encode(bytes([1, 0, 0, 1])).decode()}}},
+            "wild": {"Weg": [{"name": "Rattata", "method": "grass", "times": ["night"], "minLevel": 4, "maxLevel": 6, "chance": 40}]}}
+        row = json.dumps(["$", "$L24", None, props])
+        chunk = json.dumps([1, "1:\"$Sreact.fragment\"\n14:" + row + "\n"])
+        page = f"<html><script>self.__next_f.push({chunk})</script></html>"
+        d = dittobase.extract(page)
+        self.assertEqual(sorted(d), ["data", "pixi", "wild"])
+        self.assertEqual(dittobase.anchors(d["data"])["Tief"][2], ("Erfundenhöhle", "Erfundenhöhle UG"))
+        m, draw = dittobase.parse(d, "crystal")
+        self.assertEqual((m["slug"], m["quelle"], m["min_zoom"], m["max_zoom"]), ("db-crystal", "dittobase", -5, 1))
+        names = {o[4]: o for o in m["orte"]}
+        self.assertEqual(sorted(names), ["Beerenbaum", "Erfundenweg", "Ether", "Potion", "Wanderer Erfunden"])
+        x, y = _mg.project(names["Potion"][2], names["Potion"][3], 0)
+        self.assertAlmostEqual(x, 16 + 8, places=2)                      # Schritt 1 = 16 Pixel, Mitte des Felds
+        self.assertAlmostEqual(y, 8, places=2)
+        self.assertIn("In: Erfundenhöhle\n2× «Onix» Lv. 11 (Tackle)\nPreisgeld 352", names["Wanderer Erfunden"][5])
+        self.assertIn("In: Erfundenhöhle → Erfundenhöhle UG", names["Ether"][5])
+        self.assertIn("«Rattata» Lv. 4–6, Gras (nachts), 40 %", names["Erfundenweg"][5])
+        x, y = _mg.project(names["Ether"][2], names["Ether"][3], 0)
+        self.assertLess(abs(x - 40) + abs(y - 24), 30)                   # am Eingang der Höhle (Tür bei 2, 1)
+        self.assertEqual([g[0] for g in m["gebiete"]], ["Erfundenstadt", "Erfundenweg"])
+        self.assertEqual(len(draw["karten"]), 2)
+        self.assertTrue(dittobase.tileset_ok(draw["saetze"]["satz"]["bild"]))
+        self.assertFalse(dittobase.tileset_ok("https://example.com/satz.png"))
+        # Zeichnen: Kachelsatz 64 × 32 (Block 0 rot, Block 1 blau)
+        red, blue = bytes([255, 0, 0, 255]), bytes([0, 0, 255, 255])
+        rgba = b"".join((red * 32 + blue * 32) for _ in range(32))
+        got = {}
+        n = dittobase.render_tiles(draw, {"satz": (64, 32, rgba)}, lambda z, x, y, b: got.__setitem__((z, x, y), b))
+        self.assertEqual(n, len(dittobase.tile_list(m)))
+        t0 = got[(0, 0, 0)]                                             # volle Auflösung, eine Kachel
+        px = lambda t, x, y: t[(y * 256 + x) * 4:(y * 256 + x) * 4 + 4]
+        self.assertEqual((px(t0, 5, 5), px(t0, 40, 5), px(t0, 70, 40), px(t0, 100, 40), px(t0, 5, 40)),
+                         (red, blue, red, blue, bytes(4)))
+        t1 = got[(1, 0, 0)]                                              # doppelt so groß
+        self.assertEqual((px(t1, 70, 10), px(t1, 130, 70), px(t1, 200, 70)), (blue, red, blue))
+        self.assertEqual(px(got[(-1, 0, 0)], 20, 5), blue)              # halb so groß
+        self.assertEqual(dittobase.tile(m, 0, 0, 0), ("db/crystal/0/0-0.png", None))
+        self.assertIsNone(dittobase.tile(m, 0, 1, 0))
+        self.assertEqual(dittobase.parse(None, "crystal"), (None, None))
+        # Texte: Pokémon-Namen werden in der Datenbank übersetzt
+        r = _mg.merge(m, None, {"Onix": "Onix", "Rattata": "Rattfratz", "Potion": "Trank"})
+        texts = {p["name"]: p for p in r["punkte"]}
+        self.assertIn("Rattfratz Lv. 4–6", texts["Erfundenweg"]["text"])
+        self.assertEqual((texts["Trank"]["q"], texts["Trank"].get("en")), (["DittoBase"], "Potion"))
+
+    def test_0_38_0_ign_abfrage(self):
+        from app import ign as _ign
+        nd = {"props": {"pageProps": {"page": {"map": {
+            "width": 0.5, "height": 1, "minZoom": 2, "maxZoom": 3, "mapName": "Erfunden", "mapSlug": "karte", "objectSlug": "spiel",
+            "tilesets": ["https://oyster.ignimgs.com/ignmedia/wikimaps/spiel/karte/{z}/{x}-{y}.jpg"],
+            "types": [{"typeSlug": "location", "typeName": "Location", "markers": [
+                {"id": 1, "lat": -0.25, "lng": 0.25, "markerName": "Erfundenstadt"}]},
+                {"typeSlug": "technical-machine", "typeName": "TM", "markers": []}]}}}}}
+        page = f'<html><script id="__NEXT_DATA__" type="application/json">{json.dumps(nd)}</script></html>'
+        g = _ign.parse(page, "galar")
+        q = _ign.query(g)
+        self.assertEqual(q["variables"], {"objectSlug": "spiel", "mapSlug": "karte", "typeSlugs": ["location", "technical-machine"]})
+        self.assertIn("markersMultiple(objectSlug: $objectSlug", q["query"])
+        answer = json.dumps({"data": {"markersMultiple": [
+            {"id": 1, "lat": -0.25, "lng": 0.25, "markerName": "Erfundenstadt", "typeSlug": "location"},
+            {"id": 2, "lat": -0.5, "lng": 0.1, "markerName": "TM01", "typeSlug": "technical-machine"},
+            {"id": 3, "lat": None, "lng": 0.1, "markerName": "kaputt", "typeSlug": "technical-machine"}]}})
+        more = _ign.markers(answer)
+        self.assertEqual(len(more), 2)
+        g2 = _ign.parse(page, "galar", more)
+        self.assertEqual(sorted(o[4] for o in g2["orte"]), ["Erfundenstadt", "TM01"])      # gleiche id nur einmal
+        self.assertIn("TMs", [c["titel"] for x in g2["gruppen"] for c in x["kategorien"]])
+        self.assertEqual(_ign.markers("kein JSON"), [])
+        self.assertIsNone(_ign.query(None))
+
     def test_0_37_1_kachelmuster_schnell(self):
         import time
         from app import abruf
@@ -1047,7 +1194,7 @@ class Abgleich(TempData):
     def test_verbindungstest_parallel(self):
         # alle Server gleichzeitig, jeder für sich nacheinander; Zeilen in der Reihenfolge der Abfragen, Fortschritt zählt mit
         seen = []
-        def fake(url, timeout=40, encoding="", headers=None, raw=False, limit=None):
+        def fake(url, timeout=40, encoding="", headers=None, raw=False, limit=None, data=None):
             self.assertTrue(limit)                          # jede Abfrage hat eine Gesamtzeit
             seen.append(url)
             return {"error": "", "status": 404, "server": "x", "text": "nicht da", "body": b""}

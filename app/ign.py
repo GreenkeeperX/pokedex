@@ -4,7 +4,10 @@
 
 IGN legt die Karte in ein Einheitsquadrat (Breite width, Höhe height ≤ 1; Punkte mit lat ∈ [−height, 0], lng ∈ [0, width])
 und kachelt es wie eine Web-Karte: Stufe z hat 256·2^z Pixel je Einheit, Kacheln {z}/{x}-{y}.jpg zu 256 Pixeln. Hier liegt das
-Quadrat auf der ganzen Web-Mercator-Welt; damit sind Stufen und Kachelnummern dieselben wie bei IGN."""
+Quadrat auf der ganzen Web-Mercator-Welt; damit sind Stufen und Kachelnummern dieselben wie bei IGN.
+
+Die Seite bringt nur einen Teil der Punkte mit; alle kommen über dieselbe GraphQL-Abfrage, die die Seite selbst stellt
+(MapMarkersMultiple bei mollusk.apis.ign.com, nur lesend, alle Arten der Karte auf einmal)."""
 import json
 import math
 import re
@@ -12,6 +15,11 @@ import re
 from . import mapgenie
 
 BASE = "https://www.ign.com/maps/"
+GRAPH = "https://mollusk.apis.ign.com/graphql"
+QUERY = ("query MapMarkersMultiple($objectSlug: String!, $mapSlug: String!, $typeSlugs: [String!]!) {\n"
+         "  markersMultiple(objectSlug: $objectSlug, mapSlug: $mapSlug, typeSlugs: $typeSlugs) {\n    ...mapMarkerFields\n  }\n}\n"
+         "fragment mapMarkerFields on MapMarker {\n  id\n  lat\n  lng\n  markerName\n  markerSlug\n  typeSlug\n  wikiPage\n"
+         "  checklistTaskId\n  iconSlug\n  regionId\n  mapSlug\n  objectSlug\n}\n")
 # Spiel (Kennung wie in der PokéAPI) → (Kennung bei IGN, Karten)
 GAMES = {"sword-shield": ("pokemon-sword-shield", ("galar",)),
          "lets-go-pikachu-lets-go-eevee": ("pokemon-lets-go-pikachu-eevee", ("kanto",))}
@@ -38,15 +46,34 @@ def next_data(page):
         return None
 
 
+def query(m):
+    """GraphQL-Abfrage (als Objekt für POST) aller Punkte einer Karte aus parse, oder None ohne Arten."""
+    if not (m and m.get("typen") and m.get("objekt") and m.get("karte")):
+        return None
+    return {"operationName": "MapMarkersMultiple", "query": QUERY,
+            "variables": {"objectSlug": m["objekt"], "mapSlug": m["karte"], "typeSlugs": [t[0] for t in m["typen"]]}}
+
+
+def markers(text):
+    """Antwort der Abfrage → Liste der Punkte (dict mit lat, lng, markerName, typeSlug …); [] ohne Treffer."""
+    try:
+        d = json.loads(text) if isinstance(text, str) else (text or {})
+    except ValueError:
+        return []
+    xs = ((d.get("data") or {}).get("markersMultiple")) if isinstance(d, dict) else None
+    return [x for x in xs or [] if isinstance(x, dict) and x.get("lat") is not None and x.get("lng") is not None]
+
+
 def to_ll(lat, lng):
     """Punkt bei IGN → [Breite, Länge] auf der eigenen Karte (Einheitsquadrat = ganze Welt)."""
     la, lo = mapgenie.unproject(float(lng) * 256, -float(lat) * 256, 0)
     return round(la, 6), round(lo, 6)
 
 
-def parse(page, karte):
+def parse(page, karte, extra=None):
     """Kartenseite (HTML) → Karte wie mapgenie.parse, mit quelle "ign", kachel 256, url (Kachelmuster), einheit
-    [Breite, Höhe]; None ohne Karte."""
+    [Breite, Höhe], typen [[Slug, Name]], objekt und karte (für query); None ohne Karte. extra: Punkte aus der
+    GraphQL-Abfrage (markers), sie kommen zu denen der Seite dazu (gleiche id einmal)."""
     d = next_data(page) or {}
     m = (((d.get("props") or {}).get("pageProps") or {}).get("page") or {}).get("map") or {}
     ts = m.get("tilesets") or []
@@ -57,10 +84,22 @@ def parse(page, karte):
         return None
     w, h = float(m["width"]), float(m["height"])
     cats, gruppen, orte = {}, {}, []
+    typen = [[str(t.get("typeSlug")), str(t.get("typeName") or t.get("typeSlug"))] for t in m.get("types") or [] if t.get("typeSlug")]
+    names = dict(typen)
+    by_type = {}
     for t in m.get("types") or []:
-        name = str(t.get("typeName") or t.get("typeSlug") or "")
+        by_type.setdefault(str(t.get("typeSlug")), []).extend(t.get("markers") or [])
+    for mk in extra or []:
+        by_type.setdefault(str(mk.get("typeSlug")), []).append(mk)
+    seen = set()
+    for slug, mks in by_type.items():
+        name = names.get(slug) or slug.replace("-", " ").title()
         titel = KAT_DE.get(name, name)
-        for mk in t.get("markers") or []:
+        for mk in mks:
+            if mk.get("id") is not None:
+                if mk["id"] in seen:
+                    continue
+                seen.add(mk["id"])
             try:
                 la, lo = to_ll(mk["lat"], mk["lng"])
             except (KeyError, TypeError, ValueError):
@@ -81,7 +120,8 @@ def parse(page, karte):
     return {"id": 0, "slug": "ign-" + karte, "titel": TITEL.get(karte, str(m.get("mapName") or karte)), "quelle": "ign",
             "kacheln": "", "endung": url.rsplit(".", 1)[-1], "kachel": 256, "url": url, "einheit": [w, h],
             "min_zoom": int(m.get("minZoom") or 0), "max_zoom": int(m.get("maxZoom") or 0),
-            "bounds": [w0, s0, e0, n0], "gruppen": gl, "orte": orte, "gebiete": sorted(
+            "bounds": [w0, s0, e0, n0], "gruppen": gl, "orte": orte, "typen": typen,
+            "objekt": str(m.get("objectSlug") or ""), "karte": str(m.get("mapSlug") or karte), "gebiete": sorted(
                 ([o[4], o[3] - 0.5, o[2] - 0.3, o[3] + 0.5, o[2] + 0.3] for o in orte if o[1] == (cats.get("Orte") or {}).get("id")),
                 key=lambda g: g[0].lower())}
 

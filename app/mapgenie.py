@@ -291,6 +291,7 @@ def name_de(t, de):
     return t
 
 
+QUELLE = {"pokemoncompletion": "pokemoncompletion", "ign": "IGN", "dittobase": "DittoBase"}   # Name der Quelle einer Karte
 MERGE_TOL = 30.0            # so nah (Weltpixel bei Zoomstufe 14, wenige Meter) gelten zwei Punkte als dasselbe
 MERGE_WIDE = 3              # Einzelstücke (Geisterlichter, Icognito, Gedichte, Alphas …) dürfen dreimal so weit weg sein
 
@@ -314,9 +315,11 @@ def merge(m, own=None, de=None):
         groups.append(G)
         by_en[g["titel"]] = G
     pts = []
+    qname = QUELLE.get(m.get("quelle"), "Map Genie")
     for o in m.get("orte") or []:
         if o[1] in cat:
-            p = {"id": o[0], "c": o[1], "la": o[2], "lo": o[3], "name": name_de(o[4], de), "text": o[5], "q": ["Map Genie"]}
+            text = re.sub(r"«([^»]+)»", lambda x: de.get(x.group(1), x.group(1)), o[5]) if "«" in o[5] else o[5]
+            p = {"id": o[0], "c": o[1], "la": o[2], "lo": o[3], "name": name_de(o[4], de), "text": text, "q": [qname]}
             if p["name"] != o[4]:
                 p["en"] = o[4]
             pts.append(p)
