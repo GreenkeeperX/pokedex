@@ -956,14 +956,13 @@ class Abgleich(TempData):
             def read(self, n):
                 return b"x" * 10
         with mock.patch.object(sources.time, "monotonic", side_effect=[0, 1, 2, 100]):
-            with self.assertRaises(TimeoutError):
-                sources._read(Slow(), 50)
+            self.assertEqual(sources._read(Slow(), 50), (b"x" * 40, False))     # was bis dahin kam, als Teil
         class Done:
             def __init__(self):
                 self.parts = [b"ab", b"cd", b""]
             def read(self, n):
                 return self.parts.pop(0)
-        self.assertEqual(sources._read(Done(), None), b"abcd")
+        self.assertEqual(sources._read(Done(), None), (b"abcd", True))
 
     def test_lauf_ohne_quellen_behaelt_alte_daten(self):
         def fake(url, timeout=40, headers=None, raw=False):

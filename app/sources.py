@@ -11,11 +11,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.35.1"
+VERSION = "0.35.2"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.35.2", "12.11.2026", [
+        "Verbindungstest: eine Seite, die nach 60 Sekunden noch tröpfelt, wird mit dem bis dahin Geladenen ausgewertet statt verworfen",
+    ]),
     ("0.35.1", "12.11.2026", [
         "Verbindungstest hängt nicht mehr: jede Abfrage gibt nach 20 Sekunden ohne Antwort oder 60 Sekunden insgesamt auf",
     ]),
@@ -483,18 +486,19 @@ def _decode(raw, enc):
 
 def _read(resp, deadline):
     """Antwort in Stücken lesen; bricht ab, wenn sie zu groß wird oder die Gesamtzeit überschreitet (timeout gilt
-    nur je Lesevorgang: ein Server, der tröpfchenweise sendet, hielt die Abfrage sonst beliebig lange fest)."""
+    nur je Lesevorgang: ein Server, der tröpfchenweise sendet, hielt die Abfrage sonst beliebig lange fest).
+    Gibt (Bytes, vollständig) zurück: nach Ablauf der Zeit das, was bis dahin kam."""
     parts, n = [], 0
     while True:
         chunk = resp.read(1 << 16)
         if not chunk:
-            return b"".join(parts)
+            return b"".join(parts), True
         parts.append(chunk)
         n += len(chunk)
         if n > MAX_BODY:
             raise ValueError("Antwort zu groß")
         if deadline and time.monotonic() > deadline:
-            raise TimeoutError(f"nach {n} Bytes abgebrochen, Zeitlimit überschritten")
+            return b"".join(parts), False
 
 
 def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False, limit=None):
@@ -517,13 +521,20 @@ def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False, 
         except urllib.error.HTTPError as e:
             resp = e                      # Fehlerseiten haben auch einen Inhalt
         with resp:
-            body = _read(resp, deadline)
+            body, whole = _read(resp, deadline)
+            if not whole:
+                out["teil"] = True            # Zeit abgelaufen: nur der Anfang
             out["status"] = getattr(resp, "status", None) or resp.getcode()
             out["enc"] = (resp.headers.get("Content-Encoding") or "").lower()
             out["server"] = resp.headers.get("Server") or ""
             if out["enc"] not in ("", "identity", "gzip", "deflate") and encoding != "identity":
                 return request(url, timeout, "identity", headers, raw, max(1, deadline - time.monotonic()) if deadline else None)
-            data = _decode(body, out["enc"])
+            try:
+                data = _decode(body, out["enc"])
+            except Exception:
+                if whole:
+                    raise
+                data = zlib.decompressobj(16 + zlib.MAX_WBITS if out["enc"] == "gzip" else zlib.MAX_WBITS).decompress(body) if out["enc"] in ("gzip", "deflate") else body
             if raw:
                 out["body"] = data
             else:

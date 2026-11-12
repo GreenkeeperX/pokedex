@@ -1370,7 +1370,8 @@ def diagnose(proben=None, stand=None):
                 lines[slot] = f"{name}: keine Verbindung ({r['error']})"
                 return None
             size = len(r.get("body", b"")) if raw else len(r["text"])
-            head = f"{name}: HTTP {r['status']}, Server {r['server'] or '?'}, {size} {'Bytes' if raw else 'Zeichen'}"
+            head = (f"{name}: HTTP {r['status']}, Server {r['server'] or '?'}, {size} {'Bytes' if raw else 'Zeichen'}"
+                    + (f" (nach {DIAG_LIMIT} s abgebrochen, nur der Anfang)" if r.get("teil") else ""))
             if r["status"] >= 400 or (not raw and sources.challenge(r["text"])):
                 lines[slot] = (head + (", gesperrt" if r["status"] in sources.BLOCKED else "") +
                                (", Prüfseite (Cloudflare)" if not raw and sources.challenge(r["text"]) else "") +
