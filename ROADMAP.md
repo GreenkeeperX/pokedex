@@ -1,5 +1,12 @@
 # Roadmap
 
+## 0.50.0 (12.11.2026)
+
+- Fangformel Legenden: Arceus nach Bulbapedia „Catch rate“ (aus den Proben vom 12.11.): `abfragen.catch_chance_la`, `rank_la`,
+  Rechnung im Browser (`catchHtmlLA`). Fangraten des Spiels aus PKHeX `personal_la` (Byte 0x08, nur Arten im Spiel),
+  Tabelle `fangrate`, `importer.VERSION` 26. Formen nutzen die Fangrate der Grundform.
+- Nächstes: Shiny-Sperren aller Spiele aus Bulbapedia „List of unobtainable Shiny Pokémon“ (nur per Tausch / nie).
+
 ## 0.49.0 (12.11.2026)
 
 - `abfragen._pokearth_mons`: Arten ohne deutschen Namen (None) übersprungen; sie warfen auf allen PokéEarth-Karten AttributeError.

@@ -904,6 +904,11 @@ def _pkhex(st, log, at):
         per = src.get(PKHEX_RAW + f"byte/personal/personal_{key}", raw=True) if lvl else None
         if lvl and per:
             out[f"_lernen_{key}"] = {"lvl": lvl, "personal": per}
+    # 0.50: Werte je Form in Legenden: Arceus, für die eigenen Fangraten des Spiels (importer._derive_fangrate)
+    STATE["step"] = "PKHeX: Fangraten Legenden: Arceus"
+    per = src.get(PKHEX_RAW + "byte/personal/personal_la", raw=True)
+    if per:
+        out["_fang_la"] = {"personal": per}
     # Itemlisten je Spiel und die Itemnamen (deutsch, englisch) für Spiele ohne Liste in der PokéAPI
     STATE["step"] = "PKHeX: Items"
     items = {lang: src.get(PKHEX_RAW + f"text/items/text_Items_{lang}.txt") for lang in ("de", "en")}

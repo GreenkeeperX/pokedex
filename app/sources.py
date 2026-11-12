@@ -12,11 +12,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.49.0"
+VERSION = "0.50.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.50.0", "12.11.2026", [
+        "Fangchance in Legenden: Arceus mit der echten Formel des Spiels und den eigenen Fangraten von Hisui (etwa Garados 55 statt 45, "
+        "Dialga 45 statt 3)",
+        "Schalter für die Lage: Level und Alpha, dein Sternrang, Verhalten (frisst, schläft, betäubt …), Wurf in den Rücken, unbemerkt, "
+        "fliegt, Himmihbeere und Massenausbruch; der Rechenweg steht im Tooltip jeder Zelle",
+        "Hisui-Bälle mit den richtigen Faktoren: Pokéball ×0,75, Zentnerball ×1,75 (unbemerkt ×2), Flügelball ×1,25 (fliegt ×2)",
+    ]),
     ("0.49.0", "12.11.2026", [
         "Karten: der interne Fehler (AttributeError) bei Colosseum, XD, HeartGold/SoulSilver, Schwarz/Weiß 1 und 2, X/Y, ORAS und "
         "Strahlender Diamant/Leuchtende Perle ist behoben",

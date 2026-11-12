@@ -935,3 +935,5 @@ table.vlines td+td,table.vlines th+th{border-left:1px solid var(--line)}
 table.vlines td,table.vlines th{padding-left:8px;padding-right:8px}
 details.reqinfo{margin:6px 0 4px}details.reqinfo>summary{font-weight:400}details.reqinfo p{margin:4px 0 2px}
 details>summary{color:var(--ink-hi)}   /* 0.46: alle Klapp-Titel in derselben Farbe */
+
+.bar.fla{gap:6px 14px;margin:2px 0 6px;flex-wrap:wrap}.bar.fla label{white-space:nowrap}   /* 0.50: Schalter der Fangchance in Legenden: Arceus */
