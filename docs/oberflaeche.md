@@ -143,7 +143,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Typtabelle „Mein Team“ (`chartTeam`): nur die Typen des Teams als Zeilen, dazu `teamTypeHtml` (Verteidigung und Angriff
   je Mitglied, einklappbar, gemerkt in `ttOpen`).
 - Karten der Liste: unter dem Bild eine Zeile (`acts`) mit Team-Häkchen, Stern und Pokéball; gesetzte Marken sind immer
-  zu sehen, die übrigen Knöpfe und „+“ beim Hovern, alles an derselben Stelle. Anderswo stehen Marken (`marks`) hinter dem Namen.
+  zu sehen, die übrigen Knöpfe beim Hovern, alles an derselben Stelle. Ins Team geht es über das Häkchen (grün nur im Team),
+  ein „+“ gibt es auf den Karten seit 0.47.5 nicht mehr. Anderswo stehen Marken (`marks`) hinter dem Namen.
 - Hover-Karte (`glanceHtml`): Angriff (bester eigener Typ je Ziel), Verteidigung (beide Typen), „gut einzusetzen gegen“
   (trifft ×2 oder mehr, steckt höchstens ×½ ein). Das ausführliche Duell steht auf der Detailseite.
 - PokéWiki-Links (`wikiLink`, `a.wl`): der Name selbst ist der Link, unterstrichen nur beim Hovern, kein Pfeil.
