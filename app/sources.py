@@ -12,11 +12,19 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.39.0"
+VERSION = "0.40.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.40.0", "12.11.2026", [
+        "Aufträge und Karte hängen zusammen: ein Haken im Reiter Aufträge gilt auch auf der Karte und umgekehrt; 📍 springt vom Auftrag zur Stelle auf der Karte",
+        "Auf der Karte von Legenden: Arceus tragen Aufträge und Hauptmissionen jetzt den deutschen Namen und Text von BisaFans (Beschreibung, Aufgabe, Lösung, Belohnung), der englische steht darunter",
+        "Neu im Reiter Aufträge: die Hauptmissionen (Mission 1 bis 27 mit Kapitel und Weg, aus der Komplettlösung von BisaFans), abhakbar wie die Nebenaufträge",
+        "Aufträge ohne Ort verweisen auf die Karte; die Aufträge 95 bis 122 (Update „Ein neuer Tag in Hisui“) kennt die Karte von Map Genie nicht und sind als „nach dem Spiel“ gekennzeichnet",
+        "Karte: doppelte Punkte sind zusammengelegt (gleiche Pflanze mehrfach an einer Stelle, Massenauftreten mit mehreren Pokémon an derselben Stelle sind ein Punkt mit allen Pokémon)",
+        "Neue Kartenquelle RankedBoost für Let’s Go und Feuerrot/Blattgrün: je Ort ein Bild an seiner Stelle und ein Punkt mit den Pokémon je Fangart und Level; alles liegt auf dem Server",
+    ]),
     ("0.39.0", "12.11.2026", [
         "Schneller: beim Reiterwechsel verschwindet der alte Reiter sofort, oben zeigt ein Balken, dass geladen wird; der Server hält Verbindungen offen und hat die Karten fertig gepackt bereit",
         "Kacheln: fehlende Kacheln (Rand, Meer) merkt sich der Server auch über einen Neustart, und ist eine Karte ganz durchgesehen, fragt er nicht mehr nach. Das lange „Kacheln laden …“ ist damit weg",

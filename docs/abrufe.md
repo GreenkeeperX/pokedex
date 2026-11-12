@@ -51,7 +51,9 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    Spielen zu (Tabellen `spieltext` und `forschung`) und meldet unbekannte Kürzel im Protokoll.
    **BisaFans** (`app/bisafans.py`): die Seite der Nebenmissionen von Legenden: Arceus, einmal je Abgleich mit
    3 Sekunden Pause; ohne Treffer gilt `bisafans.json` vom letzten Lauf. `importer._derive_auftrag` legt die Aufträge in
-   `auftrag` und sucht darin die Namen der Arten aus dem Hisui-Pokédex.
+   `auftrag` und sucht darin die Namen der Arten aus dem Hisui-Pokédex. Dazu die neun Seiten der Komplettlösung
+   (`bisafans.LA_STORY`): die Hauptmissionen („Mission N: Name“ mit dem Anfang des Wegs) in `la_missionen`,
+   `importer._derive_mission` legt sie in `mission`.
    **PLA Companion** (software-notion.de, `app/companion.py`): je Karte `/apps/pla-companion/map/<Karte>/data?lang=de`
    mit 2 Sekunden Pause; Schnellreise und Lager, ausgerichtet an Geisterlichtern und Icognito von Altissimo
    (`companion.fit`, `importer._derive_companion`). Das Protokoll zählt alle Arten von Einträgen.
@@ -80,6 +82,11 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    einmal nach `mapgenie/kacheln/db/_saetze/`; daraus zeichnet der Abgleich alle Kacheln selbst nach
    `mapgenie/kacheln/db/<Spiel>/<z>/<x>-<y>.png` (`app/png.py`), neu nur, wenn sich Daten oder Kachelsätze ändern
    (`stand.json`). Gold/Silber hat eine eigene Karte; von Kristall kommt dort nur die Karte von pokemoncompletion dazu.
+7. **RankedBoost** (`app/rankedboost.py`, Quelle „rankedboost“): je Spiel in `rankedboost.GAMES` (Let’s Go, Feuerrot/Blattgrün)
+   die Fundortseite, darin die Adresse der Kartendaten (`megamap-<Spiel>-<Prüfsumme>.json`; ohne Treffer die zuletzt
+   bekannte), daraus Orte und Pokémon nach `mapgenie/<Spiel>.rb.json`. Die Ortsbilder (webp) kommen einmal nach
+   `mapgenie/kacheln/rb/<Karte>/<Nr>.webp` (neu nur bei geänderter Adresse, `stand.json`); der Server gibt sie unter
+   `/mgbild/<Spiel>/<Karte>/<Nr>` aus, Kacheln gibt es nicht.
 7. **pokemoncompletion** (`app/pkcompletion.py`, Quelle „pkcompletion“): für Kristall, Smaragd und Platin die Spieldaten
    aus dem Repository (raw.githubusercontent.com), umgerechnet in eine Karte wie bei Map Genie und unter `mapgenie/<Spiel>.pc.json`
    gespeichert; Gold/Silber, Rubin/Saphir und Diamant/Perl zeigen sie mit. Die Kacheln (512 Pixel, `{z}_{x}_{y}.png`) holt

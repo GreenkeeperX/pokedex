@@ -45,6 +45,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/mapgenie.py`: Karten von Map Genie lesen, eigene Punkte ausrichten und mit ihnen zu einer Datenbank zusammenführen
 - `app/pkcompletion.py`, `app/ign.py`, `app/dittobase.py`: weitere Kartenquellen in derselben Form wie Map Genie
   (DittoBase: Kacheln selbst gezeichnet mit `app/png.py`, PNG lesen und schreiben ohne Abhängigkeit)
-- `app/bisafans.py`: Seiten von BisaFans lesen (Aufträge in Legenden: Arceus), ohne Netz
+- `app/rankedboost.py`: Megakarten von RankedBoost (Ortsbilder statt Kacheln, Pokémon je Ort), ohne Netz
+- `app/bisafans.py`: Seiten von BisaFans lesen (Aufträge und Hauptmissionen in Legenden: Arceus), ohne Netz
 - `app/serebii.py`: Seiten von Serebii lesen (Abklingzeiten in Legenden: Z-A, Pokédexe von Pokopia), ohne Netz
 - `tests/test_all.py`: Tests ohne Netz; mit `POKEAPI_DB=/pfad/pokeapi.db` auch gegen eine gebaute Datenbank

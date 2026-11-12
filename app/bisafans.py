@@ -2,6 +2,8 @@
 
 - Legenden: Arceus, Nebenmissionen (spiele/editionen/legenden-arceus/nebenmissionen.php): alle Aufträge auf einer Seite,
   je Auftrag Nummer, Name, Beschreibung, Aufgabe, Ort („Wo“), Lösung und Belohnung, auf Deutsch.
+- Legenden: Arceus, Hauptmissionen aus der Komplettlösung (komplettloesung-1.php bis -9.php): Überschriften
+  „Mission N: Name“, darunter der Weg durch die Mission.
 
 Der Leser hängt nicht an der HTML-Form: er macht aus der Seite Textzeilen und sucht darin die Überschriften
 „Nebenmission N: Name“ und die Beschriftungen der Abschnitte (mit oder ohne Doppelpunkt, in Listen oder Tabellen).
@@ -11,6 +13,12 @@ import re
 
 BASE = "https://www.bisafans.de/"
 LA_REQUESTS = BASE + "spiele/editionen/legenden-arceus/nebenmissionen.php"
+LA_STORY = [BASE + f"spiele/editionen/legenden-arceus/komplettloesung-{i}.php" for i in range(1, 10)]
+KAPITEL = ("Erste Schritte in einer fremden Welt", "Wächter und Könige in Hisui", "Abenteuer im Sumpfland", "Gemeinsamkeit und Stärke",
+           "Der Berg ruft!", "Eisige Abenteuer im Frostland", "Unerwartete Unterstützung", "Legenden im Sinnoh-Tempel",
+           "Die Suche nach Arceus")
+_MISSION = re.compile(r"^Mission\s+(\d{1,2})\s*[:\-–—.]\s*(.+)$", re.I)
+STORY_LINES = 8             # so viele Zeilen der Komplettlösung je Mission (der Anfang des Wegs)
 FIELDS = {"beschreibung": "beschreibung", "aufgabe": "aufgabe", "wo": "ort", "ort": "ort", "lösung": "loesung",
           "belohnung": "belohnung", "belohnungen": "belohnung"}
 _HEAD = re.compile(r"^(?:Nebenmission|Auftrag|Mission)\s*(?:Nr\.\s*)?(\d{1,3})\s*[:\-–—.]\s*(.+)$", re.I)
@@ -55,3 +63,27 @@ def la_requests(page):
         if field:
             cur[field] = (cur[field] + " " + ln).strip()
     return [x for _, x in sorted(out.items()) if x["aufgabe"] or x["belohnung"] or x["beschreibung"]]
+
+
+def la_missions(pages):
+    """Hauptmissionen in Legenden: Arceus aus den Seiten der Komplettlösung (in der Reihenfolge der Kapitel):
+    [{nr, name, kapitel, text}], nach Nummer. Eine Nummer ohne Text (Inhaltsverzeichnis) weicht der mit Text."""
+    out = {}
+    for k, page in enumerate(pages, 1):
+        cur = None
+        for ln in lines(page):
+            m = _MISSION.match(ln)
+            if m:
+                cur = {"nr": int(m.group(1)), "name": m.group(2).strip(), "kapitel": k, "text": []}
+                prev = out.get(cur["nr"])
+                if prev is None or not prev["text"]:
+                    out[cur["nr"]] = cur
+                else:
+                    cur = None
+                continue
+            if cur is not None and len(cur["text"]) < STORY_LINES and len(ln) > 2:
+                if re.match(r"^(Kapitel|Inhalt|Teil)\b", ln) or ln in KAPITEL:
+                    cur = None
+                    continue
+                cur["text"].append(ln)
+    return [dict(x, text="\n".join(x["text"])) for _, x in sorted(out.items())]

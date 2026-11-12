@@ -291,9 +291,41 @@ def name_de(t, de):
     return t
 
 
-QUELLE = {"pokemoncompletion": "pokemoncompletion", "ign": "IGN", "dittobase": "DittoBase"}   # Name der Quelle einer Karte
+QUELLE = {"pokemoncompletion": "pokemoncompletion", "ign": "IGN", "dittobase": "DittoBase", "rankedboost": "RankedBoost"}   # Name der Quelle einer Karte
 MERGE_TOL = 30.0            # so nah (Weltpixel bei Zoomstufe 14, wenige Meter) gelten zwei Punkte als dasselbe
 MERGE_WIDE = 3              # Einzelstücke (Geisterlichter, Icognito, Gedichte, Alphas …) dürfen dreimal so weit weg sein
+
+
+DUP_PX = 3.0               # so nah (Weltpixel bei Zoomstufe 14) und gleich: ein Punkt
+
+
+def _dedupe(pts):
+    """Doppelte Punkte zusammenlegen: dieselbe Ebene an (fast) derselben Stelle. Gleiche Namen werden einer (Map Genie
+    führt manche Pflanzen dreifach), eigene Symbole gleicher Art legen ihre Items zusammen (ein Massenauftreten mit
+    mehreren Pokémon). Spawnpunkte und verschiedene Namen (zwei Alphas an einer Stelle) bleiben."""
+    out, seen = [], {}
+    for p in pts:
+        if p.get("sp"):
+            out.append(p)
+            continue
+        X, Y = p.get("_xy") or project(p["la"], p["lo"])
+        key = (p["c"], round(X / DUP_PX), round(Y / DUP_PX))
+        q = seen.get(key)
+        if q is None:
+            seen[key] = p
+            out.append(p)
+            continue
+        own_p, own_q = p.get("o") and "id" not in p, q.get("o") and "id" not in q
+        if own_p and own_q and p["o"].get("art") == q["o"].get("art"):
+            q["o"]["items"] = q["o"]["items"] + [i for i in p["o"]["items"] if i not in q["o"]["items"]]
+        elif p["name"] == q["name"]:
+            if p.get("o") and not q.get("o"):
+                q["o"] = p["o"]
+            q["q"] = list(dict.fromkeys(q.get("q", []) + p.get("q", [])))
+            q["mal"] = q.get("mal", 1) + 1
+        else:
+            out.append(p)
+    return out
 
 
 def merge(m, own=None, de=None):
@@ -428,6 +460,7 @@ def merge(m, own=None, de=None):
             for s in own["punkte"]:
                 pts.append({"c": k, "la": s["la"], "lo": s["lo"], "name": ", ".join(x["name"] for x in s["mons"]),
                             "sp": {"alpha": s["alpha"], "mons": s["mons"], "k": s["k"]}, "q": ["Spieldaten"]})
+    pts = _dedupe(pts)
     for p in pts:
         p.pop("_xy", None)
         cat[p["c"]]["n"] += 1

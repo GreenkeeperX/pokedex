@@ -1536,11 +1536,14 @@ async function raidsView(arg) {
    in „gefunden“ unter der Karte „auftrag“ */
 let REQ_DONE = new Set();
 let REQ_REDRAW = null, REQ_OK = false;
+const REQ_KAPITEL = ["Erste Schritte in einer fremden Welt", "Wächter und Könige in Hisui", "Abenteuer im Sumpfland", "Gemeinsamkeit und Stärke",
+  "Der Berg ruft!", "Eisige Abenteuer im Frostland", "Unerwartete Unterstützung", "Legenden im Sinnoh-Tempel", "Die Suche nach Arceus"];
 async function loadReqDone(force = false) {      // einmal je Seitenaufruf; die Haken ändert die Oberfläche selbst
   if (REQ_OK && !force) return;
-  const r = await api("/api/gefunden?" + qs({spiel: "legends-arceus", karte: "auftrag"})).catch(() => null);
+  const r = await api("/api/gefunden?" + qs({spiel: "legends-arceus"})).catch(() => null);
   if (!r) return;
-  REQ_DONE = new Set((r.auftrag || []).map(String));
+  // Nebenaufträge unter ihrer Nummer, Hauptmissionen als „m“ + Nummer (gespeichert unter auftrag und mission)
+  REQ_DONE = new Set([...(r.auftrag || []).map(String), ...(r.mission || []).map((x) => "m" + x)]);
   REQ_OK = true;
 }
 const reqCheck = (nr) => `<span class="a req${REQ_DONE.has(String(nr)) ? " on" : ""}" data-act="reqdone" data-id="${nr}" data-tip="${REQ_DONE.has(String(nr)) ? "Erledigt; Klick: wieder offen" : "Als erledigt markieren"}">${REQ_DONE.has(String(nr)) ? "✓" : "○"}</span>`;
@@ -1548,42 +1551,59 @@ const reqMons = (x) => x.pokemon.map((m) => `<a href="#pokemon/${m.id}" data-hc=
 const reqTip = (x) => [x.beschreibung, x.loesung ? "Lösung: " + x.loesung : ""].filter(Boolean).join("\n\n");
 
 async function requestsView() {
-  const rid = RID, q = store.get("reqQ", ""), mode = store.get("reqMode", "offen");
+  const rid = RID, q = store.get("reqQ", ""), mode = store.get("reqMode", "offen"), art = store.get("reqArt", "neben");
   main.innerHTML = `<div class="box"><div class="bar"><b>Aufträge in</b> <select class="gamesel"></select>
+      <span class="seg">${[["neben", "Nebenaufträge"], ["haupt", "Hauptmissionen"]].map(([k, n]) => `<button class="${k === art ? "on" : ""}" data-reqart="${k}">${n}</button>`).join("")}</span>
       <input id="reqq" type="search" placeholder="Suchen: Name, Pokémon, Ort, Belohnung" value="${esc(q)}">
       <span class="seg">${[["offen", "Offen"], ["alle", "Alle"], ["erledigt", "Erledigt"]].map(([k, n]) => `<button class="${k === mode ? "on" : ""}" data-reqmode="${k}">${n}</button>`).join("")}</span>
       <span id="reqn" class="hint"></span></div>
-    <p class="hint">Nebenmissionen aus Legenden: Arceus auf Deutsch (Quelle: BisaFans). Fährst du über einen Auftrag, siehst du Beschreibung und Lösung.
-      ○ markiert ihn als erledigt.</p>
+    <p class="hint">Legenden: Arceus auf Deutsch (Quelle: BisaFans, Hauptmissionen aus der Komplettlösung). Fährst du über einen Eintrag, siehst du
+      Beschreibung und Lösung. ○ markiert ihn als erledigt, auch auf der Karte (und umgekehrt); 📍 springt zur Stelle auf der Karte.</p>
     <div id="reqlist"><p class="hint">Lädt …</p></div></div>`;
   header();
   const [r] = await Promise.all([api("/api/auftraege?" + qs({spiel: S.game})), loadReqDone(true)]);
   if (rid !== RID) return;
+  const K = r.karte || {};
+  const pin = (k, nr) => K[k]?.[nr] ? ` <a class="reqpin" href="#karte/mg/${esc(K.slug)}/${K[k][nr]}" data-tip="Auf der Karte zeigen">📍</a>` : "";
   const draw = () => {
     const ql = ($("#reqq")?.value || "").trim().toLowerCase(), m = store.get("reqMode", "offen");
+    if (store.get("reqArt", "neben") === "haupt") {
+      const ms = r.missionen || [], done = (x) => REQ_DONE.has("m" + x.nr);
+      const xs = ms.filter((x) => (m === "alle" || (m === "erledigt") === done(x)) && (!ql || [x.name, x.text].join(" ").toLowerCase().includes(ql)));
+      $("#reqn").textContent = `${ms.filter(done).length} von ${ms.length} erledigt`;
+      $("#reqlist").innerHTML = !ms.length ? `<p class="hint">Noch keine Hauptmissionen. Der nächste Abgleich holt sie aus der Komplettlösung von BisaFans.</p>`
+        : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Mission")}${th("Kapitel")}${th("Weg", "", true)}${th("", "", true)}</tr></thead>
+          <tbody>${xs.map((x) => `<tr class="${done(x) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${x.nr}</td>
+            <td data-s="${esc(x.name)}"><b>${esc(x.name)}</b>${pin("mission", x.nr)}</td><td class="hint" data-s="${x.kapitel}">${x.kapitel ? esc(`${x.kapitel}. ${REQ_KAPITEL[x.kapitel - 1] || ""}`) : ""}</td>
+            <td class="why">${esc(x.text.split("\n").slice(0, 2).join(" "))}</td><td class="c">${reqCheck("m" + x.nr)}</td></tr>`).join("")
+            || `<tr><td colspan="5" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
+      return;
+    }
     const xs = r.rows.filter((x) => (m === "alle" || (m === "erledigt") === REQ_DONE.has(String(x.nr)))
       && (!ql || [x.name, x.aufgabe, x.ort, x.belohnung, x.beschreibung, ...x.pokemon.map((p) => p.name)].join(" ").toLowerCase().includes(ql)));
-    $("#reqn").textContent = `${REQ_DONE.size} von ${r.rows.length} erledigt`;
+    $("#reqn").textContent = `${r.rows.filter((x) => REQ_DONE.has(String(x.nr))).length} von ${r.rows.length} erledigt`;
     $("#reqlist").innerHTML = !r.rows.length ? `<p class="hint">Noch keine Aufträge. Der nächste Abgleich holt sie von BisaFans.</p>`
       : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Auftrag")}${th("Aufgabe", "", true)}${th("Ort")}${th("Belohnung")}${th("Pokémon", "", true)}${th("", "", true)}</tr></thead>
         <tbody>${xs.map((x) => `<tr class="${REQ_DONE.has(String(x.nr)) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${x.nr}</td>
-          <td data-s="${esc(x.name)}"><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b></td><td class="why">${esc(x.aufgabe)}</td>
-          <td data-s="${esc(x.ort)}">${esc(x.ort)}</td><td data-s="${esc(x.belohnung)}">${esc(x.belohnung)}</td><td>${reqMons(x)}</td><td class="c">${reqCheck(x.nr)}</td></tr>`).join("")
+          <td data-s="${esc(x.name)}"><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b>${pin("auftrag", x.nr)}</td><td class="why">${esc(x.aufgabe)}</td>
+          <td data-s="${esc(x.ort)}">${esc(x.ort) || (K.auftrag?.[x.nr] ? `<span class="hint">siehe Karte</span>` : x.nr > 94 ? `<span class="hint" data-tip="Aus dem Update „Ein neuer Tag in Hisui“; die Karte von Map Genie kennt ihn nicht">nach dem Spiel</span>` : "")}</td><td data-s="${esc(x.belohnung)}">${esc(x.belohnung)}</td><td>${reqMons(x)}</td><td class="c">${reqCheck(x.nr)}</td></tr>`).join("")
           || `<tr><td colspan="7" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
   };
   draw();
   $("#reqq").addEventListener("input", () => { store.set("reqQ", $("#reqq").value); draw(); });
+  main.querySelectorAll("[data-reqart]").forEach((b) => b.addEventListener("click", () => {
+    store.set("reqArt", b.dataset.reqart); main.querySelectorAll("[data-reqart]").forEach((x) => x.classList.toggle("on", x === b)); draw(); }));
   main.querySelectorAll("[data-reqmode]").forEach((b) => b.addEventListener("click", () => {
     store.set("reqMode", b.dataset.reqmode); main.querySelectorAll("[data-reqmode]").forEach((x) => x.classList.toggle("on", x === b)); draw(); }));
   REQ_REDRAW = draw;
 }
 async function toggleReq(nr) {
-  const k = String(nr), on = !REQ_DONE.has(k);
+  const k = String(nr), on = !REQ_DONE.has(k), mis = k.startsWith("m");
   const paint = () => $$(`[data-act="reqdone"][data-id="${nr}"]`).forEach((el) => { el.outerHTML = reqCheck(nr); });
   if (on) REQ_DONE.add(k); else REQ_DONE.delete(k);
   paint();
   if (location.hash.startsWith("#auftraege") && REQ_REDRAW) REQ_REDRAW();
-  await api("/api/gefunden", {spiel: "legends-arceus", karte: "auftrag", objekt: k, an: on}).catch(() => {
+  await api("/api/gefunden", {spiel: "legends-arceus", karte: mis ? "mission" : "auftrag", objekt: mis ? k.slice(1) : k, an: on}).catch(() => {
     if (on) REQ_DONE.delete(k); else REQ_DONE.add(k);
     paint();
   });
@@ -2357,7 +2377,8 @@ async function mgView(slug, want) {
     alpha: p.sp?.alpha, mons: p.sp?.mons,
     items: [...(p.o?.items || []), ...(p.drin || []).flatMap((x) => x.items)].map((e) => e[0]).join(", ")}));
   const okeyOf = (p) => p.o ? p.o.k + "|" + okey(p.o) : "";
-  const gkey = (p) => p.t === "mg" ? gk + "|mg:" + p.id : p.t === "ob" ? okeyOf(p) : "";
+  // Aufträge und Hauptmissionen: der Haken liegt wie im Reiter Aufträge unter auftrag|Nr bzw. mission|Nr
+  const gkey = (p) => p.aq || (p.t === "mg" ? gk + "|mg:" + p.id : p.t === "ob" ? okeyOf(p) : "");
   const isGot = (p) => got.has(gkey(p)) || (p.t === "mg" && p.o && got.has(okeyOf(p)));
   const hk = "mgEbenen:" + d.spiel;
   // anfangs aus: die vielen Materialien und Spawnpunkte (an- und abschaltbar je Ebene)
@@ -2386,7 +2407,7 @@ async function mgView(slug, want) {
         <span class="hint">|</span> <button class="link" data-gfold="1" data-tip="alle Gruppen aufklappen">auf</button> · <button class="link" data-gfold="0" data-tip="alle Gruppen zuklappen">zu</button></span></div>
         ${groups.map((g, gi) => `<details class="mgg"${open.has(String(g.id)) ? " open" : ""} data-gid="${esc(g.id)}"><summary${g.tipp ? ` data-tip="${esc(g.tipp)}"` : ""}><span class="mgdot" style="--c:${esc(g.farbe)}"></span>${esc(g.titel)} <span class="hint">${g.kategorien.reduce((a, c) => a + c.n, 0)}</span>
           <button class="link" data-grp="${gi}" data-tip="ganze Gruppe ein- oder ausblenden">ein/aus</button></summary><div class="mlays">${g.kategorien.map(catBtn).join("")}</div></details>`).join("")}</div></div></div>
-    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN", dittobase: "DittoBase (aus den Spieldaten gezeichnet; Häuser und Höhlen stehen an ihrem Eingang)"})[d.quelle] || "Map Genie"}${["pokemoncompletion", "dittobase"].includes(d.quelle) && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
+    <p class="hint">Alles liegt auf dem Server: Karte und Orte von ${({pokemoncompletion: "pokemoncompletion", ign: "IGN", dittobase: "DittoBase (aus den Spieldaten gezeichnet; Häuser und Höhlen stehen an ihrem Eingang)", rankedboost: "RankedBoost (je Ort ein Bild an seiner Stelle, ein Punkt je Ort mit seinen Pokémon)"})[d.quelle] || "Map Genie"}${["pokemoncompletion", "dittobase"].includes(d.quelle) && d.spiel !== S.game ? ` (Welt von ${esc(gameName(d.spiel))}; Fundorte und Items deiner Edition können abweichen)` : ""} (Stand ${esc(String(d.am || "").slice(0, 10).split("-").reverse().join("."))}, Texte englisch, Begriffe übersetzt)${d.spiel === "legends-arceus" ? ", zusammengeführt mit den Spieldaten (Spawnpunkte, Items, Pokémon in Bäumen und Erzbrocken): was an derselben Stelle dasselbe ist, ist ein Punkt" : ""}. Kacheln: <span id="mgstock"></span>.</p></div>`;
   header();
   const box = $("#mgmap"), tl = $(".mgtiles", box), pl = $(".mgpins", box), old = $(".mgold", box), ld = $(".mgload", box);
   const tileUrl = (k) => `/mgkachel/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${k}`;
@@ -2430,7 +2451,21 @@ async function mgView(slug, want) {
       for (let ty = Math.max(Math.floor(gy0 / TS), Math.floor(oy / TS) - pad); ty <= Math.min(Math.floor((gy1 - 1e-6) / TS), Math.floor((oy + h * f) / TS) + pad); ty++) out.push(`${zz}/${tx}/${ty}`);
     return out;
   };
+  // RankedBoost: keine Kacheln, je Ort ein Bild in Weltpixeln der Stufe bild_z (der Browser skaliert)
+  const IMGS = d.bilder || null;
+  let imgZ = null;
+  const images = () => {
+    if (old.firstChild) { old.innerHTML = ""; oldZ = null; }   // die Bilder skaliert der Browser, das alte Bild braucht es nicht
+    const w = box.clientWidth, h = box.clientHeight;
+    tl.style.transform = pl.style.transform = `translate(${-(cx - w / 2)}px,${-(cy - h / 2)}px)`;
+    if (imgZ === z && tl.firstChild) return;
+    imgZ = z;
+    const f = 2 ** (z - d.bild_z), [ox, oy] = mgProj(bb[3], bb[0], z);
+    tl.innerHTML = IMGS.map(([n, x, y, iw, ih]) => `<img class="mgimg" alt="" draggable="false" src="/mgbild/${encodeURIComponent(d.spiel)}/${encodeURIComponent(slug)}/${n}"
+      style="left:${(ox + x * f).toFixed(1)}px;top:${(oy + y * f).toFixed(1)}px;width:${(iw * f).toFixed(1)}px;height:${(ih * f).toFixed(1)}px" onerror="this.style.visibility='hidden'">`).join("");
+  };
   const progress = () => {
+    if (IMGS) { ld.hidden = true; old.innerHTML = ""; oldZ = null; return; }
     ld.hidden = !pending; ld.textContent = pending ? `Kacheln laden … noch ${pending}` : "";
     if (pending) return;
     old.innerHTML = ""; oldZ = null;           // alles da: das vergrößerte alte Bild weg
@@ -2439,6 +2474,7 @@ async function mgView(slug, want) {
       .forEach((k) => { if (!warm.has(k)) { warm.add(k); new Image().src = tileUrl(k); } });
   };
   const tiles = () => {
+    if (IMGS) return images();
     const w = box.clientWidth, h = box.clientHeight, ox = cx - w / 2, oy = cy - h / 2;
     tl.style.transform = pl.style.transform = `translate(${-ox}px,${-oy}px)`;
     if (oldZ !== null) old.style.transform = `translate(${-ox}px,${-oy}px) scale(${2 ** (z - oldZ)})`;
@@ -2461,7 +2497,7 @@ async function mgView(slug, want) {
   api("/api/mapgenie?" + qs({spiel: S.game})).then((r) => {
     const v = r.kacheln?.vorrat?.[`${d.spiel}/${slug}`], el = $("#mgstock");
     if (!el || rid !== RID) return;
-    el.textContent = !v ? (r.kacheln?.laedt ? "läuft gerade" : "startet nach dem nächsten Abgleich")
+    el.textContent = IMGS ? `keine; ${IMGS.length} Ortsbilder liegen auf dem Server, die Karte braucht kein Netz` : !v ? (r.kacheln?.laedt ? "läuft gerade" : "startet nach dem nächsten Abgleich")
       : v.fertig && v.ganz ? `alle ${v.da} Kacheln liegen auf dem Server, die Karte braucht kein Netz mehr`
       : `${v.da} von ${v.alle} Kacheln bis Stufe ${v.bis} liegen auf dem Server; der Rest kommt im Hintergrund`;
   }).catch(() => {});
@@ -2554,6 +2590,7 @@ async function mgView(slug, want) {
     pins();
     if (sel === i) side(i);
     const [karte, objekt] = k.split("|");
+    if (p.aq) REQ_OK = false;          // der Reiter Aufträge liest die Haken neu
     api("/api/gefunden", {spiel: d.spiel, karte, objekt, an: on}).catch(() => { if (on) got.delete(k); else got.add(k); pins(); });
   };
   pl.addEventListener("click", (e) => {
@@ -3783,7 +3820,7 @@ document.addEventListener("click", async (e) => {
       if (slot !== null && location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${id}/${slot}`;
     } else if (act === "teamdel") { removeSlot(+b.dataset.slot); if (location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${DETAIL?.id || ""}`; }
     else if (act === "fav") await toggleFav(id);
-    else if (act === "reqdone") await toggleReq(id);
+    else if (act === "reqdone") await toggleReq(b.dataset.id);
     else if (act === "cmpclear") { store.set("cmpMerk", []); redrawMarks(); compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "cmpmark") { cmpToggle(id); redrawMarks(); if (location.hash.startsWith("#vergleich")) compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "favadd") { $("#pick").hidden = true; await toggleFav(id, true); }

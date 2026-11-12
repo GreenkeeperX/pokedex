@@ -960,6 +960,36 @@ def mg_names():
     return out
 
 
+def _quests_de(r):
+    """Aufträge und Hauptmissionen auf der Karte: deutscher Name und Text von BisaFans vor dem englischen von Map Genie;
+    „aq“ nennt den Schlüssel, unter dem der Haken liegt (wie im Reiter Aufträge)."""
+    cats = {c["id"]: QUEST_CATS.get(c["en"]) for g in r["gruppen"] for c in g["kategorien"]}
+    con = db.game()
+    try:
+        D = data()
+        de = {"auftrag": {x["nr"]: x for x in (_requests(con, D) if D else [])}, "mission": {x["nr"]: x for x in _missions(con)}}
+    finally:
+        con.close()
+    for p in r["punkte"]:
+        k = cats.get(p["c"])
+        x = k and re.match(r"#(\d{1,3})\s*:", p.get("en") or p["name"] or "")
+        if not x:
+            continue
+        nr = int(x.group(1))
+        p["aq"] = f"{k}|{nr}"
+        g = de[k].get(nr)
+        if not g:
+            continue
+        p.setdefault("en", p["name"])
+        p["name"] = f"#{nr}: {g['name']}"
+        parts = ([g.get("beschreibung"), "**Aufgabe:** " + g["aufgabe"] if g.get("aufgabe") else "", "**Lösung:** " + g["loesung"] if g.get("loesung") else "",
+                  "**Belohnung:** " + g["belohnung"] if g.get("belohnung") else ""] if k == "auftrag" else [g.get("text")])
+        de_text = "\n\n".join(x for x in parts if x)
+        if de_text:
+            p["text"] = de_text + ("\n\n---\n\n**Map Genie (englisch):**\n\n" + p["text"] if p.get("text") else "")
+            p["q"] = p.get("q", []) + ["BisaFans"]
+
+
 def mg_map(m, spiel, stamp=None):
     """Eine Karte von Map Genie als eine Datenbank mit den eigenen Daten (mapgenie.merge): deutsche Ebenen, gleiche
     Stellen verschmolzen. Für Legenden: Arceus kommen Spawnpunkte und Symbole aus den Spieldaten dazu."""
@@ -969,6 +999,8 @@ def mg_map(m, spiel, stamp=None):
         return hit[key]
     own = mg_overlay(m, stamp) if spiel == "legends-arceus" else None
     r = mapgenie.merge(m, own, mg_names())
+    if spiel == LA:
+        _quests_de(r)
     out = {k: v for k, v in m.items() if k not in ("orte", "gruppen")}
     out.update(r, spiel=spiel, am=stamp, bounds=mapgenie.bounds_of(m))
     while len(hit) >= MERGED_MAX:            # die ältesten zuerst weg
@@ -1406,16 +1438,46 @@ def _requests(con, D, art=None):
     return out
 
 
+def _missions(con):
+    try:
+        return [{"nr": nr, "name": n, "kapitel": k, "text": t} for nr, n, k, t in
+                con.execute("SELECT nr, name, kapitel, text FROM mission WHERE spiel = ? ORDER BY nr", (LA,))]
+    except Exception:
+        return []
+
+
+QUEST_CATS = {"Request": "auftrag", "Story Mission": "mission"}     # Kategorien von Map Genie → Schlüssel in gefunden
+
+
+def quest_points(m):
+    """Aufträge und Hauptmissionen auf der Karte von Map Genie: {"auftrag": {Nr: Ort-id}, "mission": {...}}. Die Namen
+    beginnen mit „#Nr: “; Map Genie zählt wie BisaFans."""
+    out = {v: {} for v in QUEST_CATS.values()}
+    cats = {c["id"]: c["titel"] for g in (m or {}).get("gruppen") or [] for c in g["kategorien"]}
+    for o in (m or {}).get("orte") or []:
+        k = QUEST_CATS.get(cats.get(o[1]))
+        x = re.match(r"#(\d{1,3})\s*:", o[4] or "")
+        if k and x:
+            out[k].setdefault(int(x.group(1)), o[0])
+    return out
+
+
 def request_list(p):
-    """Alle Aufträge in Legenden: Arceus: {"rows": [...]} (leer in anderen Spielen)."""
+    """Alle Aufträge in Legenden: Arceus: {"rows": [...], "missionen": [...], "karte": {slug, auftrag: {Nr: Ort-id},
+    mission: {...}}} (leer in anderen Spielen)."""
     D = data()
     if not D or p.get("spiel") not in (None, "", LA):
-        return {"rows": []}
+        return {"rows": [], "missionen": []}
+    from . import abruf
     con = db.game()
     try:
-        return {"rows": _requests(con, D)}
+        out = {"rows": _requests(con, D), "missionen": _missions(con)}
     finally:
         con.close()
+    m = next((k for k in (abruf.mg_maps(LA) or {}).get("karten", []) if not k.get("quelle")), None)
+    if m:
+        out["karte"] = dict(quest_points(m), slug=m["slug"])
+    return out
 
 
 def _wiki_title(D, f):

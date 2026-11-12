@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, bisafans, companion, db, dittobase, ign, importer, mapgenie, pkcompletion, pokewiki, serebii, smogon, sources, store
+from . import altissimo, bisafans, companion, db, dittobase, ign, importer, mapgenie, pkcompletion, pokewiki, rankedboost, serebii, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -582,7 +582,7 @@ def _media_tiles(st, log, settings, at):
 
 
 def _media_mg(st, log, at):
-    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign), ("dittobase", _dittobase)):
+    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign), ("dittobase", _dittobase), ("rankedboost", _rankedboost)):
         if db.has_data() and not _resting(st, key, at):
             res = run(log)
             st["sources"][key] = res
@@ -1087,8 +1087,67 @@ def _dittobase(log):
     return src.result(dateien=found)
 
 
-MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES, *dittobase.GAMES)))   # Spiele mit eigener Karte
-MAP_FILES = ("", ".pc", ".ign", ".db")          # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
+def _rankedboost(log):
+    """Megakarten von RankedBoost für die Spiele in rankedboost.GAMES: Spielseite → Adresse der JSON-Datei → Orte mit
+    Pokémon und die Ortsbilder (webp), die als Bildebene statt Kacheln auf der Karte liegen (kacheln/rb/<Karte>/<Nr>.webp).
+    Was schon da ist, wird nicht wieder geholt."""
+    src = _Source("rankedboost", log, pause=MG_PAUSE)
+    found = 0
+    for spiel, slug in rankedboost.GAMES.items():
+        STATE["step"] = f"RankedBoost: {slug}"
+        url = None
+        for p in rankedboost.page_urls(spiel):
+            url = rankedboost.json_url(src.get(p, absent=(404,)))
+            if url or src.stopped:
+                break
+        if src.stopped:
+            break
+        if not url:
+            log(f"RankedBoost: {slug} ohne Adresse der Kartendaten auf der Seite, es gilt die zuletzt bekannte")
+            url = rankedboost.KNOWN.get(spiel)
+        m, bilder = rankedboost.parse(rankedboost.extract(src.get(url, absent=(404,)) or "" if url else ""), spiel)
+        if not m:
+            if not src.stopped:
+                log(f"RankedBoost: {slug} ohne lesbare Kartendaten")
+            continue
+        d = mg_dir("kacheln", "rb", m["slug"])
+        os.makedirs(d, exist_ok=True)
+        stand = store.load_json(os.path.join("mapgenie", "kacheln", "rb", m["slug"], "stand.json"), {}) or {}
+        neu, have = 0, []
+        for n, (nr, u, x, y, w, h) in enumerate(bilder):
+            f = os.path.join(d, f"{nr}.webp")
+            if not (os.path.isfile(f) and stand.get(str(nr)) == u) and not src.stopped:
+                STATE.update(step=f"RankedBoost: Ortsbilder {slug}", done=n, total=len(bilder))
+                body = src.get(u, raw=True, absent=(404,))
+                if body and body[:4] == b"RIFF" and body[8:12] == b"WEBP":
+                    with open(f + ".neu", "wb") as fh:
+                        fh.write(body)
+                    os.replace(f + ".neu", f)
+                    stand[str(nr)] = u
+                    neu += 1
+            if os.path.isfile(f):
+                have.append([nr, x, y, w, h])
+        store.save_json(os.path.join("mapgenie", "kacheln", "rb", m["slug"], "stand.json"), stand)
+        m["bilder"] = have
+        _save_maps(spiel, "rb", [m])
+        log(f"RankedBoost: {slug} mit {len(m['orte'])} Orten, {len(have)} von {len(bilder)} Ortsbildern" + (f" ({neu} neu)" if neu else ""))
+        found += 1
+        if src.stopped:
+            break
+    return src.result(dateien=found)
+
+
+def mg_image(spiel, karte, nr):
+    """Pfad eines Ortsbilds (RankedBoost) im Datenordner oder None. Ohne Netz: die Bilder holt der Abgleich."""
+    m = _mg_map(spiel, karte)
+    if not m or not any(b[0] == nr for b in m.get("bilder") or []):
+        return None
+    f = mg_dir("kacheln", "rb", m["slug"], f"{nr}.webp")
+    return f if os.path.isfile(f) else None
+
+
+MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES, *dittobase.GAMES, *rankedboost.GAMES)))   # Spiele mit eigener Karte
+MAP_FILES = ("", ".pc", ".ign", ".db", ".rb")   # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
 
 
 def mg_maps(spiel):
@@ -1127,7 +1186,7 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": ""}
+_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": "", "rest_rankedboost": ""}
 
 
 def _miss_load():
@@ -1304,7 +1363,7 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE, stock=False):
         return f
 
 
-TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign, "dittobase": dittobase}     # Kartenquellen mit eigenem Kachelschema
+TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign, "dittobase": dittobase, "rankedboost": rankedboost}     # Kartenquellen mit eigenem Kachelschema
 
 
 def _cdn_tile(rel, url, f, pause, quelle):
@@ -1552,12 +1611,19 @@ def _bisafans(st, log, at):
     src = _Source("bisafans", log, pause=BISA_PAUSE)
     STATE["step"] = "BisaFans: Aufträge in Legenden: Arceus"
     rows = bisafans.la_requests(src.get(bisafans.LA_REQUESTS) or "")
-    st["sources"]["bisafans"] = src.result(auftraege=len(rows))
+    pages = []
+    for i, url in enumerate(bisafans.LA_STORY):
+        if src.stopped:
+            break
+        STATE.update(step="BisaFans: Hauptmissionen in Legenden: Arceus", done=i, total=len(bisafans.LA_STORY))
+        pages.append(src.get(url, absent=(404,)) or "")
+    story = bisafans.la_missions(pages)
+    st["sources"]["bisafans"] = src.result(auftraege=len(rows), missionen=len(story))
     if src.blocked:
         st["rest"]["bisafans"] = _iso(now() + timedelta(hours=REST_H))
-    log(f"BisaFans: {len(rows)} Aufträge in Legenden: Arceus" + ("" if rows else ", es gilt der letzte Lauf"))
+    log(f"BisaFans: {len(rows)} Aufträge und {len(story)} Hauptmissionen in Legenden: Arceus" + ("" if rows else ", es gilt der letzte Lauf"))
     if rows:
-        out = {"la_auftraege": rows}
+        out = {"la_auftraege": rows, "la_missionen": story or old.get("la_missionen") or []}
         store.save_json("bisafans.json", out)
         return out
     return old
