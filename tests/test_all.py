@@ -317,6 +317,35 @@ class Leser(unittest.TestCase):
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
+    def test_0_51_shiny_sperren(self):
+        from app import shiny
+        text = """===Intentionally unobtainable Shiny Pokémon===
+{| class="roundy"
+|-
+! Pokémon
+|- style="background:#fff"
+| {{MSP/HOME|0144 s|Articuno}}
+| {{p|Articuno}}
+| {{yes}}<br>{{gameabbrev1|RGBY}} || ~ || {{yes}}<br>{{gameabbrev4|Pt}} || ~ || ~ || ~ || {{yes}}<br>{{gameabbrev8|CT}} || {{no}}
+|- style="background:#fff"
+| {{MSP/HOME|0144G s|Articuno}}
+| {{p|Articuno}}<br><small>Galarian Form</small>
+| colspan=6 style="background:#999" |  || ~ || {{no}}
+|}"""
+        rows = shiny.parse(text)
+        self.assertEqual([(r["name"], r["form"]) for r in rows], [("Articuno", ""), ("Articuno", "galarian form")])
+        forms = {"articuno": (144, "articuno", 1), "articuno-galar": (10169, "articuno", 0)}
+        games = {"red-blue": 1, "gold-silver": 2, "platinum": 4, "diamond-pearl": 4, "sword-shield": 8, "the-crown-tundra": 8,
+                 "scarlet-violet": 9}
+        lk = shiny.locks(rows, forms, games)
+        self.assertEqual(lk[("red-blue", 144)], "tausch")          # Generation I: erst in Gen. II sichtbar
+        self.assertEqual(lk[("gold-silver", 144)], "tausch")      # dort nicht zu fangen, nur aus Rot/Blau/Gelb
+        self.assertNotIn(("platinum", 144), lk)
+        self.assertEqual(lk[("diamond-pearl", 144)], "tausch")     # Generation genannt, Spiel nicht
+        self.assertEqual((lk[("sword-shield", 144)], lk[("scarlet-violet", 144)]), ("tausch", "nie"))
+        self.assertNotIn(("the-crown-tundra", 144), lk)
+        self.assertEqual((lk[("sword-shield", 10169)], lk[("scarlet-violet", 10169)]), ("tausch", "nie"))
+
     def test_0_50_fangen_legenden_arceus(self):
         from app import abfragen, importer
         # a = 0,75 × 255 + 30 × (0 + 1/3 × 0,75 × 2) = 206,25; b = 65535 × (1 − √(1 − a/255)); zwei Proben

@@ -18,9 +18,9 @@ import os
 import re
 import sqlite3
 
-from . import altissimo, companion, pokewiki, serebii, showdown
+from . import altissimo, companion, pokewiki, serebii, shiny, showdown
 
-VERSION = "26"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "27"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -746,6 +746,21 @@ def _derive_fangrate(con, pkhex):
     rates = pkhex_catch_la(((pkhex or {}).get("_fang_la") or {}).get("personal") or b"")
     con.executemany("INSERT INTO fangrate VALUES ('legends-arceus', ?, ?)", sorted(rates.items()))
     return len(rates)
+
+
+def _derive_shiny(con, wiki):
+    """0.51: Tabelle shinysperre (spiel, form, stufe) aus Bulbapedia (app/shiny.py): „tausch“ (nur per Tausch) oder „nie“."""
+    con.execute("CREATE TABLE shinysperre (spiel TEXT, form INTEGER, stufe TEXT)")
+    text = (wiki or {}).get("shiny") or ""
+    if not text or not _has(con, "spiel"):
+        return 0
+    forms = {k: (i, sp, d) for i, k, sp, d in con.execute(
+        "SELECT p.id, p.identifier, s.identifier, p.is_default FROM pokemon p JOIN pokemon_species s ON s.id = p.species_id")}
+    games = {k: g for k, g in con.execute("SELECT kennung, gen FROM spiel")}
+    rows = sorted((g, i, st) for (g, i), st in shiny.locks(shiny.parse(text), forms, games).items())
+    con.executemany("INSERT INTO shinysperre VALUES (?, ?, ?)", rows)
+    con.execute("CREATE INDEX shinysperre_spiel ON shinysperre(spiel)")
+    return len(rows)
 
 
 def _derive_crypto(con, pkhex):
@@ -1546,6 +1561,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_sets = _derive_moveset(con, sets)
         n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
         n_texte, n_forschung, unbekannt = _derive_texts(con, wiki)
+        n_shiny = _derive_shiny(con, wiki)
         n_auftrag = _derive_auftrag(con, (wiki or {}).get("bisafans"))
         n_mission = _derive_mission(con, (wiki or {}).get("bisafans"))
         n_blaubeer = _derive_blaubeer(con, (wiki or {}).get("bisafans"))
@@ -1571,7 +1587,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
                  "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "fangraten": n_fangrate, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
                  "kartenobjekte": n_obj, "lernen": n_lernen, "abklingzeiten": n_abkling, "pokopia": n_pokopia, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez,
-                 "texte": n_texte, "forschung": n_forschung, "auftraege": n_auftrag, "missionen": n_mission, "blaubeer": n_blaubeer, "trainer": n_trainer, "kuerzel_unbekannt": unbekannt, "check": why}
+                 "texte": n_texte, "shinysperren": n_shiny, "forschung": n_forschung, "auftraege": n_auftrag, "missionen": n_mission, "blaubeer": n_blaubeer, "trainer": n_trainer, "kuerzel_unbekannt": unbekannt, "check": why}
     finally:
         con.close()
     return stats

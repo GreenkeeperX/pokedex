@@ -688,6 +688,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, marked("gefangen", q.get("spiel")))
             elif path == "/api/schillernd":
                 self._send(200, marked("schillernd", q.get("spiel")))
+            elif path == "/api/shinysperre":
+                self._send(200, abfragen.shiny_locks(q.get("spiel")))
             elif path == "/api/alpha":
                 self._send(200, {"ids": marked("alpha", q.get("spiel")), "moeglich": abfragen.alpha_possible(q.get("spiel"))})
             elif path == "/api/gefunden":

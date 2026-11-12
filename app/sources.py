@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.50.0"
+VERSION = "0.51.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.51.0", "12.11.2026", [
+        "Shiny-Sperren für alle Spiele (Quelle: Bulbapedia): gibt es ein Pokémon im Spiel gar nicht schillernd, überspringt der "
+        "Klick am Pokéball „schillernd“; geht es nur per Tausch oder Verteilung, bleibt es markierbar und der Tooltip sagt es",
+        "Generation I kennt keine schillernden Pokémon: dort heißt „schillernd“ immer „erst nach dem Tausch nach Gold, Silber oder Kristall“",
+    ]),
     ("0.50.0", "12.11.2026", [
         "Fangchance in Legenden: Arceus mit der echten Formel des Spiels und den eigenen Fangraten von Hisui (etwa Garados 55 statt 45, "
         "Dialga 45 statt 3)",

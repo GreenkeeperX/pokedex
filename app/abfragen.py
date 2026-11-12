@@ -798,6 +798,26 @@ def _cond_text(d, order, names, all_label):
 _ALPHA = {}
 
 
+def shiny_locks(spiel):
+    """0.51: Shiny-Sperren des Spiels: {"tausch": [Form-Ids], "nie": [Form-Ids], "gen1": bool}. In Generation I gibt es keine
+    schillernden Pokémon: dort gilt alles als „nur per Tausch“ (sichtbar erst in Gold, Silber, Kristall)."""
+    out = {"tausch": [], "nie": [], "gen1": False}
+    try:
+        con = db.game()
+    except Exception:
+        return out
+    try:
+        g = con.execute("SELECT gen FROM spiel WHERE kennung = ?", (str(spiel or ""),)).fetchone()
+        out["gen1"] = bool(g and g[0] == 1)
+        for form, stufe in con.execute("SELECT form, stufe FROM shinysperre WHERE spiel = ?", (str(spiel or ""),)):
+            out.setdefault(stufe, []).append(form)
+    except Exception:
+        pass
+    finally:
+        con.close()
+    return out
+
+
 def alpha_possible(spiel):
     """Formen, die es im Spiel als Alpha gibt (Fundorte aus den Spieldaten und Spawn-Tabellen); leer in Spielen ohne Alphas."""
     spiel = str(spiel or "")

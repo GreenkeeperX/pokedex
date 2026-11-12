@@ -51,5 +51,6 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/pokearth.py`: Regionskarten von Serebii (PokéEarth, ein Bild und ein Punkt je Ort) für die übrigen Spiele, für Kalos
   aus einer PokéWiki-Bildkarte mit großem Bild von Bulbapedia, ohne Netz
 - `app/bisafans.py`: Seiten von BisaFans lesen (Aufträge und Hauptmissionen in Legenden: Arceus, Nebenmissionen in Z-A), ohne Netz
+- `app/shiny.py`: Shiny-Sperren aus Bulbapedia lesen (je Spiel „nur per Tausch“ oder „nie“), ohne Netz
 - `app/serebii.py`: Seiten von Serebii lesen (Abklingzeiten in Legenden: Z-A, Pokédexe von Pokopia), ohne Netz
 - `tests/test_all.py`: Tests ohne Netz; mit `POKEAPI_DB=/pfad/pokeapi.db` auch gegen eine gebaute Datenbank

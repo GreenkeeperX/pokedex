@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, bisafans, companion, db, dittobase, ign, importer, ironmon, mapgenie, pkcompletion, pokearth, pokewiki, raidnester, rankedboost, serebii, smogon, sources, store
+from . import altissimo, bisafans, companion, db, dittobase, ign, importer, ironmon, mapgenie, pkcompletion, pokearth, pokewiki, raidnester, rankedboost, serebii, shiny, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "ironmon": "HGSS IronMON Map (Karte HeartGold/SoulSilver)", "raidnester": "PKHeX Raid Plugin (Raid-Nester Schwert/Schild)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus und Z-A)", "trainer": "PokéWiki (Trainerteams)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "ironmon": "HGSS IronMON Map (Karte HeartGold/SoulSilver)", "raidnester": "PKHeX Raid Plugin (Raid-Nester Schwert/Schild)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus und Z-A)", "trainer": "PokéWiki (Trainerteams)", "smogon": "Smogon (Nutzungsstatistik)", "bulbapedia": "Bulbapedia (Shiny-Sperren)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -716,7 +716,8 @@ def _build(st, log, force, at):
     got = _parallel({"showdown": showdown_all, "pkhex": lambda: _pkhex(st, log, at), "spawns": lambda: _spawns(st, log, at),
                      "pokewiki": lambda: _pokewiki(st, log, at), "serebii": lambda: _serebii(st, log, at),
                      "bisafans": lambda: _bisafans(st, log, at), "trainer": lambda: _trainer(st, log, at),
-                     "altissimo": lambda: _altissimo(st, log, at), "companion": lambda: _companion(st, log, at)})
+                     "altissimo": lambda: _altissimo(st, log, at), "companion": lambda: _companion(st, log, at),
+                     "shiny": lambda: _shiny(st, log, at)})
     for k, v in got.items():
         if isinstance(v, Exception):
             log(f"{NAMES.get(k, k)}: abgebrochen: {type(v).__name__}: {v}")
@@ -728,6 +729,8 @@ def _build(st, log, force, at):
         wiki = dict(wiki, bisafans=got["bisafans"])         # ebenso BisaFans
     if got.get("trainer"):
         wiki = dict(wiki, trainer=(got["trainer"] or {}).get("teams") or [])
+    if (got.get("shiny") or {}).get("text"):
+        wiki = dict(wiki, shiny=got["shiny"]["text"])         # 0.51: Shiny-Sperren (importer._derive_shiny)
     alt, comp = got["altissimo"] or {}, got["companion"]
     if comp:
         alt.setdefault("legends-arceus", {})["companion"] = comp
@@ -1930,6 +1933,38 @@ def _bisafans(st, log, at):
         store.save_json("bisafans.json", out)
         return out
     return old
+
+
+SHINY_DAYS = 30            # so oft holt der Abgleich die Liste der Shiny-Sperren neu
+SHINY_PAGE = "List_of_unobtainable_Shiny_Pokémon"
+
+
+def _shiny(st, log, at):
+    """0.51: Bulbapedia „List of unobtainable Shiny Pokémon“ als Wikitext: {"am", "text"} in bulbapedia_shiny.json.
+    Jünger als SHINY_DAYS: der letzte Lauf gilt."""
+    old = store.load_json("bulbapedia_shiny.json", {}) or {}
+    if old.get("text") and old.get("am", "") > _iso(now() - timedelta(days=SHINY_DAYS)):
+        return old
+    if _resting(st, "bulbapedia", at):
+        return old
+    src = _Source("bulbapedia", log)
+    STATE.update(step="Bulbapedia: Shiny-Sperren")
+    t = src.get("https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=" + urllib.parse.quote(SHINY_PAGE)
+                + "&prop=wikitext&format=json&redirects=1")
+    text = ""
+    try:
+        w = (json.loads(t) if t else {}).get("parse", {}).get("wikitext")
+        text = w.get("*", "") if isinstance(w, dict) else (w or "")
+    except ValueError:
+        text = ""
+    st["sources"]["bulbapedia"] = src.result(shiny=len(shiny.parse(text)) if text else 0)
+    if src.blocked:
+        st["rest"]["bulbapedia"] = _iso(now() + timedelta(hours=REST_H))
+    if not text:
+        return old
+    out = {"am": _iso(now()), "text": text}
+    store.save_json("bulbapedia_shiny.json", out)
+    return out
 
 
 TRAINER_DAYS = 7           # so oft holt der Abgleich die Trainerseiten neu (sie ändern sich selten)
