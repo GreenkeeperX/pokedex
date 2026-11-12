@@ -2338,12 +2338,14 @@ def diagnose(proben=None, stand=None):
     probe("Bulbapedia, Seite Bidoof", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=Bidoof_(Pok%C3%A9mon)"
           "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
     # 0.13.0: Fangfaktoren der Hisui-Bälle zum Gegenprüfen (Bulbapedia und PokéWiki), Kartendaten des PLA Companion
-    for page in ("Heavy_Ball_(Hisui)", "Feather_Ball", "Ultra_Ball_(Hisui)"):
-        probe(f"Bulbapedia, Seite {page}", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=" + page
-              + "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
-    for page in ("Schwerball", "Federball", "Hyperball"):
+    # 0.48.8: die echte Fangformel in Legenden: Arceus (Seite „Catch rate“ und alle Hisui-Bälle, PokéWiki „Fangchance“)
+    for page in ("Heavy_Ball_(Hisui)", "Feather_Ball", "Ultra_Ball_(Hisui)", "Catch_rate", "Poké_Ball_(Hisui)",
+                 "Great_Ball_(Hisui)", "Wing_Ball", "Jet_Ball", "Leaden_Ball", "Gigaton_Ball", "Origin_Ball", "Strange_Ball"):
+        probe(f"Bulbapedia, Seite {page}", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=" + urllib.parse.quote(page)
+              + "&prop=wikitext&format=json&redirects=1", wiki_page, keep=400_000)
+    for page in ("Schwerball", "Federball", "Hyperball", "Fangchance", "Fangrate"):
         probe(f"PokéWiki, Seite {page}", POKEWIKI_API + "?" + urllib.parse.urlencode(
-            {"action": "parse", "page": page, "prop": "wikitext", "format": "json", "redirects": 1}), wiki_page, keep=True)
+            {"action": "parse", "page": page, "prop": "wikitext", "format": "json", "redirects": 1}), wiki_page, keep=400_000)
     def kinds(t):
         n = {}
         for e in companion.entries(t):
