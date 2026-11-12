@@ -2281,6 +2281,34 @@ class MitDatenbank(TempData):
         ei = next(h for h in held if h["item"] == "Glücks-Ei")
         self.assertEqual((ei["prozent"], ei["quelle"]), ("5 %", "PokéAPI"))
 
+    def test_0_45_0_speicherplatz(self):
+        """Speicherplatz des Datenordners: Teile nach Größe, Karten nach Quelle und Karte, Kleines als Sonstiges (erfundene Dateien)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(abruf.db, "data_dir", lambda: d):
+            def put(rel, n):
+                p = os.path.join(d, *rel.split("/"))
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "wb") as f:
+                    f.write(bytes(n))
+            put("pokeapi.db", 2_000_000)
+            put("user.db", 5000)
+            put("sync.json", 100)
+            put("mapgenie/test.im.json", 300)
+            put("mapgenie/kacheln/im/johto/3/0-0.png", 1_500_000)
+            put("mapgenie/kacheln/im/johto/3/1-0.png", 500)
+            put("mapgenie/kacheln/erfundenes-spiel/a/1-1.jpg", 40)
+            r = abruf.disk_usage(force=True)
+            self.assertEqual(r["gesamt"], 2_000_000 + 5000 + 100 + 300 + 1_500_500 + 40)
+            self.assertEqual([t["name"] for t in r["teile"]], ["pokeapi.db", "mapgenie", "user.db", "sonst"])
+            mg = r["teile"][1]
+            self.assertEqual((mg["bytes"], mg["dateien"]), (1_500_840, 4))
+            self.assertEqual([(t["titel"], t["bytes"]) for t in mg["teile"]],
+                             [("HeartGold/SoulSilver: Weltkarten (im Browser umgewandelt)", 1_500_500),
+                              ("Kartendaten (Punkte, Orte)", 300), ("Map Genie: erfundenes-spiel", 40)])
+            self.assertEqual(mg["teile"][0]["teile"][0]["name"], "johto")
+            self.assertIs(abruf.disk_usage(), r)            # zwischengespeichert
+        abruf._disk.update(at=0.0, data=None)
+
 
 if __name__ == "__main__":
     unittest.main()

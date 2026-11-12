@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.45.0 (12.11.2026)
+
+- Speicherplatz in den Einstellungen: `abruf.disk_usage` zählt den Datenordner (je Eintrag Bytes und Dateien, `mapgenie`
+  nach `kacheln/<Quelle>/<Karte>` aufgeschlüsselt, Kleines als „Sonstiges“, freier Platz per `shutil.disk_usage`), fünf
+  Minuten zwischengespeichert; `/api/speicher` (`?neu=1` zählt neu). Das Feld ist zu, bis man es aufklappt, und zählt erst dann
+
 ## 0.44.1 (12.11.2026)
 
 - Verbindungstest für Karten von X/Y, Sonne/Mond, Ultrasonne/Ultramond (bisher keine) und Einall, ORAS, BDSP (bisher nur

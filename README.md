@@ -94,7 +94,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Let’s Go**: Fangen ohne Kampf und Fang-Kombo auf der Detailseite, Partner-Techniken und Geheime Techniken beim Partner.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
   Gefangene blass, auf Wunsch nur die fehlenden.
-- **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen, wie im VR-Navigator): Abgleich mit Zeitplan, Quellen, Protokoll und Verbindungstest zum Aufklappen; der Verbindungstest (auch für mögliche
+- **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen, wie im VR-Navigator): Abgleich mit Zeitplan, Speicherplatz (Datenbanken, Bilder, Kartenkacheln je Quelle und Karte), Quellen, Protokoll und Verbindungstest zum Aufklappen; der Verbindungstest (auch für mögliche
   neue Quellen, mit Probe-Seiten zum Herunterladen) fragt verschiedene Server gleichzeitig an, zeigt seinen Fortschritt und
   läuft weiter, wenn du den Reiter wechselst, Lesezeichen „Seite untersuchen“ für Seiten, deren Karten erst im Browser laden (liest geladene
   Daten-Dateien, Variablen und Kartenmarker in eine Datei; nichts geht an einen Server), „Zu erledigen“ (Abweichungen zwischen

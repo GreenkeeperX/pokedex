@@ -332,6 +332,89 @@ def media_ids(kind):
         con.close()
 
 
+# Speicherplatz im Datenordner: Namen für die Ordner und Dateien (sonst steht der Name selbst da)
+DISK_LABEL = {"pokeapi.db": "Spieldatenbank", "user.db": "Deine Daten (Teams, Sammlung, Entscheidungen)",
+              "sicherung": "Tägliche Sicherungen deiner Daten", "karten": "Karten Legenden: Arceus (Spieldaten)",
+              "mapgenie": "Karten (Daten und Kacheln)", "formen": "Bilder der Formen", "bisafans.json": "Aufträge (BisaFans)",
+              "pokewiki_trainer.json": "Trainerteams (PokéWiki)"}
+DISK_TILES = {"im": "HeartGold/SoulSilver: Weltkarten (im Browser umgewandelt)", "rn": "Schwert/Schild: Raid-Nester",
+              "se": "Serebii PokéEarth", "rb": "RankedBoost", "pc": "pokemoncompletion", "db": "DittoBase", "ign": "IGN"}
+DISK_CACHE_S = 300          # so lange gilt eine Zählung (viele Kacheln: das Durchzählen dauert)
+_disk = {"at": 0.0, "data": None}
+
+
+def _du(path):
+    """(Bytes, Dateien) unter einem Pfad, ohne Verknüpfungen zu folgen."""
+    if os.path.isfile(path):
+        return os.path.getsize(path), 1
+    total = n = 0
+    stack = [path]
+    while stack:
+        try:
+            it = os.scandir(stack.pop())
+        except OSError:
+            continue
+        with it:
+            for e in it:
+                try:
+                    if e.is_dir(follow_symlinks=False):
+                        stack.append(e.path)
+                    elif e.is_file(follow_symlinks=False):
+                        total += e.stat(follow_symlinks=False).st_size
+                        n += 1
+                except OSError:
+                    pass
+    return total, n
+
+
+def disk_usage(force=False):
+    """Speicherplatz des Datenordners: {gesamt, frei, teile: [{name, titel, bytes, dateien, teile?}]}, groß zuerst;
+    Karten aufgeschlüsselt nach Quelle der Kacheln und je Karte. Gezählt höchstens alle DISK_CACHE_S Sekunden."""
+    if not force and _disk["data"] and time.monotonic() - _disk["at"] < DISK_CACHE_S:
+        return _disk["data"]
+    import shutil
+    root = db.data_dir()
+    label = {**DISK_LABEL, **{k: MEDIA_LABEL.get(k, k) for k in list(IMAGES) + list(EXTRAS)}}
+
+    def entry(path, name, titel, deeper=None):
+        b, n = _du(path)
+        out = {"name": name, "titel": titel, "bytes": b, "dateien": n}
+        if deeper:
+            subs = deeper(path)
+            if subs:
+                out["teile"] = sorted(subs, key=lambda x: -x["bytes"])
+                out["bytes"] = max(b, sum(x["bytes"] for x in subs))   # Teile können verknüpft sein
+                out["dateien"] = max(n, sum(x["dateien"] for x in subs))
+        return out
+
+    def maps(path):
+        k = os.path.join(path, "kacheln")
+        subs = [entry(os.path.join(k, x), x, DISK_TILES.get(x, f"Map Genie: {x}"),
+                      lambda p: [entry(os.path.join(p, y), y, y) for y in os.listdir(p) if os.path.isdir(os.path.join(p, y))])
+                for x in (os.listdir(k) if os.path.isdir(k) else []) if os.path.isdir(os.path.join(k, x))]
+        rest = sum(_du(os.path.join(path, x))[0] for x in os.listdir(path) if x != "kacheln")
+        return subs + [{"name": "daten", "titel": "Kartendaten (Punkte, Orte)", "bytes": rest, "dateien": 0}]
+
+    teile = []
+    for x in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        p = os.path.join(root, x)
+        teile.append(entry(p, x, label.get(x, x), maps if x == "mapgenie" else None))
+    big = [t for t in teile if t["bytes"] >= 1_000_000 or t["name"] in label]
+    small = [t for t in teile if t not in big]
+    if small:
+        big.append({"name": "sonst", "titel": "Sonstiges (Stand, Protokolle, Einstellungen)", "bytes": sum(t["bytes"] for t in small),
+                    "dateien": sum(t["dateien"] for t in small)})
+    try:
+        du = shutil.disk_usage(root)
+        frei, platte = du.free, du.total
+    except OSError:
+        frei = platte = None
+    data = {"gesamt": sum(t["bytes"] for t in teile), "frei": frei, "platte": platte, "am": _iso(now()),
+            "teile": sorted(big, key=lambda t: -t["bytes"])}
+    _disk.update(at=time.monotonic(), data=data)
+    return data
+
+
 def media_inventory():
     """Je Bildart: wie viele Dateien da sind und welche Nummern fehlen (für den Download der Spieldaten)."""
     out = {}

@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.44.1"
+VERSION = "0.45.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.45.0", "12.11.2026", [
+        "Einstellungen: neues Feld „Speicherplatz“ zeigt, was Spieldatenbank, deine Daten mit Sicherungen, Bilder und Kartenkacheln belegen, die Karten aufklappbar nach Quelle und Karte, dazu der freie Platz auf dem Laufwerk. Gezählt wird nur, wenn das Feld aufgeklappt ist",
+    ]),
     ("0.44.1", "12.11.2026", [
         "Verbindungstest: Bildkarten des PokéWiki (Kalos, Alola, Hoenn, Einall, Sinnoh mit deutschen Ortsnamen), Kartenbilder von Bulbapedia und Pokémon Database, für die Spiele ohne oder mit nur grober Karte",
     ]),
