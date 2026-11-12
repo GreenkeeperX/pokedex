@@ -260,12 +260,12 @@ function acts(id) {
     + `<span class="a${fav ? " on" : ""}" data-act="fav" data-id="${id}" data-tip="${fav ? "Favorit; Klick: aus den Favoriten" : "Zu den Favoriten (Kader zum schnellen Tauschen)"}">${icon("fav", fav)}</span>`
     + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${ballTip(id)}">${ball(id, got)}</span>` + alphaBtn(id) + `</span>`;   // 0.47.5: ohne „+“, das Häkchen nimmt ins Team
 }
-// mode: true = Sammlung (⇄ wählt zum Übertragen aus), "swap" = Favoriten im Team (⇄ nimmt ins Team oder tauscht)
+// mode: true = Sammlung (⇄ wählt zum Übertragen aus); Favoriten im Team ohne ⇄ (0.47.7: das Häkchen nimmt ins Team oder tauscht)
 function monCard(r, mode = false) {
   const xmode = mode === true, inTeam = S.team.ids.includes(r.id), xs = xmode && XSEL.has(r.id);
   return `<a class="mon${inTeam ? " inteam" : ""}${xs ? " xon" : ""}" href="#pokemon/${r.id}" draggable="true" data-id="${r.id}"><span class="nr"${r.dexk ? ` data-tip="Nummer im ${r.dex + 1}. Pokédex des Spiels"` : ""}>#${r.dexk || ""}${r.nr ?? r.art}</span>${xmode
     ? `<span class="xs${xs ? " on" : ""}" data-act="xsel" data-id="${r.id}" data-tip="${xs ? "Ausgewählt zum Übertragen; Klick: abwählen" : "Zum Übertragen auswählen"}">⇄</span>`
-    : mode === "swap" ? `<span class="xs" data-act="favswap" data-id="${r.id}" data-tip="${teamFull() ? "Ins Team tauschen: wähle, wen es ersetzt" : "Ins Team aufnehmen"}">⇄</span>` : ""}<span class="sp">${img(r.id)}${acts(r.id)}</span>
+    : ""}<span class="sp">${img(r.id)}${acts(r.id)}</span>
     <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span></span><span class="ty">${tchips(r.typen)}</span>
     ${r.legendaer ? `<span class="s">legendär</span>` : ""}<span class="s">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b></span></span>
     ${radar(r.werte, 100)}</a>`;
@@ -1987,7 +1987,7 @@ function favBox() {
   const el = $("#favs");
   if (!el) return;
   $("#favn").textContent = S.favs.length ? `(${S.favs.length})` : "";
-  el.innerHTML = S.favs.length ? `<div class="list favlist">${S.favs.map((r) => monCard(r, "swap")).join("")}</div>`
+  el.innerHTML = S.favs.length ? `<div class="list favlist">${S.favs.map((r) => monCard(r)).join("")}</div>`
     : `<p class="hint">Markiere Pokémon mit dem Stern (in der Liste oder auf der Detailseite) oder ziehe sie hierher. Sie stehen dann hier und beim Klick auf einen leeren Platz bereit.</p>`;
 }
 /* Gefangene: Empfehlungen daraus (bessere Alternative jetzt, langfristig mehr Potential nach der Entwicklung) */

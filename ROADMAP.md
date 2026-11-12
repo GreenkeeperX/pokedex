@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.7 (12.11.2026)
+
+- Favoriten-Karten ohne ⇄, Reihenabstand 8 px wie die Liste (Entscheidung 12.11.2026, ersetzt die 11 px aus 0.47.1)
+
 ## 0.47.6 (12.11.2026)
 
 - Bild 6 px tiefer (8 px war zu viel, Entscheidung 12.11.2026); Häkchen bei vollem Team öffnet die Ersetzen-Wahl (`favswap`)
