@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.8 (12.11.2026)
+
+- Bild in den Karten 4 px tiefer (Entscheidung 12.11.2026; 6 und 8 px waren zu tief)
+
 ## 0.47.7 (12.11.2026)
 
 - Favoriten-Karten ohne ⇄, Reihenabstand 8 px wie die Liste (Entscheidung 12.11.2026, ersetzt die 11 px aus 0.47.1)
