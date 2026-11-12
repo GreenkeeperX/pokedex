@@ -469,16 +469,17 @@ function showCard(el) {
    gehört dem Aufrufer und bleibt über Neuzeichnen erhalten. */
 const PIN_COL = `<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="4.5" y="0.5" width="3" height="11" fill="currentColor"/></svg>`;
 const PIN_ROW = `<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="0.5" y="4.5" width="11" height="3" fill="currentColor"/></svg>`;
-function crossTable(table, pin, onChange) {
+function crossTable(table, pin, onChange, marks = true) {
   table.classList.add("cross");
+  if (!marks) table.dataset.rowpin = "0";       // ohne Markierungszeichen (Typtabellen): Klick auf Kopf oder Zelle genügt
   // Sortierbare Spaltenköpfe: der Klick auf den Namen sortiert, das kleine Zeichen daneben hält die Spalte fest
   const hdr = table.tHead?.rows[table.tHead.rows.length - 1];
-  if (hdr) [...hdr.cells].forEach((h, i) => {
+  if (hdr && marks) [...hdr.cells].forEach((h, i) => {
     if (h.dataset.pc || !$(`td[data-c="${i}"]`, table)) return;   // auch nicht sortierbare Spalten (z. B. Beschreibung)
     h.dataset.c = i;
     h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${i}" data-tip="Spalte markieren${h.dataset.sort === undefined ? "" : " (Klick auf den Titel sortiert)"}">${PIN_COL}</span>`);
   });
-  $$("th[data-pc]", table).forEach((h) => { if (!$(":scope > .pinc", h)) h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${h.dataset.pc}" data-tip="Spalte markieren">${PIN_COL}</span>`); });
+  if (marks) $$("th[data-pc]", table).forEach((h) => { if (!$(":scope > .pinc", h)) h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pc="${h.dataset.pc}" data-tip="Spalte markieren">${PIN_COL}</span>`); });
   // Zeilenköpfe markieren schon per Klick; das Zeichen nur, wo die Tabelle es will (data-rowpin="0": ohne)
   if (table.dataset.rowpin !== "0") $$("th[data-pr]", table).forEach((h) => { if (!$(":scope > .pinc", h)) h.insertAdjacentHTML("afterbegin", `<span class="pinc" data-pr="${h.dataset.pr}" data-tip="Zeile markieren">${PIN_ROW}</span>`); });
   const paint = (hr, hc) => {
@@ -1582,12 +1583,14 @@ async function requestsView() {
       <input id="reqq" type="search" placeholder="Suchen: Name, Pokémon, Ort, Belohnung" value="${esc(q)}">
       <span class="seg">${[["offen", "Offen"], ["alle", "Alle"], ["erledigt", "Erledigt"]].map(([k, n]) => `<button class="${k === mode ? "on" : ""}" data-reqmode="${k}">${n}</button>`).join("")}</span>
       <span id="reqn" class="hint"></span></div>
-    <p class="hint"><span id="reqsrc"></span> Fährst du über einen Eintrag, siehst du
-      Beschreibung und Lösung. ○ markiert ihn als erledigt, auch auf der Karte (und umgekehrt); 📍 ganz rechts springt zur Stelle auf der Karte.</p>
+    <details class="sub reqinfo" id="reqinfo"${store.get("reqInfo", false) ? " open" : ""}><summary><span class="hint">Lösung beim Überfahren · ○ erledigt · 📍 auf der Karte</span></summary>
+      <p class="hint"><span id="reqsrc"></span> Fährst du über einen Eintrag, siehst du Beschreibung und Lösung. ○ markiert ihn als erledigt,
+      auch auf der Karte (und umgekehrt); 📍 ganz rechts springt zur Stelle auf der Karte.</p></details>
     <div id="reqlist"><p class="hint">Lädt …</p></div></div>`;
   header();
   const [r] = await Promise.all([api("/api/auftraege?" + qs({spiel: S.game})), loadReqDone(true)]);
   if (rid !== RID) return;
+  $("#reqinfo").addEventListener("toggle", (e) => store.set("reqInfo", e.target.open));
   if (r.blaubeer) return blaubeerView(r);
   const K = r.karte || {}, KAP = r.kapitel || [];
   $("#reqsrc").textContent = `${gameName(r.spiel || REQ_GAME())} auf Deutsch (Quelle: ${r.quelle || "BisaFans"}).`;
@@ -1603,7 +1606,7 @@ async function requestsView() {
       const xs = ms.filter((x) => (m === "alle" || (m === "erledigt") === done(x)) && (!ql || [x.name, x.text].join(" ").toLowerCase().includes(ql)));
       $("#reqn").textContent = `${ms.filter(done).length} von ${ms.length} erledigt`;
       $("#reqlist").innerHTML = !ms.length ? `<p class="hint">Noch keine Hauptmissionen. Der nächste Abgleich holt sie.</p>`
-        : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Mission")}${th("Kapitel")}${th("Weg", "", true)}${th("", "", true)}${pinTh}</tr></thead>
+        : `<div class="scroll sticky"><table class="rows sort vlines"><thead><tr>${thc("Nr.")}${th("Mission")}${th("Kapitel")}${th("Weg", "", true)}${th("", "", true)}${pinTh}</tr></thead>
           <tbody>${xs.map((x) => `<tr class="${done(x) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${esc(x.label || String(x.nr))}</td>
             <td data-s="${esc(x.name)}"><b data-tip="${esc(x.text)}">${esc(x.name)}</b></td><td class="hint" data-s="${x.kapitel}">${x.kapitel ? esc(KAP.length > 2 ? `${x.kapitel}. ${KAP[x.kapitel - 1] || ""}` : KAP[x.kapitel - 1] || "") : ""}</td>
             <td class="why">${esc(x.text.split("\n").slice(0, 2).join(" "))}</td><td class="c">${reqCheck("m" + x.nr)}</td>${pinTd("mission", x.nr)}</tr>`).join("")
@@ -1614,7 +1617,7 @@ async function requestsView() {
       && (!ql || [x.name, x.aufgabe, x.ort, x.belohnung, x.beschreibung, ...x.pokemon.map((p) => p.name)].join(" ").toLowerCase().includes(ql)));
     $("#reqn").textContent = `${r.rows.filter((x) => REQ_DONE.has(String(x.nr))).length} von ${r.rows.length} erledigt`;
     $("#reqlist").innerHTML = !r.rows.length ? `<p class="hint">Noch keine Aufträge. Der nächste Abgleich holt sie.</p>`
-      : `<div class="scroll sticky"><table class="rows sort"><thead><tr>${thc("Nr.")}${th("Auftrag")}${th("Aufgabe", "", true)}${th("Ort")}${th("Belohnung")}${th("Pokémon")}${th("", "", true)}${pinTh}</tr></thead>
+      : `<div class="scroll sticky"><table class="rows sort vlines"><thead><tr>${thc("Nr.")}${th("Auftrag")}${th("Aufgabe", "", true)}${th("Ort")}${th("Belohnung")}${th("Pokémon")}${th("", "", true)}${pinTh}</tr></thead>
         <tbody>${xs.map((x) => `<tr class="${REQ_DONE.has(String(x.nr)) ? "off" : ""}"><td class="c num" data-s="${x.nr}">${x.nr}</td>
           <td data-s="${esc(x.name)}"><b data-tip="${esc(reqTip(x))}">${esc(x.name)}</b></td><td class="why">${esc(x.aufgabe)}</td>
           <td data-s="${esc(x.ort)}">${esc(x.ort) || (K.auftrag?.[x.nr] ? `<span class="hint">siehe Karte</span>` : late(x))}</td><td data-s="${esc(x.belohnung)}">${esc(x.belohnung)}</td><td data-s="${esc(x.pokemon.map((p) => p.name).join(", "))}">${reqMons(x)}</td><td class="c">${reqCheck(x.nr)}</td>${pinTd("auftrag", x.nr)}</tr>`).join("")
@@ -1639,7 +1642,7 @@ function blaubeerView(r) {
     $("#reqn").textContent = `${xs.length} von ${r.blaubeer.length}`;
     $("#reqlist").innerHTML = !r.blaubeer.length ? `<p class="hint">Noch keine Blaubeer-Missionen. Der nächste Abgleich holt sie.</p>`
       : `<div class="bar"><span class="seg">${[["", "Alle"], ...bs.map((x) => [x, x])].map(([k, n]) => `<button class="${k === b ? "on" : ""}" data-bbq="${esc(k)}">${esc(n)}</button>`).join("")}</span></div>
-      <div class="scroll sticky"><table class="rows sort"><thead><tr>${th("Bereich")}${th("Art")}${th("Aufgabe", "", true)}${thc("BP")}</tr></thead>
+      <div class="scroll sticky"><table class="rows sort vlines"><thead><tr>${th("Bereich")}${th("Art")}${th("Aufgabe", "", true)}${thc("BP")}</tr></thead>
         <tbody>${xs.map((x) => `<tr><td class="hint">${esc(x.bereich)}</td><td data-s="${esc(x.art)}">${esc(x.art)}</td><td class="why">${esc(x.text)}</td>
           <td class="c num" data-s="${x.bp || 0}">${x.bp ?? ""}</td></tr>`).join("") || `<tr><td colspan="4" class="hint">Nichts gefunden.</td></tr>`}</tbody></table></div>`;
     $$("[data-bbq]").forEach((e) => e.addEventListener("click", () => { store.set("bbqBereich", e.dataset.bbq); draw(); }));
@@ -1725,7 +1728,7 @@ function researchHtml(d) {
   const all = xs.reduce((n, a) => n + pts(a), 0);
   const calc = calcRows(xs.map((a) => [a.aufgabe, `${a.stufen.length} × ${a.doppelt ? 20 : 10} = ${pts(a)}`]).concat([["Alle Stufen", `${all} Punkte`]]));
   return `<div class="box"><h2 data-fold="research" data-tip="Aufgaben im Pokédex von Hisui. Jede erreichte Stufe bringt 10 Punkte, doppelt zählende 20. Ab 100 Punkten ist der Forschungslevel 10 erreicht.">Forschungsaufgaben</h2>
-    <table class="rows"><tbody>${xs.map((a) => `<tr><td>${esc(a.aufgabe)}${a.doppelt ? ' <span class="cls tm" data-tip="Zählt doppelt: 20 statt 10 Punkte je Stufe">×2</span>' : ""}</td><td class="c">${a.stufen.map(esc).join(" · ")}</td></tr>`).join("")}</tbody></table>
+    <table class="rows"><tbody>${xs.map((a) => `<tr><td>${esc(a.aufgabe)}${a.doppelt ? ' <span class="cls tm" data-tip="Zählt doppelt: 20 statt 10 Punkte je Stufe">×2</span>' : ""}</td><td class="rst">${a.stufen.map((x) => `<span>${esc(x)}</span>`).join("")}</td></tr>`).join("")}</tbody></table>
     <p class="hint"><span ${tipRef(`<b>Punkte, wenn alle Stufen erreicht sind</b>${calc}`)}>Alle Stufen: ${all} Punkte</span>, Forschungslevel 10 ab 100. Quelle: PokéWiki.</p></div>`;
 }
 
@@ -1778,7 +1781,7 @@ function moreHtml(d) {
   if (m.wachstum) rows.push(["Wachstum", esc(m.wachstum)]);
   if (m.eigruppen) rows.push(["Ei-Gruppen", esc(m.eigruppen.join(", ")) + (m.eizyklen != null ? ` · ${m.eizyklen} Ei-Zyklen` : "")]);
   if (m.ev && m.ev.length) rows.push(["EV-Ausbeute", m.ev.map((e) => `${e.punkte} ${STAT[EVK.indexOf(e.wert)]}`).join(", ")]);
-  return rows.length ? `<details class="mehr"><summary>Mehr Details</summary>
+  return rows.length ? `<details class="mehr"><summary><h3 style="display:inline">Mehr Details</h3></summary>
     <div class="kv">${rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join("")}</div></details>` : "";
 }
 // Farben für Werte: Stärke (bis 150), Genauigkeit (ab 70), Wertung (bis 160), von Rot nach Grün
@@ -2058,7 +2061,7 @@ async function teamView() {
     </div>
     <div class="box"><h2 data-fold="tmu">Gegen Gegner</h2>
       <div class="bar"><div class="ac grow"><input id="foe" type="search" placeholder="Gegner hinzufügen (bis zu 6, etwa die Pokémon eines Arenaleiters)" style="width:100%"></div>
-        ${S.foes.length ? `<button data-act="foeclear">Gegner leeren</button>` : ""}</div>
+        <button data-act="foeclear" id="foeclr"${S.foes.length ? "" : " hidden"}>Gegner leeren</button></div>
       <div id="trpick"></div>
       <div id="mu"><p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p></div>
       ${!BATTLE() && GEN() >= 3 ? `<details class="sub" id="calcbox"${store.get("calcOpen", false) ? " open" : ""}><summary><h3 style="margin:0">Schadensrechner</h3>
@@ -2215,6 +2218,8 @@ async function trainerPick(keepOpen) {
   const q = (el.querySelector("#trq")?.value || "").trim().toLowerCase();
   const n = (r) => d.trainer.filter((t) => t.rolle === r && (o.rk || !t.rueckkampf)).length;
   el.innerHTML = `<details class="trp"${wasOpen ? " open" : ""}><summary>Trainer als Gegner: <b>${cur ? esc(cur.name) + (cur.titel ? ` <span class="hint">${esc(cur.titel)}</span>` : "") : "wählen"}</b>
+      ${cur ? `<button class="small" data-trx="1" data-tip="Trainer und seine Pokémon als Gegner entfernen">✕ entfernen</button>
+      <span class="hint">anderen Trainer: aufklappen und anklicken</span>` : ""}
       <span class="hint">${d.trainer.length} Teams aus Arenen, Top Vier, Champs, Rivalen und von Routen</span></summary>
     <div class="bar"><span class="seg">${d.rollen.map((r) => `<button class="${r === o.rolle && !q ? "on" : ""}" data-trrolle="${esc(r)}">${esc(r)} <span class="hint">${n(r)}</span></button>`).join("")}</span>
       <input id="trq" type="search" placeholder="Trainer, Ort oder Pokémon" value="${esc(q)}" style="width:200px">
@@ -2232,6 +2237,10 @@ async function trainerPick(keepOpen) {
     $$("#trpick [data-trrolle]").forEach((b) => b.classList.toggle("on", !ql && b.dataset.trrolle === o.rolle));
   };
   grid();
+  el.querySelector("[data-trx]")?.addEventListener("click", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    S.foes = []; store.set("foes", S.foes); store.set("foeTrainer:" + S.game, null); VPIN.c = null; trainerPick(); matchup();
+  });
   $("#trq").addEventListener("input", grid);
   $$("#trpick [data-trrolle]").forEach((b) => b.addEventListener("click", () => { o.rolle = b.dataset.trrolle; store.set("trOpt", o); $("#trq").value = ""; grid(); }));
   $("#trrk").addEventListener("change", (e) => { o.rk = e.target.checked; store.set("trOpt", o); trainerPick(true); });
@@ -2250,6 +2259,7 @@ function pickTrainer(id) {
 async function matchup() {
   const box = $("#mu");
   if (!box) return;
+  $("#foeclr")?.toggleAttribute("hidden", !S.foes.length);    // auch nach der Wahl eines Trainers (ohne neuen Aufbau)
   if (!S.foes.length) { box.innerHTML = `<p class="hint">Wähle Gegner: das Tool zeigt, wer aus deinem Team gegen wen im Vorteil ist.</p>`; return; }
   const foeCard = (id, r) => { const fm = foeMember(id);
     return `<div class="foe" draggable="true" data-foe="${id}" data-hc="${id}">${img(id, "", true)}<b>${esc(r?.name || "#" + id)}</b>${fm?.lvl ? ` <span class="hint">Lv ${fm.lvl}</span>` : ""}<div>${tchips(r?.typen || [])}</div>
@@ -2267,7 +2277,7 @@ async function matchup() {
   const seen = new Set();
   box.innerHTML = `<div class="foes">${r.einzeln.map((x) => foeCard(x.gegner.id, ROWS[x.gegner.id])).join("")}</div>
     ${r.ohne_antwort.length ? `<div class="note warn">Niemand im Team ist klar im Vorteil gegen: ${esc(r.ohne_antwort.join(", "))}</div>` : `<div class="note go">Gegen jeden Gegner hast du mindestens einen guten Kandidaten.</div>`}
-    <div class="scroll"><table class="vs" id="vs" data-rowpin="0"><thead><tr><th class="corner" data-c="0" data-pc="0"></th>${r.einzeln.map((x, i) => `<th class="foeh" data-c="${i + 1}" data-pc="${i + 1}" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
+    <div class="scroll"><table class="vs" id="vs" data-rowpin="0"><thead><tr><th class="corner vsteam" data-c="0" data-pc="0" data-tip="Spalte deines Teams markieren">Dein Team</th>${r.einzeln.map((x, i) => `<th class="foeh" data-c="${i + 1}" data-pc="${i + 1}" data-hc="${x.gegner.id}">${img(x.gegner.id)}<div>${esc(x.gegner.name)}</div></th>`).join("")}</tr></thead><tbody>
       ${r.uebersicht.filter((m) => !seen.has(m.id) && seen.add(m.id)).map((m, k) => `<tr data-r="${k}"><th class="r" data-pr="${k}" data-c="0" data-hc="${m.id}">${img(m.id)} ${esc(m.name)}</th>${r.einzeln.map((x, i) => { const v = verdict[`${m.id}:${x.gegner.id}`], u = VERDICT[v.urteil];
         return `<td data-c="${i + 1}" class="v-${v.urteil}" data-tip="${esc(`${m.name} gegen ${x.gegner.name}: ${u[1]}\n${v.gruende.map((g) => "· " + g).join("\n")}`)}">${u[0]}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
     <p class="hint">Vorteil: teilt mehr aus, als es einsteckt (Typen und Initiative). Nachteil: steckt mehr ein, als es austeilt. Die Attacken des Gegners zählen über seine Typen (beim Team eines Trainers über seine echten Attacken), deine über die gewählten Attacken; eine Attacke ohne Eigentyp-Bonus (×1,5) zählt dabei ein Drittel weniger. Zelle hovern für die Rechnung; Klick hält Zeile oder Spalte fest. Gegner lassen sich oben per Ziehen umsortieren.</p>`;
@@ -3406,12 +3416,12 @@ async function chartView() {
   if (!mine) {
     $("details.combos").addEventListener("toggle", (e) => store.set("combosOpen", e.target.open));
     $("#cbsicht").addEventListener("change", (e) => { store.set("combosSicht", e.target.value); chartView(); });
-    crossTable($("table.cbt"), CPIN);
+    crossTable($("table.cbt"), CPIN, null, false);
   }
-  crossTable($("#tchart"), PIN, () => { $("#unpin").hidden = PIN.r === null && PIN.c === null; });
+  crossTable($("#tchart"), PIN, () => { $("#unpin").hidden = PIN.r === null && PIN.c === null; }, false);
   $("#ctm").addEventListener("change", (e) => { store.set("chartTeam", e.target.checked); chartView(); });
   $$("details.tteam").forEach((d) => {
-    crossTable($("table", d), TPIN[d.dataset.tt]);
+    crossTable($("table", d), TPIN[d.dataset.tt], null, false);
     d.addEventListener("toggle", () => store.set("ttOpen", {...store.get("ttOpen", {}), [d.dataset.tt]: d.open}));
   });
 }
@@ -3848,10 +3858,9 @@ function foldBoxes(root) {
       if (bar) { sm.append(...bar.childNodes); bar.remove(); } else { sm.append(h); }
       d.append(sm, ...b.childNodes); b.replaceWith(d);
     }
-    d.id = "s-" + id; d.classList.add("fold");
-    d.open = id === "speicherplatz" ? store.get("diskOpen", false) : !shut.has(id);   // Speicherplatz zählt nur aufgeklappt, daher zu
+    d.id = "s-" + id; d.classList.add("fold"); d.open = !shut.has(id);
     $("summary", d).addEventListener("click", (e) => { if (e.target.closest("button")) e.preventDefault(); });   // Knöpfe im Kopf klappen nicht
-    d.addEventListener("toggle", () => { if (id === "speicherplatz") return store.set("diskOpen", d.open); if (d.open) shut.delete(id); else shut.add(id); store.set("setShut", [...shut]); });
+    d.addEventListener("toggle", () => { if (d.open) shut.delete(id); else shut.add(id); store.set("setShut", [...shut]); });
   });
   root.insertAdjacentHTML("afterbegin", `<div class="jump">${jumps.map(([id, l]) => `<a href="#einstellungen" data-jump="s-${id}">${esc(l)}</a>`).join("")}
     <span class="foldall"><button class="link" data-fold="1">alle auf</button> · <button class="link" data-fold="0">alle zu</button></span></div>`);
@@ -3935,15 +3944,16 @@ async function settingsView() {
       ${pr.length - open.length ? `<details><summary>Entschieden (${pr.length - open.length})</summary><table class="rows">${pr.filter((r) => r.entscheidung).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.feld)}</td><td>${esc(r.entscheidung)}</td><td><button class="small" data-act="dec" data-k="${esc(r.key)}" data-v="">zurück</button></td></tr>`).join("")}</table></details>` : ""}
     </div>
     <div class="box"><h2>Sicherung</h2>
-      <p class="hint">Die Sicherung enthält alles Eigene: Teams, Favoriten, deine Sammlung (als gefangen markiert), Kampftagebuch und Entscheidungen. Der Server sichert user.db außerdem täglich selbst (die letzten 14 Tage).
-        Die Spieldaten sind alles, was der Abgleich gesammelt hat (Datenbank, Stand, Protokoll, „Zu erledigen“ und welche Bilder und Kacheln fehlen), zum Nachprüfen; zum Einlesen braucht es sie nicht.</p>
-      <div class="bar"><a class="btn" href="/api/spieldaten" download data-tip="ZIP-Datei, etwa 20 MB, ohne Bilder und ohne eigene Daten">Spieldaten herunterladen</a>
-        <a class="btn" href="/api/export" download>Sicherung herunterladen</a>
-        <label class="btn filebtn">Sicherung einlesen <input type="file" id="restore" accept="application/json,.json" hidden></label></div>
-      <p class="hint">Einlesen ersetzt alle eigenen Daten durch die Datei; vorher legt der Server eine Kopie an.</p>
-      <div id="restmsg"></div></div>
-    <div class="box"><h2>Speicherplatz</h2><p class="hint">Was Spieldatenbank, deine Daten, Bilder und Kartenkacheln im Datenordner des Servers belegen.</p>
-      <div id="disk"><p class="hint">Lädt …</p></div></div></div></div>
+      <div class="bar"><a class="btn" href="/api/export" download data-tip="Alles Eigene als JSON-Datei">Sicherung herunterladen</a>
+        <label class="btn filebtn" data-tip="Ersetzt alle eigenen Daten durch die Datei; vorher legt der Server eine Kopie an">Sicherung einlesen <input type="file" id="restore" accept="application/json,.json" hidden></label>
+        <a class="btn" href="/api/spieldaten" download data-tip="ZIP-Datei, etwa 20 MB, ohne Bilder und ohne eigene Daten">Spieldaten herunterladen</a></div>
+      <div id="restmsg"></div>
+      <details class="sub" id="sichinfo"${store.get("sichInfo", false) ? " open" : ""}><summary><span class="hint">Der Server sichert deine Daten außerdem täglich (14 Tage)</span></summary>
+        <p class="hint">Die Sicherung enthält alles Eigene: Teams, Favoriten, deine Sammlung (als gefangen markiert), Kampftagebuch und Entscheidungen.
+        Einlesen ersetzt alle eigenen Daten durch die Datei; vorher legt der Server eine Kopie an. Der Server sichert user.db außerdem täglich selbst (die letzten 14 Tage).
+        Die Spieldaten sind alles, was der Abgleich gesammelt hat (Datenbank, Stand, Protokoll, „Zu erledigen“ und welche Bilder und Kacheln fehlen), zum Nachprüfen; zum Einlesen braucht es sie nicht.</p></details>
+      <details class="sub" id="diskd"${store.get("diskOpen", false) ? " open" : ""}><summary><b>Speicherplatz</b> <span class="hint">Datenbanken, Bilder und Kartenkacheln auf dem Server</span></summary>
+        <div id="disk"><p class="hint">Lädt …</p></div></details></div></div></div>
     <h2 class="sect">Deine Daten</h2>
     <div class="box"><h2>Seite untersuchen (Lesezeichen)</h2><p class="hint">Manche Seiten laden ihre Karten erst im Browser (etwa das PokéWiki),
       der Abgleich sieht dann nur eine leere Hülle. Dieses Lesezeichen liest die fertig geladene Seite in deinem Browser: welche Daten-Dateien sie nachlädt
@@ -3960,7 +3970,8 @@ async function settingsView() {
     S.meta.einstellungen = await api("/api/einstellungen", {auto: $("#auto").checked, tage: +$("#tage").value, sprites: $("#sprites").checked});
   };
   ["auto", "tage", "sprites"].forEach((k) => $("#" + k).addEventListener("change", saveSet));
-  { const dk = $("#s-speicherplatz"); if (dk) { if (dk.open) diskBox(); dk.addEventListener("toggle", () => { if (dk.open) diskBox(); }); } }   // zählt nur aufgeklappt
+  { const dk = $("#diskd"); if (dk.open) diskBox(); dk.addEventListener("toggle", () => { store.set("diskOpen", dk.open); if (dk.open) diskBox(); }); }   // zählt nur aufgeklappt
+  $("#sichinfo").addEventListener("toggle", (e) => store.set("sichInfo", e.target.open));
   $("#restore").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     e.target.value = "";

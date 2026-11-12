@@ -12,11 +12,22 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.45.0"
+VERSION = "0.46.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.46.0", "12.11.2026", [
+        "Klapp-Pfeile überall gleich: derselbe größere Pfeil in derselben Farbe vor allem, was sich aufklappen lässt (Detailseite, Team, Einstellungen, Karten)",
+        "Pokémon-Karten: das Bild sitzt ein paar Pixel tiefer, die Nummer bleibt frei; die Favoriten im Team-Reiter stehen wieder so eng wie die Liste",
+        "Forschungsaufgaben: die Stufen stehen in festen Spalten untereinander",
+        "Gegen Gegner: ein gewählter Trainer lässt sich mit „✕ entfernen“ direkt abwählen, „Gegner leeren“ ist auch nach der Wahl eines Trainers da; in der Tabelle markiert „Dein Team“ oben links die Spalte deines Teams",
+        "Team: die Typen stehen bei „Bessere Alternative“ und „Langfristig mehr Potential“ immer in einer eigenen Zeile; Löschen in der Rückfrage auch im dunklen Modus in Nintendo-Rot",
+        "Schadensrechner: die gewählte Einstellung ist ruhiger hervorgehoben",
+        "Typen: die Markierungszeichen in den Tabellen sind weg, ein Klick auf Typ oder Zelle hält weiterhin fest",
+        "Aufträge: die Erklärung ist eingeklappt, die Tabellen haben senkrechte Linien",
+        "Einstellungen: der Speicherplatz steht jetzt in der Sicherung, deren Erklärung ist eingeklappt",
+    ]),
     ("0.45.0", "12.11.2026", [
         "Einstellungen: neues Feld „Speicherplatz“ zeigt, was Spieldatenbank, deine Daten mit Sicherungen, Bilder und Kartenkacheln belegen, die Karten aufklappbar nach Quelle und Karte, dazu der freie Platz auf dem Laufwerk. Gezählt wird nur, wenn das Feld aufgeklappt ist",
     ]),
