@@ -1,5 +1,20 @@
 # Roadmap
 
+## 0.44.0 (12.11.2026)
+
+- Auswertung der Kartenrecherche vom 12.11. (21 Spielgruppen): brauchbar sind die HGSS IronMON Map und die Raid-Nester
+  aus dem PKHeX Raid Plugin; Gamer Guides und Pokédens erreicht nur der Heimserver (Verbindungstest, Daten mit `keep`)
+- `app/ironmon.py`, `abruf._ironmon`, `mapgenie/<Spiel>.im.json`: Johto und Kanto als ganze Welt (WebP 13712×5893 und
+  9736×6994), Trainer (Klasse eingedeutscht, Level) und Items (sichtbar, versteckt, TM) aus TypeScript, je Ort ein Punkt.
+  WebP kann der Server ohne Bibliothek nicht zerlegen: der Browser wandelt das Bild beim ersten Öffnen in PNG-Kacheln um
+  (`mgConvert`, `/api/kacheln/umwandeln`, `abruf.tile_upload` prüft Karte, Lage und PNG); Test: Johto 1733 Kacheln in
+  gut 30 Sekunden, 114 MB
+- `app/raidnester.py`, `abruf._raidnester`, `mapgenie/<Spiel>.rn.json`: 276 Raid-Nester auf den Karten des Plugins
+  (Naturzone, Insel der Rüstung, Schneelande; pkTeraRaid rechnet die Schneelande falsch um). Insel der Rüstung und
+  Schneelande haben damit eigene Karten vor Galar
+- Offen: Inhalt je Nest (Pokédens oder die Nest-Tabellen des Plugins), Karten für X/Y, Sonne/Mond, Ultrasonne/Ultramond
+  (keine Karte) und bessere für Einall, ORAS, BDSP, Orre (nur grobe Serebii-Übersicht)
+
 ## 0.43.0 (12.11.2026)
 
 - Karten (`mgView`): gebrochener Zoom (Kacheln der nächsten Stufe, per CSS skaliert), Regler, Mausrad in halben Stufen,

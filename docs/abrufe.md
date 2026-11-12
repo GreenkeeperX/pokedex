@@ -94,6 +94,13 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    (`/pokearth/<Region>/`, 2 Sekunden Pause) mit Bildkarte; das Bild einmal nach `mapgenie/kacheln/se/<Region>.png`, je
    Spiel die Karten seiner Regionen nach `mapgenie/<Spiel>.se.json`. Die Pokémon je Ort setzt `abfragen._pokearth_mons`
    beim Anzeigen aus den Fundorten des Spiels ein.
+7. **HGSS IronMON Map** (`app/ironmon.py`, Quelle „ironmon“, GitHub): je Region Trainer und Items (`src/data/*.ts`) und
+   einmal das Bild (`src/assets/Full<Region>.webp`) nach `mapgenie/kacheln/im/<Region>.webp`; Karten nach
+   `mapgenie/heartgold-soulsilver.im.json`. Kacheln macht der Browser beim ersten Öffnen (`/api/kacheln/umwandeln`),
+   abgelegt unter `mapgenie/kacheln/im/<Region>/<z>/<x>-<y>.png`.
+7. **Raid-Nester** (`app/raidnester.py`, Quelle „raidnester“, GitHub, PKHeX Raid Plugin): `Nests/NestLocations.cs`,
+   `Raid/RaidParameters.cs` und einmal die drei Bilder nach `mapgenie/kacheln/rn/<Teil>.png`; je Spiel
+   `mapgenie/<Spiel>.rn.json` (Schwert/Schild, Insel der Rüstung, Schneelande der Krone).
 7. **RankedBoost** (`app/rankedboost.py`, Quelle „rankedboost“): je Spiel in `rankedboost.GAMES` (Let’s Go, Feuerrot/Blattgrün)
    die Fundortseite, darin die Adresse der Kartendaten (`megamap-<Spiel>-<Prüfsumme>.json`; ohne Treffer die zuletzt
    bekannte), daraus Orte und Pokémon nach `mapgenie/<Spiel>.rb.json`. Die Ortsbilder (webp) kommen einmal nach

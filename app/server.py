@@ -626,6 +626,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._file(f, "max-age=2592000")
                 else:
                     self._send(404, {"error": "kein Ortsbild"}, extra={"Cache-Control": "max-age=3600"})
+            elif path == "/api/kacheln/umwandeln":
+                d = abruf.tile_convert_state(q.get("spiel", ""), q.get("karte", ""))
+                self._send(200 if d else 404, d or {"error": "keine Karte zum Umwandeln"})
             elif path == "/api/smogon":
                 self._send(200, abfragen.smogon_view(q.get("spiel")))
             elif path == "/api/mapgenie/eigene":
@@ -747,7 +750,10 @@ class Handler(BaseHTTPRequestHandler):
         "/api/einstellungen": abruf.save_settings,
         "/api/abgleich": lambda b: {"started": abruf.start(force=bool(b.get("neu")))},
         "/api/diag": lambda b: {"started": start_diag()},
+        "/api/kacheln/umwandeln": abruf.tile_upload,
     }
+    # größere Rümpfe: Datensicherung, Kacheln aus dem Browser (je Anfrage einige, als Base64)
+    BODY_MAX = {"/api/restore": 8_000_000, "/api/kacheln/umwandeln": 6_000_000}
 
     def do_POST(self):
         path = urllib.parse.urlsplit(self.path).path
@@ -759,7 +765,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True      # Rumpf ungelesen: die Verbindung nicht weiter nutzen
                 self._send(404, {"error": "nicht gefunden"})
                 return
-            self._send(200, fn(self._body(8_000_000 if path == "/api/restore" else 200_000)))
+            self._send(200, fn(self._body(self.BODY_MAX.get(path, 200_000))))
         except ValueError as e:
             self.close_connection = True
             self._send(400, {"error": str(e)})

@@ -1932,6 +1932,78 @@ class Server(TempData):
         self.assertEqual([t["name"] for t in both], ["Erfundo", "Käfersammler Erfo"])   # die Trainerseite gilt
         self.assertNotIn("seite_rolle", both[0])
 
+    def test_0_44_0_ironmon_und_raidnester(self):
+        """HGSS-Weltkarte (TypeScript-Punkte, WebP-Kopf, Kacheln aus dem Browser) und Raid-Nester (erfundene Daten)."""
+        import base64
+        from app import ironmon, raidnester
+        ts = """export const trainers = [
+  // Rt 30
+  {
+    name: "Bug Catcher Erfo",
+    numPokemon: 2,
+    pokemonLevels: [3, 6],
+    x: 700,
+    y: 400,
+  },
+  // {
+  //   name: "Lass Alt",
+  //   x: 0,
+  // },
+  // Erfundener Turm
+  // 2F
+  {
+    name: "Sage Testo",
+    pokemonLevels: [9],
+    x: 900,
+    y: 300,
+    tooltipPosition: TooltipPosition.Bottom,
+  },
+];"""
+        tr = ironmon.objects(ts)
+        self.assertEqual([(t["name"], t["ort"], t["teil"], t["pokemonLevels"]) for t in tr],
+                         [("Bug Catcher Erfo", "Rt 30", "", [3, 6]), ("Sage Testo", "Erfundener Turm", "2F", [9])])
+        it = ironmon.objects("  // Rt 30\n  {\n    x: 710,\n    y: 410,\n    type: ItemType.Hidden,\n  },")
+        self.assertEqual(it[0]["type"], "Hidden")
+        self.assertEqual((ironmon.trainer_name("Bug Catcher Erfo"), ironmon.trainer_name("Unbekannt X")), ("Käfersammler Erfo", "Unbekannt X"))
+        head = b"RIFF\0\0\0\0WEBPVP8X\x0a\0\0\0\0\0\0\0" + (1999).to_bytes(3, "little") + (999).to_bytes(3, "little")
+        self.assertEqual(ironmon.webp_size(head), (2000, 1000))
+        m = ironmon.parse("johto", 2000, 1000, tr, it)
+        self.assertEqual((m["bild_z"], m["min_zoom"], m["max_zoom"]), (3, 0, 3))
+        self.assertEqual(sorted(o[4] for o in m["orte"] if o[1] == 1), ["Erfundener Turm", "Route 30"])
+        self.assertIn("**Pokémon:** 2, Level 3, 6", next(o[5] for o in m["orte"] if o[4] == "Käfersammler Erfo"))
+        self.assertEqual((ironmon.tile_range(m, 3), ironmon.tile_range(m, 1), ironmon.tile_range(m, 4)), ((8, 4), (2, 1), None))
+        self.assertEqual(ironmon.tile(m, 3, 7, 3), ("im/johto/3/7-3.png", None))
+        self.assertIsNone(ironmon.tile(m, 3, 8, 0))
+        with mock.patch.object(abruf, "_mg_map", lambda s, k: m if k == "im-johto" else None):
+            png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + bytes(20)).decode()
+            self.assertEqual(abruf.tile_upload({"spiel": "x", "karte": "im-johto", "kacheln": [[3, 0, 0, png]]}), {"gespeichert": 1})
+            f = abruf.mg_dir("kacheln", "im", "johto", "3", "0-0.png")
+            self.assertTrue(os.path.isfile(f))
+            os.remove(f)
+            for bad in ([[3, 9, 0, png]], [[3, 0, 0, base64.b64encode(b"GIF89a").decode()]], [["3", 0, 0, png]]):
+                with self.assertRaises(ValueError):
+                    abruf.tile_upload({"spiel": "x", "karte": "im-johto", "kacheln": bad})
+            with self.assertRaises(ValueError):
+                abruf.tile_upload({"spiel": "x", "karte": "rn-ct", "kacheln": []})
+            st = abruf.tile_convert_state("x", "im-johto")
+            self.assertEqual((st["fertig"], st["fehlen"], st["bild"]), (False, 32 + 8 + 2 + 1, False))
+
+        cs = """        private static readonly string[] LocationNames =
+        [
+            "Erfundenes Feld",
+        ];"""
+        names = raidnester.location_names(cs)
+        self.assertEqual(names, ["Erfundenes Feld"])
+        ns = raidnester.nests("""            new NestHashDetail(0x1, 0x2, 0, 185, 977), //16 52
+//            new NestHashDetail(0x1, 0x2, 0, 1, 1),
+            new NestHashDetail(0x3, 0x4, 33, 500, 800),""", names)
+        self.assertEqual(ns, [("wa", 185, 977, "Erfundenes Feld"), ("ct", 500, 800, "")])
+        self.assertEqual((raidnester.area_of(16), raidnester.area_of(17), raidnester.area_of(43)), ("wa", "ioa", "ct"))
+        r = raidnester.parse(ns, "wa", 458, 1064)
+        self.assertEqual((r["slug"], len(r["orte"]), r["bilder"][0][5]), ("rn-wa", 2, "rn/wa.png"))
+        self.assertTrue(r["gruppen"][0]["titel"].startswith("Orte"))
+        self.assertEqual(raidnester.png_size(b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR" + (458).to_bytes(4, "big") + (1064).to_bytes(4, "big")), (458, 1064))
+
     def test_raids_und_crypto_lesen(self):
         rec = (25).to_bytes(2, "little") + bytes([0, 0, 1, 2, 0, 35]) + b"".join(m.to_bytes(2, "little") for m in (85, 609, 0, 0)) \
             + bytes([12, 0, 3, 100]) + bytes(4)

@@ -1119,6 +1119,9 @@ def _pokearth_mons(r, spiel):
     for k, n in en.items():
         en2de.setdefault(n.lower(), de.get(k) or n)
     for p in r["punkte"]:
+        if p.get("text"):              # „Ort: Cherrygrove“ (Trainer, Items) → deutscher Ortsname
+            p["text"] = re.sub(r"(\*\*Ort:\*\* )([^\n(]+?)(?=\s*\(|\n|$)", lambda x: x.group(1) + (
+                en2de.get(x.group(2).lower()) or en2de.get(re.sub(r"\s+(City|Town)$", "", x.group(2)).lower()) or x.group(2)), p["text"])
         name = p.get("en") or p["name"]
         d = en2de.get(name.lower()) or en2de.get(re.sub(r"\s+(City|Town)$", "", name).lower())
         if not d:
@@ -1152,7 +1155,7 @@ def mg_map(m, spiel, stamp=None):
     r = mapgenie.merge(m, own, mg_names())
     if spiel in QUEST_GAMES:
         _quests_de(r, spiel)
-    if m.get("quelle") == "pokearth":
+    if m.get("quelle") in ("pokearth", "ironmon", "raidnester"):       # Orte mit englischem Namen: Pokémon aus den Fundorten
         _pokearth_mons(r, spiel)
     _point_pics(r)
     out = {k: v for k, v in m.items() if k not in ("orte", "gruppen")}
