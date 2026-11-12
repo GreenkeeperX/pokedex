@@ -1,5 +1,22 @@
 # Roadmap
 
+## 0.39.0 (12.11.2026)
+
+- Ladezeiten: `route` leert beim Wechsel der Ansicht sofort (`VIEW`), `body.busy` zeigt nach 120 ms einen Balken;
+  `loadReqDone` einmal je Seitenaufruf. Server mit HTTP/1.1 (offene Verbindungen, `timeout` 60 s, `Connection: close`
+  bei POST-Fehlern), zusammengeführte Karten bis zu 12 im Speicher (`abfragen.MERGED_MAX`), JSON und gzip einmal je Karte
+  (`server._packed`, `_GZ`), Vorbereiten aller Karten eines Spiels, sobald die Liste kommt (`_prewarm`)
+- Kacheln: fehlende Kacheln mit Datum in `mapgenie/kacheln/fehlt.json` (30 Tage), Stand des Vorrats in `vorrat.json`;
+  ist eine Karte ganz durchgesehen, fragt `mg_tile` für die Oberfläche nicht mehr nach. Einzelne 403 bei Map Genie werden
+  bei einer Sperre wieder vergessen. Der Vorrat wartet außerhalb der Sperre. 404 bei Kacheln eine Stunde im Browser
+- Einklappen allgemein: `data-fold` an `h2` (Box) oder `h3` in `.fsec` (Abschnitt), Zustand `zu:<Schlüssel>`
+- Detailseite: rechte Spalte ein Stapel (der Abstand zu „Entwicklung“ hing an der Höhe links); `statNet` für Werte und
+  Effort Levels im Stil von `radar`
+- `crossTable`: Markierzeichen auch an Zeilenköpfen und an Spaltenköpfen mit `data-pc`; Zellen ohne `data-c` markieren
+  nur die Zeile
+- `abruf.mg_maps`: Schwester-Edition mit eigener Karte (Gold/Silber, DittoBase) vorn, vom Hauptspiel nur andere Quellen
+- `pokewiki.plain`: `{{Item|…}}` auch groß geschrieben; `importer.VERSION` 21
+
 ## 0.38.0 (12.11.2026)
 
 - Neue Quelle DittoBase (`app/dittobase.py`, `abruf._dittobase`, `mapgenie/<Spiel>.db.json`): Kristall. Die Kartenseite

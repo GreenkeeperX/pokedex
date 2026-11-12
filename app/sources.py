@@ -12,11 +12,23 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.38.0"
+VERSION = "0.39.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.39.0", "12.11.2026", [
+        "Schneller: beim Reiterwechsel verschwindet der alte Reiter sofort, oben zeigt ein Balken, dass geladen wird; der Server hält Verbindungen offen und hat die Karten fertig gepackt bereit",
+        "Kacheln: fehlende Kacheln (Rand, Meer) merkt sich der Server auch über einen Neustart, und ist eine Karte ganz durchgesehen, fragt er nicht mehr nach. Das lange „Kacheln laden …“ ist damit weg",
+        "Detailseite: „Entwicklung“ steht wieder direkt unter „Im Duell gegen Typen“; Typwirkung, Duell, Entwicklung, Forschungsaufgaben, Getragene Items, Fundorte, Attacken und die Wertung lassen sich per Klick auf die Überschrift einklappen",
+        "Das Netz bei Effort Levels und Werten ist größer und sieht aus wie das Radar oben, mit Werten an den Ecken; Minzen wählt man über das Wesen",
+        "Team: Bewertung, Verbesserungen, Sammlung (auch Bessere Alternative und Potential einzeln) und Gegen Gegner einklappbar, Typen unter dem Namen, Zeilen in „Gegen Gegner“ markierbar, Löschen in Nintendo-Rot, ruhigere Auswahl im Schadensrechner, Favoriten enger",
+        "Attacken und Items: Zellen mittig; Wirkung und Beschreibung markieren nur die Zeile, nicht die ganze Spalte",
+        "Typen: Zählspalten ohne Farbfläche und in allen Tabellen rechts",
+        "Karte: startet eine Stufe näher, Details höher, Ebenen-Gruppen auch in den Einzelkarten einklappbar (alle auf/zu)",
+        "Gold/Silber: eigene Karte von DittoBase (Items und Trainer aus Gold/Silber), dazu die Karte von pokemoncompletion",
+        "Getragene Items: Namen ohne Wiki-Code",
+    ]),
     ("0.38.0", "12.11.2026", [
         "Kristall (auch Gold/Silber): neue Karte von DittoBase, aus den Spieldaten selbst gezeichnet, mit allen Items, versteckten Items, Beerenbäumen, Trainern samt Team und Preisgeld, festen Pokémon und den wilden Pokémon je Gebiet (mit Tageszeit)",
         "Was in Häusern, Höhlen und tieferen Etagen liegt, steht am Eingang auf der Karte, mit dem Weg dorthin im Text",

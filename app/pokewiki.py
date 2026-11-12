@@ -110,10 +110,13 @@ def la_move(wt):
 def _plain(v):
     """Wikitext einer Zelle ohne Anmerkungen, Links und Formatierung."""
     v = re.sub(r"\{\{\s*Anmerkung\s*\|[^{}]*\}\}", "", v)
-    v = re.sub(r"\{\{\s*item\s*\|([^|}]+)[^}]*\}\}", r"\1", v)
+    v = re.sub(r"\{\{\s*item\s*\|([^|}]+)[^}]*\}\}", r"\1", v, flags=re.I)     # {{Item|Sinelbeere|sp=PLA}}
     v = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", v)
     v = re.sub(r"<[^>]+>|'''|''", "", v)
     return " ".join(v.replace("&nbsp;", " ").split())
+
+
+plain = _plain             # für den Import: ältere Abrufe tragen noch Vorlagen im Namen
 
 
 def held_items(wt):

@@ -1509,10 +1509,46 @@ class Server(TempData):
             {"slug": "erfunden", "titel": "Erfunden", "kacheln": "spiel/erfunden/{z}/{x}/{y}.png", "min_zoom": 9, "max_zoom": 10,
              "bounds": [-1.4, 0, 0, 1.4], "orte": []}]})
         asked = []
-        with mock.patch.object(abruf, "mg_tile", lambda s, k, z, x, y, pause=0: asked.append(z)):
+        with mock.patch.object(abruf, "mg_tile", lambda s, k, z, x, y, **kw: asked.append(z)), mock.patch.object(abruf, "sleep", lambda t: None):
             abruf.mg_stock()
         self.assertEqual(max(asked), 10)
         self.assertTrue(abruf.mg_status()["vorrat"]["scarlet-violet/erfunden"]["ganz"])
+        # 0.39: der Stand übersteht den Neustart; ist die Karte ganz durchgesehen, fragt die Oberfläche nicht mehr nach
+        self.assertIn("scarlet-violet/erfunden", abruf.store.load_json(abruf.VORRAT_FILE, {}))
+        abruf._mg["vorrat"]["scarlet-violet/erfunden"]["fertig"] = True
+        with mock.patch.object(abruf.sources, "fetch", deny):
+            calls.clear()
+            self.assertIsNone(abruf.mg_tile("scarlet-violet", "erfunden", 10, 510, 510))
+            self.assertEqual(calls, [])
+        abruf._mg["vorrat"].clear()
+        # fehlende Kacheln (einzelnes 403) stehen mit Datum in fehlt.json; bei einer Sperre werden sie wieder vergessen
+        abruf._mg.update(rest="", n403=0, miss=set(), miss_am={}, r403=[])
+        with mock.patch.object(abruf.sources, "fetch", deny):
+            abruf.mg_tile("scarlet-violet", "erfunden", 10, 508, 508, pause=0)
+            self.assertIn("spiel/erfunden/10/508/508.png", abruf._mg["miss_am"])
+            for x in range(abruf.MG_403_MAX):
+                abruf.mg_tile("scarlet-violet", "erfunden", 10, 508 + x % 4, 509 + x // 4, pause=0)
+        self.assertNotEqual(abruf.mg_status()["ruht"], "")
+        self.assertEqual(abruf._mg["miss_am"], {})
+        abruf._mg.update(rest="", n403=0, miss=set(), miss_am={}, r403=[])
+
+    def test_0_39_0_schwester_karten(self):
+        # Gold/Silber: eigene Karte von DittoBase vorn, von Kristall nur die Karten anderer Quellen
+        os.makedirs(os.path.join(self.dir, "mapgenie"), exist_ok=True)
+
+        def save(spiel, suf, slug, quelle):
+            abruf.store.save_json(f"mapgenie/{spiel}{suf}.json", {"am": "2026-11-12", "karten": [
+                {"slug": slug, "titel": slug, "quelle": quelle, "orte": []}]})
+        save("crystal", ".pc", "pc-crystal", "pokemoncompletion")
+        save("crystal", ".db", "db-crystal", "dittobase")
+        self.assertEqual([k["slug"] for k in abruf.mg_maps("gold-silver")["karten"]], ["pc-crystal", "db-crystal"])
+        save("gold-silver", ".db", "db-gold-silver", "dittobase")
+        d = abruf.mg_maps("gold-silver")
+        self.assertEqual((d["spiel"], [k["slug"] for k in d["karten"]]), ("gold-silver", ["db-gold-silver", "pc-crystal"]))
+        self.assertEqual([k["slug"] for k in abruf.mg_maps("crystal")["karten"]], ["pc-crystal", "db-crystal"])
+        # Item-Namen aus dem PokéWiki ohne Vorlage, auch wenn sie groß geschrieben ist
+        from app import pokewiki
+        self.assertEqual(pokewiki.plain("{{Item|Sinelbeere|sp=PLA}}"), "Sinelbeere")
 
     def test_alpha(self):
         db.migrate()

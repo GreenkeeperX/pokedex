@@ -79,7 +79,7 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    (`/<Spiel>/map`, 3 Sekunden Pause), daraus Karte und Punkte nach `mapgenie/<Spiel>.db.json`. Die Kachelsätze (PNG) kommen
    einmal nach `mapgenie/kacheln/db/_saetze/`; daraus zeichnet der Abgleich alle Kacheln selbst nach
    `mapgenie/kacheln/db/<Spiel>/<z>/<x>-<y>.png` (`app/png.py`), neu nur, wenn sich Daten oder Kachelsätze ändern
-   (`stand.json`). Gold/Silber zeigen die Karte von Kristall mit.
+   (`stand.json`). Gold/Silber hat eine eigene Karte; von Kristall kommt dort nur die Karte von pokemoncompletion dazu.
 7. **pokemoncompletion** (`app/pkcompletion.py`, Quelle „pkcompletion“): für Kristall, Smaragd und Platin die Spieldaten
    aus dem Repository (raw.githubusercontent.com), umgerechnet in eine Karte wie bei Map Genie und unter `mapgenie/<Spiel>.pc.json`
    gespeichert; Gold/Silber, Rubin/Saphir und Diamant/Perl zeigen sie mit. Die Kacheln (512 Pixel, `{z}_{x}_{y}.png`) holt
@@ -93,7 +93,9 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    bleibt. Danach braucht die Karte kein Netz; ohne Vorrat holt das Ansehen eine fehlende Kachel einmal. Eine Anfrage zur
    Zeit. Ein einzelnes 403 heißt bei Map Genie „Kachel gibt es nicht“ (kommt außerhalb der Karte); nach 8 nacheinander fragt
    der Dienst eine Kachel an, die es sicher gibt: kommt sie, fehlen nur Randkacheln; sonst (oder bei 429) ruht die Quelle 24
-   Stunden. Gefragt wird nur ab der kleinsten Zoomstufe der Karte (darunter gibt es keine Kacheln). Z-A nennt im Muster erst y,
+   Stunden. Gefragt wird nur ab der kleinsten Zoomstufe der Karte (darunter gibt es keine Kacheln). Fehlende Kacheln
+   stehen mit Datum in `mapgenie/kacheln/fehlt.json` (30 Tage), der Stand des Vorrats in `vorrat.json`; ist eine Karte ganz
+   durchgesehen, fragt die Oberfläche nicht mehr bei der Quelle nach. Z-A nennt im Muster erst y,
    dann x. Fehlen die Grenzen einer Karte, gelten die der Orte (`mapgenie.bounds_of`).
 8. **Showdown-Mods** (mit Showdown): `data/mods/gen{1,2,4,5,6,7,8}/pokedex.ts` für frühere Basiswerte (Tabelle `werte_alt`,
    Generation 1 mit Spezial-Wert); fehlende Mods (404) fallen weg.

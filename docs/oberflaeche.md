@@ -126,7 +126,12 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Fadenkreuz (`crossTable`): Tabellen mit `data-r` an Zeilen, `data-c` an Zellen und `data-pr`/`data-pc` an den Köpfen;
   Hover `.hl`, festgehalten `.fix`. Genutzt von Typtabelle, Typwirkung je Mitglied und „Gegen Gegner“. Sortierbare
   Köpfe bekommen ein kleines ▯ (`.pinc`), das die Spalte festhält, ohne zu sortieren; Zellen mit `data-pr` (etwa der Name
-  in der Attacken-Liste) markieren nur die Zeile.
+  in der Attacken-Liste) markieren nur die Zeile, ebenso Zellen ohne `data-c` (Wirkung, Beschreibung). Zeilenköpfe
+  (`th[data-pr]`) und Spaltenköpfe mit `data-pc` bekommen ihr Zeichen von `crossTable`.
+- Einklappen: `<h2 data-fold="…">` klappt die Box zu, `<div class="fsec"><h3 data-fold="…">` nur den Abschnitt; der
+  Zustand steht unter `zu:<Schlüssel>` (`applyFolds` über einen MutationObserver auf `#main`).
+- Laden: beim Wechsel der Ansicht (`VIEW`) steht sofort „Lädt …“; dauert es länger als 120 ms, zeigt `body.busy` oben
+  einen Balken.
 - Typtabelle „Mein Team“ (`chartTeam`): nur die Typen des Teams als Zeilen, dazu `teamTypeHtml` (Verteidigung und Angriff
   je Mitglied, einklappbar, gemerkt in `ttOpen`).
 - Karten der Liste: unter dem Bild eine Zeile (`acts`) mit Team-Häkchen, Stern und Pokéball; gesetzte Marken sind immer
