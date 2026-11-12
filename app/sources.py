@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.44.0"
+VERSION = "0.44.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.44.1", "12.11.2026", [
+        "Verbindungstest: Bildkarten des PokéWiki (Kalos, Alola, Hoenn, Einall, Sinnoh mit deutschen Ortsnamen), Kartenbilder von Bulbapedia und Pokémon Database, für die Spiele ohne oder mit nur grober Karte",
+    ]),
     ("0.44.0", "12.11.2026", [
         "HeartGold/SoulSilver: große Karten von Johto und Kanto mit allen Häusern und Höhlen, dazu über 400 Trainer mit Level und über 400 Items (HGSS IronMON Map). Beim ersten Öffnen wandelt der Browser das große Bild einmal in Kacheln um (etwa eine Minute), danach lädt die Karte schnell",
         "Schwert/Schild: Karten mit allen 276 Raid-Nestern der Naturzone, der Insel der Rüstung und der Schneelande; die Erweiterungen haben damit erstmals eine eigene Karte",
