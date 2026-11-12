@@ -937,3 +937,4 @@ details.reqinfo{margin:6px 0 4px}details.reqinfo>summary{font-weight:400}details
 details>summary{color:var(--ink-hi)}   /* 0.46: alle Klapp-Titel in derselben Farbe */
 
 .bar.fla{gap:6px 14px;margin:2px 0 6px;flex-wrap:wrap}.bar.fla label{white-space:nowrap}   /* 0.50: Schalter der Fangchance in Legenden: Arceus */
+.tmck{display:inline-block;width:22px;height:22px;line-height:22px;border-radius:6px;cursor:pointer;color:var(--muted);border:1px solid var(--line)}.tmck:hover{background:var(--hov);color:var(--ink-hi)}.tmck.on{color:var(--go);border-color:var(--go)}.cls.tmfehlt{color:var(--muted)}   /* 0.53: Maschinen abhaken */

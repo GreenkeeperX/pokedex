@@ -12,11 +12,19 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.52.0"
+VERSION = "0.53.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.53.0", "12.11.2026", [
+        "Items › Maschinen: TMs und VMs abhaken, die du im Spiel hast; Filter „habe ich“ und „fehlen“, Zähler, und in der Spalte „Wo“ "
+        "die Kartenpunkte, die die Maschine nennen (Klick zeigt sie auf der Karte)",
+        "Hast du Maschinen abgehakt, schlägt das Moveset nur Attacken vor, die du wirklich beibringen kannst; reine TM-Attacken "
+        "ohne die TM tragen den Hinweis „TM50 fehlt“",
+        "Karten: die fertig zusammengeführte Karte liegt jetzt im Datenordner und gilt, bis ein Abgleich oder eine neue Version "
+        "kommt; nach einem Neustart muss der Server sie nicht neu rechnen",
+    ]),
     ("0.52.0", "12.11.2026", [
         "Karte Legenden: Arceus öffnet schneller: der Server führt die Karten schon beim Start und nach jedem Abgleich im "
         "Hintergrund zusammen und packt sie vor; das Protokoll des Containers nennt die Dauer („Karte vorbereitet …“)",
