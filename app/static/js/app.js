@@ -242,7 +242,9 @@ const ball = (id, on = isCaught(id)) => icon("ball", on).replace('class="ic ic-b
 ;
 const ballTip = (id) => BATTLE() ? (isCaught(id) ? "Im Kader; Klick: nicht mehr im Kader" : "In den Kader")
   : isShiny(id) ? `Schillernd in deiner Sammlung (${esc(gameName())}); Klick: doch nicht gefangen`
-  : isCaught(id) ? `In deiner Sammlung (${esc(gameName())}); Klick: schillernd` : "Als gefangen markieren";
+  : isCaught(id) ? (shinyLock(id) === "nie" ? `In deiner Sammlung (${esc(gameName())}). Schillernd gibt es hier nicht (Shiny-Sperre); Klick: doch nicht gefangen`
+    : `In deiner Sammlung (${esc(gameName())}); Klick: schillernd${shinyLock(id) === "tausch" ? (S.shinyGen1 ? " (in Generation I unsichtbar, erst nach dem Tausch nach Gold, Silber oder Kristall)" : " (hier nur per Tausch oder Verteilung)") : ""}`)
+  : "Als gefangen markieren";
 /* Marken (im Team, gefangen, Favorit) links oben auf der Bildecke, nur die gesetzten: so bleibt dem Namen die ganze
    Zeile. Zum Setzen erscheinen beim Hovern kleine Knöpfe unter dem Bild; nichts verschiebt sich */
 function marks(id) {
@@ -779,14 +781,18 @@ function undoToast(text, undo) {
 }
 async function loadCaught(force = false) {
   if (!force && S.caughtGame === S.game) return;
-  const [c, sh, al] = await Promise.all([api("/api/gefangen?" + qs({spiel: S.game})), api("/api/schillernd?" + qs({spiel: S.game})),
-    api("/api/alpha?" + qs({spiel: S.game})).catch(() => ({ids: [], moeglich: []}))]);
+  const [c, sh, al, lk] = await Promise.all([api("/api/gefangen?" + qs({spiel: S.game})), api("/api/schillernd?" + qs({spiel: S.game})),
+    api("/api/alpha?" + qs({spiel: S.game})).catch(() => ({ids: [], moeglich: []})),
+    api("/api/shinysperre?" + qs({spiel: S.game})).catch(() => ({tausch: [], nie: [], gen1: false}))]);
   S.caught = new Set(c); S.shiny = new Set(sh); S.alpha = new Set(al.ids); S.alphaOk = new Set(al.moeglich);
+  S.shinyLock = new Map([...(lk.tausch || []).map((i) => [i, "tausch"]), ...(lk.nie || []).map((i) => [i, "nie"])]); S.shinyGen1 = !!lk.gen1;
   S.caughtGame = S.game;
 }
-// Klick am Pokéball: nicht gefangen → gefangen → schillernd → nicht gefangen
+// 0.51: Shiny-Sperre im Spiel: "nie" (gibt es dort nicht schillernd), "tausch" (nur per Tausch oder Verteilung) oder ""
+const shinyLock = (id) => S.shinyLock?.get(id) || (S.shinyGen1 ? "tausch" : "");
+// Klick am Pokéball: nicht gefangen → gefangen → schillernd → nicht gefangen; „nie“ überspringt schillernd
 async function toggleCaught(id, plain = false) {
-  if (isCaught(id) && !isShiny(id) && !plain && !BATTLE()) {
+  if (isCaught(id) && !isShiny(id) && !plain && !BATTLE() && shinyLock(id) !== "nie") {
     await api("/api/schillernd", {spiel: S.game, id, an: true});
     S.shiny.add(id);
   } else {

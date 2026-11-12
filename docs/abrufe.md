@@ -62,6 +62,10 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    `Team/Zeile` (Edition, Trainerklasse, id/lvl/item/fähigkeit/atk je Platz). Gleiche Kämpfe von Trainer- und Ortsseite
    nur einmal (`pokewiki.dedupe_teams`). Gespeichert in
    `pokewiki_trainer.json`, neu geholt alle 7 Tage; `importer._derive_trainer` legt je Spiel und Kampf eine Zeile an.
+   **Shiny-Sperren** (`abruf._shiny`, Bulbapedia „List of unobtainable Shiny Pokémon“, eine Seite als Wikitext):
+   gespeichert in `bulbapedia_shiny.json`, neu geholt alle 30 Tage. `app/shiny.py` liest die Tabelle (Spalte je Generation,
+   ✔/~/✘ mit Spielkürzeln), `importer._derive_shiny` legt je Spiel und Form „tausch“ oder „nie“ in `shinysperre`.
+   **Fangraten Legenden: Arceus** (PKHeX `personal_la`, Byte 0x08 je Art): Tabelle `fangrate`.
    **PLA Companion** (software-notion.de, `app/companion.py`): je Karte `/apps/pla-companion/map/<Karte>/data?lang=de`
    mit 2 Sekunden Pause; Schnellreise und Lager, ausgerichtet an Geisterlichtern und Icognito von Altissimo
    (`companion.fit`, `importer._derive_companion`). Das Protokoll zählt alle Arten von Einträgen.

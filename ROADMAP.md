@@ -1,5 +1,12 @@
 # Roadmap
 
+## 0.51.0 (12.11.2026)
+
+- Shiny-Sperren: `app/shiny.py` (Parser), `abruf._shiny` (alle 30 Tage), Tabelle `shinysperre`, `/api/shinysperre`,
+  `importer.VERSION` 27. Spiele einer Generation, die eine Zelle mit Kürzeln nicht nennt, gelten als „tausch“.
+  Formen ohne eigene Zeile in der PokéAPI (Vivillon-Muster, Spitzohr-Pichu) bleiben ohne Sperre.
+- Offen: Alola-Karten, Ladezeit der Arceus-Karte.
+
 ## 0.50.0 (12.11.2026)
 
 - Fangformel Legenden: Arceus nach Bulbapedia „Catch rate“ (aus den Proben vom 12.11.): `abfragen.catch_chance_la`, `rank_la`,
