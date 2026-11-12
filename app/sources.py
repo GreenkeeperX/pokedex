@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.55.0"
+VERSION = "0.56.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.56.0", "12.11.2026", [
+        "Karten für Sonne/Mond und Ultrasonne/Ultramond: je Insel eine Karte (Mele-Mele, Akala, Ula-Ula, Poni, Æther-Paradies) "
+        "aus den Bildkarten des PokéWiki, mit deutschen Ortsnamen und den Pokémon je Ort aus den Fundorten",
+        "Die Anzeige „Abgleich läuft“ oben aktualisiert sich jetzt in jedem Reiter und verschwindet, wenn der Abgleich fertig ist",
+    ]),
     ("0.55.0", "12.11.2026", [
         "Sammelobjekte (Knopf auf der Karte und bei „Was fehlt mir noch?“): Geisterlichter, Icognito, Pflöcke, Schrauben, "
         "Digda und alles andere aus der Gruppe „Sammelobjekte“ der Karten, je mit Fortschritt wie 23 / 107",

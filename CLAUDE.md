@@ -49,7 +49,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/ironmon.py`: Weltkarten HeartGold/SoulSilver (HGSS IronMON Map, Trainer und Items), ohne Netz; Kacheln macht der Browser
 - `app/raidnester.py`: Raid-Nester Schwert/Schild (PKHeX Raid Plugin, Bildkarten je Teil), ohne Netz
 - `app/pokearth.py`: Regionskarten von Serebii (PokéEarth, ein Bild und ein Punkt je Ort) für die übrigen Spiele, für Kalos
-  aus einer PokéWiki-Bildkarte mit großem Bild von Bulbapedia, ohne Netz
+  aus einer PokéWiki-Bildkarte mit großem Bild von Bulbapedia, für Alola je Insel aus den PokéWiki-Bildkarten, ohne Netz
 - `app/bisafans.py`: Seiten von BisaFans lesen (Aufträge und Hauptmissionen in Legenden: Arceus, Nebenmissionen in Z-A), ohne Netz
 - `app/shiny.py`: Shiny-Sperren aus Bulbapedia lesen (je Spiel „nur per Tausch“ oder „nie“), ohne Netz
 - `app/serebii.py`: Seiten von Serebii lesen (Abklingzeiten in Legenden: Z-A, Pokédexe von Pokopia), ohne Netz

@@ -1363,33 +1363,66 @@ def _pokearth(log):
         d = pokearth.extract(src.get(pokearth.page_url(reg), absent=(404,)) or "")
         if src.stopped:
             break
+        if not d and pokearth.PW_MAPS.get(reg, {}).get("inseln"):     # 0.56: Alola, eine Karte je Insel
+            ms = [m for m in (_pw_island(src, reg, t) for t in _pw_islands(src, reg)) if m]
+            if ms:
+                have[reg] = ms
+            else:
+                log(f"Serebii PokéEarth: {reg} ohne Bildkarte")
+            continue
         if not d and reg in pokearth.PW_MAPS:      # 0.48: Bildkarte aus dem PokéWiki, großes Bild von Bulbapedia
             d = _pw_region(src, reg)
         m = pokearth.parse(d, reg)
         if not m:
             log(f"Serebii PokéEarth: {reg} ohne Bildkarte")
             continue
-        rel = m["bilder"][0][5]
-        f = mg_dir("kacheln", *rel.split("/"))
-        if not os.path.isfile(f):
-            body = src.get(d["bild"], raw=True, absent=(404,))
-            if body and (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff" or body[:4] == b"GIF8"):
-                os.makedirs(os.path.dirname(f), exist_ok=True)
-                with open(f + ".neu", "wb") as fh:
-                    fh.write(body)
-                os.replace(f + ".neu", f)
-        if not os.path.isfile(f):
-            m["bilder"] = []
-        have[reg] = m
+        _region_image(src, m, d)
+        have[reg] = [m]
     found = 0
     for spiel, regs in pokearth.GAMES.items():
-        ks = [have[r] for r in regs if r in have]
+        ks = [m for r in regs if r in have for m in have[r]]
         if ks:
             _save_maps(spiel, "se", ks)
             found += 1
     if have:
-        log(f"Serebii PokéEarth: {len(have)} Regionen mit {sum(len(m['orte']) for m in have.values())} Orten für {found} Spiele")
+        log(f"Serebii PokéEarth: {len(have)} Regionen mit {sum(len(m['orte']) for ms in have.values() for m in ms)} Orten für {found} Spiele")
     return src.result(dateien=found)
+
+
+def _region_image(src, m, d):
+    """Bild einer Regions- oder Inselkarte einmal holen (kacheln/se/…); ohne Bild bleibt die Karte ohne Bildebene."""
+    rel = m["bilder"][0][5]
+    f = mg_dir("kacheln", *rel.split("/"))
+    if not os.path.isfile(f):
+        body = src.get(d["bild"], raw=True, absent=(404,))
+        if body and (body[:8] == b"\x89PNG\r\n\x1a\n" or body[:3] == b"\xff\xd8\xff" or body[:4] == b"GIF8"):
+            os.makedirs(os.path.dirname(f), exist_ok=True)
+            with open(f + ".neu", "wb") as fh:
+                fh.write(body)
+            os.replace(f + ".neu", f)
+    if not os.path.isfile(f):
+        m["bilder"] = []
+
+
+def _pw_islands(src, reg):
+    """0.56: Orte je Insel aus der PokéWiki-Vorlage (pokearth.pw_islands)."""
+    try:
+        wt = next(iter(pokewiki.pages(src.get(pokearth.pw_template_url(reg)) or "{}").values()), "")
+    except ValueError:
+        wt = ""
+    return pokearth.pw_islands(wt, reg)
+
+
+def _pw_island(src, reg, t):
+    """Karte einer Insel: Orte aus der Bildkarte, Bild in Originalgröße aus dem PokéWiki."""
+    key, title, f, orte = t
+    small = pokearth.imageinfo(src.get(pokearth.imageinfo_url(pokearth.PW_API, f)))
+    m = pokearth.parse(pokearth.pw_map(orte, small), reg, (key, title))
+    if m:
+        _region_image(src, m, {"bild": small[0]})
+    src.log(f"PokéWiki-Bildkarte {pokearth.REGION.get(reg, reg)}, {title}: {len(orte)} Orte, Bild "
+            + (f"{small[1]}×{small[2]}" if small else "fehlt"))
+    return m
 
 
 def _pw_region(src, reg):

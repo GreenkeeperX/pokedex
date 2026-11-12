@@ -129,7 +129,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [HGSS IronMON Map](https://github.com/kelseyyoung/HGSSIronmonMap) | HeartGold/SoulSilver: Weltkarten Johto und Kanto, Trainer mit Level, Items; nur im Datenordner | MIT (Code), Spielgrafik von Nintendo |
 | [PKHeX Raid Plugin](https://github.com/Leanny/PKHeX_Raid_Plugin) | Schwert/Schild: Lage und Inhalt der Raid-Nester, Karten der Naturzone, Insel der Rüstung, Schneelande; nur im Datenordner | Daten und Bilder des Projekts, Spielgrafik von Nintendo |
 | [Serebii PokéEarth](https://www.serebii.net/pokearth/) | Regionskarten (Johto, Kanto, Hoenn, Sinnoh, Einall, Orre) für die Spiele ohne andere Karte; nur im Datenordner | Bilder von Serebii, Spielgrafik von Nintendo |
-| [PokéWiki](https://www.pokewiki.de/) und [Bulbapedia-Archiv](https://archives.bulbagarden.net/) | Regionskarte Kalos (X/Y): Orte aus der Bildkarte des PokéWiki, Bild in groß von Bulbapedia; nur im Datenordner | Spielgrafik von Nintendo |
+| [PokéWiki](https://www.pokewiki.de/) und [Bulbapedia-Archiv](https://archives.bulbagarden.net/) | Regionskarte Kalos (X/Y): Orte aus der Bildkarte des PokéWiki, Bild in groß von Bulbapedia; Inselkarten Alola (Sonne/Mond, USUM) aus den Bildkarten des PokéWiki; nur im Datenordner | Spielgrafik von Nintendo |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
 

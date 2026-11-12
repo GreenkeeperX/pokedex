@@ -317,6 +317,35 @@ class Leser(unittest.TestCase):
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
+    def test_0_56_alola_inseln(self):
+        """Alola: je Insel eine Bildkarte in der Vorlage (erfundene Flächen); Pfeile zur Nachbarinsel fallen weg, der
+        Punkt liegt im Schwerpunkt der Fläche bzw. bei Knick an der nächsten Ecke."""
+        from app import pokearth
+        wt = """{| class="x"
+| {{#tag:imagemap|{{Fileexist|USUM-Map Mele-Mele {{PAGENAME}}.png|Datei:USUM-Map Mele-Mele {{PAGENAME}}.png|Datei:USUM-Map Mele-Mele.png}}
+poly 10 10 30 10 30 30 10 30 [[Hauholi City]]
+poly 0 0 100 0 100 10 10 10 10 100 0 100 [[Route 1 (Alola)]]
+rect 200 200 220 220 [[Akala]]
+desc none
+}}
+| {{#tag:imagemap|Datei:USUM-Global-Map Mele-Mele.png{{!}}270px
+rect 1 1 5 5 [[Mele-Mele]]
+}}
+| {{#tag:imagemap|{{Fileexist|USUM-Map Akala {{PAGENAME}}.png|Datei:USUM-Map Akala {{PAGENAME}}.png|Datei:USUM-Map Akala.png}}
+rect 50 60 70 80 [[Konikoni City]]
+}}"""
+        maps = pokearth.pw_imagemaps(wt)
+        self.assertEqual(sorted(maps), ["USUM-Global-Map Mele-Mele.png", "USUM-Map Akala.png", "USUM-Map Mele-Mele.png"])
+        isl = pokearth.pw_islands(wt, "alola")
+        self.assertEqual([(k, [o["name"] for o in orte]) for k, _, _, orte in isl],
+                         [("mele-mele", ["Hauholi City", "Route 1"]), ("akala", ["Konikoni City"])])
+        city, route = isl[0][3]
+        self.assertEqual((city["cx"], city["cy"]), (20, 20))
+        self.assertTrue(route["cx"] in (0, 10, 100) and route["cy"] in (0, 10, 100))    # Winkel: Ecke statt Mitte im Leeren
+        m = pokearth.parse(pokearth.pw_map(isl[0][3], ("https://www.pokewiki.de/images/a/b/USUM-Map_Mele-Mele.png", 270, 270)),
+                           "alola", ("mele-mele", "Mele-Mele"))
+        self.assertEqual((m["slug"], m["titel"], m["bilder"][0][5]), ("se-alola-mele-mele", "Alola: Mele-Mele (PokéWiki)", "se/alola-mele-mele.png"))
+
     def test_0_55_sammelobjekte(self):
         """Sammelobjekte: Gruppe „Sammelobjekte“ und Icognito zählen, Haken wie auf der Karte (Map Genie mg:Id, Spieldaten Art:x:z)."""
         from app import abfragen

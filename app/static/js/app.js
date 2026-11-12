@@ -606,6 +606,21 @@ function header() {
         : last ? ` · <span class="${stale ? "stale" : ""}" title="${esc(new Date(last).toLocaleString("de-DE"))}">Stand ${esc(ago(last))}</span>` : "");
   version();
   renderTheme();
+  // 0.56: läuft ein Abgleich, fragt die Seite alle 5 Sekunden nach, in jedem Reiter; sonst blieb „Abgleich läuft“ bis zum Neuladen stehen
+  if (a.running && !syncT) syncT = setTimeout(syncPoll, 5000);
+}
+let syncT = 0;
+async function syncPoll() {
+  syncT = 0;
+  let m;
+  try { m = await api("/api/meta"); } catch (x) { m = null; }
+  if (!m) { if (!syncT) syncT = setTimeout(syncPoll, 15000); return; }
+  if (LOADED_VER && m.version && m.version !== LOADED_VER) { location.reload(); return; }
+  const fresh = !S.meta?.has_data && m.has_data;
+  S.meta = m;
+  S.types = Object.fromEntries((m.typen || []).map((t) => [t.id, t.name]));
+  header();
+  if (fresh) route();
 }
 /* Hell, dunkel oder wie das Gerät: runder Knopf mit Menü, wie im VR-Navigator */
 const THEMES = [
