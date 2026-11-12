@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.48.5 (12.11.2026)
+
+- Schadensrechner: `.seg.cslots button.on` mit `--hcbg`; Zeilenumbruch (`.brk`) vor „gegen …“
+
 ## 0.48.4 (12.11.2026)
 
 - Proben für Shiny-Sperren: Bulbapedia „List of unobtainable Shiny Pokémon“, „Shiny-locked“, „Shiny Pokémon“ und PokéWiki

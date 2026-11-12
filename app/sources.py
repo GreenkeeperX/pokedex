@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.48.4"
+VERSION = "0.48.5"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.48.5", "12.11.2026", [
+        "Schadensrechner: gewählter Angreifer im Hintergrund der Hover-Karte statt grau, „gegen …“ und die übrigen Einstellungen immer in der nächsten Zeile",
+    ]),
     ("0.48.4", "12.11.2026", [
         "Verbindungstest: Listen der Shiny-Sperren je Spiel (Bulbapedia, PokéWiki) als Proben, damit der Pokéball „schillernd“ nur dort anbietet, wo es das gibt",
     ]),
