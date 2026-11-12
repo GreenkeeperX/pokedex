@@ -1335,7 +1335,7 @@ def _enc(con, g, pid):
         return []
     locs = _names(con, "location_names", "location_id")
     areas = _names(con, "location_area_prose", "location_area_id")
-    meths = _names(con, "encounter_method_prose", "encounter_method_id")
+    meths = _methods(con)
     conds = _names(con, "encounter_condition_value_prose", "encounter_condition_value_id")
     vn = _names(con, "version_names", "version_id")
     nv = con.execute("SELECT COUNT(*) FROM versions WHERE version_group_id = ?", (g["id"],)).fetchone()[0]
@@ -1352,6 +1352,31 @@ def _enc(con, g, pid):
 
 
 _AREAS = {}
+
+
+# 0.54: Begegnungsarten der PokéAPI, die es nur englisch gibt (ab Nr. 18), auf Deutsch
+METHOD_DE = {18: "Geschenk", 19: "Ei als Geschenk", 20: "feste Begegnung", 21: "Pokéflöte spielen",
+             22: "Kopfnuss (Baum, selten)", 23: "Kopfnuss (Baum)", 24: "Kopfnuss (Baum, häufig)", 25: "Schiggykanne an Mogelbaum",
+             26: "Wailmerkanne an Mogelbaum", 27: "Tauchen im Seetang", 28: "frei im Gras", 29: "frei auf dem Wasser",
+             30: "Devon-Scope", 31: "Angeln an Barschwa-Stellen", 32: "Inselscan", 33: "Notruf (SOS)", 34: "Angeln an sprudelnden Stellen",
+             35: "Beerenbaum", 36: "Tausch mit einer Person im Spiel", 37: "Notruf an sprudelnden Stellen", 38: "frei laufend",
+             39: "frei beim Surfen", 40: "fliegend am Himmel", 41: "selten im Gras (Lockparfüm oder Fangserie)",
+             42: "selten am Himmel (Lockparfüm oder Fangserie)", 43: "selten im Wasser (Lockparfüm oder Fangserie)",
+             44: "Fünfer-Begegnung", 45: "Bonus-Disc (USA, Jirachi)", 46: "Bonus-Disc (Japan)", 47: "Pokémon Channel (Jirachi)",
+             48: "Pokémon Ranger (Manaphy)", 49: "Pokémon Battle Revolution", 50: "Ei aus dem Pokémon Center New York",
+             51: "Erlösen (Colosseum/XD)", 52: "Erlösen, zweiter Versuch (Colosseum/XD)", 53: "Poképlatz (XD)",
+             54: "Versteckte Grotte", 55: "Honigbaum", 56: "frei aus Boden oder Sumpf", 57: "feste Stelle (Oberwelt)",
+             58: "feste Stelle im Wasser", 59: "verfolgt beim Schwimmen", 60: "Dynamax-Abenteuer", 61: "Dyna-Raid",
+             62: "aus der Mülltonne", 63: "aus dem raschelnden Busch", 64: "von der Höhlendecke", 65: "aus dem Boden", 66: "vom Himmel"}
+# Begegnungsarten, die einmalig sind oder ein Geschenk: in „Was fehlt mir noch“ unter „fest“
+FIXED_METHODS = {METHOD_DE[i] for i in (18, 19, 20, 36, 45, 46, 47, 48, 49, 50, 51, 52, 57, 58)}
+
+
+def _methods(con):
+    """Begegnungsarten der PokéAPI mit deutschem Namen (eigene Übersetzung, wo die PokéAPI nur englisch hat)."""
+    out = _names(con, "encounter_method_prose", "encounter_method_id")
+    out.update(METHOD_DE)
+    return out
 
 
 def _place(place, area):
@@ -1427,7 +1452,7 @@ def _areas_pokeapi(con, D, g):
         return {}
     locs = _names(con, "location_names", "location_id")
     area_n = _names(con, "location_area_prose", "location_area_id")
-    meths = _names(con, "encounter_method_prose", "encounter_method_id")
+    meths = _methods(con)
     conds = _names(con, "encounter_condition_value_prose", "encounter_condition_value_id")
     vn = _names(con, "version_names", "version_id")
     nv = con.execute("SELECT COUNT(*) FROM versions WHERE version_group_id = ?", (g["id"],)).fetchone()[0]
@@ -2285,6 +2310,155 @@ def team_caught(body):
     pot = _furthest(pot, D, {f["id"] for f in caught} | {r["id"] for r in alt[:8]})
     pot.sort(key=lambda r: -r["plus"])
     return {"alternativen": alt[:8], "potential": pot[:8], "gefangen": len(caught), "wertung": base}
+
+
+# 0.54: Spiele ohne Zucht (kein Ei, keine Pension): „Zucht“ fällt dort als Weg weg
+NO_BREEDING = {"red-green-japan", "blue-japan", "red-blue", "yellow", "colosseum", "xd", "lets-go-pikachu-lets-go-eevee",
+               "legends-arceus", "legends-za", "mega-dimension", "champions"}
+NO_EGGS = 15                     # Ei-Gruppe „Unbekannt“: legendäre und manche besondere Pokémon schlüpfen nie
+WAYS = ("jetzt", "wild", "fest", "entwicklung", "raid", "zucht", "tausch", "edition", "unklar")
+SV_FAMILY = ("scarlet-violet", "the-teal-mask", "the-indigo-disk")
+
+
+def missing(p):
+    """0.54: Was fehlt mir noch im gewählten Spiel: die Arten des Spiel-Dex, von denen keine Form als gefangen markiert
+    ist, je mit den Wegen dorthin. p: spiel, edition (Name einer Edition des Spiels: Fundorte nur der anderen Edition
+    zählen dann als „andere Edition“). Gibt {spiel, editionen, edition, arten, gefangen, fehlt: [{art, id, name, nr, dex,
+    dexk, typen, legendaer, weg, wege: [{art, text, ort?, von?, hast?}]}]} zurück; weg ist der beste Weg:
+    jetzt (Vorstufe oder Weiterentwicklung gefangen: entwickeln oder züchten), wild, fest (Geschenk oder einmalige
+    Begegnung), entwicklung, raid (Tera-Raid), zucht, tausch (Tausch-Entwicklung), edition (nur in der anderen Edition),
+    unklar (kein Weg in den Daten); Reihenfolge wie WAYS."""
+    D = data()
+    if not D:
+        return None
+    g, gen, _ = game_of(D, p.get("spiel"))
+    if not g:
+        return None
+    in_game = D.in_game.get(g["id"], {})
+    caught_forms = own_marks("gefangen", g["kennung"])
+    caught = {D.forms[i]["art"] for i in caught_forms if i in D.forms}
+    # je Art die Form, die der Dex des Spiels zeigt (niedrigste Nummer, sonst die Standardform)
+    rep = {}
+    for fid, nr in in_game.items():
+        f = D.forms.get(fid)
+        if not f:
+            continue
+        di = D.in_dex.get(g["id"], {}).get(fid, (0, ""))
+        k = (di[0] or 99, nr or 99999, not f["standard"], fid)
+        if f["art"] not in rep or k < rep[f["art"]][0]:
+            rep[f["art"]] = (k, f, nr, di)
+    con = db.game()
+    try:
+        vn = _names(con, "version_names", "version_id")
+        eds = [vn.get(v) or ident for v, ident in con.execute("SELECT id, identifier FROM versions WHERE version_group_id = ? ORDER BY id",
+                                                              (g["id"],))]
+        von = dict(con.execute("SELECT id, evolves_from_species_id FROM pokemon_species WHERE evolves_from_species_id IS NOT NULL"))
+        try:
+            no_eggs = {r[0] for r in con.execute("SELECT species_id FROM pokemon_egg_groups WHERE egg_group_id = ?", (NO_EGGS,))}
+        except Exception:
+            no_eggs = set()
+        items = _names(con, "item_names", "item_id")
+        trig = _names(con, "evolution_trigger_prose", "evolution_trigger_id")
+        locs = _names(con, "location_names", "location_id")
+        evo = {}
+        for r in con.execute("SELECT * FROM pokemon_evolution"):
+            r = dict(r)
+            t = evo_text(r, D, items, trig, locs)
+            e = evo.setdefault(r["evolved_species_id"], {"texte": [], "tausch": False})
+            if t and t not in e["texte"]:
+                e["texte"].append(t)
+            e["tausch"] = e["tausch"] or r.get("evolution_trigger_id") == 2
+        raids = {}
+        if g["kennung"] in SV_FAMILY:
+            try:
+                for fid, st in con.execute("SELECT form, sterne FROM raid WHERE spiel = 'scarlet-violet'"):
+                    if fid in D.forms:
+                        raids.setdefault(D.forms[fid]["art"], set()).add(st)
+            except Exception:
+                pass
+    finally:
+        con.close()
+    edition = p.get("edition") if p.get("edition") in eds else ""
+    # Fundorte je Art aus der Gebietsliste (gleiche Quelle wie Karte › Gebiete)
+    wild = {}
+    for gb in (areas({"spiel": g["kennung"]}) or {}).get("gebiete", []):
+        for m in gb["mons"]:
+            f = D.forms.get(m["id"])
+            if f:
+                wild.setdefault(f["art"], []).append({"ort": gb["ort"], "methode": m["methode"], "level": m["level"],
+                                                      "editionen": m["editionen"], "bedingungen": m["bedingungen"]})
+    kids = {}
+    for a, b in von.items():
+        kids.setdefault(b, []).append(a)
+
+    def later(a, n=0):
+        out = set()
+        for k in kids.get(a, []):
+            out |= {k} | (later(k, n + 1) if n < 4 else set())
+        return out
+
+    breeding = g["kennung"] not in NO_BREEDING and gen >= 2
+    out = []
+    for art, (_, f, nr, di) in rep.items():
+        if art in caught:
+            continue
+        ways = []
+        fx = lambda w: w["methode"] in FIXED_METHODS or w["methode"].startswith("fest")
+        here = [w for w in wild.get(art, []) if not fx(w)]
+        fixed = [w for w in wild.get(art, []) if fx(w)]
+        mine = [w for w in here if not w["editionen"] or not edition or edition in w["editionen"]]
+        other = [w for w in here if w not in mine]
+        if mine:
+            seen, txt = set(), []
+            for w in mine:
+                if w["ort"] in seen:
+                    continue
+                seen.add(w["ort"])
+                txt.append(w["ort"] + (f" (Lv {w['level']})" if w["level"] else ""))
+            only = sorted({e for w in mine for e in w["editionen"]}) if all(w["editionen"] for w in mine) else []
+            ways.append({"art": "wild", "text": ", ".join(txt[:2]) + (f" und {len(txt) - 2} weitere" if len(txt) > 2 else ""),
+                         "ort": mine[0]["ort"], "methode": mine[0]["methode"], "nur": only})
+        if art in raids:
+            st = sorted(raids[art])
+            ways.append({"art": "raid", "text": "Tera-Raid " + (f"{st[0]}★" if len(st) == 1 else f"{st[0]}–{st[-1]}★")})
+        pre = von.get(art)
+        if pre and pre in rep:
+            e = evo.get(art, {"texte": [], "tausch": False})
+            # Vorstufe oder eine Stufe davor gefangen: dann geht es jetzt
+            have, x, n = None, pre, 0
+            while x and n < 4:
+                if x in caught:
+                    have = x
+                    break
+                x, n = von.get(x), n + 1
+            pf = rep[pre][1]
+            ways.append({"art": "tausch" if e["tausch"] else "entwicklung", "von": pf["id"], "von_name": pf["name"],
+                         "text": f"aus {pf['name']}" + (": " + " oder ".join(e["texte"]) if e["texte"] else ""),
+                         "hast": have is not None, "hast_name": rep[have][1]["name"] if have in rep else ""})
+        # Zucht: eine Weiterentwicklung, die Eier legt (Babys wie Pichu sind selbst „Unbekannt“, Pikachu nicht); ohne
+        # gefangene Weiterentwicklung nur, wenn es die Art sonst nicht wild gibt
+        parents = {k for k in later(art) if k not in no_eggs} & set(rep)
+        if breeding and not pre and parents and not f["legendaer"] and not f["mysterioes"]:
+            got = sorted(parents & caught)
+            if got or not mine:
+                pf = rep[got[0] if got else min(parents)][1]
+                ways.append({"art": "zucht", "text": f"Ei von {pf['name']}",
+                             "hast": bool(got), "von": pf["id"], "von_name": pf["name"]})
+        if other:
+            eo = sorted({e for w in other for e in w["editionen"]})
+            ways.append({"art": "edition", "text": f"nur in {', '.join(eo)}: tauschen", "ort": other[0]["ort"], "nur": eo})
+        if fixed:
+            ways.append({"art": "fest", "text": ", ".join(dict.fromkeys(w["ort"] + (f" (Lv {w['level']})" if w["level"] else "")
+                                                                         for w in fixed))[:200], "ort": fixed[0]["ort"]})
+        if not ways:
+            ways.append({"art": "unklar", "text": "nur Verteilung oder Event" if f["mysterioes"] else
+                         "kein Fundort in den Daten: Geschenk, Tausch oder aus einem anderen Spiel"})
+        best = "jetzt" if any(w.get("hast") for w in ways) else min((w["art"] for w in ways), key=WAYS.index)
+        out.append({"art": art, "id": f["id"], "name": f["name"], "nr": nr if nr is not None else art, "dex": di[0], "dexk": di[1],
+                    "typen": form_types(D, f, gen), "legendaer": bool(f["legendaer"] or f["mysterioes"]), "weg": best, "wege": ways})
+    out.sort(key=lambda x: (x["dex"] or 99, x["nr"] or 99999, x["id"]))
+    return {"spiel": g["kennung"], "editionen": eds if len(eds) > 1 else [], "edition": edition, "arten": len(rep),
+            "gefangen": len(set(rep) & caught), "fehlt": out}
 
 
 def _evolves_from():

@@ -160,6 +160,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   und Beschreibung des Spiels), Fangfaktor und Bedingung bei Bällen (`BALL`, in Legenden: Arceus `BALL_HISUI` als
   Richtwerte), die Attacke des Spiels bei Maschinen. Preise farbig (`priceColor`).
   Bilder unter `itembild/<Nummer>`; unfertige Einträge (`unfertig`) nur mit dem Schalter.
+- Was fehlt mir noch (`missingView`, `#fehlt`): `/api/fehlt?spiel=…&edition=…`, Gruppen nach `weg` in der Reihenfolge von
+  `WEG` (wie `abfragen.WAYS`), Knöpfe `#fseg` filtern, Edition je Spiel im Browser (`edition:<Spiel>`). Der Pokéball auf
+  einer Karte (`.fmon .gball`, `data-act="caught"`) macht sie blass; aus der Liste fällt sie erst beim nächsten Öffnen.
 - Auswahl mit Bildern (`.pick`, Karte): Knopf, darunter Suche und Liste aus echten Links; Enter nimmt den ersten Treffer.
 - Einstellungen: `foldBoxes` macht aus jedem Kasten ein `details.fold` mit Leiste oben (`.jump`, „alle auf“, „alle zu“);
   zugeklappte merkt sich `setShut`. Zeiten mit `deTime` (deutsch, Zeit des Browsers), Protokollzeilen mit `logLocal`.

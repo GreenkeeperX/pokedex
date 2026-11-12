@@ -12,11 +12,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.53.0"
+VERSION = "0.54.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.54.0", "12.11.2026", [
+        "Was fehlt mir noch? (Knopf in der Pokémon-Liste): alle Arten des Spiel-Dex, die du noch nicht gefangen hast, "
+        "geordnet nach dem besten Weg: geht jetzt (Vorstufe oder Weiterentwicklung gefangen), wild, Geschenk oder einmalig, "
+        "entwickeln, Tera-Raid, züchten, Tausch-Entwicklung, andere Edition",
+        "Wähle deine Edition: was es wild nur in der anderen gibt, steht unter „Andere Edition“; den Pokéball setzt du direkt auf der Karte",
+        "Begegnungsarten, die es bei der PokéAPI nur englisch gab (Geschenk, feste Begegnung, Notruf, Inselscan …), heißen jetzt deutsch",
+    ]),
     ("0.53.0", "12.11.2026", [
         "Items › Maschinen: TMs und VMs abhaken, die du im Spiel hast; Filter „habe ich“ und „fehlen“, Zähler, und in der Spalte „Wo“ "
         "die Kartenpunkte, die die Maschine nennen (Klick zeigt sie auf der Karte)",
