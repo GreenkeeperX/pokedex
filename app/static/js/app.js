@@ -1900,7 +1900,7 @@ function renderMoves(A, level) {
   const mv = (x) => all[x] || MOVES[x];
   const covered = new Set();
   mine.map(mv).filter((m) => m.klasse !== 1 && m.staerke).forEach((m) => Object.entries(S.chart?.[m.typ] || {}).forEach(([t, f]) => f > 1 && covered.add(t)));
-  const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"><span${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</span>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${moveMarks(m)}</td>
+  const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"><span${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</span>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.tm_fehlt ? ` <span class="cls tmfehlt" data-tip="${esc(`Nur per ${m.tm_fehlt}, und die hast du in diesem Spiel nicht abgehakt (Items › Maschinen); der Vorschlag lässt sie weg`)}">${esc(m.tm_fehlt)} fehlt</span>` : ""}${moveMarks(m)}</td>
     <td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td><td class="c"><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="c num" data-s="${m.staerke ?? 0}">${powStil(m)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
     <td class="c num" data-s="${status ? 0 : m.wertung}">${status ? "–" : `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>`}</td><td class="c weg" data-s="${esc(m.wege[0] || "")}">${m.wege.map((w) => esc(w).replace(", Beherrschung", "<br>Beherrschung")).join("<br>")}</td><td class="why">${status ? (m.kurz ? `<b>${kurzHtml(m.kurz)}</b>` : esc(m.text || "")) : (m.kurz ? kurzHtml(m.kurz) + (m.gruende.length ? " · " : "") : "") + esc(m.gruende.join(" · "))}</td>
     <td class="c">${mine.includes(m.id) ? `<button class="small on" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✓</button>` : mine.length < 4 ? `<button class="small" data-act="mvadd" data-mid="${m.id}" data-tip="In deine Auswahl (4 Plätze)">+</button>` : ""}</td></tr>`;
@@ -3363,6 +3363,12 @@ async function itemsView() {
   const items = d.items || [];
   const nOdd = items.filter((x) => x.unfertig).length;
   let pocket = store.get("itemPocket", ""), q = "", art = "", odd = false;
+  // 0.53: Maschinen abhaken (gefunden, Karte „tm“) und wo es sie gibt (Kartenpunkte); Filter alle / habe ich / fehlen
+  const tmGot = await api("/api/gefunden?" + qs({spiel: S.game, karte: "tm"})).catch(() => ({}));
+  if (rid !== RID) return;
+  const tmHave = new Set((tmGot.tm || []).map(String));
+  let tmShow = store.get("tmShow", ""), tmOrte = null;
+  const tmKey = (x) => { const m = /\b(TM|VM|TP|HM|TR)\s*0*(\d{1,3})\b/.exec(x.name || ""); return m ? ({HM: "VM", TR: "TP"}[m[1]] || m[1]) + (+m[2]) : ""; };
   if (!(d.taschen || []).includes(pocket) && !(pocket === HERSTELLEN && d.rezepte)) pocket = "";
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Items</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <input id="itemq" type="search" placeholder="Name oder Beschreibung" style="width:220px">
@@ -3370,7 +3376,9 @@ async function itemsView() {
       ${nOdd ? `<label data-tip="Einträge, deren Text in den Spieldaten noch Platzhalter wie [VAR] enthält"><input type="checkbox" id="itemodd"> unfertige Einträge (${nOdd})</label>` : ""}
 </div>
     <div class="bar"><span class="seg" id="itemseg"><button data-t="">alle</button>${(d.taschen || []).map((t) => `<button data-t="${esc(t)}">${esc(t)}</button>`).join("")}${d.rezepte
-      ? `<button data-t="${HERSTELLEN}" data-tip="Items mit Rezept: was es zum Herstellen braucht">Herstellen</button>` : ""}</span><span class="hint grow" id="itemn"></span></div>
+      ? `<button data-t="${HERSTELLEN}" data-tip="Items mit Rezept: was es zum Herstellen braucht">Herstellen</button>` : ""}</span>
+      <span class="seg" id="tmseg" hidden><button data-tms="">alle</button><button data-tms="habe">habe ich</button><button data-tms="fehlt">fehlen</button><span class="hint" id="tmcnt" style="margin-left:8px"></span></span>
+      <span class="hint grow" id="itemn"></span></div>
     ${d.hinweis ? `<div class="note info">${esc(d.hinweis)}</div>` : ""}
     <div class="scroll sticky" id="itembox"></div>
     <p class="hint">Quelle: PokéAPI; Items ohne Eintrag dort und deutsche Namen: PKHeX${d.rezepte ? "; Rezepte und Fundorte der Zutaten: Altissimo (englisch)" : ""}. Englisch, wo es keinen deutschen Text gibt. Bilder lädt der Abgleich.</p></div>`;
@@ -3397,10 +3405,13 @@ async function itemsView() {
               [th("Beschreibung", "", true), "", text]],
     Bälle: [[th("Name"), "22%", name], [thc("Preis"), "7%", price], [thc("Fang", "Fangfaktor des Balls; „immer“ fängt sicher. In Legenden: Arceus Richtwerte"), "70px", ballCell],
             [th("Bedingung", "Wann der Ball besser fängt"), "26%", (x) => `<td>${esc(ballOf(x)?.[1] || "")}</td>`], [th("Beschreibung", "", true), "", text]],
-    Maschinen: [[th("Name"), "16%", name], [thc("Preis"), "7%", price], [th("Attacke"), "15%", (x) => `<td><b>${esc(x.attacke?.name || "")}</b></td>`],
+    Maschinen: [[thc("✓", "Habe ich: abgehakte Maschinen nutzt der Moveset-Vorschlag, fehlende nicht"), "44px", (x) => `<td class="c" data-s="${tmHave.has(String(x.id)) ? 1 : 0}"><span class="tmck${tmHave.has(String(x.id)) ? " on" : ""}" data-tm="${x.id}" data-tip="${tmHave.has(String(x.id)) ? "Habe ich; Klick: doch nicht" : "Als vorhanden abhaken"}">✓</span></td>`],
+                [th("Name"), "13%", name], [thc("Preis"), "7%", price], [th("Attacke"), "15%", (x) => `<td><b>${esc(x.attacke?.name || "")}</b></td>`],
                 [thc("Typ"), "9%", (x) => `<td class="c" data-s="${x.attacke ? esc(tname(x.attacke.typ)) : ""}">${x.attacke ? tchip(x.attacke.typ) : ""}</td>`],
                 [thc("Klasse"), "8%", (x) => `<td class="c">${esc(MKLASSE[x.attacke?.klasse] || "")}</td>`],
                 [thc("Stärke"), "6%", (x) => num(x.attacke?.staerke)], [thc("Gen."), "6%", (x) => num(x.attacke?.genauigkeit)], [thc("AP"), "5%", (x) => num(x.attacke?.ap)],
+                [th("Wo", "Kartenpunkte, die diese Maschine nennen (Klick: auf der Karte zeigen)"), "12%", (x) => { const ws = (tmOrte || {})[tmKey(x)] || [];
+                  return `<td class="why">${tmOrte === null ? `<span class="hint">…</span>` : ws.length ? ws.map((w) => w.id ? `<a href="#karte/mg/${esc(w.karte)}/${esc(w.id)}">${esc(w.name || w.titel)}</a>` : esc(w.name)).join(", ") : `<span class="hint">–</span>`}</td>`; }],
                 [th("Wirkung", "", true), "", (x) => `<td class="why">${x.attacke?.kurz ? kurzHtml(x.attacke.kurz) : esc(x.text)}</td>`]],
     [HERSTELLEN]: [[th("Name"), "22%", name], [th("Zutaten"), "30%", recipe], [th("Wo", "Wo das Rezept zu haben ist"), "16%", where],
                    [th("Rezept bekommen", "", true), "", (x) => `<td class="why" lang="en">${esc(x.rezept?.hinweis && x.rezept.hinweis !== "N/A" ? x.rezept.hinweis : "–")}</td>`]],
@@ -3411,8 +3422,15 @@ async function itemsView() {
     const arts = [...new Set(inPocket.map((x) => x.art).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
     if (art && !arts.includes(art)) art = "";
     $("#itemart").innerHTML = `<option value="">jede Art</option>` + arts.map((a) => `<option${a === art ? " selected" : ""}>${esc(a)}</option>`).join("");
+    const isTm = pocket === "Maschinen";
     const xs = inPocket.filter((x) => (!art || x.art === art) && (!ql || x.name.toLowerCase().includes(ql) || x.text.toLowerCase().includes(ql)
-      || (x.attacke?.name || "").toLowerCase().includes(ql)));
+      || (x.attacke?.name || "").toLowerCase().includes(ql))
+      && (!isTm || !tmShow || (tmShow === "habe") === tmHave.has(String(x.id))));
+    $("#tmseg").hidden = !isTm;
+    if (isTm) { const all = inPocket.length, got = inPocket.filter((x) => tmHave.has(String(x.id))).length;
+      $("#tmcnt").textContent = `${got} von ${all} abgehakt`; $$("#tmseg button").forEach((b) => b.classList.toggle("on", b.dataset.tms === tmShow));
+      if (tmOrte === null && !draw.loading) { draw.loading = true;
+        api("/api/tmorte?" + qs({spiel: S.game})).then((o) => { tmOrte = o || {}; if (rid === RID) draw(); }).catch(() => { tmOrte = {}; }); } }
     const kind = pocket === HERSTELLEN ? HERSTELLEN : pocket === "Maschinen" ? "Maschinen" : pocket === "Bälle" ? "Bälle"
       : pocket === "Medizin" || pocket === "Beeren" ? "wirkung" : "";
     const cols = COLS[kind].filter((c, i) => !(pocket && !kind && i === 2));      // in einer Tasche braucht es die Spalte Tasche nicht
@@ -3425,6 +3443,15 @@ async function itemsView() {
     $$("tbody tr[data-r]", tb).forEach((tr) => [...tr.cells].forEach((td, i) => { td.dataset.c = i; if (td.classList.contains("why")) td.classList.add("nohc"); if (!i) td.dataset.pr = tr.dataset.r; }));
     crossTable(tb, IPIN);
   };
+  $$("#tmseg button").forEach((b) => b.addEventListener("click", () => { tmShow = b.dataset.tms; store.set("tmShow", tmShow); draw(); }));
+  $("#itembox").addEventListener("click", async (e) => {
+    const t = e.target.closest("[data-tm]");
+    if (!t) return;
+    const id = t.dataset.tm, on = !tmHave.has(id);
+    await api("/api/gefunden", {spiel: S.game, karte: "tm", objekt: [id], an: on});
+    if (on) tmHave.add(id); else tmHave.delete(id);
+    draw();
+  });
   $("#itemq").addEventListener("input", (e) => { q = e.target.value.trim(); draw(); });
   $("#itemart").addEventListener("change", (e) => { art = e.target.value; draw(); });
   $("#itemodd")?.addEventListener("change", (e) => { odd = e.target.checked; draw(); });

@@ -317,6 +317,28 @@ class Leser(unittest.TestCase):
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
+    def test_0_53_kartencache_und_tms(self):
+        import tempfile
+        from unittest import mock
+        from app import abfragen, server
+        calls = []
+        def fake(m, spiel, am):
+            calls.append(m["slug"])
+            return {"punkte": [{"name": "TM27 Rückkehr", "id": 5}, {"name": "Beere"}]}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(abfragen, "mg_map", fake), \
+                mock.patch.object(server.db, "data_dir", lambda: tmp):
+            m = {"slug": "welt", "id": 1, "titel": "Welt"}
+            b1 = server._map_body(m, "x-y", "2026-11-12")
+            server._MAPBODY.clear()
+            b2 = server._map_body(m, "x-y", "2026-11-12")                 # aus der Datei, ohne neu zu rechnen
+            self.assertEqual((b1, calls), (b2, ["welt"]))
+            server._MAPBODY.clear()
+            server._map_body(m, "x-y", "2026-11-13")                      # neuer Stand: neu rechnen
+            self.assertEqual(calls, ["welt", "welt"])
+            places = abfragen.tm_places({"spiel": "x-y", "am": "a", "karten": [m]}, lambda k: json.loads(server._map_body(k, "x-y", "a")))
+            self.assertEqual(places, {"TM27": [{"karte": "welt", "titel": "Welt", "id": 5, "name": "TM27 Rückkehr"}]})
+        server._MAPBODY.clear()
+
     def test_0_51_shiny_sperren(self):
         from app import shiny
         text = """===Intentionally unobtainable Shiny Pokémon===

@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.53.0 (12.11.2026)
+
+- Maschinen-Besitz: user.db `gefunden` (Karte „tm“, Objekt Item-Id); `abfragen.owned_tms`, `_tm_missing` (nur wenn mindestens eine
+  abgehakt ist), `ranked_moves` setzt `tm_fehlt` und nimmt solche Attacken aus „jetzt“. `/api/tmorte` sucht „TM27“ usw. in den
+  Kartenpunkten (`abfragen.tm_places`).
+- Kartencache: `server._map_body` speichert die zusammengeführte Karte gepackt unter `kartencache/` mit Schlüssel
+  (Spiel, Karte, Stand, pokeapi.db, Version).
+- Als Nächstes: „Was fehlt mir noch“ je Spiel, dann Sammelobjekte mit Fortschritt (Entscheidung 12.11.2026: alle drei nacheinander).
+
 ## 0.52.0 (12.11.2026)
 
 - Karten: `server._warm_loop` bereitet `WARM_GAMES` (Legenden: Arceus) beim Start und nach jedem Abgleich vor, mit gzip;

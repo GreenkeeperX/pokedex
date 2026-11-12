@@ -501,24 +501,61 @@ def _prewarm(d):
         for m in d["karten"][:abfragen.MERGED_MAX - 2]:
             try:
                 t0 = time.time()
-                body = _packed(abfragen.mg_map(m, d["spiel"], d["am"]))
-                _gz_put(body)
-                print(f"Karte vorbereitet: {d['spiel']}/{m.get('slug')} in {time.time() - t0:.1f} s, "
+                body = _map_body(m, d["spiel"], d["am"])
+                print(f"Karte bereit: {d['spiel']}/{m.get('slug')} in {time.time() - t0:.1f} s, "
                       f"{len(body) // 1024} KB", file=sys.stderr, flush=True)
             except Exception as e:
                 print("Karte vorbereiten:", e, file=sys.stderr)
     threading.Thread(target=run, daemon=True, name="karten-vorbereiten").start()
 
 
-def _gz_put(body):
-    """0.52: die gepackte Fassung einer großen Antwort gleich mit vorbereiten (spart beim ersten Öffnen das Packen)."""
-    hit = _GZ.get(id(body))
-    if hit and hit[0] is body:
-        return
-    gz = gzip.compress(body, compresslevel=5)
-    if len(_GZ) >= 16:
-        _GZ.clear()
-    _GZ[id(body)] = (body, gz)
+_MAPBODY = {}
+_MAPBODY_LOCK = threading.Lock()
+
+
+def _map_body(m, spiel, am):
+    """0.53: eine zusammengeführte Karte als JSON (und gepackt), gespeichert im Datenordner (kartencache/): die Punkte
+    ändern sich nur mit einem Abgleich oder einer neuen Version, also rechnet der Server sie nur dann neu, nicht nach
+    jedem Neustart. Schlüssel: Spiel, Karte, Stand der Karte, Stand von pokeapi.db, Version."""
+    key = json.dumps([spiel, m.get("slug"), m.get("id"), am, abfragen._stamp(), sources.VERSION])
+    hit = _MAPBODY.get(key)
+    if hit:
+        return hit
+    with _MAPBODY_LOCK:
+        hit = _MAPBODY.get(key)
+        if hit:
+            return hit
+        folder = os.path.join(db.data_dir(), "kartencache")
+        name = re.sub(r"[^a-z0-9-]+", "_", f"{spiel}__{m.get('slug') or m.get('id')}".lower())
+        path = os.path.join(folder, name + ".json.gz")
+        body = None
+        try:
+            with open(path + ".key", encoding="utf-8") as f:
+                if f.read() == key:
+                    with open(path, "rb") as g:
+                        gz = g.read()
+                    body = gzip.decompress(gz)
+        except (OSError, EOFError, ValueError):
+            body = None
+        if body is None:
+            body = json.dumps(abfragen.mg_map(m, spiel, am), ensure_ascii=False).encode("utf-8")
+            gz = gzip.compress(body, compresslevel=6)
+            try:
+                os.makedirs(folder, exist_ok=True)
+                with open(path + ".tmp", "wb") as g:
+                    g.write(gz)
+                os.replace(path + ".tmp", path)
+                with open(path + ".key", "w", encoding="utf-8") as f:
+                    f.write(key)
+            except OSError as e:
+                print("Kartencache:", e, file=sys.stderr)
+        while len(_MAPBODY) >= 12:
+            _MAPBODY.pop(next(iter(_MAPBODY)))
+        _MAPBODY[key] = body
+        if len(_GZ) >= 16:
+            _GZ.clear()
+        _GZ[id(body)] = (body, gz)
+        return body
 
 
 WARM_GAMES = ("legends-arceus",)    # 0.52: diese Karten führt der Server schon beim Start zusammen (Arceus ist das Startspiel)
@@ -684,7 +721,7 @@ class Handler(BaseHTTPRequestHandler):
                 if d and q.get("karte"):
                     m = next((m for m in d["karten"] if m["slug"] == q["karte"]), None)
                     if m:
-                        self._send(200, _packed(abfragen.mg_map(m, d["spiel"], d["am"])))
+                        self._send(200, _map_body(m, d["spiel"], d["am"]))
                     else:
                         self._send(404, {"error": "keine Karte"})
                 else:
@@ -724,6 +761,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, marked("gefangen", q.get("spiel")))
             elif path == "/api/schillernd":
                 self._send(200, marked("schillernd", q.get("spiel")))
+            elif path == "/api/tmorte":
+                d = abruf.mg_maps(q.get("spiel"))
+                self._send(200, abfragen.tm_places(d, lambda m: json.loads(_map_body(m, d["spiel"], d["am"]))))
             elif path == "/api/shinysperre":
                 self._send(200, abfragen.shiny_locks(q.get("spiel")))
             elif path == "/api/alpha":

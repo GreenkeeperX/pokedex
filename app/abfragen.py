@@ -560,9 +560,75 @@ def proven_sets(con, D, f, g, gen, rows):
     return out, use
 
 
+def owned_tms(spiel):
+    """0.53: Maschinen (Item-Ids), die der User im Spiel als vorhanden abgehakt hat (user.db gefunden, Karte „tm“)."""
+    try:
+        u = db.user()
+    except Exception:
+        return set()
+    try:
+        return {int(o) for (o,) in u.execute("SELECT objekt FROM gefunden WHERE spiel = ? AND karte = 'tm'", (str(spiel or ""),))
+                if str(o).isdigit()}
+    except Exception:
+        return set()
+    finally:
+        u.close()
+
+
+def _tm_missing(con, vg, owned):
+    """{Attacke: TM-Name} der Maschinen des Spiels, die der User nicht hat (nur wenn er überhaupt welche abgehakt hat)."""
+    if not owned or vg is None:
+        return {}
+    out, have = {}, set()
+    try:
+        for item, mid, name in con.execute("SELECT m.item_id, m.move_id, i.identifier FROM machines m JOIN items i ON i.id = m.item_id "
+                                           "WHERE m.version_group_id = ?", (vg,)):
+            if item in owned:
+                have.add(mid)
+            else:
+                out.setdefault(mid, machine_label(name, 3 if vg >= 20 else 2) or name)
+    except Exception:
+        return {}
+    return {mid: label for mid, label in out.items() if mid not in have}
+
+
+TM_RX = re.compile(r"\b(TM|HM|VM|TR|TP)[ -]?0*(\d{1,3})\b")
+
+
+def tm_key(text):
+    """„TM27“, „HM 03“, „TR-12“ → („TM“, 27), („VM“, 3), („TP“, 12); None ohne Maschine."""
+    m = TM_RX.search(str(text or ""))
+    if not m:
+        return None
+    return ({"HM": "VM", "TR": "TP"}.get(m.group(1), m.group(1)), int(m.group(2)))
+
+
+def tm_places(maps, load=None):
+    """0.53: Wo es Maschinen gibt, aus den Kartenpunkten aller Karten des Spiels (Name oder Text nennt „TM27“ usw.):
+    {"TM27": [{karte, titel, id, name}]}, je Maschine höchstens 6 Stellen. load(m): die fertige Karte (Kartencache)."""
+    out = {}
+    if not maps:
+        return out
+    for m in maps["karten"]:
+        try:
+            r = load(m) if load else mg_map(m, maps["spiel"], maps["am"])
+        except Exception:
+            continue
+        for p in r.get("punkte") or []:
+            k = tm_key(p.get("name")) or tm_key(p.get("en")) or tm_key(p.get("text"))
+            if not k:
+                continue
+            xs = out.setdefault(f"{k[0]}{k[1]}", [])
+            if len(xs) < 6:
+                xs.append({"karte": m.get("slug"), "titel": m.get("titel"), "id": p.get("id"), "name": p.get("name") or ""})
+    return out
+
+
 def ranked_moves(con, D, f, g, gen, level=None):
     """Bewertete Schadens-Attacken einer Form im Spiel, mit Gründen, dazu Moveset und Status-Attacken."""
     ls, used = learnset(con, D, f, g)
+    # 0.53: hat der User TMs abgehakt, zählen reine TM-Attacken ohne vorhandene TM nicht als „jetzt verfügbar“
+    missing = _tm_missing(con, used["id"], owned_tms(g["kennung"])) if g and used and used["id"] == g["id"] else {}
     ch = D.chart(gen)
     mon = {"typen": form_types(D, f, gen), "ang": f["ang"], "spang": f["spang"], "faehigkeit": ability_of(D, f, used)}
     by_move = {}
@@ -586,10 +652,13 @@ def ranked_moves(con, D, f, g, gen, level=None):
         v = old_class(move_view(D, e["m"], used), gen)
         wege = sorted(e["wege"], key=lambda w: (w[0] != "level-up", w[1] or 0))
         now = level is None or any(w[0] != "level-up" or (w[1] or 0) <= level for w in wege)
+        tm_fehlt = missing.get(mid) if mid in missing and all(w[0] == "machine" for w in wege) else ""
+        if tm_fehlt:
+            now = False
         base = {"id": mid, "name": v["name"], "typ": v["typ"], "klasse": v["klasse"], "staerke": v["staerke"],
                 "genauigkeit": v["genauigkeit"], "ap": v["ap"], "prio": v["prio"], "wege": [w[3] for w in wege],
                 "jetzt": now, "geaendert": bool(v.get("geaendert")), "text": v.get("text"), "kurz": v.get("kurz") or "",
-                "kraft": v.get("kraft"), "tempo": v.get("tempo"), "abkling": v.get("abkling")}
+                "kraft": v.get("kraft"), "tempo": v.get("tempo"), "abkling": v.get("abkling"), "tm_fehlt": tm_fehlt}
         if v["klasse"] == attacken.STATUS or not v["staerke"]:
             status.append(base)
             continue
