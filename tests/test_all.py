@@ -467,7 +467,8 @@ class Leser(unittest.TestCase):
         self.assertEqual(abfragen.pick_text(D, per, games[0])["aus"], "DIAMOND-PEARL")     # nichts davor: das erste
         self.assertEqual(abfragen.pick_text(D, per, games[3])["aus"], "")
         self.assertEqual(abfragen.pick_text(D, {"sword-shield": [("", "S.", "PokéAPI")]}, games[4])["aus"], "")  # Erweiterung
-        self.assertEqual(abfragen._research(con, 399), [{"aufgabe": "Exemplare gefangen", "stufen": ["1", "3"], "doppelt": True}])
+        self.assertEqual(abfragen._research(con, 399, {}), [{"nr": 0, "aufgabe": "Exemplare gefangen", "stufen": ["1", "3"], "doppelt": True, "erreicht": 0}])
+        self.assertEqual(abfragen._research(con, 399, {(399, 0): 5})[0]["erreicht"], 2)     # 0.49: nie mehr Stufen als vorhanden
         con.close()
 
     def test_0_38_0_png(self):

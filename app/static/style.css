@@ -96,6 +96,7 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start}
 .cols>.box{margin-bottom:0}
 .cols{margin-bottom:12px}
+@media (min-width:1200px){.cols.tcols{grid-template-columns:minmax(440px,1.25fr) minmax(300px,1fr) minmax(280px,.8fr)}}   /* 0.49: Bewertung breiter (Typwirkung ohne Scrollen) */
 .note{border-radius:8px;padding:8px 10px;font-size:14px;margin:6px 0}
 .note.warn{background:var(--warn-bg);color:var(--warn)}
 .note.info{background:var(--info-bg);color:var(--info)}
@@ -161,7 +162,7 @@ td.nw{white-space:nowrap}
 .mk .m-alpha,.alpha-i{color:#e53935;font:800 13px/1 system-ui,sans-serif}
 .mk .m-alpha{width:19px;height:19px}
 /* α in der Knopfreihe neben dem Pokéball, gleich groß wie Stern und Ball */
-.mon .acts .a.alp{font:800 21px/1 system-ui,sans-serif;color:var(--muted);padding-bottom:3px;margin-left:-2px}
+.mon .acts .a.alp{font:800 21px/1 system-ui,sans-serif;color:var(--muted);padding-bottom:3px;margin-left:-3px}   /* 0.49: 1 px näher am Ball */
 .mon .acts .a.alp.on{color:#e53935;opacity:1}
 .mon .acts .a.alp:not(.on):hover{color:var(--ink-hi)}   /* 0.47.12: wie die anderen weiß, rot erst wenn gesetzt */
 /* Knöpfe zum Setzen: beim Hovern unten auf dem Bild */
@@ -921,6 +922,7 @@ button.danger:hover,dialog.ask button.danger:hover{background:#c4000f !important
 /* 0.46: Forschungsaufgaben, Stufen in festen Spalten */
 td.rst{white-space:nowrap;text-align:left}
 td.rst span{display:inline-block;min-width:2.8em;text-align:right;font-variant-numeric:tabular-nums}
+td.rst .rs{cursor:pointer;border-radius:4px;padding:0 3px}td.rst .rs:hover{color:var(--ink-hi);background:var(--hov)}td.rst .rs.on{color:var(--go)}   /* 0.49: abgehakte Stufen dezent grün */
 #foeclr[hidden]{display:none}
 /* 0.48.5: gewählter Angreifer im Hintergrund der Hover-Karte (das Grau schluckte die Bilder); „gegen …“ immer in eigener Zeile */
 #calc .bar+.bar{margin-top:-4px}   /* 0.48.6: zwei Zeilen statt Umbruch-Element (das gab doppelten Abstand) */

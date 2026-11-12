@@ -268,7 +268,7 @@ function monCard(r, mode = false) {
     ? `<span class="xs${xs ? " on" : ""}" data-act="xsel" data-id="${r.id}" data-tip="${xs ? "Ausgewählt zum Übertragen; Klick: abwählen" : "Zum Übertragen auswählen"}">⇄</span>`
     : ""}<span class="sp">${img(r.id)}${acts(r.id)}</span>
     <span class="mi"><span class="nl"><span class="n">${esc(r.name)}</span></span><span class="ty">${tchips(r.typen)}</span>
-    ${r.legendaer ? `<span class="s">legendär</span>` : ""}<span class="s">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b></span></span>
+    ${r.legendaer ? `<span class="s">legendär</span>` : ""}<span class="s">Basiswerte <b style="color:${sumColor(r.summe)}">${r.summe}</b></span>${r.forschung_offen != null ? `<span class="s">Forschung offen <b>${r.forschung_offen}</b></span>` : ""}</span>
     ${radar(r.werte, 100)}</a>`;
 }
 // Marken überall neu zeichnen, ohne die Seite neu aufzubauen
@@ -892,7 +892,7 @@ function filterBar(f, id, opts = {}) {
         <button data-fm="und" class="${f.modus === "und" ? "on" : ""}">und</button><button data-fm="oder" class="${f.modus === "oder" ? "on" : ""}">oder</button></span>
       <select data-f="formen" data-tip="${esc(FORMEN_TIP)}"><option value="relevant">Formen mit eigenen Werten</option><option value="standard">nur Standardform</option><option value="alle">alle Formen</option></select>
       ${opts.sort === false ? "" : `<select data-f="sort"><option value="nr" data-tip="Nummer im Pokédex des Spiels; Spiele mit mehreren Dexen der Reihe nach">Nummer</option><option value="nat">Nationale Nummer</option><option value="name">Name</option><option value="summe">Basiswerte</option>
-        <option value="ang">Angriff</option><option value="spang">Sp.-Angriff</option><option value="init">Initiative</option><option value="kp">KP</option><option value="vert">Verteidigung</option></select>`}
+        <option value="ang">Angriff</option><option value="spang">Sp.-Angriff</option><option value="init">Initiative</option><option value="kp">KP</option><option value="vert">Verteidigung</option>${S.game === "legends-arceus" ? `<option value="forschung" data-tip="Wo bis zum Forschungslevel 10 noch die meisten Punkte offen sind (abgehakte Stufen zählen nicht)">Offene Forschung</option>` : ""}</select>`}
       <button data-act="freset" data-fid="${id}">Zurücksetzen</button></div>
     <div class="bubbles">${bub}</div>
     <div class="bar">
@@ -1657,6 +1657,22 @@ function blaubeerView(r) {
   $("#reqq").addEventListener("input", draw);
   REQ_REDRAW = draw;
 }
+/* 0.49: Forschungsstufe abhaken: Klick auf Stufe k setzt „bis k erreicht“, Klick auf die höchste erreichte nimmt sie zurück */
+async function toggleResearch(b) {
+  const art = +b.dataset.art, nr = +b.dataset.nr, k = +b.dataset.k, cell = b.closest("td"), spans = $$("[data-act=rsdone]", cell);
+  const have = spans.filter((x) => x.classList.contains("on")).length, to = k === have ? k - 1 : k;
+  const paint = (n) => spans.forEach((x, i) => { x.classList.toggle("on", i < n); x.dataset.tip = i < n ? (i + 1 === n ? "Erreicht; Klick: doch nicht" : "Erreicht") : "Klick: bis hier erreicht"; });
+  paint(to);
+  const obj = (n) => `${art}|${nr}|${n}`, all = spans.map((_, i) => i + 1);
+  try {
+    if (all.some((n) => n > to)) await api("/api/gefunden", {spiel: "legends-arceus", karte: "forschung", objekt: all.filter((n) => n > to).map(obj), an: false});
+    if (to) await api("/api/gefunden", {spiel: "legends-arceus", karte: "forschung", objekt: all.filter((n) => n <= to).map(obj), an: true});
+    if (DETAIL && DETAIL.forschung) {
+      const a = DETAIL.forschung.find((x) => x.nr === nr), box = cell.closest(".box");
+      if (a) { a.erreicht = to; if (box) { box.outerHTML = researchHtml(DETAIL); applyFolds(); } }
+    }
+  } catch (e) { paint(have); }
+}
 async function toggleReq(nr) {
   const k = String(nr), on = !REQ_DONE.has(k), mis = k.startsWith("m");
   const paint = () => $$(`[data-act="reqdone"][data-id="${nr}"]`).forEach((el) => { el.outerHTML = reqCheck(nr); });
@@ -1730,11 +1746,12 @@ function researchHtml(d) {
   const xs = d.forschung || [];
   if (!xs.length) return "";
   const pts = (a) => a.stufen.length * (a.doppelt ? 20 : 10);
-  const all = xs.reduce((n, a) => n + pts(a), 0);
+  const all = xs.reduce((n, a) => n + pts(a), 0), have = xs.reduce((n, a) => n + (a.erreicht || 0) * (a.doppelt ? 20 : 10), 0);
   const calc = calcRows(xs.map((a) => [a.aufgabe, `${a.stufen.length} × ${a.doppelt ? 20 : 10} = ${pts(a)}`]).concat([["Alle Stufen", `${all} Punkte`]]));
   return `<div class="box"><h2 data-fold="research" data-tip="Aufgaben im Pokédex von Hisui. Jede erreichte Stufe bringt 10 Punkte, doppelt zählende 20. Ab 100 Punkten ist der Forschungslevel 10 erreicht.">Forschungsaufgaben</h2>
-    <table class="rows"><tbody>${xs.map((a) => `<tr><td>${esc(a.aufgabe)}${a.doppelt ? ' <span class="cls tm" data-tip="Zählt doppelt: 20 statt 10 Punkte je Stufe">×2</span>' : ""}</td><td class="rst">${a.stufen.map((x) => `<span>${esc(x)}</span>`).join("")}</td></tr>`).join("")}</tbody></table>
-    <p class="hint"><span ${tipRef(`<b>Punkte, wenn alle Stufen erreicht sind</b>${calc}`)}>Alle Stufen: ${all} Punkte</span>, Forschungslevel 10 ab 100. Quelle: PokéWiki.</p></div>`;
+    <table class="rows"><tbody>${xs.map((a) => `<tr><td>${esc(a.aufgabe)}${a.doppelt ? ' <span class="cls tm" data-tip="Zählt doppelt: 20 statt 10 Punkte je Stufe">×2</span>' : ""}</td><td class="rst">${a.stufen.map((x, k) => `<span class="rs${k < (a.erreicht || 0) ? " on" : ""}" data-act="rsdone" data-art="${d.art}" data-nr="${a.nr}" data-k="${k + 1}"
+      data-tip="${k < (a.erreicht || 0) ? (k + 1 === a.erreicht ? "Erreicht; Klick: doch nicht" : "Erreicht") : "Klick: bis hier erreicht"}">${esc(x)}</span>`).join("")}</td></tr>`).join("")}</tbody></table>
+    <p class="hint"><span ${tipRef(`<b>Punkte, wenn alle Stufen erreicht sind</b>${calc}`)}>Alle Stufen: ${all} Punkte</span>, Forschungslevel 10 ab 100.${have ? ` Erreicht: <b>${have}</b> Punkte${have >= 100 ? " (Level 10)" : `, noch ${Math.min(100, all) - have > 0 ? Math.min(100, all) - have : 0} bis Level 10`}.` : " Klick auf eine Zahl hakt die Stufe ab."} Quelle: PokéWiki.</p></div>`;
 }
 
 function catchHtml(d) {
@@ -2008,9 +2025,9 @@ async function caughtBox() {
   if (rid !== RID || !$("#gef")) return;
   [...r.alternativen, ...r.potential].forEach((x) => { ROWS[x.id] = Object.assign(ROWS[x.id] || {}, x); if (x.wird) ROWS[x.wird.id] = Object.assign(ROWS[x.wird.id] || {}, x.wird); });
   const where = (x) => x.slot === null || x.slot === undefined ? "auf einen freien Platz" : `statt ${esc(x.statt)} (Platz ${x.slot + 1})`;
-  const line = (x, extra = "") => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><div class="grow"><b>${esc(x.name)}</b> ${favStar(x.id)}<div class="tl">${tchips(x.typen)}</div>
-    <div class="why">${extra}<b class="plus">+${x.plus}</b> Teamwertung ${where(x)}</div></div>
-    <button class="small" data-act="${x.slot === null || x.slot === undefined ? "teamadd" : "pickfav"}" data-id="${x.id}" data-slot="${x.slot ?? ""}">${x.slot === null || x.slot === undefined ? "Ins Team" : "Tauschen"}</button></div>`;
+  const line = (x, extra = "") => `<div class="imp diff" data-id="${x.id}" data-hc="${x.id}" draggable="true"><a href="#pokemon/${x.id}">${img(x.id)}</a><div class="grow"><b>${esc(x.name)}</b> ${favStar(x.id)}<button class="favstar teamck" data-act="${x.slot === null || x.slot === undefined ? "teamadd" : "pickfav"}" data-id="${x.id}" data-slot="${x.slot ?? ""}"
+      data-tip="${x.slot === null || x.slot === undefined ? "Ins Team (auf einen freien Platz)" : `Ins Team, statt ${esc(x.statt)}`}">${icon("team")}</button><div class="tl">${tchips(x.typen)}</div>
+    <div class="why">${extra}<b class="plus">+${x.plus}</b> Teamwertung ${where(x)}</div></div></div>`;   // 0.49: Häkchen hinter dem Stern statt „Tauschen“
   el.innerHTML = `<p class="hint">${S.caught.size} gefangen in ${esc(gameName())}.</p>
     <div class="fsec"><h3 data-fold="talt" data-tip="Ein Tausch mit einem Mitglied (oder ein freier Platz) hebt die Teamwertung jetzt">Bessere Alternative</h3>
     ${r.alternativen.map((x) => line(x)).join("") || `<p class="hint">Nichts aus deiner Sammlung hebt das Team im Moment.</p>`}</div>
@@ -2059,7 +2076,7 @@ async function teamView() {
         <div><h3>Filter für Vorschläge und Suche</h3>${filterBar(S.tfilter, "tf", {sort: false})}</div></div>
       <h3>Vorschläge für den nächsten Platz</h3><div id="sug" class="sugs"><p class="hint">Mit mindestens einem Mitglied.</p></div>
     </details>
-    <div class="cols">
+    <div class="cols tcols">
       <div class="box"><h2 data-fold="tev">Bewertung</h2><div id="ev"><p class="hint">Lädt …</p></div></div>
       <div class="box"><h2 data-fold="timp">Verbesserungen</h2><div id="imp"></div></div>
       <div class="box dropmark" data-drop="gef"><h2 data-fold="tgef">${icon("ball")} Aus deiner Sammlung</h2><div id="gef"><p class="hint">Lädt …</p></div></div>
@@ -2170,7 +2187,7 @@ async function teamRefresh() {
     <details><summary>Typwirkung je Mitglied</summary><div class="scroll"><table class="matrix" id="matrix"><tr><th></th>${ms.map((m, i) => `<th data-hc="${m.id}" data-c="${i + 1}" data-pc="${i + 1}">${img(m.id)}</th>`).join("")}</tr>
       ${Object.keys(S.types).filter((a) => ev.matrix[ms[0].id]?.[a] !== undefined).map((a) => `<tr data-r="${a}"><th class="r" data-pr="${a}">${tchip(a)}</th>${ms.map((m, i) => { const f = ev.matrix[m.id][a]; return `<td data-c="${i + 1}" data-tip="${esc(`${tname(a)} gegen ${m.name}: ×${fl(f)}`)}"><span class="f ${fcls(f)}">${f === 1 ? "" : fl(f)}</span></td>`; }).join("")}</tr>`).join("")}</table></div>
       <p class="hint">Zeile: angreifender Typ, Spalte: Mitglied. Klick hält Zeile oder Spalte fest.</p></details>`;
-  crossTable($("#matrix"), MPIN);
+  crossTable($("#matrix"), MPIN, null, false);      // 0.49: ohne Markier-Zeichen, Klick auf Kopf oder Zelle genügt
   $("#ev details").open = store.get("matrixOpen", false);
   $("#ev details").addEventListener("toggle", (e) => store.set("matrixOpen", e.target.open));
   // Wo ein Vorschlag vom Team abweicht, ist die Zeile dezent hinterlegt; „passt so“ bleibt blass
@@ -2471,10 +2488,13 @@ function mgMd(text, slug) {
   return out.join("");
 }
 // Anfangszoom je Spiel (oder Spiel/Karte): Stufen näher als „ganze Karte im Bild“, als Liste mit der Mitte in Anteilen
-const MGSTART = {"red-blue": 2, yellow: 2, "legends-arceus": 2, "firered-leafgreen": [2, 0.36, 0.36],
-  "gold-silver": 0, crystal: 0, "heartgold-soulsilver": 0, "omega-ruby-alpha-sapphire": 0, "lets-go-pikachu-lets-go-eevee": 0,
-  "sword-shield": 0, "the-isle-of-armor": 0, "the-crown-tundra": 0,
-  "ruby-sapphire": -1, emerald: -1, "diamond-pearl": [-1, 0.5, 0.4], platinum: [-1, 0.5, 0.4],
+// 0.49: nach Rückmeldung vom 12.11. abends (eine Mausrad-Raste = eine halbe Stufe)
+const MGSTART = {"red-blue": 2, yellow: 2, "legends-arceus": 2, "firered-leafgreen": [1.5, 0.33, 0.45],
+  "gold-silver": 1, crystal: 1, "heartgold-soulsilver": 0, "omega-ruby-alpha-sapphire": 0, "lets-go-pikachu-lets-go-eevee": 0.75,
+  "sword-shield": 0.5, "the-isle-of-armor": 0.5, "the-crown-tundra": 0.5,
+  "scarlet-violet": 2, "the-teal-mask": 2, "the-indigo-disk": 2.5, "legends-za": [1.25, 0.45, 0.5], "mega-dimension": [1.25, 0.45, 0.5],
+  pokopia: [1.5, 0.56, 0.44],
+  "ruby-sapphire": 0.5, emerald: 0.5, "diamond-pearl": [0.5, 0.5, 0.4], platinum: [0.5, 0.5, 0.4],
   "heartgold-soulsilver/im-johto": 1, "heartgold-soulsilver/im-kanto": 1,   // große Weltkarten (IronMON): bildfüllend
   "sword-shield/rn-wa": 0, "the-isle-of-armor/rn-ioa": 0, "the-crown-tundra/rn-ct": 0};   // Raid-Nester: ganzes Gebiet
 const mgProj = (lat, lng, z) => {
@@ -4100,7 +4120,8 @@ async function diag(start = true) {
     const el = $("#diag"), sub = $("#diagsub");
     if (!el) return;                           // andere Seite: beim nächsten Öffnen der Einstellungen weiter
     if (!d) { setTimeout(poll, 3000); return; } // Dienst gerade beschäftigt oder Netz weg: nicht aufgeben
-    const hint = $("summary .hint", sub);
+    const hint = $("summary .hint", sub), btn = $('[data-act="diag"]');
+    if (btn) { btn.disabled = !!d.running; btn.textContent = d.running ? "Test läuft …" : "Verbindung testen"; }   // 0.49: nicht doppelt starten
     if (d.running) {
       const pc = d.gesamt ? Math.round(d.fertig / d.gesamt * 100) : 0;
       hint.textContent = d.gesamt ? `läuft … ${d.fertig} von ${d.gesamt}` : "läuft …";
@@ -4141,6 +4162,7 @@ document.addEventListener("click", async (e) => {
       if (slot >= 0) removeSlot(slot); if (location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${DETAIL?.id || ""}`; }
     else if (act === "fav") await toggleFav(id);
     else if (act === "reqdone") await toggleReq(b.dataset.id);
+    else if (act === "rsdone") await toggleResearch(b);
     else if (act === "cmpclear") { store.set("cmpMerk", []); redrawMarks(); compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "cmpmark") { cmpToggle(id); redrawMarks(); if (location.hash.startsWith("#vergleich")) compareView(...location.hash.split("/").slice(1, 3)); }
     else if (act === "favadd") { $("#pick").hidden = true; await toggleFav(id, true); }

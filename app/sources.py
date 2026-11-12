@@ -12,11 +12,22 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.48.9"
+VERSION = "0.49.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.49.0", "12.11.2026", [
+        "Karten: der interne Fehler (AttributeError) bei Colosseum, XD, HeartGold/SoulSilver, Schwarz/Weiß 1 und 2, X/Y, ORAS und "
+        "Strahlender Diamant/Leuchtende Perle ist behoben",
+        "Karten: Startzoom je Spiel angepasst (näher heran, bei Feuerrot/Blattgrün, Z-A und Pokopia auch ein anderer Ausschnitt)",
+        "Forschungsaufgaben in Legenden: Arceus: Klick auf eine Stufe hakt sie ab (bis dahin erreicht, dezent grün), "
+        "die Punkte bis Level 10 stehen darunter; neue Sortierung „Offene Forschung“ in der Liste",
+        "Team: die Spalte mit der Typwirkung je Mitglied ist breiter, ohne Markier-Knöpfe; bei „bessere Alternative“ "
+        "ein Häkchen hinter dem Stern statt „Tauschen“",
+        "Einstellungen: „Verbindung testen“ ist gesperrt, solange der Test läuft",
+        "Pokémon-Karten: α 1 px näher am Ball",
+    ]),
     ("0.48.9", "12.11.2026", [
         "Fangchance in den übrigen Spielen mit allen Bällen des Spiels: Netz-, Turbo-, Mond-, Schwer- und Ultraball, wo sie beim Pokémon wirken, "
         "dazu Tauch-, Finster-, Flott-, Timer-, Nest-, Wieder-, Köder-, Traum-, Level- und Sympaball mit ihrer Bedingung; Faktoren je Generation",
