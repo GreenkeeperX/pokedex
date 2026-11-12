@@ -69,7 +69,9 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Eigentyp-Faktor, physisch/speziell, Schwächen), Verteidigung je Angriffstyp, Fähigkeiten, Attacken (nur A, beide, nur B).
 - Typtabelle: Typfilter je Tabelle (`typeFilter`; `chartPick` Zeilen der Typtabelle, `combosPick` Kombinationen mit allen
   gewählten Typen, `ttPickd`/`ttPicka` Spalten der Team-Tabellen); Zählspalten farbig (`cntTd`, `DEFC`, `ATTC`).
-- Einstellungen: `details.sub` (Quellen, Verbindungstest, Protokoll) im Kasten Abgleich; Sicherung mit Spieldaten in einem Kasten.
+- Einstellungen: im Kasten Abgleich oben der Zeitplan, dann `details.sub` (Quellen mit farbigen Zählern `.badge`,
+  Verbindungstest mit Fortschrittsbalken, Protokoll); „kopieren“ und „herunterladen“ stehen im Kopf (`.slinks`), Knöpfe
+  dort klappen nicht. Sicherung mit Spieldaten in einem Kasten.
 - Map Genie: Kachelebene `.mgtiles`, beim Zoomen bleibt das alte Bild in `.mgold` (skaliert), bis alle neuen Kacheln da sind;
   `.mgload` zählt offene Kacheln; danach lädt der Browser Nachbarn und die Stufen ±1 vor (`warm`). `#mgstock` zeigt den Vorrat.
 - Typkombinationen (`combosHtml`, unter der Typtabelle, aufklappbar `combosOpen`, nicht bei „Mein Team“): Sicht `combosSicht`

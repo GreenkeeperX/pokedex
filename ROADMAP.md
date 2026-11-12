@@ -1,5 +1,12 @@
 # Roadmap
 
+## 0.35.0 (12.11.2026)
+
+- Verbindungstest parallel je Server (`abruf.diagnose(proben, stand)`, ein Thread je Server, Pausen aus `DIAG_PAUSE`),
+  Fortschritt über `/api/diag` (`gesamt`, `fertig`, `laeuft`, `start`, `dauer`); die Oberfläche nimmt einen laufenden
+  Test beim Öffnen der Einstellungen wieder auf
+- Einstellungen: Zeitplan oben, farbige Zähler bei den Quellen, „kopieren“ im Kopf von Protokoll und Verbindungstest
+
 ## 0.34.0 (12.11.2026)
 
 - Rechenweg-Tooltips für die Fangchance (`catchTip`, Zeilen tragen `faktor`, `mehr.fang_gen`) und die Initiative-Liste

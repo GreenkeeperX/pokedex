@@ -933,6 +933,23 @@ class Abgleich(TempData):
         self.assertTrue(src.blocked)
         self.assertEqual(src.n, 1)                       # nach der Sperre keine weitere Anfrage
 
+    def test_verbindungstest_parallel(self):
+        # alle Server gleichzeitig, jeder für sich nacheinander; Zeilen in der Reihenfolge der Abfragen, Fortschritt zählt mit
+        seen = []
+        def fake(url, timeout=40, encoding="", headers=None, raw=False):
+            seen.append(url)
+            return {"error": "", "status": 404, "server": "x", "text": "nicht da", "body": b""}
+        stand, proben = {}, {}
+        with mock.patch.object(sources, "request", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            lines = abruf.diagnose(proben, stand)
+        self.assertEqual(stand["fertig"], stand["gesamt"])
+        self.assertEqual(stand["laeuft"], [])
+        self.assertEqual(len(seen), stand["gesamt"])
+        self.assertGreater(stand["gesamt"], 100)
+        heute = lines.index("== Heutige Quellen")
+        self.assertTrue(lines[heute + 1].startswith("GitHub-API, Dateiliste PokéAPI: HTTP 404"))
+        self.assertFalse(any(x.endswith(": keine Antwort") for x in lines))
+
     def test_lauf_ohne_quellen_behaelt_alte_daten(self):
         def fake(url, timeout=40, headers=None, raw=False):
             raise sources.FetchError(url, 404)

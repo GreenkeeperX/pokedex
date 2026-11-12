@@ -3433,21 +3433,21 @@ async function settingsView() {
       ${st.built ? `<br>Datenbank gebaut: ${esc(deTime(st.built))}` : ""}
       ${bad.length ? `<br><b class="errc">${bad.length} ${bad.length === 1 ? "Quelle" : "Quellen"} mit Problem</b> (${esc(bad.join(", "))})` : ""}</p>
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
-      ${srcKeys.length ? `<details class="sub"${bad.length ? " open" : ""}><summary><b>Quellen</b> <span class="hint">${[okN && `${okN} ok`, bad.length && `${bad.length} mit Problem`].filter(Boolean).join(", ")}</span></summary>
-      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("itemhq", "Große Item-Bilder")}${srcRow("mapgenie", "Map Genie")}${srcRow("smogon", "Smogon")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table></details>` : ""}
-      <div class="bar"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
-        <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button>
-        <button data-act="diag" data-tip="Fragt jede Quelle einmal an, auch mögliche neue (Items, Fundorte, Wikis, Kampfdaten, Karten), und beschreibt die Antwort. Speichert nichts; dauert etwa eine Minute">Verbindung testen</button></div>
-      <details class="sub nosep" id="diagsub"><summary><b>Verbindungstest</b> <span class="hint">noch nicht gestartet</span></summary>
-        <div class="bar slim"><span id="dlinks"></span></div><div id="diag"><p class="hint">„Verbindung testen“ fragt jede Quelle einmal an; Probe-Seiten lassen sich danach herunterladen.</p></div></details>
-      <details class="sub"${st.ok === false || st.running ? " open" : ""}><summary><b>Protokoll</b> <span class="hint">${st.started ? esc(deTime(st.started)) + (st.ok === false ? ", mit Fehlern" : "") : "noch keins"}</span></summary>
-        ${(st.log || []).length ? `<div class="bar slim"><button class="link" data-act="copy" data-src="#plog">kopieren</button> · <button class="link" data-act="dl" data-src="#plog" data-name="pokedex-protokoll">herunterladen</button></div>` : ""}
-        <div class="log" id="plog">${esc((st.log || []).map(logLocal).join("\n") || "Noch kein Lauf.")}</div></details>
-      <h3>Zeitplan</h3>
+      <div class="plan"><h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
         <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
       <div class="bar"><label><input type="checkbox" id="sprites"${s.sprites ? " checked" : ""}> Bilder laden (Sprites 96 × 96 und offizielle Artworks 475 × 475, zusammen gut 180 MB; dazu schillernde und animierte Sprites, Rufe und Item-Bilder, gut 45 MB)</label></div>
-      <p class="hint">Ändert sich bei keiner Quelle etwas, bleibt die Datenbank. Eine neue gilt erst nach bestandener Selbstprüfung; deine Teams liegen getrennt (user.db) und werden täglich gesichert.</p>
+      <p class="hint">Ändert sich bei keiner Quelle etwas, bleibt die Datenbank. Eine neue gilt erst nach bestandener Selbstprüfung; deine Teams liegen getrennt (user.db) und werden täglich gesichert.</p></div>
+      ${srcKeys.length ? `<details class="sub"${bad.length ? " open" : ""}><summary><b>Quellen</b> ${okN ? `<span class="badge ok">${okN} ok</span>` : ""}${bad.length ? `<span class="badge bad">${bad.length} mit Problem</span>` : ""}</summary>
+      <table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Abrufe</th><th>Fehler</th><th>Zeit</th></tr>${srcRow("pokeapi", "PokéAPI")}${srcRow("showdown", "Showdown")}${srcRow("pkhex", "PKHeX")}${srcRow("spawns", "Spawnpunkte")}${srcRow("karten", "Kartenbilder")}${srcRow("sprites", "Bilder")}${srcRow("extras", "Extras")}${srcRow("itemhq", "Große Item-Bilder")}${srcRow("mapgenie", "Map Genie")}${srcRow("smogon", "Smogon")}${srcRow("pokewiki", "PokéWiki")}${srcRow("altissimo", "Altissimo")}${srcRow("companion", "PLA Companion")}</table></details>` : ""}
+      <div class="bar acts"><button class="primary" data-act="sync"${st.running ? " disabled" : ""}>Jetzt abgleichen</button>
+        <button data-act="rebuild"${st.running ? " disabled" : ""} data-tip="Auch ohne Änderung neu bauen">Neu bauen</button>
+        <button data-act="diag" data-tip="Fragt jede Quelle einmal an, auch mögliche neue (Items, Fundorte, Wikis, Kampfdaten, Karten), und beschreibt die Antwort. Verschiedene Server gleichzeitig, jeden für sich mit Pause. Speichert nichts und läuft weiter, wenn du den Reiter wechselst">Verbindung testen</button></div>
+      <details class="sub nosep" id="diagsub"><summary><b>Verbindungstest</b> <span class="hint">noch nicht gestartet</span><span id="dlinks" class="slinks"></span></summary>
+        <div id="diag"><p class="hint">„Verbindung testen“ fragt jede Quelle einmal an; Probe-Seiten lassen sich danach herunterladen.</p></div></details>
+      <details class="sub"${st.ok === false || st.running ? " open" : ""}><summary><b>Protokoll</b> <span class="hint">${st.started ? esc(deTime(st.started)) + (st.ok === false ? ", mit Fehlern" : "") : "noch keins"}</span>
+        ${(st.log || []).length ? `<span class="slinks"><button class="link" data-act="copy" data-src="#plog">kopieren</button> · <button class="link" data-act="dl" data-src="#plog" data-name="pokedex-protokoll">herunterladen</button></span>` : ""}</summary>
+        <div class="log" id="plog">${esc((st.log || []).map(logLocal).join("\n") || "Noch kein Lauf.")}</div></details>
       <details class="sub"><summary><b>Quellen und Lizenzen</b> <span class="hint">Pokédex ${esc(S.meta?.version || "")}</span></summary>
       <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
         <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
@@ -3493,6 +3493,7 @@ async function settingsView() {
         <li>Dann die Seite öffnen (etwa eine Karte im PokéWiki, bei Serebii, GamerGuides oder Pokébip), warten, bis die Karte steht, und das Lesezeichen anklicken.</li></ul></div>`;
   $$("h2.sect", main).forEach((h) => h.remove());       // die Leiste oben ersetzt die Zwischenüberschriften
   foldBoxes(main);
+  diag(false);                                          // laufenden Test oder letztes Ergebnis zeigen
   const saveSet = async () => {
     S.meta.einstellungen = await api("/api/einstellungen", {auto: $("#auto").checked, tage: +$("#tage").value, sprites: $("#sprites").checked});
   };
@@ -3601,20 +3602,34 @@ function download(name, txt, type = "text/plain") {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
-async function diag() {
-  await api("/api/diag", {});
-  const sub = $("#diagsub");
-  if (sub) { sub.open = true; $("summary .hint", sub).textContent = "läuft …"; }
+/* Verbindungstest: läuft auf dem Server weiter, auch wenn du den Reiter wechselst; die Einstellungen zeigen beim
+   Öffnen den Stand (Fortschritt oder letztes Ergebnis) */
+let diagPoll = 0;
+async function diag(start = true) {
+  if (start) await api("/api/diag", {});
+  const sub = $("#diagsub"), my = ++diagPoll;
+  if (sub && start) sub.open = true;
   const poll = async () => {
-    const d = await api("/api/diag");
-    const el = $("#diag");
-    if (!el) return;
-    if (d.running) { el.innerHTML = `<p class="hint">Läuft …</p>`; setTimeout(poll, 1500); return; }
+    if (my !== diagPoll) return;
+    const d = await api("/api/diag").catch(() => null);
+    const el = $("#diag"), sub = $("#diagsub");
+    if (!el || !d) return;
+    const hint = $("summary .hint", sub);
+    if (d.running) {
+      const pc = d.gesamt ? Math.round(d.fertig / d.gesamt * 100) : 0;
+      hint.textContent = d.gesamt ? `läuft … ${d.fertig} von ${d.gesamt}` : "läuft …";
+      el.innerHTML = `<div class="dprog"><i style="width:${pc}%"></i></div><p class="hint">${d.gesamt ? `${d.fertig} von ${d.gesamt} Abfragen fertig. ` : ""}${d.laeuft?.length ? "Gerade: " + esc(d.laeuft.join(" · ")) : d.gesamt ? "Wartet auf die Pause zwischen zwei Abfragen am selben Server." : ""}</p>`;
+      $("#dlinks").innerHTML = "";
+      setTimeout(poll, 1000); return;
+    }
+    if (!d.lines && !d.error) return;          // noch kein Test seit dem Start des Dienstes
     el.innerHTML = `<div class="log" id="dlog">${esc((d.lines || []).join("\n") || d.error)}</div>`;
-    if (sub) $("summary .hint", sub).textContent = (d.lines || []).length ? `${d.lines.length} Zeilen` : "ohne Ergebnis";
+    const bad = (d.lines || []).filter((x) => /keine Verbindung|gesperrt|Prüfseite|HTTP [45]\d\d|Fehler im Test/.test(x)).length;
+    hint.textContent = (d.lines || []).length ? `${d.dauer != null ? `${Math.floor(d.dauer / 60)}:${String(d.dauer % 60).padStart(2, "0")} min, ` : ""}${bad ? `${bad} von ${d.gesamt} ohne Erfolg` : `${d.gesamt} ok`}` : "ohne Ergebnis";
+    hint.dataset.tip = d.start ? `Gestartet ${deTime(d.start)}; ${d.gesamt} Abfragen` : "";
     // Kopieren und Herunterladen erst, wenn es ein Ergebnis gibt
-    $("#dlinks").innerHTML = (d.lines || []).length ? `<button class="link" data-act="copy" data-src="#dlog">Ergebnis kopieren</button> <button class="link" data-act="dl" data-src="#dlog" data-name="pokedex-verbindungstest">herunterladen</button>`
-      + (d.proben ? ` <a href="/api/diag/proben" download data-tip="Gekürzte Rohseiten der Quellen (${d.proben}), aus denen sich Leser für sie bauen lassen">Proben herunterladen</a>` : "") : "";
+    $("#dlinks").innerHTML = (d.lines || []).length ? `<button class="link" data-act="copy" data-src="#dlog">kopieren</button> · <button class="link" data-act="dl" data-src="#dlog" data-name="pokedex-verbindungstest">herunterladen</button>`
+      + (d.proben ? ` · <a href="/api/diag/proben" download data-tip="Gekürzte Rohseiten der Quellen (${d.proben}), aus denen sich Leser für sie bauen lassen. Liegen nur im Speicher des Dienstes; der nächste Test ersetzt sie">Proben</a>` : "") : "";
   };
   poll();
 }
@@ -3624,7 +3639,7 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-act]");
   if (!b) return;
   const act = b.dataset.act, id = +b.dataset.id;
-  if (b.closest("a")) e.preventDefault();       // „+“ auf einer Karte öffnet nicht die Detailseite
+  if (b.closest("a") || b.closest("summary")) e.preventDefault();       // „+“ auf einer Karte öffnet nicht die Detailseite; Knöpfe im Kopf klappen nicht
   try {
     if (act === "thm") themeMenu($("#thmMenu").hidden);
     else if (act === "thmset") setTheme(b.dataset.v);

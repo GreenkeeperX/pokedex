@@ -1340,33 +1340,68 @@ PKHEX_GAMES = {"brilliant-diamond-shining-pearl": ("legality/wild/Gen8/encounter
                "mega-dimension": ("legality/wild/Gen9/encounter_hyperspace_za.pkl", "text/locations/gen9a/text_za_00000_de.txt", "")}
 
 
-def diagnose(proben=None):
+# Pausen im Verbindungstest je Server (sonst PAUSE): wer beim Abgleich langsamer abgefragt wird, auch hier
+DIAG_PAUSE = {"www.serebii.net": SEREBII_PAUSE, "www.pokewiki.de": WIKI_PAUSE, "mapgenie.io": MG_PAUSE}
+
+
+def diagnose(proben=None, stand=None):
     """Verbindung testen: jede Quelle einmal abfragen und beschreiben, was zurückkommt. Speichert nichts.
-    proben: dict, in das Probe-Seiten (gekürzt) kommen, damit sich Leser für neue Quellen bauen lassen."""
+    proben: dict, in das Probe-Seiten (gekürzt) kommen, damit sich Leser für neue Quellen bauen lassen.
+    stand: dict für den Fortschritt (gesamt, fertig, laeuft: Namen der Abfragen, die gerade laufen).
+    Verschiedene Server fragt der Test gleichzeitig an, jeden Server für sich nacheinander und mit Pause;
+    die Zeilen bleiben in der Reihenfolge der Abfragen."""
+    import concurrent.futures as cf
     lines = [f"Pokédex {sources.VERSION}, Test vom {now().strftime('%d.%m.%Y %H:%M')} UTC"]
     proben = {} if proben is None else proben
+    stand = {} if stand is None else stand
+    stand.update(gesamt=0, fertig=0, laeuft=[])
     html = {"Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"}
+    lock, pools, futs = threading.Lock(), {}, []
+
+    def one(slot, name, url, info, raw, keep, headers, pause):
+        with lock:
+            stand["laeuft"].append(name)
+        r = None
+        try:
+            r = sources.request(url, raw=raw, headers=headers)
+            if r["error"]:
+                lines[slot] = f"{name}: keine Verbindung ({r['error']})"
+                return None
+            size = len(r.get("body", b"")) if raw else len(r["text"])
+            head = f"{name}: HTTP {r['status']}, Server {r['server'] or '?'}, {size} {'Bytes' if raw else 'Zeichen'}"
+            if r["status"] >= 400 or (not raw and sources.challenge(r["text"])):
+                lines[slot] = (head + (", gesperrt" if r["status"] in sources.BLOCKED else "") +
+                               (", Prüfseite (Cloudflare)" if not raw and sources.challenge(r["text"]) else "") +
+                               ("" if raw else f". Anfang: {' '.join(r['text'][:160].split())}"))
+                return None
+            try:
+                lines[slot] = f"{head}, {info(r.get('body') if raw else r['text'])}"
+            except Exception as e:
+                lines[slot] = f"{head}, nicht auswertbar ({type(e).__name__}: {e})"
+            if keep and not raw:
+                proben[name] = r["text"][:keep if keep is not True else PROBE_MAX]
+            return r
+        except Exception as e:
+            lines[slot] = f"{name}: Fehler im Test ({type(e).__name__}: {e})"
+            return None
+        finally:
+            with lock:
+                stand["laeuft"].remove(name)
+                stand["fertig"] += 1
+            if r is not None and not r.get("error"):
+                sleep(pause)
 
     def probe(name, url, info, raw=False, keep=False, headers=None):
-        r = sources.request(url, raw=raw, headers=headers)
-        if r["error"]:
-            lines.append(f"{name}: keine Verbindung ({r['error']})")
-            return None
-        size = len(r.get("body", b"")) if raw else len(r["text"])
-        head = f"{name}: HTTP {r['status']}, Server {r['server'] or '?'}, {size} {'Bytes' if raw else 'Zeichen'}"
-        if r["status"] >= 400 or (not raw and sources.challenge(r["text"])):
-            lines.append(head + (", gesperrt" if r["status"] in sources.BLOCKED else "") +
-                         (", Prüfseite (Cloudflare)" if not raw and sources.challenge(r["text"]) else "") +
-                         ("" if raw else f". Anfang: {' '.join(r['text'][:160].split())}"))
-            return None
-        try:
-            lines.append(f"{head}, {info(r.get('body') if raw else r['text'])}")
-        except Exception as e:
-            lines.append(f"{head}, nicht auswertbar ({type(e).__name__}: {e})")
-        if keep and not raw:
-            proben[name] = r["text"][:keep if keep is not True else PROBE_MAX]
-        sleep(PAUSE)
-        return r
+        """Reiht die Abfrage beim Server ein; gibt ein Future zurück (.result(): Antwort oder None)."""
+        host = urllib.parse.urlsplit(url).hostname or ""
+        if host not in pools:
+            pools[host] = cf.ThreadPoolExecutor(1, thread_name_prefix="test-" + host)
+        lines.append(f"{name}: keine Antwort")
+        with lock:
+            stand["gesamt"] += 1
+        f = pools[host].submit(one, len(lines) - 1, name, url, info, raw, keep, headers, DIAG_PAUSE.get(host, PAUSE))
+        futs.append(f)
+        return f
 
     def section(title):
         lines.append("")
@@ -1745,7 +1780,7 @@ def diagnose(proben=None):
     ign_js = set()
     for name, url in (("IGN, Galar (ganz)", "https://www.ign.com/maps/pokemon-sword-shield/galar"),
                       ("IGN, Let’s Go Kanto (ganz)", "https://www.ign.com/maps/pokemon-lets-go-pikachu-eevee/kanto")):
-        r = probe(name, url, ign_info, keep=600_000, headers=html)
+        r = probe(name, url, ign_info, keep=600_000, headers=html).result()
         if r:
             ign_js.update(u for u in re.findall(r'<script src="(https://kraken\.ignimgs\.com/_next/static/chunks/[^"]+\.js)"', r["text"])
                           if "polyfills" not in u and "framework" not in u)
@@ -1777,6 +1812,9 @@ def diagnose(proben=None):
     probe("Showdown, Random-Battle-Sets Gen 9", SD_RAW + "random-battles/gen9/sets.json",
           lambda t: f"{len(json.loads(t))} Pokémon mit Rollen und Attacken")
     probe("Showdown, abilities.ts", SD_RAW + "abilities.ts", lambda t: f"{t.count('num:')} Fähigkeiten mit Wirkung im Code")
+    cf.wait(futs)
+    for p in pools.values():
+        p.shutdown()
     if proben:
         lines.append("")
         lines.append(f"{len(proben)} Probe-Seiten zum Herunterladen (Knopf „Proben herunterladen“).")
