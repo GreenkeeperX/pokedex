@@ -1185,6 +1185,16 @@ def mg_map(m, spiel, stamp=None):
     hit = _MERGED.setdefault("maps", {})
     if key in hit:
         return hit[key]
+    with _MERGE_LOCK:              # 0.52: Vorbereiten im Hintergrund und erste Anfrage rechnen nicht doppelt
+        if key in hit:
+            return hit[key]
+        return _mg_map(m, spiel, stamp, key, hit)
+
+
+_MERGE_LOCK = threading.Lock()
+
+
+def _mg_map(m, spiel, stamp, key, hit):
     own = mg_overlay(m, stamp) if spiel == "legends-arceus" else None
     r = mapgenie.merge(m, own, mg_names())
     if spiel in QUEST_GAMES:

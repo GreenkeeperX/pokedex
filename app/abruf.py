@@ -10,6 +10,7 @@ Ablauf: Hat sich bei keiner Quelle etwas geändert, wird nichts neu gebaut. Sons
 in einer eigenen Datei und ersetzt die alte erst nach bestandener Selbstprüfung. Scheitert etwas, bleibt die
 alte Datenbank. Nach einer Sperre (HTTP 403, 429) oder Prüfseite ruht eine Quelle REST_H Stunden.
 """
+import base64
 import gzip
 import hashlib
 import json
@@ -2136,6 +2137,8 @@ def diagnose(proben=None, stand=None):
                 lines[slot] = f"{head}, nicht auswertbar ({type(e).__name__}: {e})"
             if keep and not raw:
                 proben[name] = r["text"][:keep if keep is not True else PROBE_MAX]
+            elif keep and raw:                 # 0.52: Bilder für die Auswertung als base64 mitnehmen
+                proben[name] = "base64:" + base64.b64encode(r.get("body", b"")[:keep if keep is not True else PROBE_MAX]).decode("ascii")
             return r
         except Exception as e:
             lines[slot] = f"{name}: Fehler im Test ({type(e).__name__}: {e})"
@@ -2782,6 +2785,45 @@ def diagnose(proben=None, stand=None):
           lambda t: f"{t.count('<area')} Flächen, {len(set(img_rx.findall(t)))} Bilder: {', '.join(sorted(set(img_rx.findall(t)))[:8])}", keep=True, headers=html)
     probe("Bulbapedia-Archiv, Regionskarten mit Größe", "https://archives.bulbagarden.net/w/api.php?action=query&prop=imageinfo"
           "&iiprop=size|url&format=json&titles=" + urllib.parse.quote("|".join("File:" + b for b in bulba)), sizes, keep=True)
+
+    section("Alola und die Quellen der Liste vom 12.11. (anderssprachige Wikis, pokemon.com)")
+    # 0.52: PokéWiki hat je Ort ein Inselbild mit hervorgehobenem Ort (94 Bilder, 270 px): Vergleich mit dem leeren
+    # Inselbild ergibt die Lage. Dazu die größeren Inselkarten von Bulbapedia, um zu sehen, ob beide zusammenpassen
+    pw_img = "https://www.pokewiki.de/images/"
+    for path, name in (("f/fe/USUM-Map_Mele-Mele.png", "Mele-Mele leer"), ("3/39/USUM-Map_Mele-Mele_Lili%E2%80%99i.png", "Mele-Mele Lili’i"),
+                       ("1/19/USUM-Map_Mele-Mele_Route_1_%28Alola%29.png", "Mele-Mele Route 1"), ("0/0a/USUM-Map_Ula-Ula.png", "Ula-Ula leer"),
+                       ("6/66/USUM-Map_Ula-Ula_Route_10_%28Alola%29.png", "Ula-Ula Route 10"), ("9/98/USUM-Map_Akala.png", "Akala leer"),
+                       ("e/e1/USUM-Map_Poni.png", "Poni leer"), ("1/14/USUM-Global-Map_Mele-Mele.png", "Übersicht Mele-Mele")):
+        probe(f"PokéWiki, Inselbild {name}", pw_img + path, img_info, raw=True, keep=True)
+    for f in ("Melemele Island Map 2.png", "Ula'ula Island Map 2.png", "Poni Island Map 2.png"):
+        probe(f"Bulbapedia-Archiv, Bild {f}", "https://archives.bulbagarden.net/wiki/Special:FilePath/" + urllib.parse.quote(f),
+              img_info, raw=True, keep=True)
+    probe("Bulbapedia-Archiv, Suche Akala Island Map", "https://archives.bulbagarden.net/w/api.php?action=query&list=allimages"
+          "&aiprefix=Akala&aiprop=size|url&ailimit=50&format=json&formatversion=2", sizes, keep=True)
+    # die anderssprachigen Wikis (alle MediaWiki): Seite der Region und einer Insel als Wikitext, Bildkarten (imagemap)?
+    def wiki_maps(text):
+        j = json.loads(text)
+        if "parse" not in j:
+            return f"Seite gibt es nicht ({(j.get('error') or {}).get('code', '?')})"
+        p = j["parse"]
+        wt = p["wikitext"]["*"] if isinstance(p["wikitext"], dict) else p["wikitext"]
+        files = sorted(set(re.findall(r"(?:File|Datei|Fichier|Archivo|Immagine|文件|ファイル|Image):([^|\]\n]+\.(?:png|jpe?g|gif))", wt, re.I)))
+        return (f"Seite „{p['title']}“, {len(wt)} Zeichen, {wt.count('<imagemap')} Bildkarten, {wt.count('rect ') + wt.count('poly ')} Flächen; "
+                f"Bilder: {', '.join(files[:12])}")
+    wikis = (("Poképédia (FR)", "https://www.pokepedia.fr/api.php", ("Alola", "Île de Mele-Mele")),
+             ("WikiDex (ES)", "https://www.wikidex.net/api.php", ("Alola", "Isla Melemele")),
+             ("Pokémon Central (IT)", "https://wiki.pokemoncentral.it/api.php", ("Alola", "Mele Mele")),
+             ("52poke (CN)", "https://wiki.52poke.com/api.php", ("阿罗拉地区", "美乐美乐岛")),
+             ("ポケモンWiki (JA)", "https://wiki.xn--rckteqa2e.com/w/api.php", ("アローラ地方", "メレメレ島")))
+    for wname, api, pages in wikis:
+        probe(f"{wname}, API", api + "?action=query&meta=siteinfo&format=json", wiki_info)
+        for page in pages:
+            probe(f"{wname}, Seite {page}", api + "?action=parse&page=" + urllib.parse.quote(page) + "&prop=wikitext&format=json&redirects=1",
+                  wiki_maps, keep=300_000)
+    probe("pokemon.com, Pokédex-Daten", "https://www.pokemon.com/us/api/pokedex/kalos",
+          lambda t: f"{len(json.loads(t))} Einträge, Felder: {', '.join(sorted(json.loads(t)[0])) if json.loads(t) else '-'}", keep=60_000)
+    probe("pokemon.com, Pokédex-Seite Bisasam (DE)", "https://www.pokemon.com/de/pokedex/bisasam",
+          lambda t: f"{len(t)} Zeichen, Titel: {(re.search(r'<title>([^<]*)', t) or [None, '?'])[1].strip()}", keep=150_000, headers=html)
 
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",

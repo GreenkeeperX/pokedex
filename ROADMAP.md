@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.52.0 (12.11.2026)
+
+- Karten: `server._warm_loop` bereitet `WARM_GAMES` (Legenden: Arceus) beim Start und nach jedem Abgleich vor, mit gzip;
+  `abfragen.mg_map` rechnet unter einer Sperre (Hintergrund und erste Anfrage nicht doppelt).
+- Alola: PokéWiki-Inselbilder je Ort (USUM-Map Insel Ort.png, 270 px) gegen das leere Inselbild vergleichen → Lage der Orte;
+  Proben (base64) im nächsten Verbindungstest, ebenso Bulbapedia „Island Map 2“ (650–750 px).
+- Quellen der Liste vom 12.11.: Poképédia, WikiDex, Pokémon Central, 52poke, ポケモンWiki, pokemon.com als Proben;
+  danach ins Quellenprotokoll. Reddit bewusst nicht (keine strukturierten Daten).
+
 ## 0.51.0 (12.11.2026)
 
 - Shiny-Sperren: `app/shiny.py` (Parser), `abruf._shiny` (alle 30 Tage), Tabelle `shinysperre`, `/api/shinysperre`,

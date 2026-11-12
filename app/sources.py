@@ -12,11 +12,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.51.0"
+VERSION = "0.52.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.52.0", "12.11.2026", [
+        "Karte Legenden: Arceus öffnet schneller: der Server führt die Karten schon beim Start und nach jedem Abgleich im "
+        "Hintergrund zusammen und packt sie vor; das Protokoll des Containers nennt die Dauer („Karte vorbereitet …“)",
+        "Verbindungstest: neue Proben für Alola (Inselbilder mit hervorgehobenen Orten aus dem PokéWiki, Inselkarten von Bulbapedia) "
+        "und für die Wikis auf Französisch, Spanisch, Italienisch, Chinesisch und Japanisch sowie pokemon.com",
+    ]),
     ("0.51.0", "12.11.2026", [
         "Shiny-Sperren für alle Spiele (Quelle: Bulbapedia): gibt es ein Pokémon im Spiel gar nicht schillernd, überspringt der "
         "Klick am Pokéball „schillernd“; geht es nur per Tausch oder Verteilung, bleibt es markierbar und der Tooltip sagt es",
