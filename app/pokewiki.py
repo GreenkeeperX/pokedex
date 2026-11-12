@@ -421,7 +421,9 @@ def za_missions(wt):
 # ---- Trainer mit Team (Arenaleiter, Top Vier, Champs, Rivalen): Vorlagen Team/Kopf und Team/Zeile
 
 TRAINER_CATS = {"Arenaleiter": "Arenaleiter", "Top Vier": "Top Vier", "Champ": "Champ", "Rivale": "Rivale",
-                "Ort aus einem Hauptspiel": "Trainer"}
+                "Ort aus einem Hauptspiel": "Trainer",
+                # 0.48.6: Legenden: Arceus hat keine Arenen; seine Kämpfe (Wächter, Clanführer, Rivale) stehen bei den Charakteren
+                "Charakter aus Hisui": "Trainer"}
 # Rolle der Ortsseiten (Routen, Höhlen, Städte): dort heißt der Trainer „Name“, „Trainername“ ist das Bild der Klasse
 ORT_ROLLE = "Trainer"
 # Kürzel im Parameter Edition (klein, ohne Zeichen dazwischen) → Spiele

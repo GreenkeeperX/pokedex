@@ -827,9 +827,13 @@ function noData() {
     <a class="btn" href="#einstellungen">Protokoll ansehen</a></div>`;
   if (a.running) setTimeout(refreshMeta, 5000);
 }
+let LOADED_VER = null;     // Version, mit der diese Seite geladen wurde
 async function refreshMeta() {
   S.favGame = null; S.caughtGame = null;
   S.meta = await api("/api/meta");
+  // 0.48.6: Server inzwischen auf neuer Version (Update im Hintergrund): Seite neu laden, sonst bleiben altes CSS und JS
+  if (LOADED_VER && S.meta.version && S.meta.version !== LOADED_VER) { location.reload(); return; }
+  LOADED_VER = LOADED_VER || S.meta.version;
   S.types = Object.fromEntries((S.meta.typen || []).map((t) => [t.id, t.name]));
   header();
   if (S.meta.has_data || !S.meta.abgleich?.running) route(); else setTimeout(refreshMeta, 5000);
@@ -2382,7 +2386,7 @@ async function movesView() {
 }
 
 /* ------------------------------------------------------------------ Typtabelle */
-const PIN = {r: null, c: null}, MPIN = {r: null, c: null}, VPIN = {r: null, c: null}, APIN = {r: null, c: null}, IPIN = {r: null, c: null};
+const PIN = {r: null, c: null}, MPIN = {r: null, c: null}, VPIN = {r: null, c: null}, APIN = {r: null, c: null}, IPIN = {r: null, c: null}, XPIN = {r: null, c: null};
 let MSORT = {k: "", dir: ""};
 /* ------------------------------------------------------------------ Karte (Legenden: Arceus)
    Spielkoordinaten 0–1024; Welt in Pixeln = Koordinate × 2 (2048 px bei Zoom 2). Kacheln 256 px von Serebii, auf dem Server
@@ -2535,11 +2539,15 @@ async function mgConvert(d, slug, rid) {
     MGCONV = null;
   }
 }
+const MG_EDITION = {redblue: ["red-blue", "red-green-japan", "blue-japan"], yellow: ["yellow"]};   // Map-Genie-Karte → Editionen
 async function mgView(slug, want) {
   const rid = RID;
   const lst = await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({karten: []}));
   if (rid !== RID) return;
   if (!lst.karten.length) return S.game === "legends-arceus" ? mapView() : areasView();
+  // 0.48.6: Karten einer Schwester-Edition nicht anbieten (Rot/Blau zeigt nicht Gelb und umgekehrt), sonst blieb beim
+  // Spielwechsel die Karte der anderen Edition stehen
+  lst.karten = lst.karten.filter((k) => !MG_EDITION[k.slug] || MG_EDITION[k.slug].includes(S.game));
   const kk = "mgKarte:" + S.game;
   // Schwester-Editionen teilen sich ein Spiel bei Map Genie: anfangs die Karte, deren Kennung zur Edition passt (Gelb: yellow)
   const mine = lst.karten.find((k) => !/^(rb|se)-/.test(k.slug) && S.game.split("-").some((w) => w.length > 3 && k.slug.includes(w))) || lst.karten[0];
@@ -3619,7 +3627,8 @@ async function calcBox() {
     <div class="bar"><span class="seg"><button class="${o.ansicht === "alle" ? "" : "on"}" data-cv="eins" data-tip="Eine Attacke eines Mitglieds gegen alle Gegner, mit Balken und Treffern bis K.O.">eine Attacke</button><button class="${o.ansicht === "alle" ? "on" : ""}" data-cv="alle" data-tip="Jedes Mitglied gegen jeden Gegner mit seiner stärksten gewählten Attacke">Übersicht</button></span>
       ${o.ansicht === "alle" ? "" : `<span class="hint">Angreifer</span><span class="seg cslots">${t.ids.map((id, i) => dmg(i).length ? `<button class="${i === o.slot ? "on" : ""}" data-cslot="${i}" data-hc="${id}" data-slot="${i}" aria-label="${esc(ROWS[id]?.name || id)}">${img(id, "sm")}<span>${esc(ROWS[id]?.name || id)}</span></button>` : "").join("")}</span>
       <label>Attacke <select id="cmove">${dmg(o.slot).map((x) => `<option value="${x}"${x === o.move ? " selected" : ""}>${esc(A[x].name)} (${A[x].staerke})</option>`).join("")}</select></label>`}
-      <span class="brk"></span><label data-tip="${champ ? "Häufige Gegner: die 30 meistgenutzten Pokémon der Nutzungsstatistik von Smogon (unten unter „Häufige Gegner“)." : "Gegner von oben: die aus „Gegen Gegner“."} Mein Team: deine eigenen sechs. Favoriten: deine Favoriten in diesem Spiel. Eigene Auswahl: wen du selbst hinzufügst">gegen <select id="cgegen">${champ && (S.usageIds || []).length ? `<option value="smogon"${o.gegen === "smogon" ? " selected" : ""}>häufige Gegner (Top 30)</option>` : ""}
+      </div><div class="bar">
+      <label data-tip="${champ ? "Häufige Gegner: die 30 meistgenutzten Pokémon der Nutzungsstatistik von Smogon (unten unter „Häufige Gegner“)." : "Gegner von oben: die aus „Gegen Gegner“."} Mein Team: deine eigenen sechs. Favoriten: deine Favoriten in diesem Spiel. Eigene Auswahl: wen du selbst hinzufügst">gegen <select id="cgegen">${champ && (S.usageIds || []).length ? `<option value="smogon"${o.gegen === "smogon" ? " selected" : ""}>häufige Gegner (Top 30)</option>` : ""}
         ${!champ && S.foes.length ? `<option value="foes"${o.gegen === "foes" ? " selected" : ""}>Gegner von oben (${S.foes.length})</option>` : ""}
         <option value="team"${o.gegen === "team" ? " selected" : ""}>mein Team</option>${favIds.length ? `<option value="favs"${o.gegen === "favs" ? " selected" : ""}>Favoriten (${favIds.length})</option>` : ""}<option value="eigene"${o.gegen === "eigene" ? " selected" : ""}>eigene Auswahl (${own.length})</option></select></label>
       <label data-tip="${old ? "Ob die Verteidiger volle Stat Exp in KP und der passenden Verteidigung haben (DVs immer 15)" : "Wie viel die Verteidiger in KP und die passende Verteidigung stecken (252 EVs)"}">Gegner <select id="cvert">${[["0", "nicht investiert"], ["kp", "volle KP"], ["kp_vert", "volle KP und Verteidigung"]].map(([k, n]) => [k, r.art === "la" && k !== "0" ? n + " (Effort Level 10)" : r.art === "lgpe" && k !== "0" ? n + " (200 AVs)" : n]).map(([k, n]) => `<option value="${k}"${o.vert === k ? " selected" : ""}>${n}</option>`).join("")}</select></label>
@@ -3634,9 +3643,9 @@ async function calcBox() {
       ${rest}</p>`}
     ${o.gegen === "eigene" ? `<div class="bar logpick">${own.map((id) => `<span class="chip on" data-act="calcfoe" data-id="${id}" data-tip="Entfernen">${img(id, "sm")}${esc(ROWS[id]?.name || "#" + id)} ✕</span>`).join("")}
       <div class="ac"><input id="cfoeq" type="search" placeholder="Gegner hinzufügen" style="width:200px"></div></div>` : ""}
-    ${all ? `<div class="scroll"><table class="rows dmgx"><thead><tr><th></th>${all.gegner.map((g) => `<th class="c" data-hc="${g.id}">${img(g.id, "sm")}<div>${esc(g.name)}</div></th>`).join("")}</tr></thead>
-      <tbody>${all.rows.map((m) => `<tr><th class="nw" data-hc="${m.id}">${img(m.id, "sm")} ${esc(m.name)}</th>${m.zellen.map((x, k) => !x ? `<td class="c hint">–</td>`
-        : `<td class="c ${toneOf(x)}" ${tipRef(dmgTip({angreifer: m.name, attacke: x.attacke, level: x.level ?? r.level, gen: r.gen}, Object.assign({}, x, {name: all.gegner[k].name})) + `<div class="muted">${esc(ko(x))}</div>`)}><b>${pct(x.max_pct)} %</b><div class="hint">${esc(x.attacke)}</div></td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<div class="scroll sticky"><table class="rows sort dmg fixed"><colgroup><col style="width:26%"><col style="width:84px"><col style="width:180px"><col style="width:110px"><col style="width:120px"><col></colgroup>
+    ${all ? `<div class="scroll"><table class="rows dmgx" id="dmgx" data-rowpin="0"><thead><tr><th></th>${all.gegner.map((g, k) => `<th class="c" data-c="${k + 1}" data-pc="${k + 1}" data-hc="${g.id}">${img(g.id, "sm")}<div>${esc(g.name)}</div></th>`).join("")}</tr></thead>
+      <tbody>${all.rows.map((m, i) => `<tr data-r="${i}"><th class="nw r" data-pr="${i}" data-c="0" data-hc="${m.id}">${img(m.id, "sm")} ${esc(m.name)}</th>${m.zellen.map((x, k) => !x ? `<td class="c hint" data-c="${k + 1}">–</td>`
+        : `<td class="c ${toneOf(x)}" data-c="${k + 1}" ${tipRef(dmgTip({angreifer: m.name, attacke: x.attacke, level: x.level ?? r.level, gen: r.gen}, Object.assign({}, x, {name: all.gegner[k].name})) + `<div class="muted">${esc(ko(x))}</div>`)}><b style="color:${ramp(x.max_pct / 100)}">${pct(x.max_pct)} %</b><div class="hint">${esc(x.attacke)}</div></td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<div class="scroll sticky"><table class="rows sort dmg fixed"><colgroup><col style="width:26%"><col style="width:84px"><col style="width:180px"><col style="width:110px"><col style="width:120px"><col></colgroup>
       <thead><tr>${th("Verteidiger")}${thc("Wirkung")}${thc("Schaden", "Balken: kräftig der kleinste Wurf, blass bis zum größten; ein voller Balken ist 100 % der KP")}${thc("in %", "Prozent der KP, kleinster bis größter Wurf")}${thc("KP")}${th("Treffer bis K.O.", "", true)}</tr></thead>
       <tbody>${r.rows.map((x) => { const tone = x.min_pct >= 100 ? "go" : x.max_pct >= 100 ? "warn" : x.max_pct >= 50 ? "mid" : "low";
         return `<tr data-hc="${x.id}"><td class="nw" data-s="${esc(x.name)}">${img(x.id, "sm")} <a href="#pokemon/${x.id}">${esc(x.name)}</a>${x.faehigkeit_vert ? ` <span class="cls" data-tip="Fähigkeit des Verteidigers ändert die Wirkung dieser Attacke (gerechnet mit seiner ersten Fähigkeit)">${esc(x.faehigkeit_vert)}</span>` : ""}${x.item_vert ? ` <span class="cls" data-tip="${esc("Item des Verteidigers: " + x.item_vert)}">Item</span>` : ""}</td>
@@ -3644,6 +3653,7 @@ async function calcBox() {
         <td data-s="${x.max_pct}" ${tipRef(dmgTip(r, x))}><span class="dbar ${tone}"><i class="mx" style="width:${Math.min(100, x.max_pct)}%"></i><i class="mn" style="width:${Math.min(100, x.min_pct)}%"></i></span></td>
         <td class="c num ${tone}" data-s="${x.max_pct}" ${tipRef(dmgTip(r, x))}>${pct(x.min_pct)}–${pct(x.max_pct)} %</td>
         <td class="c num hint" data-s="${x.kp}" ${tipRef(dmgTip(r, x))}>${x.min}–${x.max} / ${x.kp}</td><td class="${cls(x)}">${ko(x)}</td></tr>`; }).join("")}</tbody></table></div>`}`;
+  if ($("#dmgx")) crossTable($("#dmgx"), XPIN);     // 0.48.6: Übersicht wie „Gegen Gegner“ markierbar
   $$("[data-cv]", el()).forEach((b) => b.addEventListener("click", () => set("ansicht", b.dataset.cv)));
   if ($("#cfoeq")) autocomplete($("#cfoeq"), (x) => { if (!own.includes(x.id)) store.set(ownKey, [...own, x.id].slice(0, 30)); calcBox(); });
   const set = (k, v) => { o[k] = v; store.set(ck, o); calcBox(); };

@@ -922,7 +922,8 @@ td.rst{white-space:nowrap;text-align:left}
 td.rst span{display:inline-block;min-width:2.8em;text-align:right;font-variant-numeric:tabular-nums}
 #foeclr[hidden]{display:none}
 /* 0.48.5: gewählter Angreifer im Hintergrund der Hover-Karte (das Grau schluckte die Bilder); „gegen …“ immer in eigener Zeile */
-#calc .bar>.brk{flex-basis:100%;height:0}
+#calc .bar+.bar{margin-top:-4px}   /* 0.48.6: zwei Zeilen statt Umbruch-Element (das gab doppelten Abstand) */
+#calc .seg button.on{background:var(--hcbg);color:var(--ink-hi);font-weight:600;box-shadow:none}   /* 0.48.6: Ansicht wie der Angreifer */
 /* 0.48.3: die Regel aus 0.46 für #calc .seg ist wieder weg, es gilt der Stand von 0.43 (Segmente kräftig, Angreifer ruhiger) */
 #vs th.vsteam{vertical-align:bottom;text-align:left;font-size:12px;color:var(--muted);font-weight:600;cursor:pointer}
 #vs th.vsteam>.pinc{opacity:.8}
