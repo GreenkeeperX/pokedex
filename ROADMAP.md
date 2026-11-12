@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.35.1 (12.11.2026)
+
+- `sources.request(limit=…)`: Gesamtzeit je Abfrage; `timeout` galt nur je Lesevorgang, ein tröpfelnder Server hielt den
+  Verbindungstest fest. Der Test nimmt `DIAG_TIMEOUT` 20 s und `DIAG_LIMIT` 60 s
+
 ## 0.35.0 (12.11.2026)
 
 - Verbindungstest parallel je Server (`abruf.diagnose(proben, stand)`, ein Thread je Server, Pausen aus `DIAG_PAUSE`),

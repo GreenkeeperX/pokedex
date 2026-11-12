@@ -936,7 +936,8 @@ class Abgleich(TempData):
     def test_verbindungstest_parallel(self):
         # alle Server gleichzeitig, jeder für sich nacheinander; Zeilen in der Reihenfolge der Abfragen, Fortschritt zählt mit
         seen = []
-        def fake(url, timeout=40, encoding="", headers=None, raw=False):
+        def fake(url, timeout=40, encoding="", headers=None, raw=False, limit=None):
+            self.assertTrue(limit)                          # jede Abfrage hat eine Gesamtzeit
             seen.append(url)
             return {"error": "", "status": 404, "server": "x", "text": "nicht da", "body": b""}
         stand, proben = {}, {}
@@ -949,6 +950,20 @@ class Abgleich(TempData):
         heute = lines.index("== Heutige Quellen")
         self.assertTrue(lines[heute + 1].startswith("GitHub-API, Dateiliste PokéAPI: HTTP 404"))
         self.assertFalse(any(x.endswith(": keine Antwort") for x in lines))
+
+    def test_tropfende_antwort_bricht_ab(self):
+        class Slow:                                     # sendet endlos kleine Stücke, nie einen Abschluss
+            def read(self, n):
+                return b"x" * 10
+        with mock.patch.object(sources.time, "monotonic", side_effect=[0, 1, 2, 100]):
+            with self.assertRaises(TimeoutError):
+                sources._read(Slow(), 50)
+        class Done:
+            def __init__(self):
+                self.parts = [b"ab", b"cd", b""]
+            def read(self, n):
+                return self.parts.pop(0)
+        self.assertEqual(sources._read(Done(), None), b"abcd")
 
     def test_lauf_ohne_quellen_behaelt_alte_daten(self):
         def fake(url, timeout=40, headers=None, raw=False):
