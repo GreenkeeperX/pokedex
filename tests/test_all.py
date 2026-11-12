@@ -303,6 +303,16 @@ class Leser(unittest.TestCase):
         self.assertEqual([x["faktor"] for x in t], [1, 1.5, 2])                    # für den Rechenweg im Tooltip
         self.assertEqual(t[1]["schlaf"], 73.4)                                   # Fangrate 45, Superball, 1 KP, Schlaf: b = 60654, vier Proben
         self.assertTrue(all(x["voll"] <= x["rot"] <= x["status"] <= x["schlaf"] for x in t))
+        # 0.48.9: weitere Bälle je Spiel (erfundenes Pokémon: Wasser, Initiative 110, 250 kg)
+        mon = {"art": 9999, "typen": [11], "werte": [50, 50, 50, 50, 50, 110]}
+        rows = {n: (f, plus) for n, f, plus in abfragen.ball_rows(9, {"Netzball", "Turboball", "Schwerball", "Flottball", "Mondball"}, mon, 250)}
+        self.assertEqual(rows["Netzball (Wasser oder Käfer)"], (3.5, 0))
+        self.assertEqual(rows["Turboball (Initiative ab 100)"], (4, 0))
+        self.assertEqual(rows["Schwerball (250 kg: Fangrate +20)"], (1, 20))
+        self.assertNotIn("Mondball (entwickelt sich mit Mondstein)", rows)
+        self.assertEqual(abfragen.ball_rows(4, {"Flottball", "Netzball"}, {"typen": [10], "werte": [0] * 6}), [("Flottball (erste Runde)", 4, 0)])
+        t = abfragen.catch_table(45, 9, extra=[("Schwerball", 1, 20)])
+        self.assertEqual(t[-1]["voll"], abfragen.catch_chance(65, 1, gen=9))
         h = {x["ball"]: x["faktor"] for x in abfragen.catch_table(45, 8, abfragen.BALLS_HISUI)}   # 0.48.7: Hisui-Bälle
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))

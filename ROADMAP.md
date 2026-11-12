@@ -1,5 +1,17 @@
 # Roadmap
 
+## 0.48.9 (12.11.2026)
+
+- `abfragen.ball_rows`: Bälle aus der Item-Liste des Spiels (Tasche „Bälle“) mit Faktor je Generation; der Schwerball als
+  Zuschlag auf die Fangrate nach Gewicht (Tabelle ab Gen. 7 und davor). Nestball mit Level 10 als Beispiel.
+  Ohne Safari-, Turnier- und Parkball (nur an einem Ort)
+
+## 0.48.8 (12.11.2026)
+
+- Proben: Bulbapedia „Catch rate“ und die Seiten aller Hisui-Bälle, PokéWiki „Fangchance“ und „Fangrate“. Danach die
+  Hisui-Formel mit Schaltern (unbemerkt, Rücken, Alpha, Level gegen Rang) statt der Formel der Hauptspiele.
+  Die Faktoren in `BALLS_HISUI` gegenprüfen (laut Bulbapedia gilt der Federball nur bei bestimmten fliegenden Begegnungen mit ×1,25)
+
 ## 0.48.7 (12.11.2026)
 
 - `abfragen.BALLS_HISUI`: Fangtabelle in Legenden: Arceus mit den Hisui-Bällen. Noch offen: die echte Hisui-Formel

@@ -1363,12 +1363,59 @@ def catch_chance(rate, ball=1.0, hp_share=1.0, status=1.0, gen=9):
     return round(100 * (b / 65536) ** (3 if gen == 5 else 4), 1)
 
 
-def catch_table(rate, gen, balls=BALLS):
+def catch_table(rate, gen, balls=BALLS, extra=()):
     """Fangchance je Ball bei vollen KP, bei 1 KP, bei 1 KP mit Paralyse, Gift oder Verbrennung (×1,5) und bei 1 KP mit
     Schlaf oder Einfrieren (ab Generation 5 ×2,5, sonst ×2)."""
     sleep = sleep_factor(gen)
     return [{"ball": n, "faktor": f, "voll": catch_chance(rate, f, gen=gen), "rot": catch_chance(rate, f, 0, gen=gen),
-             "status": catch_chance(rate, f, 0, 1.5, gen=gen), "schlaf": catch_chance(rate, f, 0, sleep, gen=gen)} for n, f in balls]
+             "status": catch_chance(rate, f, 0, 1.5, gen=gen), "schlaf": catch_chance(rate, f, 0, sleep, gen=gen)} for n, f in balls] + [
+        {"ball": n, "faktor": f, "plus": plus or None, "voll": catch_chance(max(1, rate + plus), f, gen=gen),
+         "rot": catch_chance(max(1, rate + plus), f, 0, gen=gen), "status": catch_chance(max(1, rate + plus), f, 0, 1.5, gen=gen),
+         "schlaf": catch_chance(max(1, rate + plus), f, 0, sleep, gen=gen)} for n, f, plus in extra]
+
+
+MOON_SPECIES = {30, 33, 35, 39, 300, 517}          # entwickeln sich mit dem Mondstein (Nidorina, Nidorino, Piepi, Pummeluff, Eneco, Somniam)
+ULTRA_BEASTS = {793, 794, 795, 796, 797, 798, 799, 803, 804, 805, 806}
+
+
+def ball_rows(gen, have, f, weight_kg=None):
+    """0.48.9: weitere Bälle der Hauptspiele für die Fangtabelle, nur die es im Spiel gibt (have: Namen aus der Item-Liste).
+    → [(Name mit Bedingung, Faktor, Zuschlag auf die Fangrate)]. Bälle, die nur vom Pokémon abhängen (Netz-, Turbo-, Mond-,
+    Schwer-, Ultraball), stehen nur da, wenn sie hier wirken; Bälle, die von der Lage abhängen, mit der Lage im Namen.
+    Faktoren je Generation: Netz- und Wiederball ×3 bis Gen. 6, dann ×3,5; Finsterball ×3,5 bis Gen. 6, dann ×3;
+    Flottball ×4 in Gen. 4, dann ×5; Köderball ×3 bis Gen. 6, ×5 in Gen. 7, dann ×4."""
+    typen = set(f.get("typen") or [])
+    out = []
+    def add(name, label, fac, plus=0):
+        if name in have:
+            out.append((label, fac, plus))
+    if typen & {7, 11}:                                     # Käfer, Wasser
+        add("Netzball", "Netzball (Wasser oder Käfer)", 3 if gen <= 6 else 3.5)
+    if (f.get("werte") or [0] * 6)[5] >= 100:
+        add("Turboball", "Turboball (Initiative ab 100)", 4)
+    if f.get("art") in MOON_SPECIES:
+        add("Mondball", "Mondball (entwickelt sich mit Mondstein)", 4)
+    if "Ultraball" in have:
+        add("Ultraball", "Ultraball" + (" (Ultrabestie)" if f.get("art") in ULTRA_BEASTS else " (keine Ultrabestie)"),
+            5 if f.get("art") in ULTRA_BEASTS else 0.1)
+    if weight_kg is not None and "Schwerball" in have:
+        if gen >= 7:
+            plus = -20 if weight_kg < 100 else 0 if weight_kg < 200 else 20 if weight_kg < 300 else 30
+        else:
+            plus = -20 if weight_kg < 102.4 else 0 if weight_kg < 204.8 else 20 if weight_kg < 307.2 else 30 if weight_kg < 409.6 else 40
+        add("Schwerball", f"Schwerball ({weight_kg:g} kg: Fangrate {plus:+d})".replace(".", ","), 1, plus)
+    add("Tauchball", "Tauchball (Surfen, Angeln, unter Wasser)", 3.5)
+    add("Finsterball", "Finsterball (nachts oder in Höhlen)", 3.5 if gen <= 6 else 3)
+    add("Flottball", "Flottball (erste Runde)", 4 if gen == 4 else 5)
+    add("Timerball", "Timerball (ab Runde 11)", 4)
+    add("Nestball", "Nestball (wildes Pokémon Level 10)", max(1, (41 - 10) / 10 if gen >= 5 else (40 - 10) / 10))
+    add("Wiederball", "Wiederball (Art schon gefangen)", 3 if gen <= 6 else 3.5)
+    add("Köderball", "Köderball (geangelt)", 3 if gen <= 6 else 5 if gen == 7 else 4)
+    if gen >= 8:
+        add("Traumball", "Traumball (schlafend)", 4)
+    add("Levelball", "Levelball (dein Pokémon mind. 4× so hohes Level)", 8)
+    add("Sympaball", "Sympaball (gleiche Art, anderes Geschlecht)", 8)
+    return out
 
 
 def sleep_factor(gen):
@@ -1389,7 +1436,16 @@ def _more(con, f, g, gen):
     kennung = g["kennung"] if g else ""
     if sp["capture_rate"] is not None:
         out["fangrate"] = sp["capture_rate"]
-        out["fangen"] = catch_table(sp["capture_rate"], gen, BALLS_HISUI if kennung == "legends-arceus" else BALLS)
+        extra = ()
+        if g and kennung != "legends-arceus":
+            try:
+                have = {r["name"] for r in con.execute("SELECT name, spiele FROM item WHERE tasche = 'Bälle'")
+                        if g["id"] in json.loads(r["spiele"] or "[]")}
+                w = con.execute("SELECT weight FROM pokemon WHERE id = ?", (f["id"],)).fetchone()
+                extra = ball_rows(gen, have, f, w[0] / 10 if w and w[0] is not None else None)
+            except Exception:
+                extra = ()
+        out["fangen"] = catch_table(sp["capture_rate"], gen, BALLS_HISUI if kennung == "legends-arceus" else BALLS, extra)
         out["schlaf_faktor"] = str(sleep_factor(gen)).replace(".", ",")
         out["fang_gen"] = gen
         out["fang_grob"] = gen <= 2 or kennung.startswith("legends-") or kennung.startswith("lets-go")
