@@ -1550,6 +1550,72 @@ class Server(TempData):
         from app import pokewiki
         self.assertEqual(pokewiki.plain("{{Item|Sinelbeere|sp=PLA}}"), "Sinelbeere")
 
+    def test_0_40_0_auftraege_und_karte(self):
+        from app import bisafans, mapgenie, abfragen as _q
+        page = """<h2>Kapitel 1</h2><ul><li>Mission 1: Erfundener Anfang</li></ul>
+          <h3>Mission 1: Erfundener Anfang</h3><p>Sprich mit der erfundenen Person.</p><p>Geh nach Norden.</p>
+          <h3>Mission 2: Erfundene Prüfung</h3><p>Fange drei erfundene Pokémon.</p>"""
+        ms = bisafans.la_missions([page, "<h3>Mission 3: Ende</h3><p>Fertig.</p>"])
+        self.assertEqual([(x["nr"], x["name"], x["kapitel"]) for x in ms], [(1, "Erfundener Anfang", 1), (2, "Erfundene Prüfung", 1), (3, "Ende", 2)])
+        self.assertEqual(ms[0]["text"], "Sprich mit der erfundenen Person.\nGeh nach Norden.")
+        m = {"gruppen": [{"titel": "Quests", "kategorien": [{"id": 1, "titel": "Request"}, {"id": 2, "titel": "Story Mission"}]}],
+             "orte": [[11, 1, 0.1, 0.1, "#5: Made Up", ""], [12, 2, 0.2, 0.2, "#2: Story", ""], [13, 1, 0.3, 0.3, "Blackboard", ""]]}
+        self.assertEqual(_q.quest_points(m), {"auftrag": {5: 11}, "mission": {2: 12}})
+        # Doppeltes: gleiche Pflanze dreifach an einer Stelle wird ein Punkt, Massenauftreten legen ihre Pokémon zusammen
+        pts = [{"id": i, "c": 7, "la": 0.5, "lo": 0.5, "name": "Kraut", "q": ["Map Genie"]} for i in range(3)]
+        pts += [{"c": "o:massen", "la": 0.1, "lo": 0.1, "name": "Massenauftreten", "o": {"art": "massen", "items": [[n, "Lv 1", 1]]}, "q": ["Spieldaten"]}
+                for n in ("A", "B")]
+        pts += [{"id": 9, "c": 8, "la": 0.2, "lo": 0.2, "name": "Alpha-A", "q": ["Map Genie"]}, {"id": 10, "c": 8, "la": 0.2, "lo": 0.2, "name": "Alpha-B", "q": ["Map Genie"]}]
+        out = mapgenie._dedupe(pts)
+        self.assertEqual(len(out), 4)
+        self.assertEqual(out[0]["mal"], 3)
+        self.assertEqual([i[0] for i in out[1]["o"]["items"]], ["A", "B"])
+
+    def test_0_40_0_rankedboost(self):
+        """RankedBoost: Seite → JSON → Orte und Ortsbilder (erfundene Daten), Abgleich ohne Netz, Bild über den Server."""
+        from app import rankedboost as rb
+        spiel = "lets-go-pikachu-lets-go-eevee"
+        url = rb.CDN + "/wp-content/plugins/k-Pokemon/assets/cache/megamap-lets-go-pikachu-eevee-0123abcd.json"
+        self.assertEqual(rb.json_url(f'<script>var u="{url}";</script>'), url)
+        self.assertIsNone(rb.image_ok("https://boese.example/x.webp"))
+        self.assertEqual(rb.mon_name("/sprites/mr-erfund.png"), "Mr Erfund")
+        mega = {"bounds": {"x": 100, "y": 50, "w": 2000, "h": 1000}, "maps": [
+            {"slug": "route-erf", "name": "Route Erfunden", "x": 300, "y": 150, "w": 200, "h": 100, "type": "route",
+             "url": "/wp-content/plugins/k-Pokemon/assets/location-maps/route-erf.webp", "minLv": 3, "maxLv": 5,
+             "methods": [{"l": "Grass", "s": ["/s/erfundmon.png", "/s/zweitmon.png"]}, {"l": "Surf", "s": []}]},
+            {"slug": "hoehle", "name": "Erfundene Höhle", "x": 900, "y": 600, "w": 50, "h": 50, "type": "cave",
+             "url": "https://boese.example/h.webp", "methods": [{"l": "Walking", "s": ["/s/drittmon.png"]}]},
+            {"name": "kaputt", "x": "a"}]}
+        text = json.dumps({"megaMap": json.dumps(mega)})
+        m, bilder = rb.parse(rb.extract(text), spiel)
+        self.assertEqual([o[4] for o in m["orte"]], ["Route Erfunden", "Erfundene Höhle"])
+        self.assertEqual(m["orte"][0][5], "Gras: «Erfundmon», «Zweitmon»\nLevel 3–5")
+        self.assertEqual(len(bilder), 1)                 # nur Bilder vom CDN
+        self.assertEqual(bilder[0][1:], [rb.CDN + "/wp-content/plugins/k-Pokemon/assets/location-maps/route-erf.webp", 200, 100, 200, 100])
+        self.assertEqual([c["titel"] for c in m["gruppen"][0]["kategorien"]], ["Orte und Routen", "Höhlen und Gebäude"])
+        self.assertIsNone(rb.extract("kein json"))
+        webp = b"RIFF\x10\x00\x00\x00WEBPVP8 erfunden"
+        page = f'<a href="{url}">'
+
+        def fake(self_, u, raw=False, absent=(), data=None):
+            if u == rb.page_urls(spiel)[0]:
+                return page
+            if u == url:
+                return text
+            if u.endswith(".webp"):
+                return webp
+            return None
+        with mock.patch.object(abruf._Source, "get", fake), mock.patch.object(rb, "GAMES", {spiel: rb.GAMES[spiel]}):
+            abruf._rankedboost(lambda *a: None)
+        d = abruf.mg_maps(spiel)
+        k = next(k for k in d["karten"] if k.get("quelle") == "rankedboost")
+        self.assertEqual(k["bilder"], [[0, 200, 100, 200, 100]])
+        f = abruf.mg_image(spiel, k["slug"], 0)
+        with open(f, "rb") as fh:
+            self.assertEqual(fh.read(), webp)
+        self.assertIsNone(abruf.mg_image(spiel, k["slug"], 1))
+        self.assertIsNone(abruf._tile_of(k, 3, 0, 0)[0])         # keine Kacheln
+
     def test_alpha(self):
         db.migrate()
         server.set_mark("alpha", {"spiel": "legends-arceus", "id": 59})

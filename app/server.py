@@ -620,6 +620,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._file(f, "max-age=2592000")
                 else:                # fehlende Kacheln (Rand, Meer) fragt der Browser eine Stunde nicht wieder
                     self._send(404, {"error": "keine Kachel"}, extra={"Cache-Control": "max-age=3600"})
+            elif m := re.fullmatch(r"/mgbild/([a-z0-9-]{2,60})/([a-z0-9-]{1,60})/(\d{1,5})", path):
+                f = abruf.mg_image(m.group(1), m.group(2), int(m.group(3)))
+                if f:
+                    self._file(f, "max-age=2592000")
+                else:
+                    self._send(404, {"error": "kein Ortsbild"}, extra={"Cache-Control": "max-age=3600"})
             elif path == "/api/smogon":
                 self._send(200, abfragen.smogon_view(q.get("spiel")))
             elif path == "/api/mapgenie/eigene":

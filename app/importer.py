@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "21"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "22"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -1367,6 +1367,16 @@ def _derive_auftrag(con, bisa):
     return len(rows)
 
 
+def _derive_mission(con, bisa):
+    """Hauptmissionen in Legenden: Arceus (BisaFans, Komplettlösung) in die Tabelle mission. Gibt die Zahl zurück."""
+    con.execute("CREATE TABLE mission (spiel TEXT, nr INTEGER, name TEXT, kapitel INTEGER, text TEXT, PRIMARY KEY (spiel, nr))")
+    rows = (bisa or {}).get("la_missionen") or []
+    for r in rows:
+        con.execute("INSERT OR REPLACE INTO mission VALUES ('legends-arceus', ?, ?, ?, ?)",
+                    (r["nr"], r.get("name", ""), r.get("kapitel"), r.get("text", "")))
+    return len(rows)
+
+
 def _derive_serebii(con, ser):
     """Aus Serebii (abruf._serebii): Abklingzeiten in Legenden: Z-A (attacke_spiel.abklingzeit) und die Pokémon in Pokopia
     (Tabelle pokopia, dazu spiel_form für den Haupt-Pokédex). ser = {"za": {Schlüssel: {...}}, "pokopia": {Dex: [...]}}.
@@ -1464,6 +1474,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
         n_texte, n_forschung, unbekannt = _derive_texts(con, wiki)
         n_auftrag = _derive_auftrag(con, (wiki or {}).get("bisafans"))
+        n_mission = _derive_mission(con, (wiki or {}).get("bisafans"))
         n_abkling, n_pokopia = _derive_serebii(con, (wiki or {}).get("serebii"))
         n_wiki_karte = _derive_wiki_karte(con, wiki)
         n_orte = _derive_companion(con, alt)
@@ -1485,7 +1496,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
                  "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
                  "kartenobjekte": n_obj, "lernen": n_lernen, "abklingzeiten": n_abkling, "pokopia": n_pokopia, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez,
-                 "texte": n_texte, "forschung": n_forschung, "auftraege": n_auftrag, "kuerzel_unbekannt": unbekannt, "check": why}
+                 "texte": n_texte, "forschung": n_forschung, "auftraege": n_auftrag, "missionen": n_mission, "kuerzel_unbekannt": unbekannt, "check": why}
     finally:
         con.close()
     return stats

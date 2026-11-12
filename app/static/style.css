@@ -870,3 +870,6 @@ th.r>.pinc{margin-right:6px}
 button.danger{background:#e60012;border-color:#e60012;color:#fff}
 button.danger:hover{background:#c4000f;border-color:#c4000f}
 .seg button.on{background:color-mix(in srgb,var(--accent) 16%,var(--card));color:var(--ink-hi);box-shadow:inset 0 0 0 1px var(--accent)}
+/* 0.40: Aufträge mit Sprung zur Karte */
+.reqpin{text-decoration:none;margin-left:4px;font-size:13px;opacity:.75}.reqpin:hover{opacity:1}
+.mgtiles img.mgimg{position:absolute;image-rendering:pixelated;max-width:none}

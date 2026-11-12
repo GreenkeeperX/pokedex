@@ -1,5 +1,21 @@
 # Roadmap
 
+## 0.40.0 (12.11.2026)
+
+- Aufträge und Karte: Haken unter denselben Schlüsseln (`auftrag|Nr`, `mission|Nr`); Punkte der Kategorien „Request“ und
+  „Story Mission“ tragen `aq` (`abfragen._quests_de`) und den deutschen Text von BisaFans. `request_list` liefert dazu die
+  Hauptmissionen und je Nummer den Ort auf der Karte (`abfragen.quest_points`, 📍 im Reiter Aufträge)
+- Geprüft (Daten 12.11.): Map Genie hat 94 Aufträge ohne Lücke und Doppel, BisaFans 122 (95 bis 122 aus dem Update, nicht
+  auf der Karte); 17 Aufträge ohne Ort bei BisaFans verweisen auf die Karte
+- Hauptmissionen aus der Komplettlösung von BisaFans (`bisafans.la_missions`, Tabelle `mission`, `importer.VERSION` 22)
+- Karte: `mapgenie._dedupe` legt gleiche Punkte an derselben Stelle (3 Weltpixel) zusammen; eigene Symbole gleicher Art
+  vereinen ihre Items. Spawnpunkte und verschiedene Namen bleiben (Legenden: Arceus 5905 → 5863 Punkte)
+- Neue Quelle RankedBoost (`app/rankedboost.py`, `abruf._rankedboost`, `mapgenie/<Spiel>.rb.json`): Fundortseite → JSON
+  `megamap-*.json` (zuletzt bekannte Adresse als Ersatz) → je Ort ein Punkt und ein Ortsbild (webp, `kacheln/rb/<Karte>/<Nr>.webp`,
+  `/mgbild/…`). Keine Kacheln: die Karte legt die Bilder an ihre Stelle (`d.bilder`, `bild_z`)
+- Offen: Aufträge 95 bis 122 auf der Karte (Ort von BisaFans ohne Koordinaten), SwSh-Fundorte von Serebii, Trainer-Teams
+  als Gegner, Raid-Nester, deutsche Texte für Z-A und Karmesin/Purpur, RankedBoost für weitere Spiele (SV-JSON bekannt)
+
 ## 0.39.0 (12.11.2026)
 
 - Ladezeiten: `route` leert beim Wechsel der Ansicht sofort (`VIEW`), `body.busy` zeigt nach 120 ms einen Balken;
