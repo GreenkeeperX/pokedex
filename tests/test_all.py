@@ -1881,13 +1881,56 @@ class Server(TempData):
         con.execute("INSERT INTO spiel VALUES (1000, 'pokopia')")
         con.execute("CREATE TABLE form (id INTEGER, art INTEGER, kennung TEXT, standard INTEGER)")
         con.execute("INSERT INTO form VALUES (1, 1, 'bulbasaur', 1), (25, 25, 'pikachu', 1)")
-        con.execute("CREATE TABLE spiel_form (spiel INTEGER, form INTEGER, nr INTEGER, PRIMARY KEY (spiel, form))")
+        con.execute("CREATE TABLE spiel_form (spiel INTEGER, form INTEGER, nr INTEGER, dex INTEGER DEFAULT 0, dexk TEXT DEFAULT '', PRIMARY KEY (spiel, form))")
         con.execute("CREATE TABLE attacke_spiel (spiel TEXT, attacke INTEGER, staerke INTEGER, kraft INTEGER, tempo INTEGER, "
                     "genauigkeit INTEGER, ap INTEGER, abklingzeit INTEGER, PRIMARY KEY (spiel, attacke))")
         self.assertEqual(_imp._derive_serebii(con, {"za": m, "pokopia": {"haupt": rows}}), (2, 2))
         self.assertEqual(con.execute("SELECT attacke, abklingzeit FROM attacke_spiel ORDER BY attacke").fetchall(), [(151, 9), (453, 3)])
         self.assertEqual(con.execute("SELECT form, nr FROM spiel_form ORDER BY nr").fetchall(), [(1, 1), (25, 79)])
         self.assertEqual(con.execute("SELECT name, spezial FROM pokopia WHERE nr = 79").fetchone(), ("Peakychu", '["generate", "litter"]'))
+
+    def test_0_43_0_karten_dex_und_routentrainer(self):
+        """Kartenpunkte eindeutschen und Bilder herauslösen, Nummer je Regional-Dex, Trainer von Ortsseiten (erfunden)."""
+        import sqlite3
+        from app import pokewiki, mapgenie, abfragen
+        de = {"Potion": "Trank", "Fakemon": "Erfundemon"}
+        self.assertEqual(mapgenie.text_de("Find a Potion near [Potion](https://x.test/Potion)", de),
+                         "Find a Trank near [Trank](https://x.test/Potion)")
+        mons, items = {"Erfundemon": 9001, "Zweitmon": 9002}, {"Supertrank": 26}
+        pk, it, rest = abfragen.point_pics("**Zu Fuß:**\nErfundemon (Lv. 5), Zweitmon\nHier liegt ein Supertrank.", "",
+                                           mons, abfragen.names_rx(mons, True), items, abfragen.names_rx(items))
+        self.assertEqual([(x[0], x[2], x[3]) for x in pk], [(9001, "Zu Fuß", "Lv. 5"), (9002, "Zu Fuß", "")])
+        self.assertEqual((it, rest), ([[26, "Supertrank"]], "**Zu Fuß:**\nHier liegt ein Supertrank."))
+        pk, it, rest = abfragen.point_pics("**Bäume:**\nErfundemon", "", mons, abfragen.names_rx(mons, True), items, None)
+        self.assertEqual((len(pk), rest), (1, ""))                      # Überschrift ohne übrigen Inhalt fällt weg
+
+        con = sqlite3.connect(":memory:")
+        con.executescript("""CREATE TABLE pokemon_moves (pokemon_id INTEGER, version_group_id INTEGER);
+            CREATE TABLE form (id INTEGER, art INTEGER, standard INTEGER, relevant INTEGER);
+            INSERT INTO form VALUES (1, 1, 1, 1), (2, 2, 1, 1), (3, 3, 1, 1);
+            CREATE TABLE spiel (id INTEGER); INSERT INTO spiel VALUES (15);
+            CREATE TABLE pokedexes (id INTEGER, identifier TEXT);
+            INSERT INTO pokedexes VALUES (1, 'national'), (12, 'kalos-central'), (13, 'kalos-coastal');
+            CREATE TABLE pokedex_version_groups (pokedex_id INTEGER, version_group_id INTEGER);
+            INSERT INTO pokedex_version_groups VALUES (1, 15), (12, 15), (13, 15);
+            CREATE TABLE pokemon_dex_numbers (species_id INTEGER, pokedex_id INTEGER, pokedex_number INTEGER);
+            INSERT INTO pokemon_dex_numbers VALUES (1, 1, 1), (2, 1, 2), (3, 1, 3), (1, 12, 80), (1, 13, 5), (2, 13, 7);""")
+        importer._derive_spiel_form(con)
+        self.assertEqual(con.execute("SELECT form, nr, dex, dexk FROM spiel_form ORDER BY form").fetchall(),
+                         [(1, 80, 0, ""), (2, 7, 1, "K")])                # erst der erste Dex, sonst Kürzel; 3 fehlt im Spiel
+
+        wt = """==== Trainer ====
+{{Team/Kopf|Überschrift=Trainer}}
+{{Team/Zeile|Edition=FRBG|Trainerklasse=Käfersammler|Trainername=Käfersammler|Name=Erfo|id1=010|lvl1=6|id2=013|lvl2=6}}
+{{Team/Zeile|Edition=FRBG|Trainerklasse=Arenaleiter|Trainername=Arenaleiter|Name=Erfundo|id1=074|lvl1=12}}"""
+        ts = pokewiki.trainer_teams(wt, "Route 99 (Erfunden)", pokewiki.ORT_ROLLE)
+        self.assertEqual([(t["name"], t["rolle"], t["titel"]) for t in ts],
+                         [("Käfersammler Erfo", "Trainer", "Route 99 (Erfunden)"), ("Arenaleiter Erfundo", "Arenaleiter", "Route 99 (Erfunden)")])
+        own = pokewiki.trainer_teams("""{{Team/Kopf|Überschrift=Arena}}
+{{Team/Zeile|Edition=FRBG|Trainerklasse=Arenaleiter|Trainername=Erfundo|id1=074|lvl1=12}}""", "Erfundo", "Arenaleiter")
+        both = pokewiki.dedupe_teams(ts + own)
+        self.assertEqual([t["name"] for t in both], ["Erfundo", "Käfersammler Erfo"])   # die Trainerseite gilt
+        self.assertNotIn("seite_rolle", both[0])
 
     def test_raids_und_crypto_lesen(self):
         rec = (25).to_bytes(2, "little") + bytes([0, 0, 1, 2, 0, 35]) + b"".join(m.to_bytes(2, "little") for m in (85, 609, 0, 0)) \

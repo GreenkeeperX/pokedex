@@ -14,8 +14,9 @@ from . import mapgenie
 
 BASE = "https://rankedboost.com/"
 CDN = "https://img.rankedboost.com"
-GAMES = {"lets-go-pikachu-lets-go-eevee": "lets-go-pikachu-eevee", "firered-leafgreen": "fire-red-leaf-green",
-         "scarlet-violet": "scarlet-violet", "legends-za": "legends-z-a"}   # Spiel → Kennung
+# Karmesin/Purpur und Z-A nicht (0.43.0): dort liegen die Ortsbilder in mehreren Regionen übereinander und Map Genie
+# hat die bessere Karte
+GAMES = {"lets-go-pikachu-lets-go-eevee": "lets-go-pikachu-eevee", "firered-leafgreen": "fire-red-leaf-green"}   # Spiel → Kennung
 TITEL = {"lets-go-pikachu-lets-go-eevee": "Kanto (RankedBoost)", "firered-leafgreen": "Kanto und Sevii-Inseln (RankedBoost)",
          "scarlet-violet": "Paldea (RankedBoost)", "legends-za": "Illumina City (RankedBoost)"}
 TILE = 256

@@ -420,7 +420,10 @@ def za_missions(wt):
 
 # ---- Trainer mit Team (Arenaleiter, Top Vier, Champs, Rivalen): Vorlagen Team/Kopf und Team/Zeile
 
-TRAINER_CATS = {"Arenaleiter": "Arenaleiter", "Top Vier": "Top Vier", "Champ": "Champ", "Rivale": "Rivale"}
+TRAINER_CATS = {"Arenaleiter": "Arenaleiter", "Top Vier": "Top Vier", "Champ": "Champ", "Rivale": "Rivale",
+                "Ort aus einem Hauptspiel": "Trainer"}
+# Rolle der Ortsseiten (Routen, Höhlen, Städte): dort heißt der Trainer „Name“, „Trainername“ ist das Bild der Klasse
+ORT_ROLLE = "Trainer"
 # Kürzel im Parameter Edition (klein, ohne Zeichen dazwischen) → Spiele
 ED_GAMES = {"rb": ["red-blue"], "gelb": ["yellow"], "g": ["yellow"], "rbg": ["red-blue", "yellow"], "gs": ["gold-silver"],
             "kristall": ["crystal"], "k": ["crystal"], "gsk": ["gold-silver", "crystal"], "rs": ["ruby-sapphire"],
@@ -484,6 +487,18 @@ def _role(klasse, rolle):
     return rolle
 
 
+def dedupe_teams(teams):
+    """Dieselben Kämpfe von Trainer- und Ortsseite nur einmal (die Trainerseite zuerst): gleiche Spiele, gleiches Team."""
+    seen, out = set(), []
+    for t in sorted(teams, key=lambda t: t.get("seite_rolle") == ORT_ROLLE):
+        k = (tuple(sorted(t["spiele"])), tuple((m["nr"], m.get("lvl")) for m in t["team"]))
+        if k not in seen:
+            seen.add(k)
+            t.pop("seite_rolle", None)
+            out.append(t)
+    return out
+
+
 def trainer_teams(wt, title, rolle):
     """Teams eines Trainers aus seiner Seite: [{spiele, name, rolle, titel, hinweis, rueckkampf, team: [{nr, lvl, item,
     faehigkeit, attacken}]}]; nur Teams aus den Hauptspielen (Kürzel in ED_GAMES)."""
@@ -505,10 +520,15 @@ def trainer_teams(wt, title, rolle):
         if not team:
             continue
         head = next((h for hp, h in reversed(heads) if hp < pos), "")
-        name = clean(p.get("Trainername") or p.get("Name") or title)
+        if rolle == ORT_ROLLE:
+            klasse, name = clean(p.get("Trainerklasse", "")), clean(p.get("Name", ""))
+            name = f"{klasse} {name}".strip() if name and klasse and klasse.lower() not in name.lower() else (name or klasse)
+            head = title + (f" · {head}" if head and head.lower() != "trainer" else "")
+        else:
+            name = clean(p.get("Trainername") or p.get("Name") or title)
         out.append({"spiele": games, "name": name or title, "seite": title, "rolle": _role(p.get("Trainerklasse"), rolle),
                     "titel": head[:160], "hinweis": clean(p.get("Hinweis", ""))[:300],
-                    "rueckkampf": bool(clean(p.get("Rückkampf", ""))), "team": team})
+                    "rueckkampf": bool(clean(p.get("Rückkampf", ""))), "team": team, "seite_rolle": rolle})
     return out
 
 
