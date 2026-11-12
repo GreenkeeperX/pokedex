@@ -900,3 +900,11 @@ button.danger:hover{background:#c4000f;border-color:#c4000f}
 .trc .trn{display:flex;justify-content:space-between;gap:6px}.trc .trt{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .trc .trm{display:flex;flex-wrap:wrap}.trc .trm .spr{width:32px;height:32px}
 .foe .foeatk{font-size:11px;max-width:150px;margin:2px auto 0;line-height:1.25}
+
+/* Speicherplatz (Einstellungen) */
+.dk>summary,div.dk{display:grid;grid-template-columns:minmax(160px,1.6fr) 1fr 72px 110px;gap:8px;align-items:center;padding:3px 0;font-size:13px}
+.dk>summary{cursor:pointer;list-style:none}.dk>summary::-webkit-details-marker{display:none}
+.dk>summary .dk-n::before{content:"▸ ";color:var(--muted)}.dk[open]>summary .dk-n::before{content:"▾ "}
+.dk1>summary,div.dk1{padding-left:16px}.dk2>summary,div.dk2{padding-left:32px}
+.dk-b{height:8px;border-radius:4px;background:var(--chip);overflow:hidden}.dk-b i{display:block;height:100%;background:var(--accent)}
+.dk-v{text-align:right;font-variant-numeric:tabular-nums}.dk-c{font-size:12px}

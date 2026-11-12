@@ -3848,14 +3848,33 @@ function foldBoxes(root) {
       if (bar) { sm.append(...bar.childNodes); bar.remove(); } else { sm.append(h); }
       d.append(sm, ...b.childNodes); b.replaceWith(d);
     }
-    d.id = "s-" + id; d.classList.add("fold"); d.open = !shut.has(id);
+    d.id = "s-" + id; d.classList.add("fold");
+    d.open = id === "speicherplatz" ? store.get("diskOpen", false) : !shut.has(id);   // Speicherplatz zählt nur aufgeklappt, daher zu
     $("summary", d).addEventListener("click", (e) => { if (e.target.closest("button")) e.preventDefault(); });   // Knöpfe im Kopf klappen nicht
-    d.addEventListener("toggle", () => { if (d.open) shut.delete(id); else shut.add(id); store.set("setShut", [...shut]); });
+    d.addEventListener("toggle", () => { if (id === "speicherplatz") return store.set("diskOpen", d.open); if (d.open) shut.delete(id); else shut.add(id); store.set("setShut", [...shut]); });
   });
   root.insertAdjacentHTML("afterbegin", `<div class="jump">${jumps.map(([id, l]) => `<a href="#einstellungen" data-jump="s-${id}">${esc(l)}</a>`).join("")}
     <span class="foldall"><button class="link" data-fold="1">alle auf</button> · <button class="link" data-fold="0">alle zu</button></span></div>`);
   $$("[data-jump]", root).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); const d = $("#" + a.dataset.jump); d.open = true; d.scrollIntoView({behavior: "smooth", block: "start"}); }));
   $$("[data-fold]", root).forEach((b) => b.addEventListener("click", () => $$("details.fold", root).forEach((d) => { d.open = b.dataset.fold === "1"; })));
+}
+/* Speicherplatz des Datenordners (/api/speicher): Teile nach Größe, Karten aufklappbar nach Quelle und Karte */
+const fmtBytes = (b) => b == null ? "?" : b >= 1e9 ? `${(b / 1e9).toFixed(2).replace(".", ",")} GB` : b >= 1e6 ? `${Math.round(b / 1e6)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
+async function diskBox(neu) {
+  const el = $("#disk");
+  if (!el) return;
+  const d = await api("/api/speicher" + (neu ? "?neu=1" : "")).catch((e) => ({error: e.message}));
+  if (!$("#disk")) return;
+  if (d.error) { el.innerHTML = `<p class="hint">Nicht lesbar (${esc(d.error)}).</p>`; return; }
+  const row = (t, lv) => {
+    const pct = d.gesamt ? t.bytes / d.gesamt * 100 : 0, kids = (t.teile || []).filter((x) => x.bytes > 0);
+    const head = `<span class="dk-n">${esc(t.titel)}</span><span class="dk-b"><i style="width:${Math.max(0.5, pct).toFixed(1)}%"></i></span><span class="dk-v">${fmtBytes(t.bytes)}</span><span class="hint dk-c">${t.dateien ? t.dateien.toLocaleString("de-DE") + (t.dateien === 1 ? " Datei" : " Dateien") : ""}</span>`;
+    return kids.length ? `<details class="dk dk${lv}"><summary>${head}</summary>${kids.map((x) => row(x, lv + 1)).join("")}</details>` : `<div class="dk dk${lv}">${head}</div>`;
+  };
+  el.innerHTML = `<p>Zusammen <b>${fmtBytes(d.gesamt)}</b>${d.frei != null ? `, auf dem Laufwerk frei: <b>${fmtBytes(d.frei)}</b> von ${fmtBytes(d.platte)}` : ""}.
+      <button class="link" id="diskneu" data-tip="Neu zählen (sonst gilt die Zählung fünf Minuten)">neu zählen</button></p>
+    ${d.teile.filter((t) => t.bytes > 0).map((t) => row(t, 0)).join("")}`;
+  $("#diskneu").addEventListener("click", () => { el.innerHTML = `<p class="hint">Zählt …</p>`; diskBox(true); });
 }
 async function settingsView() {
   const rid = RID;
@@ -3922,7 +3941,9 @@ async function settingsView() {
         <a class="btn" href="/api/export" download>Sicherung herunterladen</a>
         <label class="btn filebtn">Sicherung einlesen <input type="file" id="restore" accept="application/json,.json" hidden></label></div>
       <p class="hint">Einlesen ersetzt alle eigenen Daten durch die Datei; vorher legt der Server eine Kopie an.</p>
-      <div id="restmsg"></div></div></div></div>
+      <div id="restmsg"></div></div>
+    <div class="box"><h2>Speicherplatz</h2><p class="hint">Was Spieldatenbank, deine Daten, Bilder und Kartenkacheln im Datenordner des Servers belegen.</p>
+      <div id="disk"><p class="hint">Lädt …</p></div></div></div></div>
     <h2 class="sect">Deine Daten</h2>
     <div class="box"><h2>Seite untersuchen (Lesezeichen)</h2><p class="hint">Manche Seiten laden ihre Karten erst im Browser (etwa das PokéWiki),
       der Abgleich sieht dann nur eine leere Hülle. Dieses Lesezeichen liest die fertig geladene Seite in deinem Browser: welche Daten-Dateien sie nachlädt
@@ -3939,6 +3960,7 @@ async function settingsView() {
     S.meta.einstellungen = await api("/api/einstellungen", {auto: $("#auto").checked, tage: +$("#tage").value, sprites: $("#sprites").checked});
   };
   ["auto", "tage", "sprites"].forEach((k) => $("#" + k).addEventListener("change", saveSet));
+  { const dk = $("#s-speicherplatz"); if (dk) { if (dk.open) diskBox(); dk.addEventListener("toggle", () => { if (dk.open) diskBox(); }); } }   // zählt nur aufgeklappt
   $("#restore").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     e.target.value = "";

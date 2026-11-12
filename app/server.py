@@ -626,6 +626,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._file(f, "max-age=2592000")
                 else:
                     self._send(404, {"error": "kein Ortsbild"}, extra={"Cache-Control": "max-age=3600"})
+            elif path == "/api/speicher":
+                self._send(200, abruf.disk_usage(force=q.get("neu") == "1"))
             elif path == "/api/kacheln/umwandeln":
                 d = abruf.tile_convert_state(q.get("spiel", ""), q.get("karte", ""))
                 self._send(200 if d else 404, d or {"error": "keine Karte zum Umwandeln"})
