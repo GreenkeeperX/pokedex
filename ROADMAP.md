@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.47.3 (12.11.2026)
+
+- Sprite der Pokémon-Karten 8 px statt 5 px tiefer
+
 ## 0.47.2 (12.11.2026)
 
 - Verbindungstest mit den Kandidaten der Recherche „Kartenalternativen für Kalos und Alola“: Fan-Karten Kalos
