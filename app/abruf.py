@@ -2438,6 +2438,18 @@ def diagnose(proben=None, stand=None):
         lambda t: (lambda w: f"{len(w)} Zeichen Wikitext, {w.count('{{')} Vorlagen, {w.lower().count('cooldown')}× cooldown")(
             ((json.loads(t).get("parse") or {}).get("wikitext") or {}).get("*", "")), keep=True)
 
+    # 0.48.4: Shiny-Sperren je Spiel (Bulbapedia-Liste mit Zeichen je Spiel: fangbar, nur Übertragung, gar nicht; PokéWiki zum Gegenprüfen)
+    def shiny_info(t):
+        w = ((json.loads(t).get("parse") or {}).get("wikitext") or {}).get("*", "")
+        return (f"{len(w)} Zeichen Wikitext, {w.count('{{')} Vorlagen, {w.count('|-')} Tabellenzeilen, "
+                f"{w.lower().count('shiny lock') + w.lower().count('shiny-lock')}× shiny lock, {w.lower().count('transfer')}× transfer")
+    for page in ("List_of_unobtainable_Shiny_Pok%C3%A9mon", "Shiny-locked", "Shiny_Pok%C3%A9mon"):
+        probe(f"Bulbapedia, Seite {urllib.parse.unquote(page)}", "https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=" + page
+              + "&prop=wikitext&format=json&redirects=1", shiny_info, keep=400_000)
+    for page in ("Schillernde Pokémon", "Shiny-Lock"):
+        probe(f"PokéWiki, Seite {page}", POKEWIKI_API + "?" + urllib.parse.urlencode(
+            {"action": "parse", "page": page, "prop": "wikitext", "format": "json", "redirects": 1}), shiny_info, keep=400_000)
+
     def tree_hits(*words):
         def f(text):
             ps = [x.get("path", "") for x in json.loads(text).get("tree", [])]
