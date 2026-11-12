@@ -775,6 +775,9 @@ class Leser(unittest.TestCase):
         got = abfragen._optik(con, {"id": 412})
         self.assertEqual([(x["id"], x["name"]) for x in got], [(None, "Plant"), (10034, "Sandumhang")])
         self.assertEqual(abfragen._optik(con, {"id": 25}), [])             # nur eine Form: nichts zu zeigen
+        from app import store                                              # 0.48.2: Bild gibt es bei der Quelle nicht
+        with mock.patch.object(store, "load_json", lambda name, default: {"10034": "2026-01-01"} if name == "formen_fehlen.json" else default):
+            self.assertEqual(abfragen._optik(con, {"id": 412}), [])
         con.close()
 
     def test_bdsp_fundorte(self):

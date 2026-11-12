@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.48.1"
+VERSION = "0.48.2"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.48.2", "12.11.2026", [
+        "Formen zum Ansehen: Formen ohne eigenes Bild bei der Quelle (z. B. Moterpel, das in jeder Form gleich aussieht) erscheinen nicht mehr, der Hinweis auf den nächsten Abgleich kommt nur noch, wenn wirklich noch etwas zu laden ist",
+    ]),
     ("0.48.1", "12.11.2026", [
         "Verbindungstest: Inselkarten von MewMaps (Google Drive) mit Größe und die Datenquellen der FrontierNav-Karte für Alola",
     ]),
