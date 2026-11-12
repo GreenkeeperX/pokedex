@@ -11,11 +11,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.37.0"
+VERSION = "0.37.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.37.1", "12.11.2026", [
+        "Verbindungstest: eine Auswertung großer Kartenseiten lief quadratisch lange und bremste den ganzen Dienst aus; jetzt in Sekundenbruchteilen",
+    ]),
     ("0.37.0", "12.11.2026", [
         "Legenden: Arceus: neuer Reiter „Aufträge“ mit allen Nebenmissionen auf Deutsch (Aufgabe, Ort, Belohnung, Lösung im Tooltip), Suche und Haken für erledigte",
         "Auf der Detailseite stehen die Aufträge, in denen das Pokémon vorkommt",
