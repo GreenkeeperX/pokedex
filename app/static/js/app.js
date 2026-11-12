@@ -254,7 +254,7 @@ function marks(id) {
 function acts(id) {
   const inTeam = S.team.ids.includes(id), fav = isFav(id), got = isCaught(id);
   // Haken: im Team (Klick nimmt es heraus); sonst blass, Klick füllt einen freien Platz
-  return `<span class="acts">${inTeam ? `<span class="a team on" data-act="teamdel" data-slot="${S.team.ids.indexOf(id)}" data-tip="Im Team; Klick: aus dem Team">${icon("team")}</span>`
+  return `<span class="acts">${inTeam ? `<span class="a team on" data-act="teamdel" data-id="${id}" data-slot="${S.team.ids.lastIndexOf(id)}" data-tip="Im Team; Klick: aus dem Team">${icon("team")}</span>`
     : teamFull() ? `<span class="a team ph"></span>` : `<span class="a team" data-act="teamadd" data-id="${id}" data-tip="Ins Team (auf den nächsten freien Platz)">${icon("team")}</span>`}`
     + `<span class="a${fav ? " on" : ""}" data-act="fav" data-id="${id}" data-tip="${fav ? "Favorit; Klick: aus den Favoriten" : "Zu den Favoriten (Kader zum schnellen Tauschen)"}">${icon("fav", fav)}</span>`
     + `<span class="a${got ? " on" : ""}" data-act="caught" data-id="${id}" data-tip="${ballTip(id)}">${ball(id, got)}</span>` + alphaBtn(id)
@@ -1060,7 +1060,7 @@ function teamChanged() {
   dock();
   const h = location.hash;
   if (h.startsWith("#team")) teamRefresh();
-  else redrawMarks();
+  redrawMarks();      // 0.47.4: auch im Team-Reiter, sonst behalten die Favoriten-Karten alte Haken
 }
 /* Neue Mitglieder bekommen die Attacken, die sie im Spiel bis zu ihrem Level kennen (ohne Level: die ersten vier).
    Auch Mitglieder ohne Attacken (ältere Teams) bekommen sie, einmal je Platz, Pokémon und Spiel */
@@ -4124,7 +4124,10 @@ document.addEventListener("click", async (e) => {
     else if (act === "teamadd") {
       const slot = addToTeam(id);
       if (slot !== null && location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${id}/${slot}`;
-    } else if (act === "teamdel") { removeSlot(+b.dataset.slot); if (location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${DETAIL?.id || ""}`; }
+    } else if (act === "teamdel") {
+      // Haken an einer Karte: den Platz dieses Pokémon nehmen, nie einen veralteten (0.47.4)
+      const slot = b.dataset.id && S.team.ids[+b.dataset.slot] !== id ? S.team.ids.lastIndexOf(id) : +b.dataset.slot;
+      if (slot >= 0) removeSlot(slot); if (location.hash.startsWith("#pokemon/")) location.hash = `#pokemon/${DETAIL?.id || ""}`; }
     else if (act === "fav") await toggleFav(id);
     else if (act === "reqdone") await toggleReq(b.dataset.id);
     else if (act === "cmpclear") { store.set("cmpMerk", []); redrawMarks(); compareView(...location.hash.split("/").slice(1, 3)); }

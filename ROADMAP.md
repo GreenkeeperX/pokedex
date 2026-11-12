@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.47.4 (12.11.2026)
+
+- Haken „Im Team“ auf Karten trägt die Pokémon-Nummer; `teamChanged` zeichnet die Marken auch im Team-Reiter neu
+  (die Favoriten-Karten behielten sonst den alten Platz und den Haken)
+
 ## 0.47.3 (12.11.2026)
 
 - Sprite der Pokémon-Karten 8 px statt 5 px tiefer
