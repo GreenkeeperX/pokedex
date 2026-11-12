@@ -848,3 +848,4 @@ table.items tr.odd td{opacity:.6}
 .cnt.cg{color:var(--go)}.cnt.cb{color:var(--stop)}
 .usage td.ushare{background:linear-gradient(90deg,color-mix(in srgb,var(--info) 22%,transparent) var(--w),transparent var(--w))}
 .dex p{margin:8px 0}
+.a.req{cursor:pointer;font-weight:700;font-size:16px;color:var(--muted)}.a.req.on{color:var(--go)}

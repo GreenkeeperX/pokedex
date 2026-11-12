@@ -98,6 +98,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Detailseite: `dexTextHtml` (Pokédex-Eintrag des Spiels, bei zwei Editionen beide), `fromHtml` (Marke „aus <Spiel>“,
   wenn der Text aus einem anderen Spiel stammt, sonst die Quelle, wenn es nicht die PokéAPI ist), `researchHtml`
   (Forschungsaufgaben in Legenden: Arceus, Punkte als Rechen-Tooltip).
+- Reiter „Aufträge“ (nur Legenden: Arceus, `requestsView`): Suche, Offen/Alle/Erledigt, Haken `reqdone` (`toggleReq`,
+  `/api/gefunden` mit Karte `auftrag`); auf der Detailseite `requestsHtml`.
 - Detailseite: `wissenHtml` (gepflegtes Spielwissen in der Fangchance), `partnerHtml` (Partner-Techniken, Geheime Techniken).
 - Schadensrechner: Gegner `favs` (Favoriten des Spiels).
 - Werte `statBox` (`#stbox`, übrige Spiele außer Champions, Pokopia; `STATS_OK`): `/api/werte`, Team-Platz `ivs`,

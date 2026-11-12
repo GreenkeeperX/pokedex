@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, companion, db, ign, importer, mapgenie, pkcompletion, pokewiki, serebii, smogon, sources, store
+from . import altissimo, bisafans, companion, db, ign, importer, mapgenie, pkcompletion, pokewiki, serebii, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -627,6 +627,7 @@ def _build(st, log, force, at):
     STATE["step"] = "Showdown, PKHeX, Spawnpunkte, PokéWiki, Serebii, Altissimo, PLA Companion (parallel)"
     got = _parallel({"showdown": showdown_all, "pkhex": lambda: _pkhex(st, log, at), "spawns": lambda: _spawns(st, log, at),
                      "pokewiki": lambda: _pokewiki(st, log, at), "serebii": lambda: _serebii(st, log, at),
+                     "bisafans": lambda: _bisafans(st, log, at),
                      "altissimo": lambda: _altissimo(st, log, at), "companion": lambda: _companion(st, log, at)})
     for k, v in got.items():
         if isinstance(v, Exception):
@@ -635,6 +636,8 @@ def _build(st, log, force, at):
     pkhex, spawns, wiki = got["pkhex"] or {}, got["spawns"] or {}, got["pokewiki"] or {}
     if got["serebii"]:
         wiki = dict(wiki, serebii=got["serebii"])           # Serebii läuft beim Bauen mit dem PokéWiki zusammen
+    if got.get("bisafans"):
+        wiki = dict(wiki, bisafans=got["bisafans"])         # ebenso BisaFans
     alt, comp = got["altissimo"] or {}, got["companion"]
     if comp:
         alt.setdefault("legends-arceus", {})["companion"] = comp
@@ -718,7 +721,8 @@ def _build(st, log, force, at):
         + (f"; {stats['items']} Items" if stats.get("items") else "")
         + ("; deutsche Texte je Spiel: " + ", ".join(f"{n} {TEXT_LABEL.get(k, k)}" for k, n in sorted((stats.get("texte") or {}).items()))
            if stats.get("texte") else "")
-        + (f", {stats['forschung']} Forschungsaufgaben (Legenden: Arceus)" if stats.get("forschung") else ""))
+        + (f", {stats['forschung']} Forschungsaufgaben (Legenden: Arceus)" if stats.get("forschung") else "")
+        + (f"; BisaFans: {stats['auftraege']} Aufträge (Legenden: Arceus)" if stats.get("auftraege") else ""))
     for k, keys in (stats.get("kuerzel_unbekannt") or {}).items():
         log(f"PokéWiki: unbekannte Spielkürzel bei {TEXT_LABEL.get(k, k)}: {', '.join(keys[:20])}")
     return not papi.stopped and not sd.stopped
@@ -1394,6 +1398,30 @@ def _serebii(st, log, at):
     return old
 
 
+BISA_PAUSE = 3.0            # Sekunden zwischen zwei Seiten bei BisaFans
+
+
+def _bisafans(st, log, at):
+    """Seiten von BisaFans: die Aufträge in Legenden: Arceus auf Deutsch, {"la_auftraege": [...]}. Bei Sperre, Fehler oder
+    einer Seite ohne Treffer gilt der letzte Lauf (bisafans.json im Datenordner)."""
+    old = store.load_json("bisafans.json", {})
+    if _resting(st, "bisafans", at):
+        log(f"BisaFans ruht bis {st['rest']['bisafans'][:16].replace('T', ' ')} UTC")
+        return old
+    src = _Source("bisafans", log, pause=BISA_PAUSE)
+    STATE["step"] = "BisaFans: Aufträge in Legenden: Arceus"
+    rows = bisafans.la_requests(src.get(bisafans.LA_REQUESTS) or "")
+    st["sources"]["bisafans"] = src.result(auftraege=len(rows))
+    if src.blocked:
+        st["rest"]["bisafans"] = _iso(now() + timedelta(hours=REST_H))
+    log(f"BisaFans: {len(rows)} Aufträge in Legenden: Arceus" + ("" if rows else ", es gilt der letzte Lauf"))
+    if rows:
+        out = {"la_auftraege": rows}
+        store.save_json("bisafans.json", out)
+        return out
+    return old
+
+
 def start(force=False):
     """Lauf im Hintergrund. False, wenn schon einer läuft."""
     if _running.locked():
@@ -1715,6 +1743,9 @@ def diagnose(proben=None, stand=None):
             out.append(f"{name}: {len(pokewiki.per_game(kind, tx))} Spiele" + (f", unbekannt: {', '.join(unk)}" if unk else "")
                        + (f", {len(v.get('aufgaben') or [])} Forschungsaufgaben" if kind == "pokemon" else ""))
         return "; ".join(out)
+    probe("BisaFans, Aufträge in Legenden: Arceus", bisafans.LA_REQUESTS,
+          lambda t: (lambda r: f"{len(r)} Aufträge" + (f", zuletzt Nr. {r[-1]['nr']} „{r[-1]['name']}“, Belohnung {r[-1]['belohnung'] or '?'}"
+                                                        if r else ""))(bisafans.la_requests(t)), keep=True)
     probe("PokéWiki, Texte je Spiel (Pikachu, Donnerblitz, Statik)", pokewiki.batch_url(["Pikachu", "Donnerblitz", "Statik"]),
           wiki_texts, keep=True)
     probe("Bulbapedia, API", "https://bulbapedia.bulbagarden.net/w/api.php?action=query&meta=siteinfo&format=json", wiki_info)

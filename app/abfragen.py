@@ -1265,6 +1265,7 @@ def detail(fid, p):
                     text=joined(dex) if dex["texte"] else (" ".join(str(flavor[0]).split()) if flavor else ""),
                     texte=dex["texte"], text_aus=dex["aus"], text_quelle=dex["quelle"] or ("PokéAPI" if flavor else ""),
                     forschung=_research(con, f["art"]) if g and g["kennung"] == LA else [], faehigkeiten=abil,
+                    auftraege=_requests(con, D, f["art"]) if g and g["kennung"] == LA else [],
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
@@ -1378,6 +1379,39 @@ def _research(con, art):
         stufen = [x for x in json.loads(st or "[]") if x not in ("0", "")]
         out.append({"aufgabe": a, "stufen": stufen, "doppelt": bool(d)})
     return out
+
+
+def _requests(con, D, art=None):
+    """Aufträge in Legenden: Arceus (BisaFans), mit art nur die, in denen die Art vorkommt."""
+    try:
+        rows = con.execute("SELECT nr, name, beschreibung, aufgabe, ort, loesung, belohnung, arten FROM auftrag "
+                           "WHERE spiel = ? ORDER BY nr", (LA,)).fetchall()
+    except Exception:
+        return []
+    std = {}
+    for f in D.forms.values():
+        if f["standard"]:
+            std.setdefault(f["art"], f)
+    out = []
+    for nr, name, besch, aufg, ort, loes, bel, arten in rows:
+        arts = json.loads(arten or "[]")
+        if art is not None and art not in arts:
+            continue
+        out.append({"nr": nr, "name": name, "beschreibung": besch, "aufgabe": aufg, "ort": ort, "loesung": loes,
+                    "belohnung": bel, "pokemon": [{"id": std[a]["id"], "name": std[a]["name"]} for a in arts if a in std]})
+    return out
+
+
+def request_list(p):
+    """Alle Aufträge in Legenden: Arceus: {"rows": [...]} (leer in anderen Spielen)."""
+    D = data()
+    if not D or p.get("spiel") not in (None, "", LA):
+        return {"rows": []}
+    con = db.game()
+    try:
+        return {"rows": _requests(con, D)}
+    finally:
+        con.close()
 
 
 def _wiki_title(D, f):

@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.37.0 (12.11.2026)
+
+- Neue Quelle BisaFans (`app/bisafans.py`, `abruf._bisafans`, `bisafans.json` im Datenordner): die Nebenmissionen von
+  Legenden: Arceus von einer Seite. Der Leser arbeitet auf Textzeilen (Überschrift „Nebenmission N: Name“, Abschnitte
+  Beschreibung, Aufgabe, Wo, Lösung, Belohnung) und hängt nicht an der HTML-Form
+- Tabelle `auftrag` (`importer._derive_auftrag`) mit den Arten aus dem Hisui-Pokédex, deren Name im Text steht;
+  `/api/auftraege`, Reiter „Aufträge“ (nur in Legenden: Arceus), Kasten auf der Detailseite. Erledigt liegt in
+  user.db in `gefunden` unter der Karte `auftrag` (Export und Import nehmen es mit). `importer.VERSION` 20
+- Verbindungstest: Probe „BisaFans, Aufträge in Legenden: Arceus“ (wird als Probe behalten)
+
 ## 0.36.0 (12.11.2026)
 
 - Deutsche Texte je Spiel aus dem PokéWiki (`abruf._wiki_texts`, `pokewiki_texte.json` im Datenordner): Seiten aller

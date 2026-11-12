@@ -20,7 +20,7 @@ import sqlite3
 
 from . import altissimo, companion, pokewiki, serebii, showdown
 
-VERSION = "19"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
+VERSION = "20"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
 _INT = re.compile(r"-?\d+")
 
@@ -1336,6 +1336,36 @@ def _derive_texts(con, wiki):
     return {k: len(v) for k, v in counts.items()}, n_tasks, {k: sorted(v) for k, v in unknown.items()}
 
 
+def _derive_auftrag(con, bisa):
+    """Aufträge in Legenden: Arceus (BisaFans, abruf._bisafans) in die Tabelle auftrag. arten: die Arten aus dem Pokédex
+    von Hisui, deren deutscher Name in Aufgabe, Beschreibung oder Lösung steht. Gibt die Zahl der Aufträge zurück."""
+    con.execute("CREATE TABLE auftrag (spiel TEXT, nr INTEGER, name TEXT, beschreibung TEXT, aufgabe TEXT, ort TEXT, "
+                "loesung TEXT, belohnung TEXT, arten TEXT, PRIMARY KEY (spiel, nr))")
+    rows = (bisa or {}).get("la_auftraege") or []
+    if not rows:
+        return 0
+    names = {}
+    if _has(con, "spiel_form") and _has(con, "pokemon_species_names"):
+        for art, n in con.execute(
+                "SELECT DISTINCT f.art, n.name FROM spiel_form sf JOIN spiel s ON s.id = sf.spiel JOIN form f ON f.id = sf.form "
+                "JOIN pokemon_species_names n ON n.pokemon_species_id = f.art AND n.local_language_id = ? "
+                "WHERE s.kennung = 'legends-arceus'", (DE,)):
+            if n:
+                names[n] = art
+    pat = re.compile(r"(?<![\wÄÖÜäöüß-])(" + "|".join(sorted(map(re.escape, names), key=len, reverse=True)) + r")(?![\wÄÖÜäöüß])") if names else None
+    for r in rows:
+        found = []
+        if pat:
+            for part in ("aufgabe", "beschreibung", "loesung"):
+                for n in pat.findall(r.get(part) or ""):
+                    if names[n] not in found:
+                        found.append(names[n])
+        con.execute("INSERT OR REPLACE INTO auftrag VALUES ('legends-arceus', ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (r["nr"], r.get("name", ""), r.get("beschreibung", ""), r.get("aufgabe", ""), r.get("ort", ""),
+                     r.get("loesung", ""), r.get("belohnung", ""), json.dumps(found)))
+    return len(rows)
+
+
 def _derive_serebii(con, ser):
     """Aus Serebii (abruf._serebii): Abklingzeiten in Legenden: Z-A (attacke_spiel.abklingzeit) und die Pokémon in Pokopia
     (Tabelle pokopia, dazu spiel_form für den Haupt-Pokédex). ser = {"za": {Schlüssel: {...}}, "pokopia": {Dex: [...]}}.
@@ -1432,6 +1462,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
         n_sets = _derive_moveset(con, sets)
         n_wiki_moves, n_wiki_items = _derive_wiki(con, wiki)
         n_texte, n_forschung, unbekannt = _derive_texts(con, wiki)
+        n_auftrag = _derive_auftrag(con, (wiki or {}).get("bisafans"))
         n_abkling, n_pokopia = _derive_serebii(con, (wiki or {}).get("serebii"))
         n_wiki_karte = _derive_wiki_karte(con, wiki)
         n_orte = _derive_companion(con, alt)
@@ -1453,7 +1484,7 @@ def build(path, csvs, sd_texts=None, extra=None, strict=True, pkhex=None, spawns
                  "games": con.execute("SELECT COUNT(*) FROM spiel").fetchone()[0],
                  "sd_pokemon": len(sd_dex), "sd_moves": len(sd_moves), "diff": n_check, "fundorte": n_fund, "raids": n_raid, "crypto": n_crypto, "spawns": n_spawn, "items": n_item, "sets": n_sets, "werte_alt": n_alt, "wiki_attacken": n_wiki_moves, "wiki_items": n_wiki_items,
                  "kartenobjekte": n_obj, "lernen": n_lernen, "abklingzeiten": n_abkling, "pokopia": n_pokopia, "wiki_karte": n_wiki_karte, "orte": n_orte, "rezepte": n_rez,
-                 "texte": n_texte, "forschung": n_forschung, "kuerzel_unbekannt": unbekannt, "check": why}
+                 "texte": n_texte, "forschung": n_forschung, "auftraege": n_auftrag, "kuerzel_unbekannt": unbekannt, "check": why}
     finally:
         con.close()
     return stats

@@ -11,11 +11,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.36.0"
+VERSION = "0.37.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.37.0", "12.11.2026", [
+        "Legenden: Arceus: neuer Reiter „Aufträge“ mit allen Nebenmissionen auf Deutsch (Aufgabe, Ort, Belohnung, Lösung im Tooltip), Suche und Haken für erledigte",
+        "Auf der Detailseite stehen die Aufträge, in denen das Pokémon vorkommt",
+    ]),
     ("0.36.0", "12.11.2026", [
         "Pokédex-Einträge, Attacken- und Fähigkeitstexte auf Deutsch für das gewählte Spiel, auch für ältere Spiele und Karmesin/Purpur (aus dem PokéWiki)",
         "Fehlt der Text im Spiel, steht dabei, aus welchem Spiel er stammt; bei zwei Editionen stehen beide",
