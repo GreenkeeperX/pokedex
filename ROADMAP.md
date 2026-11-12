@@ -1,5 +1,11 @@
 # Roadmap
 
+## 0.47.2 (12.11.2026)
+
+- Verbindungstest mit den Kandidaten der Recherche „Kartenalternativen für Kalos und Alola“: Fan-Karten Kalos
+  (4414×2924) und Alola (4414×3144) als PNG, MewMaps Sonne/Mond und USUM (Insel- und Gebietsbilder), japanische
+  X/Y-Kartenübersicht mit Bildkarte; aus der Cloud nicht erreichbar, daher erst über die Proben bewertbar
+
 ## 0.47.1 (12.11.2026)
 
 - Favoriten-Reihen wieder 11 px, ⇄ wieder 24 px (Entscheidung 12.11.2026: so war es richtig)

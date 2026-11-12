@@ -12,11 +12,14 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.47.1"
+VERSION = "0.47.2"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.47.2", "12.11.2026", [
+        "Verbindungstest: weitere Kartenquellen für X/Y, Sonne/Mond und Ultrasonne/Ultramond (große Fan-Karten von Kalos und Alola, MewMaps, japanische X/Y-Übersicht)",
+    ]),
     ("0.47.1", "12.11.2026", [
         "Favoriten im Team-Reiter: Abstand der Reihen und Größe des ⇄-Knopfs wieder wie vor 0.46",
     ]),

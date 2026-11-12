@@ -2666,6 +2666,19 @@ def diagnose(proben=None, stand=None):
     bulba = ["Kalos XY.png", "Melemele Island Map.png", "Melemele Island Map 2.png", "Ula'ula Island Map.png", "Ula'ula Island Map 2.png",
              "Poni Island Map.png", "Poni Island Map 2.png", "Sinnoh BDSP.png", "UGMAP.png", "Galar Sh.png", "Galar Sh DLC.png",
              "Hoenn Soaring ORAS Map.png", "Sinnoh DP.png", "Sinnoh.png", "Hisui.png", "Paldea.png", "Kitakami.png", "Blueberry Academy.png"]
+    # Recherche 12.11. (Kalos und Alola): große Fan-Karten als PNG, MewMaps (Insel- und Gebietskarten), japanische Übersicht
+    def png_info(text):
+        b = text.encode("latin-1", "replace") if isinstance(text, str) else text
+        wh = raidnester.png_size(b)
+        return f"PNG {wh[0]} × {wh[1]} px, {len(b)} Bytes" if wh else f"kein PNG ({len(b)} Bytes, Anfang {b[:12]!r})"
+    for u, name in (("http://www.40k.zombiecrisis.org/map.png", "Kalos"), ("http://40k.zombiecrisis.org/map-alola.png", "Alola")):
+        probe(f"Fan-Karte {name} (PNG)", u, png_info, raw=True)
+    img_rx = re.compile(r'(?:src|href)="([^"]+?\.(?:jpe?g|png|webp))"', re.I)
+    for path, name in (("sun-moon", "Sonne/Mond"), ("ultra-sun-ultra-moon", "Ultrasonne/Ultramond")):
+        probe(f"MewMaps, {name}", f"https://www.mewmaps.org/{path}",
+              lambda t: f"{len(set(img_rx.findall(t)))} Bilder: {', '.join(sorted(set(img_rx.findall(t)))[:12])}", keep=True, headers=html)
+    probe("Japanische X/Y-Kartenübersicht", "https://xn--rckteqa2e6038anjua.com/xy/pokemon_xy_map.html",
+          lambda t: f"{t.count('<area')} Flächen, {len(set(img_rx.findall(t)))} Bilder: {', '.join(sorted(set(img_rx.findall(t)))[:8])}", keep=True, headers=html)
     probe("Bulbapedia-Archiv, Regionskarten mit Größe", "https://archives.bulbagarden.net/w/api.php?action=query&prop=imageinfo"
           "&iiprop=size|url&format=json&titles=" + urllib.parse.quote("|".join("File:" + b for b in bulba)), sizes, keep=True)
 
