@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import threading
+import time
 import traceback
 import urllib.parse
 import zipfile
@@ -49,7 +50,8 @@ def host_allowed(host, extra=None):
 
 # ------------------------------------------------------------------ Verbindungstest im Hintergrund
 
-DIAG = {"id": 0, "running": False, "lines": None, "error": "", "proben": {}}
+# Ergebnis und Probe-Seiten liegen nur im Speicher; ein neuer Test ersetzt sie (nichts sammelt sich auf der Platte)
+DIAG = {"id": 0, "running": False, "lines": None, "error": "", "proben": {}, "stand": {}, "start": "", "dauer": None}
 _diag_lock = threading.Lock()
 
 
@@ -57,17 +59,17 @@ def start_diag():
     with _diag_lock:
         if DIAG["running"]:
             return False
-        DIAG.update(id=DIAG["id"] + 1, running=True, lines=None, error="", proben={})
+        DIAG.update(id=DIAG["id"] + 1, running=True, lines=None, error="", proben={}, stand={}, start=_now(), dauer=None)
 
     def run():
-        proben = {}
+        proben, t0 = {}, time.monotonic()
         try:
-            lines, error = abruf.diagnose(proben), ""
+            lines, error = abruf.diagnose(proben, DIAG["stand"]), ""
         except Exception as e:
             traceback.print_exc()
             lines, error = None, type(e).__name__
         with _diag_lock:
-            DIAG.update(running=False, lines=lines, error=error, proben=proben)
+            DIAG.update(running=False, lines=lines, error=error, proben=proben, dauer=round(time.monotonic() - t0))
     threading.Thread(target=run, daemon=True).start()
     return True
 
@@ -635,7 +637,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, abruf.status())
             elif path == "/api/diag":
                 with _diag_lock:
-                    self._send(200, {k: v for k, v in DIAG.items() if k != "proben"} | {"proben": len(DIAG["proben"])})
+                    st = DIAG["stand"]
+                    self._send(200, {k: v for k, v in DIAG.items() if k not in ("proben", "stand")} | {"proben": len(DIAG["proben"]),
+                               "gesamt": st.get("gesamt", 0), "fertig": st.get("fertig", 0), "laeuft": list(st.get("laeuft", []))[:4]})
             elif path == "/api/diag/proben":
                 with _diag_lock:
                     body = {"app": "pokedex", "version": sources.VERSION, "proben": dict(DIAG["proben"])}

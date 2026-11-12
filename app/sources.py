@@ -10,11 +10,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.34.0"
+VERSION = "0.35.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.35.0", "12.11.2026", [
+        "Verbindungstest fragt verschiedene Server gleichzeitig an (jeden für sich mit Pause) und zeigt, wie weit er ist",
+        "Der Test läuft weiter, wenn du den Reiter wechselst; die Einstellungen zeigen danach Stand oder Ergebnis",
+        "Einstellungen: Zeitplan oben im Kasten, Quellen mit farbigen Zählern, Kopieren und Herunterladen im Kopf von Protokoll und Test",
+    ]),
     ("0.34.0", "12.11.2026", [
         "Fangchance: jede Zelle zeigt im Tooltip den Rechenweg (Fangrate, KP, Ball, Status, Fangwert, Rüttelproben)",
         "Initiative-Liste: jeder Wert zeigt im Tooltip Basis, Level, IV, EV, Wesen, die Formel mit Zahlen und Rückenwind oder Wahlschal",

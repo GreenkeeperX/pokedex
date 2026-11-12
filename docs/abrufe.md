@@ -116,7 +116,11 @@ eingestellten Abstand (1 bis 30 Tage, Standard 7); nach einem Fehlschlag frühes
 
 ## Verbindungstest
 
-Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen:
+Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen. Verschiedene Server fragt er gleichzeitig an, jeden
+Server für sich nacheinander mit Pause (`abruf.DIAG_PAUSE`, sonst `PAUSE`); die Zeilen bleiben in der Reihenfolge der
+Abfragen. Der Test läuft im Dienst und geht weiter, wenn die Oberfläche den Reiter wechselt; `GET /api/diag` liefert
+den Fortschritt (`gesamt`, `fertig`, `laeuft`) und am Ende Start, Dauer und Zeilen. Ergebnis und Probe-Seiten liegen nur
+im Speicher; jeder neue Test ersetzt sie, auf der Platte sammelt sich nichts.
 
 - heutige Quellen: GitHub-API, eine CSV der PokéAPI, Showdown, ein Sprite,
 - Items: `items.csv` und `item_flavor_text.csv` der PokéAPI, `items.ts` von Showdown, deutsche Itemnamen aus PKHeX,
