@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.48.6 (12.11.2026)
+
+- Schadensrechner: `#calc .seg button.on` mit `--hcbg`; zwei `.bar` statt `.brk` (der leere Umbruch gab doppelten Zeilenabstand);
+  Übersicht `#dmgx` mit `crossTable` (XPIN), Prozent mit `ramp`
+- Seite merkt sich die Version beim Laden (`LOADED_VER`); liefert `/api/meta` später eine andere, lädt sie neu.
+  `index.html` bekommt `?v=VERSION` an CSS und JS
+- Map Genie Rot/Blau/Gelb: `MG_EDITION` ordnet die Karten `redblue` und `yellow` ihren Editionen zu
+- Trainer: Kategorie „Charakter aus Hisui“ (Rolle Trainer); `pokewiki_trainer.json` merkt die Kategorien und holt bei neuen sofort neu
+
 ## 0.48.5 (12.11.2026)
 
 - Schadensrechner: `.seg.cslots button.on` mit `--hcbg`; Zeilenumbruch (`.brk`) vor „gegen …“

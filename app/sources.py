@@ -12,11 +12,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.48.5"
+VERSION = "0.48.6"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.48.6", "12.11.2026", [
+        "Schadensrechner: „eine Attacke“/„Übersicht“ wie der gewählte Angreifer, „gegen …“-Zeile mit normalem Abstand",
+        "Schadensrechner, Übersicht: Zeilen und Spalten markierbar, alle Prozente farbig von Rot bis Grün",
+        "Nach einem Update lädt die Seite sich selbst neu, sobald sie die neue Version bemerkt; CSS und JS tragen die Version in der Adresse",
+        "Karte Rot/Blau zeigt nur die Rot/Blau-Karte, Gelb nur die Gelb-Karte (Wechsel des Spiels wechselt die Karte)",
+        "Trainer als Gegner auch in Legenden: Arceus (Charaktere aus Hisui im PokéWiki), dazu Proben im Verbindungstest",
+    ]),
     ("0.48.5", "12.11.2026", [
         "Schadensrechner: gewählter Angreifer im Hintergrund der Hover-Karte statt grau, „gegen …“ und die übrigen Einstellungen immer in der nächsten Zeile",
     ]),

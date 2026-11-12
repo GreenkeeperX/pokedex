@@ -1934,7 +1934,8 @@ def _trainer(st, log, at):
     """Teams der Arenaleiter, Top Vier, Champs und Rivalen aller Hauptspiele aus dem PokéWiki, dazu die Trainer auf den
     Ortsseiten (Routen, Höhlen, Städte); Kategorien, dann die Seiten zu je 50: {"am", "teams": [...]} in pokewiki_trainer.json. Jünger als TRAINER_DAYS: der letzte Lauf gilt."""
     old = store.load_json("pokewiki_trainer.json", {}) or {}
-    if old.get("teams") and old.get("am", "") > _iso(now() - timedelta(days=TRAINER_DAYS)):
+    cats = sorted(pokewiki.TRAINER_CATS)          # neue Kategorien (0.48.6: Hisui) holen sofort neu, nicht erst nach TRAINER_DAYS
+    if old.get("teams") and old.get("am", "") > _iso(now() - timedelta(days=TRAINER_DAYS)) and old.get("kategorien", cats) == cats:
         return old
     if _resting(st, "pokewiki", at):
         return old
@@ -1972,7 +1973,7 @@ def _trainer(st, log, at):
         st["rest"]["pokewiki"] = _iso(now() + timedelta(hours=REST_H))
     log(f"PokéWiki: {len(teams)} Teams von {len(names)} Trainern" + ("" if teams else ", es gilt der letzte Lauf"))
     if teams and not src.stopped:
-        out = {"am": _iso(now()), "teams": teams}
+        out = {"am": _iso(now()), "teams": teams, "kategorien": cats}
         store.save_json("pokewiki_trainer.json", out)
         return out
     return old
@@ -2304,6 +2305,10 @@ def diagnose(proben=None, stand=None):
     probe("PokéWiki, Trainerteams und Blaubeer-Missionen", pokewiki.batch_url(["Rocko", "Nemila", pokewiki.BBQ_PAGE]), wiki_trainer)
     probe("PokéWiki, Kategorie Arenaleiter", pokewiki.category_url("Arenaleiter"),
           lambda t: f"{len(pokewiki.category_members(t)[0])} Seiten")
+    # 0.48.6: Trainer in Legenden: Arceus (Charaktere aus Hisui; Kamado und Wächterin Irida als Stichprobe)
+    probe("PokéWiki, Kategorie Charakter aus Hisui", pokewiki.category_url("Charakter aus Hisui"),
+          lambda t: (lambda n: f"{len(n)} Seiten: " + ", ".join(n[:15]))(pokewiki.category_members(t)[0]), keep=True)
+    probe("PokéWiki, Trainerteams Hisui (Kamado, Irida, Adamas)", pokewiki.batch_url(["Kamado", "Irida", "Adamas"]), wiki_trainer)
     def wiki_batch(text):
         got = pokewiki.pages(text)
         vals = {k: pokewiki.la_move(v) for k, v in got.items()}

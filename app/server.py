@@ -581,7 +581,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             if path in ("/", "/index.html"):
-                self._file(os.path.join(STATIC, "index.html"))
+                # 0.48.6: CSS und JS mit der Version in der Adresse, damit der Browser nach einem Update nie alte Dateien nimmt
+                with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
+                    page = f.read().replace('href="style.css"', f'href="style.css?v={sources.VERSION}"').replace(
+                        'src="js/app.js"', f'src="js/app.js?v={sources.VERSION}"')
+                self._send(200, page.encode("utf-8"), "text/html; charset=utf-8", {"Cache-Control": "no-cache"})
             elif re.fullmatch(r"/(style\.css|icon\.svg|js/[a-z-]+\.js)", path) and os.path.isfile(os.path.join(STATIC, path[1:])):
                 self._file(os.path.join(STATIC, path[1:]))
             elif m := re.fullmatch(r"/(sprites|artwork)/(\d{1,6})\.png", path):
