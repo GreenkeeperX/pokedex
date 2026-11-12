@@ -2530,6 +2530,26 @@ def diagnose(proben=None, stand=None):
                        ("pokemon-scarlet-and-violet/maps/the-indigo-disk", "Indigoblaue Scheibe")):
         probe(f"Gamer Guides, Kartenseite {name}", f"https://www.gamerguides.com/{path}",
               lambda t: f"Muster: {', '.join(tile_patterns(t)[:5]) or '–'}; {t.count('max_zoom')}× max_zoom", keep=True, headers=html)
+    # Spiele ohne Karte (X/Y, Sonne/Mond, USUM): Regionskarten mit Bildkarte im PokéWiki (deutsche Ortsnamen),
+    # Kartenbilder bei Bulbapedia und Pokémon Database; die Antworten bleiben für die Auswertung (keep)
+    area_rx = re.compile(r"(?m)^\s*(?:rect|poly|circle)\s")
+    file_rx = re.compile(r"[\w .-]+-Map [\w .äöüÆæ-]+[.](?:png|gif)")
+
+    def imagemap(text):
+        out = []
+        for k, v in pokewiki.pages(text).items():
+            files = ", ".join(sorted(set(file_rx.findall(v)))[:6]) or "–"
+            out.append(f"{k}: {len(area_rx.findall(v))} Flächen, Bilder {files}")
+        return "; ".join(out) or "keine Seiten"
+    probe("PokéWiki, Bildkarten Kalos und Alola (Vorlagen)", pokewiki.batch_url(
+        ["Vorlage:XY-Map Kalos", "Vorlage:SM-Map Alola", "Vorlage:USUM-Map Alola", "Vorlage:ORAS-Map Hoenn",
+         "Vorlage:SW-Map Einall", "Vorlage:S2W2-Map Einall", "Vorlage:SDLP-Map Sinnoh"]), imagemap, keep=True)
+    probe("Bulbapedia-Archiv, Kategorie Spielkarten", "https://archives.bulbagarden.net/w/api.php?action=query&list=categorymembers"
+          "&cmtitle=Category:Game_maps&cmlimit=500&cmtype=file&format=json",
+          lambda t: f"{len(json.loads(t)['query']['categorymembers'])} Dateien", keep=True)
+    map_rx = re.compile(r'href="(/map/[^"]+)"')
+    probe("Pokémon Database, Regionskarten", "https://pokemondb.net/map",
+          lambda t: f"{t.count('<area')} Flächen, {len(set(map_rx.findall(t)))} Kartenseiten", keep=True, headers=html)
     probe("Pokédens, Raid-Nester Schwert/Schild (Inhalt je Nest)", "https://pokedens.github.io/data.json",
           lambda t: (lambda d: f"{type(d).__name__} mit {len(d)} Einträgen; Schlüssel: {', '.join(list(d)[:8]) if isinstance(d, dict) else ', '.join(list(d[0])[:8]) if d and isinstance(d[0], dict) else '–'}")(json.loads(t)), keep=True)
 

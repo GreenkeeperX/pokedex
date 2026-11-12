@@ -1,5 +1,12 @@
 # Roadmap
 
+## 0.44.1 (12.11.2026)
+
+- Verbindungstest für Karten von X/Y, Sonne/Mond, Ultrasonne/Ultramond (bisher keine) und Einall, ORAS, BDSP (bisher nur
+  die grobe Serebii-Übersicht): Vorlagen `XY-Map Kalos`, `SM-Map Alola`, `USUM-Map Alola` u. a. im PokéWiki (Bildkarten mit
+  Flächen je Ort, deutsche Namen), Kategorie `Game maps` im Bulbapedia-Archiv, Regionskarten von Pokémon Database; die
+  Antworten bleiben in den Proben für die Auswertung
+
 ## 0.44.0 (12.11.2026)
 
 - Auswertung der Kartenrecherche vom 12.11. (21 Spielgruppen): brauchbar sind die HGSS IronMON Map und die Raid-Nester
