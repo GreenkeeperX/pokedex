@@ -12,11 +12,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.41.0"
+VERSION = "0.42.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.42.0", "12.11.2026", [
+        "Trainer als Gegner: im Reiter Team unter „Gegen Gegner“ die Teams der Arenaleiter, Top Vier, Champs und Rivalen des Spiels (PokéWiki), je Rolle nach Level sortiert, Rückkämpfe auf Wunsch, Suche nach Trainer, Ort oder Pokémon. Ein Klick setzt das Team als Gegner, mit Level und Attacken",
+        "Die Bewertung gegen ein Trainerteam rechnet mit dessen echten Attacken, der Schadensrechner mit dessen Level",
+        "Karmesin/Purpur: der Reiter Aufträge zeigt die Blaubeer-Missionen der Indigoblauen Scheibe mit BP, nach Solo-, Bonus- und Gruppen-Missionen",
+        "RankedBoost auch für Karmesin/Purpur und Legenden: Z-A",
+    ]),
     ("0.41.0", "12.11.2026", [
         "Legenden: Z-A hat jetzt auch den Reiter Aufträge: alle Nebenmissionen auf Deutsch (BisaFans, auch die der Mega-Dimension) und die Haupt- und Dimensions-Missionen (PokéWiki), abhakbar und mit der Karte verbunden",
         "Karten für alle übrigen Spiele: HeartGold/SoulSilver (Johto und Kanto), Schwarz/Weiß und Schwarz 2/Weiß 2, X/Y, Omega Rubin/Alpha Saphir, Sonne/Mond, Ultrasonne/Ultramond, Strahlender Diamant/Leuchtende Perle, Colosseum und XD als Regionskarte von Serebii; je Ort ein Punkt mit den Pokémon dort",

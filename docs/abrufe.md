@@ -55,7 +55,11 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    (`bisafans.LA_STORY`): die Hauptmissionen („Mission N: Name“ mit dem Anfang des Wegs) in `la_missionen`,
    `importer._derive_mission` legt sie in `mission`. Für Legenden: Z-A die Nebenmissionen (`bisafans.ZA_REQUESTS`, Hauptspiel
    und Mega-Dimension) und aus dem PokéWiki die Seite „Missionen in Pokémon-Legenden: Z-A“ (`pokewiki.za_missions`): Haupt-
-   und Dimensions-Missionen, dazu Nebenmissionen, die BisaFans noch fehlen.
+   und Dimensions-Missionen, dazu Nebenmissionen, die BisaFans noch fehlen. In derselben Anfrage die Seite „Blaubeer-Punkte“
+   (`pokewiki.bbq_missions`), daraus die Tabelle `blaubeer`.
+   **Trainer** (`abruf._trainer`, PokéWiki): die Kategorien Arenaleiter, Top Vier, Champ und Rivale, dann deren Seiten zu je
+   50; je Seite die Vorlagen `Team/Zeile` (Edition, Trainerklasse, id/lvl/item/fähigkeit/atk je Platz). Gespeichert in
+   `pokewiki_trainer.json`, neu geholt alle 7 Tage; `importer._derive_trainer` legt je Spiel und Kampf eine Zeile an.
    **PLA Companion** (software-notion.de, `app/companion.py`): je Karte `/apps/pla-companion/map/<Karte>/data?lang=de`
    mit 2 Sekunden Pause; Schnellreise und Lager, ausgerichtet an Geisterlichtern und Icognito von Altissimo
    (`companion.fit`, `importer._derive_companion`). Das Protokoll zählt alle Arten von Einträgen.

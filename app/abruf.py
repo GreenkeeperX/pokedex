@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "rankedboost": "RankedBoost (Karten Let's Go, Feuerrot/Blattgrün, Karmesin/Purpur, Z-A)", "pokearth": "Serebii PokéEarth (Regionskarten der übrigen Spiele)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus und Z-A)", "trainer": "PokéWiki (Trainerteams)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -632,7 +632,7 @@ def _build(st, log, force, at):
     STATE["step"] = "Showdown, PKHeX, Spawnpunkte, PokéWiki, Serebii, Altissimo, PLA Companion (parallel)"
     got = _parallel({"showdown": showdown_all, "pkhex": lambda: _pkhex(st, log, at), "spawns": lambda: _spawns(st, log, at),
                      "pokewiki": lambda: _pokewiki(st, log, at), "serebii": lambda: _serebii(st, log, at),
-                     "bisafans": lambda: _bisafans(st, log, at),
+                     "bisafans": lambda: _bisafans(st, log, at), "trainer": lambda: _trainer(st, log, at),
                      "altissimo": lambda: _altissimo(st, log, at), "companion": lambda: _companion(st, log, at)})
     for k, v in got.items():
         if isinstance(v, Exception):
@@ -643,6 +643,8 @@ def _build(st, log, force, at):
         wiki = dict(wiki, serebii=got["serebii"])           # Serebii läuft beim Bauen mit dem PokéWiki zusammen
     if got.get("bisafans"):
         wiki = dict(wiki, bisafans=got["bisafans"])         # ebenso BisaFans
+    if got.get("trainer"):
+        wiki = dict(wiki, trainer=(got["trainer"] or {}).get("teams") or [])
     alt, comp = got["altissimo"] or {}, got["companion"]
     if comp:
         alt.setdefault("legends-arceus", {})["companion"] = comp
@@ -1666,13 +1668,15 @@ def _bisafans(st, log, at):
         za_pages.append(src.get(url, absent=(404,)) or "")
     za_rows = bisafans.merged_requests(za_pages)
     # Haupt- und Dimensions-Missionen in Z-A (und Nebenmissionen, die BisaFans noch fehlen) aus dem PokéWiki
-    za = {}
+    za, bbq = {}, []
     if not _resting(st, "pokewiki", at):
-        STATE.update(step="PokéWiki: Missionen in Legenden: Z-A")
+        STATE.update(step="PokéWiki: Missionen in Legenden: Z-A, Blaubeer-Missionen")
         wsrc = _Source("pokewiki", log, pause=BISA_PAUSE)
-        t = wsrc.get(pokewiki.batch_url([pokewiki.ZA_MISSIONS]), absent=(404,))
+        t = wsrc.get(pokewiki.batch_url([pokewiki.ZA_MISSIONS, pokewiki.BBQ_PAGE]), absent=(404,))
         try:
-            za = pokewiki.za_missions(pokewiki.pages(t).get(pokewiki.ZA_MISSIONS, "")) if t else {}
+            ps = pokewiki.pages(t) if t else {}
+            za = pokewiki.za_missions(ps.get(pokewiki.ZA_MISSIONS, ""))
+            bbq = pokewiki.bbq_missions(ps.get(pokewiki.BBQ_PAGE, ""))
         except ValueError:
             za = {}
     have = {r["nr"] for r in za_rows}
@@ -1687,11 +1691,63 @@ def _bisafans(st, log, at):
     if src.blocked:
         st["rest"]["bisafans"] = _iso(now() + timedelta(hours=REST_H))
     log(f"BisaFans: {len(rows)} Aufträge und {len(story)} Hauptmissionen in Legenden: Arceus" + ("" if rows else ", es gilt der letzte Lauf")
-        + f"; Legenden: Z-A {len(za_rows)} Nebenmissionen, {len(za_story)} Haupt- und Dimensions-Missionen (PokéWiki)")
-    if rows or za_rows:
+        + f"; Legenden: Z-A {len(za_rows)} Nebenmissionen, {len(za_story)} Haupt- und Dimensions-Missionen (PokéWiki)"
+        + f"; {len(bbq)} Blaubeer-Missionen (PokéWiki)")
+    if rows or za_rows or bbq:
         out = {"la_auftraege": rows or old.get("la_auftraege") or [], "la_missionen": story or old.get("la_missionen") or [],
-               "za_auftraege": za_rows or old.get("za_auftraege") or [], "za_missionen": za_story or old.get("za_missionen") or []}
+               "za_auftraege": za_rows or old.get("za_auftraege") or [], "za_missionen": za_story or old.get("za_missionen") or [],
+               "blaubeer": bbq or old.get("blaubeer") or []}
         store.save_json("bisafans.json", out)
+        return out
+    return old
+
+
+TRAINER_DAYS = 7           # so oft holt der Abgleich die Trainerseiten neu (sie ändern sich selten)
+
+
+def _trainer(st, log, at):
+    """Teams der Arenaleiter, Top Vier, Champs und Rivalen aller Hauptspiele aus dem PokéWiki (Kategorien, dann die
+    Seiten zu je 50): {"am", "teams": [...]} in pokewiki_trainer.json. Jünger als TRAINER_DAYS: der letzte Lauf gilt."""
+    old = store.load_json("pokewiki_trainer.json", {}) or {}
+    if old.get("teams") and old.get("am", "") > _iso(now() - timedelta(days=TRAINER_DAYS)):
+        return old
+    if _resting(st, "pokewiki", at):
+        return old
+    src = _Source("pokewiki", log, pause=BISA_PAUSE)
+    roles = {}
+    for cat, rolle in pokewiki.TRAINER_CATS.items():
+        cont, n = None, 0
+        while n < 5 and not src.stopped:
+            STATE.update(step=f"PokéWiki: Trainer ({cat})")
+            t = src.get(pokewiki.category_url(cat, cont), absent=(404,))
+            try:
+                titles, cont = pokewiki.category_members(t) if t else ([], None)
+            except ValueError:
+                titles, cont = [], None
+            for x in titles:
+                roles.setdefault(x, rolle)
+            n += 1
+            if not cont:
+                break
+    names, teams = sorted(roles), []
+    for i in range(0, len(names), pokewiki.BATCH):
+        if src.stopped:
+            break
+        STATE.update(step="PokéWiki: Teams der Trainer", done=i, total=len(names))
+        t = src.get(pokewiki.batch_url(names[i:i + pokewiki.BATCH]))
+        try:
+            got = pokewiki.pages(t) if t else {}
+        except ValueError:
+            got = {}
+        for title, wt in got.items():
+            teams += pokewiki.trainer_teams(wt, title, roles.get(title, ""))
+    st["sources"]["trainer"] = src.result(trainer=len(names), teams=len(teams))
+    if src.blocked:
+        st["rest"]["pokewiki"] = _iso(now() + timedelta(hours=REST_H))
+    log(f"PokéWiki: {len(teams)} Teams von {len(names)} Trainern" + ("" if teams else ", es gilt der letzte Lauf"))
+    if teams and not src.stopped:
+        out = {"am": _iso(now()), "teams": teams}
+        store.save_json("pokewiki_trainer.json", out)
         return out
     return old
 
@@ -2012,6 +2068,16 @@ def diagnose(proben=None, stand=None):
                  "Forschungsaufgabe", "Edelhorde", "Raum-Zeit-Verzerrung"):
         probe(f"PokéWiki, Seite {page}", POKEWIKI_API + "?action=parse&page=" + urllib.parse.quote(page)
               + "&prop=wikitext&format=json&redirects=1", wiki_page, keep=True)
+    # 0.42: Trainerteams und Blaubeer-Missionen (der Leser zählt, was er findet)
+    def wiki_trainer(text):
+        got = pokewiki.pages(text)
+        ts = [t for k, v in got.items() for t in pokewiki.trainer_teams(v, k, "")]
+        bbq = pokewiki.bbq_missions(got.get(pokewiki.BBQ_PAGE, ""))
+        return (f"{len(ts)} Teams ({', '.join(sorted({g for t in ts for g in t['spiele']}))}); "
+                f"{len(bbq)} Blaubeer-Missionen ({', '.join(sorted({x['bereich'] for x in bbq}))})")
+    probe("PokéWiki, Trainerteams und Blaubeer-Missionen", pokewiki.batch_url(["Rocko", "Nemila", pokewiki.BBQ_PAGE]), wiki_trainer)
+    probe("PokéWiki, Kategorie Arenaleiter", pokewiki.category_url("Arenaleiter"),
+          lambda t: f"{len(pokewiki.category_members(t)[0])} Seiten")
     def wiki_batch(text):
         got = pokewiki.pages(text)
         vals = {k: pokewiki.la_move(v) for k, v in got.items()}

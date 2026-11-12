@@ -873,3 +873,11 @@ button.danger:hover{background:#c4000f;border-color:#c4000f}
 /* 0.40: Aufträge mit Sprung zur Karte */
 .reqpin{text-decoration:none;margin-left:4px;font-size:13px;opacity:.75}.reqpin:hover{opacity:1}
 .mgtiles img.mgimg{position:absolute;image-rendering:pixelated;max-width:none}
+/* 0.42: Trainer als Gegner */
+.trp{margin:2px 0 12px}.trp>summary{cursor:pointer;padding:6px 0}.trp>summary .hint{margin-left:8px}
+.trgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;max-height:420px;overflow:auto;padding:2px}
+.trc{display:flex;flex-direction:column;align-items:stretch;gap:2px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer}
+.trc:hover{border-color:var(--accent)}.trc.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.trc .trn{display:flex;justify-content:space-between;gap:6px}.trc .trt{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trc .trm{display:flex;flex-wrap:wrap}.trc .trm .spr{width:32px;height:32px}
+.foe .foeatk{font-size:11px;max-width:150px;margin:2px auto 0;line-height:1.25}

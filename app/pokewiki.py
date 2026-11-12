@@ -416,3 +416,142 @@ def za_missions(wt):
                      "freischaltung": (r[4] if len(r) > 4 else "").replace("\n", " ")}
             out[k].append(x)
     return out
+
+
+# ---- Trainer mit Team (Arenaleiter, Top Vier, Champs, Rivalen): Vorlagen Team/Kopf und Team/Zeile
+
+TRAINER_CATS = {"Arenaleiter": "Arenaleiter", "Top Vier": "Top Vier", "Champ": "Champ", "Rivale": "Rivale"}
+# Kürzel im Parameter Edition (klein, ohne Zeichen dazwischen) → Spiele
+ED_GAMES = {"rb": ["red-blue"], "gelb": ["yellow"], "g": ["yellow"], "rbg": ["red-blue", "yellow"], "gs": ["gold-silver"],
+            "kristall": ["crystal"], "k": ["crystal"], "gsk": ["gold-silver", "crystal"], "rs": ["ruby-sapphire"],
+            "sm": ["emerald"], "smaragd": ["emerald"], "rss": ["ruby-sapphire", "emerald"], "frbg": ["firered-leafgreen"],
+            "dp": ["diamond-pearl"], "pt": ["platinum"], "platin": ["platinum"], "dppt": ["diamond-pearl", "platinum"],
+            "hgss": ["heartgold-soulsilver"], "sw": ["black-white"], "s2w2": ["black-2-white-2"], "xy": ["x-y"],
+            "oras": ["omega-ruby-alpha-sapphire"], "somo": ["sun-moon"], "usum": ["ultra-sun-ultra-moon"],
+            "lgpe": ["lets-go-pikachu-lets-go-eevee"], "swsh": ["sword-shield"], "sdlp": ["brilliant-diamond-shining-pearl"],
+            "pla": ["legends-arceus"], "kapu": ["scarlet-violet"], "plza": ["legends-za"], "col": ["colosseum"],
+            "colosseum": ["colosseum"], "xd": ["xd"]}
+
+
+def ed_games(code):
+    """Edition einer Team-Zeile → Spiele ([] für Stadium, Anime und Unbekanntes)."""
+    return list(ED_GAMES.get(re.sub(r"[^a-z0-9]", "", (code or "").lower()), []))
+
+
+def category_url(cat, cont=None):
+    q = {"action": "query", "list": "categorymembers", "cmtitle": "Kategorie:" + cat, "cmlimit": "500", "cmnamespace": "0",
+         "format": "json", "formatversion": "2"}
+    if cont:
+        q["cmcontinue"] = cont
+    return API + "?" + urllib.parse.urlencode(q)
+
+
+def category_members(text):
+    """Antwort von list=categorymembers → (Titel, Fortsetzung oder None)."""
+    d = json.loads(text or "{}")
+    titles = [x["title"] for x in (d.get("query") or {}).get("categorymembers") or [] if x.get("title")]
+    return titles, ((d.get("continue") or {}).get("cmcontinue"))
+
+
+def templates_all(wt, name):
+    """Alle Vorlagen name im Wikitext in Reihenfolge: [(Position, {Parameter: Wert})]."""
+    out, pos = [], 0
+    pat = re.compile(r"\{\{\s*" + re.escape(name) + r"\s*\|")
+    while True:
+        m = pat.search(wt or "", pos)
+        if not m:
+            return out
+        parts = _parts(wt[m.start():], name)
+        p = {}
+        for x in parts:
+            if "=" in x:
+                k, v = x.split("=", 1)
+                p[k.strip()] = v.strip()
+        out.append((m.start(), p))
+        pos = m.end()
+
+
+def _role(klasse, rolle):
+    k = (klasse or "").lower()
+    if "top" in k and "vier" in k:
+        return "Top Vier"
+    if "champ" in k:
+        return "Champ"
+    if "leiter" in k or "arena" in k:
+        return "Arenaleiter"
+    if "rival" in k:
+        return "Rivale"
+    return rolle
+
+
+def trainer_teams(wt, title, rolle):
+    """Teams eines Trainers aus seiner Seite: [{spiele, name, rolle, titel, hinweis, rueckkampf, team: [{nr, lvl, item,
+    faehigkeit, attacken}]}]; nur Teams aus den Hauptspielen (Kürzel in ED_GAMES)."""
+    heads = [(pos, clean(re.sub(r"\{\{\s*sk\s*\|[^{}]*\}\}", "", p.get("Überschrift", ""))))
+             for pos, p in templates_all(wt, "Team/Kopf")]
+    out = []
+    for pos, p in templates_all(wt, "Team/Zeile"):
+        games = ed_games(p.get("Edition"))
+        if not games:
+            continue
+        team = []
+        for n in range(1, 7):
+            nr = _num(p.get(f"id{n}"))
+            if not nr:
+                continue
+            team.append({"nr": nr, "lvl": _num(p.get(f"lvl{n}")), "item": clean(p.get(f"item{n}", "")),
+                         "faehigkeit": clean(p.get(f"fähigkeit{n}", "")),
+                         "attacken": [a for a in (clean(p.get(f"atk{n}_{k}", "")) for k in range(1, 5)) if a]})
+        if not team:
+            continue
+        head = next((h for hp, h in reversed(heads) if hp < pos), "")
+        name = clean(p.get("Trainername") or p.get("Name") or title)
+        out.append({"spiele": games, "name": name or title, "seite": title, "rolle": _role(p.get("Trainerklasse"), rolle),
+                    "titel": head[:160], "hinweis": clean(p.get("Hinweis", ""))[:300],
+                    "rueckkampf": bool(clean(p.get("Rückkampf", ""))), "team": team})
+    return out
+
+
+# ---- Blaubeer-Missionen (Karmesin/Purpur: Die Indigoblaue Scheibe), Seite Blaubeer-Punkte
+
+BBQ_PAGE = "Blaubeer-Punkte"
+
+
+def _span(c):
+    m = re.search(r"rowspan\s*=\s*\"?(\d+)", c.split("|")[0] if "|" in c else "")
+    return int(m.group(1)) if m else 1
+
+
+def bbq_missions(wt):
+    """Blaubeer-Missionen aus der Tabelle der Seite Blaubeer-Punkte: [{bereich, art, text, bp}]. Die Tabelle fasst Art,
+    Name und Belohnung über mehrere Zeilen zusammen (rowspan); Abschnittszeilen (Solo-, Bonus-, Gruppen-Missionen)
+    stehen als eine Kopfzelle über alle Spalten."""
+    m = re.search(r"==\s*Blaubeer-Missionen\s*==(.*?)(?:\n==[^=]|\Z)", wt or "", re.S)
+    body = m.group(1) if m else ""
+    out, bereich, carry = [], "", {}
+    for tab in re.findall(r"(?ms)^\{\|.*?^\|\}", body):
+        for row in re.split(r"(?m)^\|-.*$", tab)[1:]:
+            cells = [ln[1:] for ln in row.split("\n") if ln[:1] in ("|", "!") and not ln.startswith("|}")]
+            if len(cells) == 1 and "colspan" in cells[0]:
+                bereich = _cell(cells[0])
+                carry = {}
+                continue
+            cols, it = [], iter(cells)
+            for col in range(4):
+                if carry.get(col, (0,))[0] > 0:
+                    n, v = carry[col]
+                    carry[col] = (n - 1, v)
+                    cols.append(v)
+                    continue
+                c = next(it, None)
+                if c is None:
+                    break
+                v = _cell(c)
+                s = _span(c)
+                if s > 1:
+                    carry[col] = (s - 1, v)
+                cols.append(v)
+            if len(cols) == 4 and cols[2]:
+                bp = _num(re.sub(r"[.\s]", "", cols[3]) if cols[3] else "")
+                out.append({"bereich": bereich.replace("\n", " "), "art": cols[1].replace("\n", " "), "text": cols[2].replace("\n", " "), "bp": bp})
+    return out
