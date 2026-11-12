@@ -1270,6 +1270,16 @@ def _raidnester(log):
         if not src.stopped:
             log("PKHeX Raid Plugin: keine Raid-Nester gelesen")
         return src.result(dateien=0)
+    tabs = raidnester.tables(src.get(raidnester.TABLES, absent=(404,)) or "") if not src.stopped else {}
+    names = {}
+    try:
+        con = db.game()
+        try:
+            names = {i: n for i, n in con.execute("SELECT pokemon_species_id, name FROM pokemon_species_names WHERE local_language_id = 6") if n}
+        finally:
+            con.close()
+    except Exception:
+        pass
     found = 0
     for area, (spiel, bild, _, _) in raidnester.AREAS.items():
         STATE["step"] = f"PKHeX Raid Plugin: {area}"
@@ -1284,11 +1294,12 @@ def _raidnester(log):
         if not os.path.isfile(f):
             continue
         with open(f, "rb") as fh:
-            m = raidnester.parse(ns, area, *(raidnester.png_size(fh.read(32)) or (0, 0)))
+            m = raidnester.parse(ns, area, *(raidnester.png_size(fh.read(32)) or (0, 0)), tabs=tabs, names=names)
         if m:
             _save_maps(spiel, "rn", [m])
             found += 1
-    log(f"PKHeX Raid Plugin: {len(ns)} Raid-Nester auf {found} Karten")
+    n_tab = sum(len(v) for v in tabs.values())
+    log(f"PKHeX Raid Plugin: {len(ns)} Raid-Nester auf {found} Karten" + (f", Inhalt aus {n_tab} Tabellen" if n_tab else ", ohne Inhalt der Nester"))
     return src.result(dateien=found)
 
 
@@ -2635,6 +2646,28 @@ def diagnose(proben=None, stand=None):
           lambda t: f"{t.count('<area')} Flächen, {len(set(map_rx.findall(t)))} Kartenseiten", keep=True, headers=html)
     probe("Pokédens, Raid-Nester Schwert/Schild (Inhalt je Nest)", "https://pokedens.github.io/data.json",
           lambda t: (lambda d: f"{type(d).__name__} mit {len(d)} Einträgen; Schlüssel: {', '.join(list(d)[:8]) if isinstance(d, dict) else ', '.join(list(d[0])[:8]) if d and isinstance(d[0], dict) else '–'}")(json.loads(t)), keep=True)
+
+    section("Kartenbilder im Detail (seit 0.47): Größe der Bilder für X/Y, Sonne/Mond, USUM, ORAS, BDSP")
+
+    def sizes(text):
+        d = json.loads(text).get("query") or {}
+        xs = [(i.get("name") or "", i.get("width"), i.get("height")) for i in d.get("allimages") or []]
+        xs += [(p.get("title") or "", (p.get("imageinfo") or [{}])[0].get("width"), (p.get("imageinfo") or [{}])[0].get("height"))
+               for p in (d.get("pages") or {}).values()] if isinstance(d.get("pages"), dict) else \
+              [(p.get("title") or "", (p.get("imageinfo") or [{}])[0].get("width"), (p.get("imageinfo") or [{}])[0].get("height"))
+               for p in d.get("pages") or []]
+        return "; ".join(f"{n} {w}×{h}" if w else f"{n} fehlt" for n, w, h in xs[:40]) or "keine Bilder"
+    # PokéWiki: alle Bilder mit diesen Anfängen (die Vorlagen nennen sie), mit Größe; Bulbapedia: einzelne Regionskarten
+    for pre in ("XY-Map", "SM-Global-Map", "SM-Map", "USUM-Global-Map", "USUM-Map", "Map Hoenn", "ORAS-Map", "SDLP-Map", "Karte Kalos", "Karte Alola"):
+        probe(f"PokéWiki, Bilder „{pre}…“ mit Größe", "https://www.pokewiki.de/api.php?action=query&list=allimages&aiprop=size|url"
+              f"&ailimit=100&format=json&formatversion=2&aiprefix={urllib.parse.quote(pre)}", sizes, keep=True)
+    for t in ("XY-Map Kalos", "USUM-Map Alola", "ORAS-Map Hoenn"):
+        probe(f"PokéWiki, Vorlage {t} (ganz)", pokewiki.batch_url(["Vorlage:" + t]), imagemap, keep=300_000)
+    bulba = ["Kalos XY.png", "Melemele Island Map.png", "Melemele Island Map 2.png", "Ula'ula Island Map.png", "Ula'ula Island Map 2.png",
+             "Poni Island Map.png", "Poni Island Map 2.png", "Sinnoh BDSP.png", "UGMAP.png", "Galar Sh.png", "Galar Sh DLC.png",
+             "Hoenn Soaring ORAS Map.png", "Sinnoh DP.png", "Sinnoh.png", "Hisui.png", "Paldea.png", "Kitakami.png", "Blueberry Academy.png"]
+    probe("Bulbapedia-Archiv, Regionskarten mit Größe", "https://archives.bulbagarden.net/w/api.php?action=query&prop=imageinfo"
+          "&iiprop=size|url&format=json&titles=" + urllib.parse.quote("|".join("File:" + b for b in bulba)), sizes, keep=True)
 
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",

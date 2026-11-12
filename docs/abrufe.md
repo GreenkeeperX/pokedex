@@ -99,7 +99,7 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
    `mapgenie/heartgold-soulsilver.im.json`. Kacheln macht der Browser beim ersten Öffnen (`/api/kacheln/umwandeln`),
    abgelegt unter `mapgenie/kacheln/im/<Region>/<z>/<x>-<y>.png`.
 7. **Raid-Nester** (`app/raidnester.py`, Quelle „raidnester“, GitHub, PKHeX Raid Plugin): `Nests/NestLocations.cs`,
-   `Raid/RaidParameters.cs` und einmal die drei Bilder nach `mapgenie/kacheln/rn/<Teil>.png`; je Spiel
+   `Raid/RaidParameters.cs`, `Nests/RaidTables.cs` (Pokémon je Nest, seit 0.47) und einmal die drei Bilder nach `mapgenie/kacheln/rn/<Teil>.png`; je Spiel
    `mapgenie/<Spiel>.rn.json` (Schwert/Schild, Insel der Rüstung, Schneelande der Krone).
 7. **RankedBoost** (`app/rankedboost.py`, Quelle „rankedboost“): je Spiel in `rankedboost.GAMES` (Let’s Go, Feuerrot/Blattgrün)
    die Fundortseite, darin die Adresse der Kartendaten (`megamap-<Spiel>-<Prüfsumme>.json`; ohne Treffer die zuletzt

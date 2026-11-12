@@ -122,7 +122,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 | [RankedBoost](https://rankedboost.com) | Let’s Go, Feuerrot/Blattgrün: Ortsbilder als Karte und die Pokémon je Ort und Fangart; nur im Datenordner, für den privaten Gebrauch | Daten und Bilder von RankedBoost, Spielgrafik von Nintendo |
 | [BisaFans](https://www.bisafans.de) | Aufträge (Nebenmissionen) und Hauptmissionen (Komplettlösung) in Legenden: Arceus, Nebenmissionen in Legenden: Z-A auf Deutsch | Daten von BisaFans, für den privaten Gebrauch |
 | [HGSS IronMON Map](https://github.com/kelseyyoung/HGSSIronmonMap) | HeartGold/SoulSilver: Weltkarten Johto und Kanto, Trainer mit Level, Items; nur im Datenordner | MIT (Code), Spielgrafik von Nintendo |
-| [PKHeX Raid Plugin](https://github.com/Leanny/PKHeX_Raid_Plugin) | Schwert/Schild: Lage der Raid-Nester und Karten der Naturzone, Insel der Rüstung, Schneelande; nur im Datenordner | Daten und Bilder des Projekts, Spielgrafik von Nintendo |
+| [PKHeX Raid Plugin](https://github.com/Leanny/PKHeX_Raid_Plugin) | Schwert/Schild: Lage und Inhalt der Raid-Nester, Karten der Naturzone, Insel der Rüstung, Schneelande; nur im Datenordner | Daten und Bilder des Projekts, Spielgrafik von Nintendo |
 | [Serebii PokéEarth](https://www.serebii.net/pokearth/) | Regionskarten (Johto, Kanto, Hoenn, Sinnoh, Einall, Kalos, Alola, Orre) für die Spiele ohne andere Karte; nur im Datenordner | Bilder von Serebii, Spielgrafik von Nintendo |
 
 Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies ist ein privates Nachschlage-Tool.
