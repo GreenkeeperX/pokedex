@@ -1,5 +1,10 @@
 # Roadmap
 
+## 0.48.1 (12.11.2026)
+
+- MewMaps verlinkt die Karten nur auf Google Drive/Photos (darum 0 Bilder im HTML); neue Proben laden die Inselkarten
+  (SM und USUM) und lesen die Größe. FrontierNav ist eine Skript-Seite: Proben der Skripte suchen die Datenadressen
+
 ## 0.48.0 (12.11.2026)
 
 - Auswertung des Verbindungstests vom 12.11. (Kartenbilder): Serebii hat für Kalos und Alola keine Bildkarte, X/Y, SM und

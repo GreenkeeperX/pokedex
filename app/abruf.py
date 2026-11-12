@@ -2695,6 +2695,30 @@ def diagnose(proben=None, stand=None):
     for path, name in (("sun-moon", "Sonne/Mond"), ("ultra-sun-ultra-moon", "Ultrasonne/Ultramond")):
         probe(f"MewMaps, {name}", f"https://www.mewmaps.org/{path}",
               lambda t: f"{len(set(img_rx.findall(t)))} Bilder: {', '.join(sorted(set(img_rx.findall(t)))[:12])}", keep=True, headers=html)
+    # 0.48.1: MewMaps verlinkt die Karten nur (Google Drive): Größe der Inselkarten; FrontierNav lädt alles per Skript:
+    # die Skripte nach Adressen von Daten durchsuchen (Marker mit Koordinaten?)
+    def img_info(text):
+        b = text.encode("latin-1", "replace") if isinstance(text, str) else text
+        wh = raidnester.png_size(b)
+        if wh:
+            return f"PNG {wh[0]} × {wh[1]} px, {len(b)} Bytes"
+        i = 2
+        while b[:2] == b"\xff\xd8" and i + 9 < len(b) and b[i] == 0xFF:
+            if b[i + 1] in (0xC0, 0xC1, 0xC2):
+                return f"JPEG {int.from_bytes(b[i + 7:i + 9], 'big')} × {int.from_bytes(b[i + 5:i + 7], 'big')} px, {len(b)} Bytes"
+            i += 2 + int.from_bytes(b[i + 2:i + 4], "big")
+        return f"kein Bild ({len(b)} Bytes, Anfang {b[:40]!r})"
+    for fid, name in (("1SBdYdLXsasmpgfDZAqOVVw2ap3L6TbDi", "SM Akala"), ("1nViijDWmSY6xQCsqlxaLeOrUjY6xi5TK", "SM Ula'ula"),
+                      ("1b4-8C-A123vAd-2iq0JiRcDGk-lb3D09", "SM Poni"), ("1GALSC0RLFUE5na21LVNWHqOMwASflw_m", "USUM Mele-Mele"),
+                      ("1oAFE9RUbkkZzHlO4UQ6fLjpQbvzlmxC2", "USUM Akala/Übersicht"), ("1lQxMilRC8NfT7m6twLWebCQs_PvFvEeH", "USUM Ula'ula"),
+                      ("1DsTHOuQyBA9X3QquPsoTvhgnTKPf61tr", "USUM Poni")):
+        probe(f"MewMaps, Inselkarte {name} (Google Drive)", f"https://drive.google.com/uc?export=download&id={fid}", img_info, raw=True)
+    api_rx = re.compile(r"""["'`]((?:https?:)?/[\w./-]*(?:api|graphql|tiles?|entit|marker|\.json)[\w./{}?=&-]*)["'`]""", re.I)
+    probe("FrontierNav, Alola-Karte (Seite)", "https://frontiernav.net/wiki/pokemon-sun-moon/visualisations/maps?m=alola-map",
+          lambda t: "Skripte: " + ", ".join(re.findall(r'src="(/static/[^"]+)"', t)), keep=True, headers=html)
+    for js in ("8a5a94fd-a.js", "27648ee4-a.js", "46bc1287-a.js"):
+        probe(f"FrontierNav, Skript {js}", f"https://frontiernav.net/static/{js}",
+              lambda t: f"{len(t)} Zeichen; Adressen: " + ", ".join(sorted(set(api_rx.findall(t)))[:30]), keep=200_000)
     probe("Japanische X/Y-Kartenübersicht", "https://xn--rckteqa2e6038anjua.com/xy/pokemon_xy_map.html",
           lambda t: f"{t.count('<area')} Flächen, {len(set(img_rx.findall(t)))} Bilder: {', '.join(sorted(set(img_rx.findall(t)))[:8])}", keep=True, headers=html)
     probe("Bulbapedia-Archiv, Regionskarten mit Größe", "https://archives.bulbagarden.net/w/api.php?action=query&prop=imageinfo"
