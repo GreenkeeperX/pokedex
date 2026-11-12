@@ -1515,8 +1515,12 @@ def _optik(con, f):
     if len(rows) < 2:
         return []
     folder = os.path.join(db.data_dir(), "formen")
-    return [{"id": None if d else i, "name": n or (k or "").replace("-", " ").title() or "Standard",
-             "bild": bool(d) or os.path.isfile(os.path.join(folder, f"{i}.png"))} for i, d, k, n in rows]
+    # 0.48.2: Formen, für die es bei der Quelle kein Bild gibt (Moterpel: sieht in jeder Form gleich aus), weglassen
+    gone = store.load_json("formen_fehlen.json", {}) or {}
+    out = [{"id": None if d else i, "name": n or (k or "").replace("-", " ").title() or "Standard",
+            "bild": bool(d) or os.path.isfile(os.path.join(folder, f"{i}.png"))} for i, d, k, n in rows
+           if d or str(i) not in gone or os.path.isfile(os.path.join(folder, f"{i}.png"))]
+    return out if len(out) > 1 else []
 
 
 def _held(con, g, f):

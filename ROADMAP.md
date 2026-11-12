@@ -1,5 +1,9 @@
 # Roadmap
 
+## 0.48.2 (12.11.2026)
+
+- `_optik`: Formen aus `formen_fehlen.json` (404 bei den PokéAPI-Sprites, z. B. `414-sandy`) weglassen; bleibt nur eine Form, kein Kasten
+
 ## 0.48.1 (12.11.2026)
 
 - MewMaps verlinkt die Karten nur auf Google Drive/Photos (darum 0 Bilder im HTML); neue Proben laden die Inselkarten
