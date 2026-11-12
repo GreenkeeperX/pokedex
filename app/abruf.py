@@ -21,7 +21,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, bisafans, companion, db, ign, importer, mapgenie, pkcompletion, pokewiki, serebii, smogon, sources, store
+from . import altissimo, bisafans, companion, db, dittobase, ign, importer, mapgenie, pkcompletion, pokewiki, serebii, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -43,7 +43,7 @@ SETTINGS = {"auto": True, "tage": 7, "sprites": True}
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
-         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
+         "mapgenie": "Map Genie (Karten)", "pkcompletion": "pokemoncompletion (Karten älterer Spiele)", "ign": "IGN (Karten)", "dittobase": "DittoBase (Karten aus den Spieldaten)", "serebii": "Serebii (Abklingzeiten Z-A, Pokopia)", "bisafans": "BisaFans (Aufträge in Legenden: Arceus)", "smogon": "Smogon (Nutzungsstatistik)", "itemhq": "Große Item-Bilder"}
 MG_PAUSE = 3.0              # Sekunden zwischen zwei Seiten bei Map Genie
 MG_TILE_PAUSE = 0.3         # zwischen zwei Kacheln, die die Oberfläche anfordert
 MG_STOCK_PAUSE = 0.6        # zwischen zwei Kacheln, die der Vorrat im Hintergrund holt
@@ -167,15 +167,16 @@ class _Source:
         self.stopped, self.blocked = why, True
         self.log(f"{self.name}: {why} bei {where}, Quelle ruht {REST_H} Stunden")
 
-    def get(self, url, raw=False, absent=()):
-        """Text (mit raw Bytes) oder None bei Fehler; "" für Statuscodes aus absent („gibt es nicht“)."""
+    def get(self, url, raw=False, absent=(), data=None):
+        """Text (mit raw Bytes) oder None bei Fehler; "" für Statuscodes aus absent („gibt es nicht“).
+        data: als JSON per POST (GraphQL-Abfrage, die nur liest)."""
         if self.stopped:
             return None
         host = urllib.parse.urlsplit(url).hostname or ""
         with _host_lock(host):
-            return self._get(url, host, raw, absent)
+            return self._get(url, host, raw, absent, data)
 
-    def _get(self, url, host, raw, absent):
+    def _get(self, url, host, raw, absent, data=None):
         wait = _HOST_LAST.get(host, 0) + self.pause - time.monotonic()
         if wait > 0:
             sleep(wait)
@@ -183,7 +184,8 @@ class _Source:
         for attempt in (1, 2):
             try:
                 try:
-                    body = sources.fetch(url, timeout=90, raw=raw)
+                    body = (sources.fetch(url, timeout=90, raw=raw) if data is None
+                            else sources.fetch(url, timeout=90, raw=raw, data=data))
                 finally:
                     _HOST_LAST[host] = time.monotonic()
                 break
@@ -577,7 +579,7 @@ def _media_tiles(st, log, settings, at):
 
 
 def _media_mg(st, log, at):
-    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign)):
+    for key, run in (("mapgenie", _mapgenie), ("pkcompletion", _pkcompletion), ("ign", _ign), ("dittobase", _dittobase)):
         if db.has_data() and not _resting(st, key, at):
             res = run(log)
             st["sources"][key] = res
@@ -985,7 +987,8 @@ def _save_maps(spiel, quelle, karten):
 
 
 def _ign(log):
-    """Karten von IGN für die Spiele in ign.GAMES: Kartenseite, daraus Kachelmuster und die mitgelieferten Punkte."""
+    """Karten von IGN für die Spiele in ign.GAMES: Kartenseite, daraus Kachelmuster und die mitgelieferten Punkte; alle
+    Punkte über die GraphQL-Abfrage, die auch die Seite stellt (ohne Antwort bleibt es bei denen der Seite)."""
     src = _Source("ign", log, pause=MG_PAUSE)
     found = 0
     for spiel, (slug, karten) in ign.GAMES.items():
@@ -996,6 +999,14 @@ def _ign(log):
             if src.stopped:
                 break
             m = ign.parse(page, k) if page else None
+            q = ign.query(m)
+            if q:
+                STATE["step"] = f"IGN: Punkte {slug}/{k}"
+                more = ign.markers(src.get(ign.GRAPH, data=q) or "")
+                if more:
+                    m = ign.parse(page, k, more)
+                else:
+                    log(f"IGN: Abfrage der Punkte für {slug}/{k} ohne Antwort, nur die Punkte der Seite")
             if m:
                 maps.append(m)
         if maps:
@@ -1007,8 +1018,74 @@ def _ign(log):
     return src.result(dateien=found)
 
 
-MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES)))   # Spiele mit eigener Karte
-MAP_FILES = ("", ".pc", ".ign")          # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
+def _dittobase(log):
+    """Karten von DittoBase für die Spiele in dittobase.GAMES: Kartenseite (Spieldaten und Punkte), die Kachelsätze als
+    Bilder, daraus zeichnet der Abgleich alle Kacheln selbst (kacheln/db/<Spiel>/). Gezeichnet wird nur, was fehlt oder
+    sich geändert hat."""
+    from . import png
+    src = _Source("dittobase", log, pause=MG_PAUSE)
+    found = 0
+    for spiel, slug in dittobase.GAMES.items():
+        STATE["step"] = f"DittoBase: {slug}"
+        page = src.get(dittobase.page_url(slug), absent=(404,))
+        if src.stopped:
+            break
+        m, draw = dittobase.parse(dittobase.extract(page), spiel) if page else (None, None)
+        if not m:
+            if page:
+                log(f"DittoBase: {slug} ohne Kartendaten (Seite geändert?)")
+            continue
+        sets, sdir = {}, mg_dir("kacheln", "db", "_saetze")
+        os.makedirs(sdir, exist_ok=True)
+        for n, (name, v) in enumerate(sorted(draw["saetze"].items())):
+            f = os.path.join(sdir, name + ".png")
+            if not os.path.isfile(f) and dittobase.tileset_ok(v["bild"]):
+                STATE.update(step=f"DittoBase: Kachelsätze {slug}", done=n, total=len(draw["saetze"]))
+                body = src.get(v["bild"], raw=True, absent=(404,))
+                if body and body[:8] == png.SIG:
+                    with open(f + ".neu", "wb") as fh:
+                        fh.write(body)
+                    os.replace(f + ".neu", f)
+                elif src.stopped:
+                    break
+            if os.path.isfile(f):
+                try:
+                    with open(f, "rb") as fh:
+                        sets[name] = png.decode(fh.read())
+                except (OSError, ValueError, png.zlib.error) as e:
+                    log(f"DittoBase: Kachelsatz {name} nicht lesbar ({e})")
+        if src.stopped:
+            break
+        tdir = mg_dir("kacheln", "db", slug)
+        stamp = _hash(json.dumps(draw, sort_keys=True), *sorted(sets))
+        old = store.load_json(os.path.join("mapgenie", "kacheln", "db", slug, "stand.json"), {}) or {}
+        same = old.get("stand") == stamp
+
+        def have(z, x, y):
+            return same and os.path.isfile(os.path.join(tdir, str(z), f"{x}-{y}.png"))
+
+        def save(z, x, y, rgba):
+            d = os.path.join(tdir, str(z))
+            os.makedirs(d, exist_ok=True)
+            f = os.path.join(d, f"{x}-{y}.png")
+            with open(f + ".neu", "wb") as fh:
+                fh.write(png.encode(dittobase.TILE, dittobase.TILE, rgba))
+            os.replace(f + ".neu", f)
+
+        def step(z, done, alle):
+            STATE.update(step=f"DittoBase: Kacheln {slug} Stufe {z}", done=done, total=alle)
+        n = dittobase.render_tiles(draw, sets, save, have, step)
+        os.makedirs(tdir, exist_ok=True)
+        store.save_json(os.path.join("mapgenie", "kacheln", "db", slug, "stand.json"), {"stand": stamp, "am": _iso(now())})
+        _save_maps(spiel, "db", [m])
+        log(f"DittoBase: {slug} mit {len(m['orte'])} Punkten, {len(sets)} von {len(draw['saetze'])} Kachelsätzen"
+            + (f", {n} Kacheln gezeichnet" if n else ""))
+        found += 1
+    return src.result(dateien=found)
+
+
+MAP_GAMES = tuple(dict.fromkeys((*mapgenie.GAMES, *pkcompletion.GAMES, *ign.GAMES, *dittobase.GAMES)))   # Spiele mit eigener Karte
+MAP_FILES = ("", ".pc", ".ign", ".db")          # je Spiel eine Datei je Quelle; die Karten erscheinen in dieser Reihenfolge
 
 
 def mg_maps(spiel):
@@ -1040,7 +1117,7 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": ""}
+_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": ""}
 
 
 def mg_status():
@@ -1128,7 +1205,7 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
     if os.path.isfile(f):
         return f
     if m.get("quelle") in TILE_SRC:
-        return _cdn_tile(rel, url, f, pause, m["quelle"])
+        return _cdn_tile(rel, url, f, pause, m["quelle"]) if url else None      # ohne Adresse: selbst gezeichnet
     with _mg_lock:
         if os.path.isfile(f):
             return f
@@ -1163,7 +1240,7 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE):
         return f
 
 
-TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign}     # Kartenquellen mit eigenem Kachelschema
+TILE_SRC = {"pokemoncompletion": pkcompletion, "ign": ign, "dittobase": dittobase}     # Kartenquellen mit eigenem Kachelschema
 
 
 def _cdn_tile(rel, url, f, pause, quelle):
@@ -1511,16 +1588,17 @@ def diagnose(proben=None, stand=None):
 
     gate = threading.Semaphore(DIAG_PARALLEL)
 
-    def one(slot, name, url, info, raw, keep, headers, pause):
+    def one(slot, name, url, info, raw, keep, headers, pause, data=None):
         r = None
         gate.acquire()
         with lock:
             stand["laeuft"].append(name)
         try:
-            r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT)
+            post = {"data": data} if data is not None else {}
+            r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT, **post)
             if r["error"] and "Errno -3" in r["error"]:      # Namensauflösung kurz überlastet: einmal nachfassen
                 sleep(2)
-                r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT)
+                r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT, **post)
             if r["error"]:
                 lines[slot] = f"{name}: keine Verbindung ({r['error']})"
                 return None
@@ -1550,7 +1628,7 @@ def diagnose(proben=None, stand=None):
             if r is not None and not r.get("error"):
                 sleep(pause)
 
-    def probe(name, url, info, raw=False, keep=False, headers=None):
+    def probe(name, url, info, raw=False, keep=False, headers=None, data=None):
         """Reiht die Abfrage beim Server ein; gibt ein Future zurück (.result(): Antwort oder None)."""
         host = urllib.parse.urlsplit(url).hostname or ""
         if host not in pools:
@@ -1558,7 +1636,7 @@ def diagnose(proben=None, stand=None):
         lines.append(f"{name}: keine Antwort")
         with lock:
             stand["gesamt"] += 1
-        f = pools[host].submit(one, len(lines) - 1, name, url, info, raw, keep, headers, DIAG_PAUSE.get(host, PAUSE))
+        f = pools[host].submit(one, len(lines) - 1, name, url, info, raw, keep, headers, DIAG_PAUSE.get(host, PAUSE), data)
         futs.append(f)
         return f
 
@@ -1987,6 +2065,73 @@ def diagnose(proben=None, stand=None):
         probe(name, url, lambda t: looks(t) + "; Muster: " + ", ".join(tile_patterns(t)[:5])
               + "; JSON-Adressen: " + ", ".join(sorted(set(re.findall(r'https?://[^"\' ]+\.json', t)))[:8]),
               keep=1_600_000, headers=html)
+
+    section("Kartendaten im Detail (0.38): IGN-Abfrage, DittoBase, RankedBoost, PokéTools")
+    # IGN: dieselbe GraphQL-Abfrage wie der Abgleich (alle Punkte einer Karte)
+    for spiel, (slug, karten) in ign.GAMES.items():
+        q = {"operationName": "MapMarkersMultiple", "query": ign.QUERY, "variables": {"objectSlug": slug, "mapSlug": karten[0],
+             "typeSlugs": ["location", "pokemon", "item", "technical-machine", "trainer", "master-trainer", "gym", "pikachu",
+                           "legendary-pokemon", "mega-stone", "den", "max-raid-den", "berry-tree", "fossil"]}}
+
+        def gq(t):
+            xs = ign.markers(t)
+            from collections import Counter
+            c = Counter(x.get("typeSlug") for x in xs)
+            err = (json.loads(t).get("errors") or [{}])[0].get("message", "") if not xs else ""
+            return f"{len(xs)} Punkte: " + ", ".join(f"{k} {n}" for k, n in c.most_common()) + (f"; Fehler: {err[:200]}" if err else "")
+        probe(f"IGN, Abfrage aller Punkte {slug}/{karten[0]}", ign.GRAPH, gq, data=q)
+
+    # DittoBase: welche Spiele haben eine Karte mit Spieldaten (wie Kristall), und wie sehen die Kachelsätze aus
+    def db_info(t):
+        d = dittobase.extract(t)
+        if not d:
+            return looks(t) + "; keine Kartendaten"
+        m, draw = dittobase.parse(d, "x")
+        ks = sorted({x.get("kind") for v in (d.get("data") or {}).get("markers", {}).values() for x in v})
+        return (f"Oberwelt {d['data'].get('overworld')}, {len(d['data'].get('maps') or {})} Karten, {len((m or {}).get('orte') or [])} Punkte, "
+                f"Arten {', '.join(map(str, ks))}, {len((draw or {}).get('saetze') or {})} Kachelsätze, Schlüssel {sorted(d)}")
+    for g in ("red-blue", "yellow", "gold-silver", "ruby-sapphire", "emerald", "firered-and-leafgreen", "diamond-pearl",
+              "platinum", "heartgold-soulsilver"):
+        probe(f"DittoBase, Karte {g}", dittobase.page_url(g), db_info, headers=html)
+
+    def png_info(b):
+        import struct
+        w, h, depth, ct, _, _, il = struct.unpack(">IIBBBBB", b[16:29])
+        return f"PNG {w}×{h}, Farbtyp {ct}, {depth} Bit, Zeilensprung {il}"
+    probe("DittoBase, Kachelsatz Johto (New Bark)", "https://assets.dittobase.com/game-maps/crystal-maps/pixi/tilesets/johto_89abcdef_g8_new_bark.png",
+          png_info, raw=True)
+    probe("DittoBase, Kachelsatz Höhle", "https://assets.dittobase.com/game-maps/crystal-maps/pixi/tilesets/cave_89abcdef.png", png_info, raw=True)
+
+    # RankedBoost: die Daten der großen Karte (data-mega-src) und der Code, der sie liest
+    def rb_json(t):
+        d = json.loads(t)
+        top = {k: (len(v) if isinstance(v, (list, dict)) else v) for k, v in (d.items() if isinstance(d, dict) else [])}
+        return f"Schlüssel {json.dumps(top)[:600]}"
+    probe("RankedBoost, Daten der Let’s-Go-Karte",
+          "https://img.rankedboost.com/wp-content/plugins/k-Pokemon/assets/cache/megamap-lets-go-pikachu-eevee-791ae0729e4a.json",
+          rb_json, keep=1_500_000)
+    probe("RankedBoost, Kartencode (mega-map-loader)", "https://img.rankedboost.com/wp-content/plugins/template-framework/assets/js/rb-mega-map-loader.js",
+          lambda t: "Muster: " + ", ".join(tile_patterns(t)[:5]) + f"; {t.count('tile')}× tile", keep=400_000)
+    for g in ("heartgold-soulsilver", "firered-leafgreen", "sword-shield", "brilliant-diamond-shining-pearl", "scarlet-violet"):
+        probe(f"RankedBoost, Karte {g}", f"https://rankedboost.com/pokemon/location/{g}/",
+              lambda t: "große Karte: " + (", ".join(sorted(set(re.findall(r'data-mega-src="([^"]+)"', t)))[:3]) or "keine"), headers=html)
+
+    # PokéTools: die Kacheln stehen im Code der Kartenseite (Next.js-Skripte); in den Skripten die Stellen mit „tile“ zeigen
+    chunk_re = re.compile(r'/_next/static/chunks/[^"\\]+[.]js')
+
+    def tile_spots(t):
+        spots = [" ".join(t[max(0, m.start() - 120):m.start() + 160].split()) for m in re.finditer(r"tiles?[/`'\"]", t)][:3]
+        return f"Muster: {', '.join(tile_patterns(t)[:5]) or '–'}" + ("; Stellen: " + " || ".join(spots) if spots else "")
+    try:
+        r = probe("PokéTools, Kartenseite Smaragd (Skripte)", "https://www.poketools.com/emerald/map",
+                  lambda t: f"{len(set(chunk_re.findall(t)))} Skripte", headers=html).result(timeout=DIAG_HANG)
+    except cf.TimeoutError:
+        r = None
+    for u in sorted(set(chunk_re.findall(r["text"])))[:30] if r else ():
+        probe(f"PokéTools, Skript {u.rsplit('/', 1)[-1]}", "https://www.poketools.com" + u, tile_spots)
+    for g in ("firered", "ruby", "crystal", "platinum", "heartgold"):
+        probe(f"PokéTools, Karte {g}", f"https://www.poketools.com/{g}/map",
+              lambda t: f"{t.count('kind')}× kind, Titel {(re.findall(r'<title>(.*?)</title>', t) or ['–'])[0][:80]}", headers=html)
 
     section("Kampfdaten (Movesets, Nutzung)")
     probe("pkmn, Smogon-Sets Gen 9", "https://data.pkmn.cc/sets/gen9.json",

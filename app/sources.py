@@ -4,6 +4,7 @@
 und Zeit. Alle Abrufe laufen über `fetch(url)`, damit Tests eine Attrappe einsetzen können.
 """
 import ipaddress
+import json
 import socket
 import time
 import urllib.error
@@ -11,11 +12,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.37.1"
+VERSION = "0.38.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.38.0", "12.11.2026", [
+        "Kristall (auch Gold/Silber): neue Karte von DittoBase, aus den Spieldaten selbst gezeichnet, mit allen Items, versteckten Items, Beerenbäumen, Trainern samt Team und Preisgeld, festen Pokémon und den wilden Pokémon je Gebiet (mit Tageszeit)",
+        "Was in Häusern, Höhlen und tieferen Etagen liegt, steht am Eingang auf der Karte, mit dem Weg dorthin im Text",
+        "Schwert/Schild und Let’s Go: die Karten von IGN holen jetzt alle Punkte, nicht nur die, die die Seite mitbringt",
+        "Bei Punkten anderer Quellen steht die richtige Quelle (pokemoncompletion, IGN, DittoBase) statt immer Map Genie",
+        "Verbindungstest: neue Proben für weitere DittoBase-Spiele, die Daten der Let’s-Go-Karte von RankedBoost und die Kacheln von PokéTools",
+    ]),
     ("0.37.1", "12.11.2026", [
         "Verbindungstest: eine Auswertung großer Kartenseiten lief quadratisch lange und bremste den ganzen Dienst aus; jetzt in Sekundenbruchteilen",
     ]),
@@ -522,23 +530,26 @@ def _read(resp, deadline):
             return b"".join(parts), False
 
 
-def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False, limit=None):
+def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False, limit=None, data=None):
     """HTTP GET ohne Ausnahme: liefert Status, Text (mit raw die Bytes unter „body“) und Kopfdaten
-    für den Verbindungstest. limit: Gesamtzeit in Sekunden (Vorgabe: keine, nur timeout je Lesevorgang)."""
+    für den Verbindungstest. limit: Gesamtzeit in Sekunden (Vorgabe: keine, nur timeout je Lesevorgang).
+    data: Objekt, das als JSON per POST geht (für GraphQL-Abfragen, die nur lesen)."""
     deadline = time.monotonic() + limit if limit else None
     head = {
         "User-Agent": USER_AGENT,
         "Accept": "application/json,text/plain;q=0.9,*/*;q=0.8",
         "Accept-Language": "de-DE,de;q=0.9,en;q=0.7",
         "Accept-Encoding": encoding,
+        **({"Content-Type": "application/json"} if data is not None else {}),
         **(headers or {}),
     }
+    payload = json.dumps(data).encode("utf-8") if data is not None else None
     out = {"url": url, "status": 0, "text": "", "enc": "", "server": "", "error": blocked_target(url)}
     if out["error"]:
         return out
     try:
         try:
-            resp = _opener.open(urllib.request.Request(url, headers=head), timeout=timeout)
+            resp = _opener.open(urllib.request.Request(url, data=payload, headers=head), timeout=timeout)
         except urllib.error.HTTPError as e:
             resp = e                      # Fehlerseiten haben auch einen Inhalt
         with resp:
@@ -549,7 +560,7 @@ def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False, 
             out["enc"] = (resp.headers.get("Content-Encoding") or "").lower()
             out["server"] = resp.headers.get("Server") or ""
             if out["enc"] not in ("", "identity", "gzip", "deflate") and encoding != "identity":
-                return request(url, timeout, "identity", headers, raw, max(1, deadline - time.monotonic()) if deadline else None)
+                return request(url, timeout, "identity", headers, raw, max(1, deadline - time.monotonic()) if deadline else None, data)
             try:
                 data = _decode(body, out["enc"])
             except Exception:
@@ -565,9 +576,9 @@ def request(url, timeout=40, encoding="gzip, deflate", headers=None, raw=False, 
     return out
 
 
-def fetch(url, timeout=40, headers=None, raw=False):
-    """HTTP GET, gibt Text zurück, mit raw die Bytes. Wirft FetchError mit Statuscode."""
-    r = request(url, timeout, headers=headers, raw=raw)
+def fetch(url, timeout=40, headers=None, raw=False, data=None):
+    """HTTP GET (mit data: POST als JSON), gibt Text zurück, mit raw die Bytes. Wirft FetchError mit Statuscode."""
+    r = request(url, timeout, headers=headers, raw=raw, data=data)
     if r["error"]:
         raise FetchError(url, 0, r["error"])
     if r["status"] >= 400:

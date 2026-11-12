@@ -1,5 +1,21 @@
 # Roadmap
 
+## 0.38.0 (12.11.2026)
+
+- Neue Quelle DittoBase (`app/dittobase.py`, `abruf._dittobase`, `mapgenie/<Spiel>.db.json`): Kristall. Die Kartenseite
+  bringt im React-Server-Datenstrom (`self.__next_f.push`) die ganze Welt mit: Blöcke je Karte, Kachelsätze (PNG zu 16
+  Blöcken je Zeile, Block 32 Pixel), Lage der Karten in der Oberwelt, Punkte (Schritt 16 Pixel) und wilde Pokémon je Karte.
+  Es gibt keine fertigen Kacheln; `dittobase.render_tiles` zeichnet sie beim Abgleich (Stufen Z1 − 5 bis Z1 + 1, nächster
+  Nachbar) nach `mapgenie/kacheln/db/<Spiel>/`, neu nur bei geänderten Daten (`stand.json`)
+- `app/png.py`: PNG lesen (8 Bit, Palette auch 1/2/4 Bit, alle Filter) und schreiben mit zlib, ohne Abhängigkeit
+- Häuser, Höhlen und Etagen: `dittobase.anchors` sucht über die Türen den Eingang in der Oberwelt; die Punkte stehen dort im
+  Kreis, „In: Höhle → Etage“ im Text. Namen in «…» übersetzt `mapgenie.merge` mit der Datenbank (Pokémon, Items)
+- IGN: alle Punkte über die GraphQL-Abfrage der Seite (`ign.query`, `MapMarkersMultiple` bei mollusk.apis.ign.com, POST);
+  `sources.request`/`fetch` und `_Source.get` nehmen dafür `data` (JSON). Ohne Antwort bleibt es bei den Punkten der Seite
+- `mapgenie.QUELLE`: Punkte tragen die Quelle ihrer Karte
+- Verbindungstest: IGN-Abfrage je Spiel, DittoBase je Spiel (Kartendaten?), zwei Kachelsätze (PNG-Kopf),
+  RankedBoost-Kartendaten (Let’s Go, als Probe behalten) und Kartencode, PokéTools-Skripte (Stellen mit „tile“)
+
 ## 0.37.1 (12.11.2026)
 
 - Verbindungstest: `abruf.tile_patterns` sucht Kachelmuster nur rund um „{z}“. Das alte Muster `[\w/.:-]*\{z\}…` über

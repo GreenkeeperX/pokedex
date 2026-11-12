@@ -73,7 +73,13 @@ oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 6. **Kartenkacheln** (Legenden: Arceus): fehlende Kacheln von Serebii (`abruf.MAP_TILES`, 5 Karten × 84 Kacheln) nach
    `karten/<Karte>/<z>-<x>-<y>.png`, eine Sekunde Pause je Kachel; fehlende (404) 30 Tage nicht erneut.
 7. **IGN** (`app/ign.py`, Quelle „ign“): je Spiel in `ign.GAMES` die Kartenseite; aus `__NEXT_DATA__` Kachelmuster, Zoom,
-   Größe und die mitgelieferten Punkte, gespeichert unter `mapgenie/<Spiel>.ign.json`. Die Kacheln holt der Kachelvorrat.
+   Größe und die mitgelieferten Punkte; alle übrigen Punkte über die GraphQL-Abfrage der Seite (`ign.query`, POST an
+   `ign.GRAPH`), gespeichert unter `mapgenie/<Spiel>.ign.json`. Die Kacheln holt der Kachelvorrat.
+7. **DittoBase** (`app/dittobase.py`, Quelle „dittobase“): je Spiel in `dittobase.GAMES` (Kristall) die Kartenseite
+   (`/<Spiel>/map`, 3 Sekunden Pause), daraus Karte und Punkte nach `mapgenie/<Spiel>.db.json`. Die Kachelsätze (PNG) kommen
+   einmal nach `mapgenie/kacheln/db/_saetze/`; daraus zeichnet der Abgleich alle Kacheln selbst nach
+   `mapgenie/kacheln/db/<Spiel>/<z>/<x>-<y>.png` (`app/png.py`), neu nur, wenn sich Daten oder Kachelsätze ändern
+   (`stand.json`). Gold/Silber zeigen die Karte von Kristall mit.
 7. **pokemoncompletion** (`app/pkcompletion.py`, Quelle „pkcompletion“): für Kristall, Smaragd und Platin die Spieldaten
    aus dem Repository (raw.githubusercontent.com), umgerechnet in eine Karte wie bei Map Genie und unter `mapgenie/<Spiel>.pc.json`
    gespeichert; Gold/Silber, Rubin/Saphir und Diamant/Perl zeigen sie mit. Die Kacheln (512 Pixel, `{z}_{x}_{y}.png`) holt
