@@ -37,8 +37,10 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Hinweise (`data-tip`) erscheinen unter dem Ziel, Hover-Karten daneben.
 - Sicherung: `/api/export` lädt herunter, `/api/restore` ersetzt alle eigenen Daten (vorher `vor-einlesen-…` in
   `sicherung/`).
-- Speicherplatz (seit 0.45.0, `diskBox`): `/api/speicher` erst beim Aufklappen von `#s-speicherplatz` (Zustand in
-  `diskOpen`, nicht in `setShut`, damit das Feld anfangs zu ist); Balken je Teil im Verhältnis zum Ganzen.
+- Speicherplatz (seit 0.45.0, `diskBox`): `/api/speicher` erst beim Aufklappen von `#diskd` im Kasten „Sicherung“
+  (Zustand in `diskOpen`, anfangs zu); Balken je Teil im Verhältnis zum Ganzen.
+- Klapp-Pfeile (seit 0.46.0): ein CSS-Dreieck für jedes `details>summary` und `[data-fold]`, keine eigenen Pfeile mehr
+  je Kasten. `crossTable(table, pin, onChange, marks)`: mit `marks=false` ohne Markierungszeichen (Typtabellen).
 - Fundorte (`encHtml`): mit Daten aus PKHeX (`fundquelle`) Gebiet, Stellen mit Level (ab sechs Stellen gekürzt, alle im
   Hinweis), Art, Level und Alpha-Level; Spalten nur, wo ein Eintrag Daten hat; sonst die Tabelle der PokéAPI. Filter „Gebiet“ (`areaSelect`) nur bei Spielen
   mit Gebieten (`/api/meta`, `spiele[].gebiete`), ohne Massenauftreten.

@@ -1,5 +1,14 @@
 # Roadmap
 
+## 0.46.0 (12.11.2026)
+
+- Rückmeldung vom 12.11. zur Oberfläche: ein Klapp-Pfeil für `details>summary` und `[data-fold]` (CSS-Dreieck, gleiche
+  Größe und Farbe, dreht beim Öffnen), Klapp-Titel einheitlich `--ink-hi`; Sprite der Pokémon-Karten 5 px tiefer;
+  Favoriten-Reihen mit 8 px Abstand (⇄ kleiner); Forschungsstufen in festen Spalten (`td.rst`)
+- Gegen Gegner: `✕ entfernen` im Kopf der Trainerwahl, `#foeclr` wird in `matchup()` ein- und ausgeblendet, Ecke der
+  Tabelle „Dein Team“; `crossTable(…, marks=false)` ohne Markierungszeichen für die Typtabellen
+- Aufträge: Erklärung als `details.reqinfo`, Tabellen `vlines`; Einstellungen: Speicherplatz als `#diskd` in der Sicherung
+
 ## 0.45.0 (12.11.2026)
 
 - Speicherplatz in den Einstellungen: `abruf.disk_usage` zählt den Datenordner (je Eintrag Bytes und Dateien, `mapgenie`

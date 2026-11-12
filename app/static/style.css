@@ -166,7 +166,7 @@ td.nw{white-space:nowrap}
 .acts .a.alp:hover{color:#ff6b66}
 /* Knöpfe zum Setzen: beim Hovern unten auf dem Bild */
 .mon .sp{position:relative;flex:none;width:84px;display:flex;flex-direction:column;align-items:center}
-.mon .sp>.spr{width:84px;height:84px}
+.mon .sp>.spr{width:84px;height:84px;position:relative;top:5px}   /* 0.46: etwas tiefer, die Nummer bleibt frei */
 /* Zeile unter dem Bild: links das Häkchen fürs Team, dann Stern und Pokéball (gesetzt immer sichtbar), + nur beim Hovern */
 .mon .acts{display:flex;justify-content:center;gap:1px;height:24px;margin-top:-4px;padding:0 4px}
 .mon .acts:has(.alp) .a:not(.plus){width:21px}
@@ -337,7 +337,6 @@ table.mine th[data-dir=desc]::after{content:" ▼";font-size:10px}
 .jump .foldall{margin-left:auto;color:var(--muted);white-space:nowrap}
 details.fold>summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;list-style:none}
 details.fold>summary::-webkit-details-marker{display:none}
-details.fold>summary::before{content:"▸";color:var(--muted)}details.fold[open]>summary::before{content:"▾"}
 details.fold>summary h2{margin:0}
 details.fold:not([open]){padding-bottom:10px}
 details.fold[open]>summary{margin-bottom:8px}
@@ -412,7 +411,7 @@ tr.off td{opacity:.55}
 .tslot .note.small{font-size:12px;padding:2px 6px;margin:4px 0}
 .favd summary{margin-top:10px}
 .favlist{margin-top:8px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
-.list:has(.mon>.xs){row-gap:11px}   /* ⇄ ragt unten aus der Karte: Platz bis zur nächsten Reihe */
+.list:has(.mon>.xs){row-gap:8px}    /* 0.46: wie die Liste; ⇄ ragt nur 6 px heraus */
 .mon:has(>.xs:hover){z-index:3}
 .mvchip[draggable=true]{cursor:grab}
 .favd summary .ic,.box h2 .ic{display:inline-block;vertical-align:-2px;margin-right:2px}
@@ -493,7 +492,6 @@ th.v>.pinc{position:absolute;top:3px;left:50%;transform:translateX(-50%);margin:
 details.sub{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
 details.sub.nosep{border-top:0;margin-top:2px;padding-top:0}
 details.sub>summary{cursor:pointer;list-style:none;display:flex;gap:8px;align-items:baseline}
-details.sub>summary::before{content:"▸";color:var(--muted)}details.sub[open]>summary::before{content:"▾"}
 details.sub>summary::-webkit-details-marker{display:none}
 details.sub>summary .slinks{margin-left:auto;font-size:12.5px;white-space:nowrap}
 .badge{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;line-height:1.5}
@@ -652,7 +650,7 @@ a.bm:active{cursor:grabbing}
 .mgg-h .link{margin-left:auto;font-size:12.5px;font-weight:400}
 .mgcats .bar{justify-content:space-between;margin-bottom:4px}
 .mgg summary{cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px;font-weight:600;list-style:none}
-.mgg summary::-webkit-details-marker{display:none}.mgg summary::before{content:"▸";color:var(--muted);font-weight:400}.mgg[open] summary::before{content:"▾"}
+.mgg summary::-webkit-details-marker{display:none}
 .mgg summary .hint{font-weight:400}
 .mgg summary .link{margin-left:auto;font-size:12.5px}
 .mgg .mlays{display:flex;flex-wrap:wrap;gap:4px;padding:2px 0 8px}
@@ -713,8 +711,6 @@ details.mehr summary { cursor: pointer; font-weight: 600; }
 .box h2.sub{margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
 details.box>summary{list-style:none;display:flex;align-items:center;gap:8px}
 details.box>summary::-webkit-details-marker{display:none}
-details.box>summary::before{content:"▸";color:var(--muted)}
-details.box[open]>summary::before{content:"▾"}
 details.box>summary h2{margin:0}
 details.box[open]>summary{margin-bottom:8px}
 /* Attacken-Liste: feste Spaltenbreiten, damit Filter nichts verschieben */
@@ -752,7 +748,7 @@ table.held td:first-child{width:48px}
 /* Sammlung übertragen */
 .xfer{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 8px}
 #xto{max-width:240px}
-.mon .xs{position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);z-index:2;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);
+.mon .xs{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);z-index:2;width:20px;height:20px;font-size:12px !important;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);
   color:var(--muted);font-size:13px;cursor:pointer;background:var(--card)}
 .mon .xs:hover{color:var(--ink-hi)}
 .mon .xs:not(.on){background:var(--bg)}
@@ -770,7 +766,6 @@ dialog.ask h3{margin:0 0 8px;color:var(--ink-hi)}
 dialog.ask p{margin:0 0 12px;color:var(--ink)}
 dialog.ask input{width:100%;margin:0 0 12px}
 dialog.ask .bar{margin:0}
-button.danger{background:var(--stop);border-color:var(--stop);color:#fff}
 .cslots button{display:inline-flex;align-items:center;gap:4px;padding:2px 8px 2px 2px}
 .cslots img,.cslots .spr{width:28px;height:28px}
 button.dangerline{border-color:color-mix(in srgb,var(--stop) 55%,var(--line))}
@@ -876,17 +871,26 @@ body.busy::before{content:"";position:fixed;z-index:60;top:0;left:0;right:0;heig
 /* 0.39: einklappbare Boxen und Abschnitte */
 [data-fold]{cursor:pointer;user-select:none}
 /* Klapp-Pfeil überall vor dem Text (0.43) */
-[data-fold]:not(button)::before{content:"▾";display:inline-block;width:1em;margin-right:4px;color:var(--muted);font-size:.75em;font-weight:400;transition:transform .15s;text-align:center}
-.zu>[data-fold]::before{transform:rotate(-90deg)}
+/* 0.46: ein Pfeil für alles, was klappt (details und data-fold): gleich groß, gleiche Farbe, unabhängig von der Schrift */
+details>summary{list-style:none;cursor:pointer}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before,[data-fold]:not(button)::before{content:"";display:inline-block;flex:none;width:0;height:0;border-style:solid;
+  border-width:5.5px 0 5.5px 9px;border-color:transparent transparent transparent var(--muted);margin-right:8px;vertical-align:1px;
+  transition:transform .15s;transform-origin:35% 50%}
+details[open]>summary::before,[data-fold]:not(button)::before{transform:rotate(90deg)}
+.zu>[data-fold]::before{transform:none !important}
+details>summary:hover::before,[data-fold]:not(button):hover::before{border-left-color:var(--ink-hi)}
+details.fold>summary::before,details.sub>summary::before,details.box>summary::before,.mgg summary::before{margin-right:0;align-self:center}
 .zu>:not([data-fold]){display:none !important}
 .box.zu>[data-fold]{margin-bottom:0}
 .fsec.zu{margin-bottom:6px}
-.imp .tl{margin:2px 0}
+.imp .tl{margin:2px 0;display:flex;flex-wrap:wrap;gap:3px;width:100%}.imp .tl .t+.t{margin-left:0}
+.imp>.grow{min-width:0}
 /* 0.39: Tabellen mittig, ruhigere Auswahl, Löschen in Nintendo-Rot */
 table.lines td,table.lines th.r,table.vs th.r,table.matrix td,table.matrix th{vertical-align:middle}
 th.r>.pinc{margin-right:6px}
-button.danger{background:#e60012;border-color:#e60012;color:#fff}
-button.danger:hover{background:#c4000f;border-color:#c4000f}
+button.danger,dialog.ask button.danger{background:#e60012 !important;border-color:#e60012 !important;color:#fff !important;opacity:1}
+button.danger:hover,dialog.ask button.danger:hover{background:#c4000f !important;border-color:#c4000f !important}
 /* 0.43: Auswahl in Segmenten wieder kräftig; nur die Angreifer im Schadensrechner (mit Bildern) ruhiger, ohne Rahmenlinie */
 .seg.cslots button.on{background:color-mix(in srgb,var(--accent) 26%,var(--card));color:var(--ink-hi);font-weight:600;box-shadow:none}
 /* 0.40: Aufträge mit Sprung zur Karte */
@@ -904,7 +908,24 @@ button.danger:hover{background:#c4000f;border-color:#c4000f}
 /* Speicherplatz (Einstellungen) */
 .dk>summary,div.dk{display:grid;grid-template-columns:minmax(160px,1.6fr) 1fr 72px 110px;gap:8px;align-items:center;padding:3px 0;font-size:13px}
 .dk>summary{cursor:pointer;list-style:none}.dk>summary::-webkit-details-marker{display:none}
-.dk>summary .dk-n::before{content:"▸ ";color:var(--muted)}.dk[open]>summary .dk-n::before{content:"▾ "}
+.dk>summary::before{display:none}
+.dk>summary .dk-n::before{content:"";display:inline-block;width:0;height:0;border-style:solid;border-width:5.5px 0 5.5px 9px;
+  border-color:transparent transparent transparent var(--muted);margin-right:8px;vertical-align:1px;transition:transform .15s;transform-origin:35% 50%}
+.dk[open]>summary .dk-n::before{transform:rotate(90deg)}
 .dk1>summary,div.dk1{padding-left:16px}.dk2>summary,div.dk2{padding-left:32px}
 .dk-b{height:8px;border-radius:4px;background:var(--chip);overflow:hidden}.dk-b i{display:block;height:100%;background:var(--accent)}
 .dk-v{text-align:right;font-variant-numeric:tabular-nums}.dk-c{font-size:12px}
+
+/* 0.46: Forschungsaufgaben, Stufen in festen Spalten */
+td.rst{white-space:nowrap;text-align:left}
+td.rst span{display:inline-block;min-width:2.8em;text-align:right;font-variant-numeric:tabular-nums}
+#foeclr[hidden]{display:none}
+/* 0.46: im Schadensrechner ist die Auswahl ruhiger (dunkel wie hell), damit die übrigen Einstellungen nicht untergehen */
+#calc .seg button.on{background:color-mix(in srgb,var(--accent) 18%,var(--card));color:var(--ink-hi);font-weight:600;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
+#vs th.vsteam{vertical-align:bottom;text-align:left;font-size:12px;color:var(--muted);font-weight:600;cursor:pointer}
+#vs th.vsteam>.pinc{opacity:.8}
+/* 0.46: Aufträge mit senkrechten Linien, Erklärung zum Aufklappen */
+table.vlines td+td,table.vlines th+th{border-left:1px solid var(--line)}
+table.vlines td,table.vlines th{padding-left:8px;padding-right:8px}
+details.reqinfo{margin:6px 0 4px}details.reqinfo>summary{font-weight:400}details.reqinfo p{margin:4px 0 2px}
+details>summary{color:var(--ink-hi)}   /* 0.46: alle Klapp-Titel in derselben Farbe */
