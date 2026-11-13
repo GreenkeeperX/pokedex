@@ -317,6 +317,24 @@ class Leser(unittest.TestCase):
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
+    def test_0_56_2_trainer_ohne_kategorien_neu(self):
+        """Eine Trainerdatei von vor 0.48.6 nennt ihre Kategorien nicht: Sie gilt nicht als aktuell, der Abgleich fragt neu
+        (sonst fehlten die Trainer aus Hisui bis zu sieben Tage)."""
+        from app import abruf, pokewiki
+        team = [{"name": "Rocko", "spiele": ["red-blue"], "team": [{"nr": 74}]}]
+        for extra, calls_expected in (({}, True), ({"kategorien": sorted(pokewiki.TRAINER_CATS)}, False)):
+            old = dict({"am": abruf._iso(abruf.now()), "teams": team}, **extra)
+            calls = []
+
+            def fake(self_, u, raw=False, absent=(), data=None):
+                calls.append(u)
+                return None
+            with mock.patch.object(abruf.store, "load_json", lambda *a, **k: old), mock.patch.object(abruf.store, "save_json", lambda *a, **k: None), \
+                    mock.patch.object(abruf._Source, "get", fake):
+                got = abruf._trainer({"sources": {}, "rest": {}}, lambda *a: None, abruf.now())
+            self.assertEqual(bool(calls), calls_expected)
+            self.assertEqual(got["teams"], team)     # ohne Antwort gilt der letzte Lauf
+
     def test_0_56_1_keine_unendlichen_zahlen(self):
         self.assertRaises(ValueError, json.loads, '{"gewichte": {"tempo": Infinity}}', parse_constant=server._no_constant)
         self.assertRaises(ValueError, json.loads, '{"x": NaN}', parse_constant=server._no_constant)
@@ -2507,6 +2525,7 @@ class MitDatenbank(TempData):
         self.assertEqual(by[17]["weg"], "jetzt")
         self.assertEqual(by[18]["weg"], "jetzt")                    # Tauboss: Taubsi zählt als Vorstufe der Vorstufe
         self.assertEqual(by[18]["wege"][0]["hast_name"], "Taubsi")
+        self.assertEqual((len(by[17]["werte"]), by[17]["summe"]), (6, sum(by[17]["werte"])))   # 0.56.2: für die Standard-Karte
         self.assertIn("zucht", [w["art"] for w in by[172]["wege"]])   # Pichu: Ei von Pikachu, obwohl Pichu selbst nie Eier legt
         self.assertIn("edition", [w["art"] for w in by[165]["wege"]])  # Ledyba: nur Silber
         self.assertEqual(by[152]["weg"], "fest")                     # Endivie: Geschenk in Neuborkia

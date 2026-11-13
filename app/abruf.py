@@ -2009,7 +2009,9 @@ def _trainer(st, log, at):
     Ortsseiten (Routen, Höhlen, Städte); Kategorien, dann die Seiten zu je 50: {"am", "teams": [...]} in pokewiki_trainer.json. Jünger als TRAINER_DAYS: der letzte Lauf gilt."""
     old = store.load_json("pokewiki_trainer.json", {}) or {}
     cats = sorted(pokewiki.TRAINER_CATS)          # neue Kategorien (0.48.6: Hisui) holen sofort neu, nicht erst nach TRAINER_DAYS
-    if old.get("teams") and old.get("am", "") > _iso(now() - timedelta(days=TRAINER_DAYS)) and old.get("kategorien", cats) == cats:
+    # 0.56.2: eine Datei von vor 0.48.6 nennt ihre Kategorien nicht; sie galt als aktuell, und die Trainer aus Hisui kamen
+    # erst nach TRAINER_DAYS. Fehlt die Angabe, holt der Abgleich jetzt neu
+    if old.get("teams") and old.get("am", "") > _iso(now() - timedelta(days=TRAINER_DAYS)) and old.get("kategorien") == cats:
         return old
     if _resting(st, "pokewiki", at):
         return old

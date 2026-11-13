@@ -2518,8 +2518,10 @@ def missing(p):
             ways.append({"art": "unklar", "text": "nur Verteilung oder Event" if f["mysterioes"] else
                          "kein Fundort in den Daten: Geschenk, Tausch oder aus einem anderen Spiel"})
         best = "jetzt" if any(w.get("hast") for w in ways) else min((w["art"] for w in ways), key=WAYS.index)
+        werte, summe = form_stats(D, f, gen)      # 0.56.2: für die Standard-Karte und die Hover-Karte
         out.append({"art": art, "id": f["id"], "name": f["name"], "nr": nr if nr is not None else art, "dex": di[0], "dexk": di[1],
-                    "typen": form_types(D, f, gen), "legendaer": bool(f["legendaer"] or f["mysterioes"]), "weg": best, "wege": ways})
+                    "typen": form_types(D, f, gen), "werte": werte, "summe": summe,
+                    "legendaer": bool(f["legendaer"] or f["mysterioes"]), "weg": best, "wege": ways})
     out.sort(key=lambda x: (x["dex"] or 99, x["nr"] or 99999, x["id"]))
     return {"spiel": g["kennung"], "editionen": eds if len(eds) > 1 else [], "edition": edition, "arten": len(rep),
             "gefangen": len(set(rep) & caught), "fehlt": out}

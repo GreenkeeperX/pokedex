@@ -160,6 +160,13 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   und Beschreibung des Spiels), Fangfaktor und Bedingung bei Bällen (`BALL`, in Legenden: Arceus `BALL_HISUI` als
   Richtwerte), die Attacke des Spiels bei Maschinen. Preise farbig (`priceColor`).
   Bilder unter `itembild/<Nummer>`; unfertige Einträge (`unfertig`) nur mit dem Schalter.
+- Karten (`mgView`), seit 0.56.2: Einstieg je Karte in `MGSTART` (Zahl: Stufen näher als „ganze Karte im Bild“, eine
+  Mausrad-Raste ist eine halbe Stufe; als Liste mit der Mitte in Anteilen von links und von oben; Schlüssel `spiel/karte`,
+  `/karte`, Spiel), erste Karte in `MGFIRST`, Karten nur für ein Spiel in `MG_EDITION`. Ebenen am Anfang: `mgStartHide`
+  (höchstens 150 Punkte). Übersicht mit Bildern: `heatCells` (Raster fest auf der Karte, Hineinzoomen lässt nichts
+  verschwinden). Auf der Karte ist die Team-Leiste zugeklappt (`MAPFOLD`), die gemerkte Einstellung bleibt.
+- Was fehlt mir noch, seit 0.56.2: Standard-Karten (`monCard` mit `extra`), darunter nur der Weg als Marke; alle Wege im
+  Hinweis. „Zurück“ der Detailseite (`backLink`) führt in die Ansicht, aus der man kam.
 - Was fehlt mir noch (`missingView`, `#fehlt`): `/api/fehlt?spiel=…&edition=…`, Gruppen nach `weg` in der Reihenfolge von
   `WEG` (wie `abfragen.WAYS`), Knöpfe `#fseg` filtern, Edition je Spiel im Browser (`edition:<Spiel>`). Der Pokéball auf
   einer Karte (`.fmon .gball`, `data-act="caught"`) macht sie blass; aus der Liste fällt sie erst beim nächsten Öffnen.
