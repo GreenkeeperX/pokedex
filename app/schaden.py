@@ -53,7 +53,9 @@ MODS = {"huge-power": ("wert", 2.0, 2, "Angriff ×2"), "pure-power": ("wert", 2.
         "hustle": ("wert", 1.5, 2, "Angriff ×1,5"), "gorilla-tactics": ("wert", 1.5, 2, "Angriff ×1,5"),
         "choice-band": ("wert", 1.5, 2, "Angriff ×1,5"), "choice-specs": ("wert", 1.5, 3, "Sp.-Angriff ×1,5"),
         "adaptability": ("stab", 2.0, 0, "Eigentyp ×2"),
-        "life-orb": ("ende", 1.3, 0, "Schaden ×1,3"), "expert-belt": ("ende", 1.2, 0, "sehr effektiv ×1,2")}
+        "life-orb": ("ende", 5324 / 4096, 0, "Schaden ×1,3"), "expert-belt": ("ende", 4915 / 4096, 0, "sehr effektiv ×1,2")}
+# 0.56.1: Leben-Orb und Expertengurt rechnet das Spiel in 4096steln (5324 und 4915), nicht mit 1,3 und 1,2: ab 512 Schaden
+# je Treffer kam mit 1,3 in jedem fünften Fall 1 KP zu viel heraus. Beide Brüche sind binär exakt.
 TECHNICIAN = "technician"            # Techniker: Stärke bis 60 ×1,5
 # Items, die einen Typ verstärken (×1,2, bis Generation 3 ×1,1): Kennung → Typ-Kennung
 TYPE_ITEMS = {"charcoal": "fire", "flame-plate": "fire", "mystic-water": "water", "splash-plate": "water",

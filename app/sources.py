@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.56.0"
+VERSION = "0.56.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.56.1", "13.11.2026", [
+        "Schadensrechner: Leben-Orb und Expertengurt rechnen jetzt genau wie im Spiel (bei sehr hohem Schaden kam bisher "
+        "manchmal 1 KP zu viel heraus)",
+        "Der Server nimmt keine unendlichen Zahlen mehr an (ein so gespeichertes Team hätte die Teamliste unlesbar gemacht)",
+    ]),
     ("0.56.0", "12.11.2026", [
         "Karten für Sonne/Mond und Ultrasonne/Ultramond: je Insel eine Karte (Mele-Mele, Akala, Ula-Ula, Poni, Æther-Paradies) "
         "aus den Bildkarten des PokéWiki, mit deutschen Ortsnamen und den Pokémon je Ort aus den Fundorten",

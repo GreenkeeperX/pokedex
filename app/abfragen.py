@@ -3247,7 +3247,7 @@ def _calc_steps(gen, art, mv, m, r, level, d_level, a_base, ai, a_iv, a_ev, a_el
             fx.append(["Eigentyp", r["stab"]])
         fx.append(["Wirkung", r["eff"]])
         if m.get("ende", 1.0) != 1.0:
-            fx.append(["Item", m["ende"]])
+            fx.append(["Item", round(m["ende"], 2)])
     return {"a_info": a_info, "d_info": d_info, "faktoren": fx}
 
 

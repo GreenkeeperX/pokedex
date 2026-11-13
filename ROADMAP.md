@@ -1,5 +1,15 @@
 # Roadmap
 
+## 0.56.1 (13.11.2026)
+
+Zwei kleine Funde aus dem Review vom 13.11.2026, als Beispiel vorab:
+
+- `schaden.MODS`: Leben-Orb 5324/4096 und Expertengurt 4915/4096 statt 1,3 und 1,2 (so rechnet das Spiel ab
+  Generation 5). Mit 1,3 wich das Ergebnis ab 512 Schaden je Treffer in jedem fünften Fall um 1 KP ab.
+- `server._body` lehnt `Infinity` und `NaN` ab (`_no_constant`): Python liest sie, obwohl sie kein JSON sind; als Gewicht
+  eines Teams gespeichert, kamen sie in `/api/teams` wieder heraus, und der Browser konnte die Antwort nicht lesen.
+- `srv.log` war seit 0.47.6 versehentlich eingecheckt; entfernt, `*.log` steht jetzt in `.gitignore`.
+
 ## 0.56.0 (12.11.2026)
 
 - Alola: `pokearth.pw_imagemaps` liest alle Bildkarten einer Vorlage, `pw_islands` je Insel die Orte (ohne Pfeile zur
