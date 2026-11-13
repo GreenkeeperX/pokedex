@@ -317,6 +317,29 @@ class Leser(unittest.TestCase):
         self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
+    def test_0_56_2_trainer_ohne_kategorien_neu(self):
+        """Eine Trainerdatei von vor 0.48.6 nennt ihre Kategorien nicht: Sie gilt nicht als aktuell, der Abgleich fragt neu
+        (sonst fehlten die Trainer aus Hisui bis zu sieben Tage)."""
+        from app import abruf, pokewiki
+        team = [{"name": "Rocko", "spiele": ["red-blue"], "team": [{"nr": 74}]}]
+        for extra, calls_expected in (({}, True), ({"kategorien": sorted(pokewiki.TRAINER_CATS)}, False)):
+            old = dict({"am": abruf._iso(abruf.now()), "teams": team}, **extra)
+            calls = []
+
+            def fake(self_, u, raw=False, absent=(), data=None):
+                calls.append(u)
+                return None
+            with mock.patch.object(abruf.store, "load_json", lambda *a, **k: old), mock.patch.object(abruf.store, "save_json", lambda *a, **k: None), \
+                    mock.patch.object(abruf._Source, "get", fake):
+                got = abruf._trainer({"sources": {}, "rest": {}}, lambda *a: None, abruf.now())
+            self.assertEqual(bool(calls), calls_expected)
+            self.assertEqual(got["teams"], team)     # ohne Antwort gilt der letzte Lauf
+
+    def test_0_56_1_keine_unendlichen_zahlen(self):
+        self.assertRaises(ValueError, json.loads, '{"gewichte": {"tempo": Infinity}}', parse_constant=server._no_constant)
+        self.assertRaises(ValueError, json.loads, '{"x": NaN}', parse_constant=server._no_constant)
+        self.assertEqual(json.loads('{"x": 1.5}', parse_constant=server._no_constant), {"x": 1.5})
+
     def test_0_56_alola_inseln(self):
         """Alola: je Insel eine Bildkarte in der Vorlage (erfundene Flächen); Pfeile zur Nachbarinsel fallen weg, der
         Punkt liegt im Schwerpunkt der Fläche bzw. bei Knick an der nächsten Ecke."""
@@ -1981,7 +2004,10 @@ rect 0 0 9 9 [[Außerhalb]]"""
         self.assertEqual((c2["max"], c2["sicher"]), (0, None))                # Tera Flug: Boden wirkt nicht
         # Fähigkeiten, Items, Wetter (0.30.0)
         m = schaden.modifiers(2, 100, "water", 2.0, "huge-power", "life-orb", "regen")
-        self.assertEqual((m["wert"], m["ende"], m["wetter"], len(m["texte"])), (2.0, 1.3, 1.5, 3))
+        self.assertEqual((m["wert"], m["ende"], m["wetter"], len(m["texte"])), (2.0, 5324 / 4096, 1.5, 3))
+        # 0.56.1: Leben-Orb in 4096steln wie im Spiel: 512 × 5324 / 4096 = 665,5 → 665 (mit 1,3 wären es 666)
+        self.assertEqual(schaden._round(512 * m["ende"]), 665)
+        self.assertEqual([schaden._round(x * m["ende"]) for x in (10, 100, 522)], [13, 130, 678])
         self.assertEqual(schaden.modifiers(3, 100, "water", 1.0, "huge-power", "expert-belt")["texte"], [])   # Kraftkoloss nur physisch, Gurt nur sehr effektiv
         self.assertEqual(schaden.modifiers(2, 60, "normal", 1.0, "technician", "silk-scarf")["staerke"], 1.5 * 1.2)
         self.assertEqual(schaden.modifiers(2, 60, "normal", 1.0, "technician", "silk-scarf", gen=3)["staerke"], 1.1)  # Techniker ab Gen. 4
@@ -2499,6 +2525,7 @@ class MitDatenbank(TempData):
         self.assertEqual(by[17]["weg"], "jetzt")
         self.assertEqual(by[18]["weg"], "jetzt")                    # Tauboss: Taubsi zählt als Vorstufe der Vorstufe
         self.assertEqual(by[18]["wege"][0]["hast_name"], "Taubsi")
+        self.assertEqual((len(by[17]["werte"]), by[17]["summe"]), (6, sum(by[17]["werte"])))   # 0.56.2: für die Standard-Karte
         self.assertIn("zucht", [w["art"] for w in by[172]["wege"]])   # Pichu: Ei von Pikachu, obwohl Pichu selbst nie Eier legt
         self.assertIn("edition", [w["art"] for w in by[165]["wege"]])  # Ledyba: nur Silber
         self.assertEqual(by[152]["weg"], "fest")                     # Endivie: Geschenk in Neuborkia

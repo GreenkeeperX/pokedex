@@ -1,5 +1,52 @@
 # Roadmap
 
+## 0.56.2 (13.11.2026)
+
+Rückmeldung vom 13.11.2026 zu 0.56.0:
+
+- **Was fehlt mir noch?** nutzt `monCard` (dritter Parameter `extra`: eine eigene Zeile) statt eigener Karten; `/api/fehlt`
+  liefert dafür `werte` und `summe`. Damit gibt es Hover-Karte, Stern, Häkchen und Pokéball wie in der Liste. `backLink`
+  kennt jetzt auch `fehlt`, `karte`, `items`, `sammeln`, `raids`, `auftraege`, `initiative`, `kampf`.
+- **Karten, Einstieg** (`MGSTART`): Schlüssel `"/karte"` gilt für eine Karte in jedem Spiel. Eine Mausrad-Raste ist eine
+  halbe Stufe. Geändert: Rot/Blau/Gelb 2 → 1,75; Feuerrot/Blattgrün (Map Genie) 1,5 → 1,75 und Mitte 0,45 → 0,44;
+  Feuerrot/Blattgrün (RankedBoost) eigener Eintrag [1; 0,33; 0,3]; Kristall (pokemoncompletion) Mitte 0,5 → 0,46, in
+  Gold/Silber → 0,43; DittoBase 1 → 0,75; HGSS Johto (ganze Welt) 1 → 1,5, Kanto (ganze Welt) 1 → 0,5, Kanto (Serebii)
+  0 → 0,25; ORAS 0 → 0,5; Paldea Mitte 0,5 → 0,54; Kitakami 2 → 1,5; Terrarium 2,5; Pokopia Mitte 0,56 → 0,59;
+  Platin und Diamant/Perl Mitte 0,4 → 0,33; Raid-Nester Rüstungsinsel und Schneelande 0 → 0,5; Alola-Inseln 1 → 0,5,
+  Akala und Ula-Ula Mitte 0,5 → 0,53; X/Y ganz weit weg und eine halbe Stufe weiter (`MGFAR`).
+- **Karten je Spiel** (`MG_EDITION`): Paldea nur in Karmesin/Purpur, Kitakami nur in der Türkisgrünen Maske, das Terrarium
+  nur in der Indigoblauen Scheibe (wie Rot/Blau und Gelb). Ein Link auf eine Ebene öffnet weiter jede Karte.
+  `MGFIRST`: erste Karte eines Spiels (HGSS: `im-johto`).
+- **Ebenen am Anfang** (`mgStartHide`): Ebenen der Gruppe „Orte“ und Schnellreise/Lager, ohne Übergänge und ähnlichen
+  Kleinkram, zusammen höchstens 150 Punkte (erst Städte, Orte, Routen, dann die kleinsten). Gemerkt je Karte unter
+  `mgEbenen3:` (die alte Auswahl unter `mgEbenen2:` gilt nicht mehr).
+- **Übersicht mit Bildern** (`heatCells`): Raster fest auf der Karte je ganzer Zoomstufe (80 bis 160 px im Bild); wer im
+  Elternfeld gezeigt wurde, bleibt im Teilfeld mit seinem größten Gewicht. Vorher lag das Raster am Bildschirm, und ein
+  seltenes Pokémon (Chaneira) fiel beim Hineinzoomen unter die 30-%-Grenze seines neuen Feldes.
+- **Team-Leiste auf der Karte** (`ONMAP`, `MAPFOLD`): beim Betreten zugeklappt; ein Klick auf die Kopfzeile klappt sie nur
+  für diesen Besuch auf. Die gemerkte Einstellung (`dock`) ändert sich dabei nicht.
+- **Team:** Häkchen bei „Bessere Alternative“ (`altpick`) öffnet die Auswahl „… ersetzt …“ mit dem empfohlenen Platz, statt
+  gleich zu tauschen. Spalten 1,15 / 1 / 0,9 statt 1,25 / 1 / 0,8; Typ-Spalte der Typwirkung so schmal wie ihr Inhalt.
+- **Rezepte abhaken** (Legenden: Arceus, Items → Herstellen): Spalte ✓, abgelegt in `gefunden` unter Karte `rezept`.
+- **Trainer aus Hisui** fehlten im Schadensrechner: `abruf._trainer` hielt eine Datei von vor 0.48.6 (ohne `kategorien`)
+  für aktuell. Fehlt die Angabe, holt der Abgleich neu; die Trainer kommen mit dem nächsten Abgleich.
+- Detailseite: „Status-Attacken“ merkt sich den Zustand (`stMvOpen`); Stufen der Forschungsaufgaben fett; Alpha-Knopf
+  der Karten 1 px nach rechts (wie vor 0.49).
+
+Offen aus derselben Rückmeldung: Punkte für Let’s Go (IGN antwortet auf die Abfrage der Punkte nicht), eine bessere Karte
+für Strahlender Diamant/Leuchtende Perle, Angaben zur Safari-Zone (Fangen dort folgt eigenen Regeln; bisher nur die
+Fundorte).
+
+## 0.56.1 (13.11.2026)
+
+Zwei kleine Funde aus dem Review vom 13.11.2026, als Beispiel vorab:
+
+- `schaden.MODS`: Leben-Orb 5324/4096 und Expertengurt 4915/4096 statt 1,3 und 1,2 (so rechnet das Spiel ab
+  Generation 5). Mit 1,3 wich das Ergebnis ab 512 Schaden je Treffer in jedem fünften Fall um 1 KP ab.
+- `server._body` lehnt `Infinity` und `NaN` ab (`_no_constant`): Python liest sie, obwohl sie kein JSON sind; als Gewicht
+  eines Teams gespeichert, kamen sie in `/api/teams` wieder heraus, und der Browser konnte die Antwort nicht lesen.
+- `srv.log` war seit 0.47.6 versehentlich eingecheckt; entfernt, `*.log` steht jetzt in `.gitignore`.
+
 ## 0.56.0 (12.11.2026)
 
 - Alola: `pokearth.pw_imagemaps` liest alle Bildkarten einer Vorlage, `pw_islands` je Insel die Orte (ohne Pfeile zur

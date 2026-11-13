@@ -579,6 +579,12 @@ def _warm_loop():
         time.sleep(300)
 
 
+def _no_constant(name):
+    """0.56.1: Infinity und NaN sind kein JSON. Python läse sie trotzdem, speicherte sie (etwa als Gewicht eines Teams)
+    und schriebe sie wieder aus; der Browser kann die Antwort dann nicht mehr lesen."""
+    raise ValueError(f"Zahl erwartet, nicht {name}")
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "pokedex"
     protocol_version = "HTTP/1.1"    # Verbindungen bleiben offen: die vielen Kacheln der Karte kommen ohne neuen Aufbau
@@ -627,7 +633,7 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         if n < 0 or n > limit:
             raise ValueError("zu groß")
-        body = json.loads(self.rfile.read(n) or b"{}")
+        body = json.loads(self.rfile.read(n) or b"{}", parse_constant=_no_constant)
         if not isinstance(body, dict):
             raise ValueError("JSON-Objekt erwartet")
         return body

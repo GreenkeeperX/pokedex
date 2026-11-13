@@ -43,6 +43,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Spalten (KP, AP, EP und Statusprobleme bei Medizin und Beeren, Fangfaktor bei Bällen, die Attacke bei Maschinen), Suche und Filter nach Art. Spiele ohne Liste in
   der PokéAPI (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, SDLP) nach PKHeX; in Legenden: Arceus „Herstellen“
   mit Rezepten und Zutaten.
+- **Rezepte abhaken** (Legenden: Arceus, Items → Herstellen): Spalte ✓ für Rezepte, die du schon hast.
 - **Was fehlt mir noch?** (Knopf in der Liste, `#fehlt`): die Arten des Spiel-Dex ohne gefangene Form, nach dem besten
   Weg geordnet (geht jetzt, wild, Geschenk oder einmalig, entwickeln, Tera-Raid, züchten, Tausch-Entwicklung, andere
   Edition), mit Wahl der eigenen Edition und Pokéball direkt auf der Karte.

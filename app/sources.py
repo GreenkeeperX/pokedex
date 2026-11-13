@@ -12,11 +12,29 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.56.0"
+VERSION = "0.56.2"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.56.2", "13.11.2026", [
+        "Was fehlt mir noch?: die gewohnten Pokémon-Karten mit Hover-Karte, dazu nur der Weg (wild fangen, entwickeln …); "
+        "„Zurück“ auf der Detailseite führt wieder dorthin, ebenso zur Karte, zu Items und Aufträgen",
+        "Karten: Einstieg je Karte nachgestellt; Karmesin/Purpur und die beiden Erweiterungen zeigen je ihre eigene Karte; "
+        "HeartGold/SoulSilver beginnt mit „Johto (ganze Welt)“; anfangs sind nur die wichtigsten Orte eingeblendet "
+        "(höchstens rund 150 Punkte); die Team-Leiste klappt auf der Karte zu",
+        "Übersicht mit Bildern: Beim Hineinzoomen verschwindet kein Pokémon mehr, es kommen nur welche dazu",
+        "Team: Das Häkchen bei „Bessere Alternative“ fragt jetzt, wen es ersetzt; die dritte Spalte ist breiter",
+        "Legenden: Arceus: Rezepte lassen sich unter Items, Herstellen abhaken; die Trainer aus Hisui kommen mit dem nächsten "
+        "Abgleich in den Schadensrechner (sie fehlten wegen eines Fehlers)",
+        "Detailseite: „Status-Attacken“ merkt sich, ob sie aufgeklappt ist; Zahlen der Forschungsaufgaben fett; "
+        "Alpha-Knopf auf den Karten 1 px nach rechts",
+    ]),
+    ("0.56.1", "13.11.2026", [
+        "Schadensrechner: Leben-Orb und Expertengurt rechnen jetzt genau wie im Spiel (bei sehr hohem Schaden kam bisher "
+        "manchmal 1 KP zu viel heraus)",
+        "Der Server nimmt keine unendlichen Zahlen mehr an (ein so gespeichertes Team hätte die Teamliste unlesbar gemacht)",
+    ]),
     ("0.56.0", "12.11.2026", [
         "Karten für Sonne/Mond und Ultrasonne/Ultramond: je Insel eine Karte (Mele-Mele, Akala, Ula-Ula, Poni, Æther-Paradies) "
         "aus den Bildkarten des PokéWiki, mit deutschen Ortsnamen und den Pokémon je Ort aus den Fundorten",
