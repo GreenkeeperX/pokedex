@@ -7,6 +7,20 @@ zusammen (`_HOST_LAST`, eine Sperre je Server): Quellen ohne Abhängigkeit laufe
 selben Server aber nie. Antwortet eine Quelle mit 403, 429
 oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 
+Die Ruhezeiten stehen in `ruhe.json` im Datenordner (`abruf.rest_set`, `rest_until`), geschrieben im Augenblick der
+Sperre: Sie gelten auch nach einem Neustart des Containers. Schlüssel ist die Quelle (`pokeapi`, `smogon` …), für
+Kacheln `kacheln` (Map Genie) und `kacheln:<Quelle>`, dazu `server:<Name>` für den Server, der gesperrt hat. Den
+Server-Schlüssel beachtet nur der Verbindungstest; der Abgleich lässt weiterhin Quellen ruhen, nicht Server.
+
+## Neustart mitten im Lauf
+
+Der Stand (`sync.json`) geht auf die Platte, bevor die erste Quelle gefragt wird, nach dem Bauen der Datenbank und nach
+jeder abgeschlossenen Quelle (`abruf._Merker`: jede Änderung an `sources` und `rest`). Solange der Lauf nicht zu Ende
+ist, trägt der Stand `laeuft`. Das Ende (`finished`, Protokoll) schreibt ein `try/finally`, auch nach einem Fehler
+außerhalb der Quellen. Findet der Dienst nach dem Start einen Stand mit `laeuft`, setzt er den Lauf fort (fünf Minuten
+nach dem Start, mit dem bisherigen Protokoll; höchstens `RESUME_MAX`-mal nacheinander, danach wie nach einem
+Fehlschlag). Was schon geholt war, bleibt: CSV-Texte im Zwischenspeicher, Bilder und Kacheln auf der Platte.
+
 ## Ablauf eines Laufs
 
 1. Sicherung von user.db (einmal am Tag, 14 bleiben).
@@ -162,12 +176,20 @@ gespeichert als `formen/<Nummer aus pokemon_forms>.png`.
 ## Zeitplan
 
 Prüfung jede Minute, erster Blick fünf Minuten nach dem Start (ohne Datenbank sofort). Passt `importer.VERSION`
-nicht mehr zum gebauten Stand (nach einem Update mit neuen Tabellen), ist der Abgleich sofort fällig. Fällig nach dem
-eingestellten Abstand (1 bis 30 Tage, Standard 7); nach einem Fehlschlag frühestens nach einer Stunde.
+nicht mehr zum gebauten Stand (nach einem Update mit neuen Tabellen), ist der Abgleich sofort fällig. Sonst zur festen
+Uhrzeit (`uhr` in `settings.json`, Voreinstellung 02:30 UTC), wenn der letzte Lauf mindestens den eingestellten Abstand
+in Kalendertagen zurückliegt (1 bis 30, Standard 7); `abruf.due`, `next_run`. Ein verpasster Termin (Server aus) wird
+am selben Tag nachgeholt. Nach einem Fehlschlag frühestens nach einer Stunde. Der Zeitplan hängt nicht am Neustart
+durch ein Update: Ein Neustart löst keinen Lauf aus, außer es war einer unterbrochen.
+
+Die Uhrzeit steht als Weltzeit (UTC) in der Einstellung, weil der Container keine Zeitzone kennt. Die Oberfläche zeigt
+und nimmt die Ortszeit des Browsers; mit der Zeitumstellung verschiebt sich der Lauf um eine Stunde.
 
 ## Verbindungstest
 
-Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen. Verschiedene Server fragt er gleichzeitig an, jeden
+Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen. Ein Server, der nach einer Sperre ruht
+(`server:<Name>` in `ruhe.json`), wird nicht gefragt; die Zeile sagt, bis wann. Sperre und Pause je Server teilt der
+Test mit dem Abgleich (`_host_lock`, `_HOST_LAST`). Verschiedene Server fragt er gleichzeitig an, jeden
 Server für sich nacheinander mit Pause (`abruf.DIAG_PAUSE`, sonst `PAUSE`); die Zeilen bleiben in der Reihenfolge der
 Abfragen. Der Test läuft im Dienst und geht weiter, wenn die Oberfläche den Reiter wechselt; `GET /api/diag` liefert
 den Fortschritt (`gesamt`, `fertig`, `laeuft`) und am Ende Start, Dauer und Zeilen. Ergebnis und Probe-Seiten liegen nur

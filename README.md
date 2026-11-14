@@ -141,7 +141,8 @@ Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies
 2. In Portainer einen Stack mit dem Inhalt von `docker-compose.yml` anlegen. Port 8789, Volume `pokedex-daten`,
    Watchtower holt neue Images selbst.
 3. Beim ersten Start holt der Container die Daten (einige Minuten, danach die Sprites). Danach gleicht er
-   nach Zeitplan ab (Standard: alle 7 Tage), fünf Minuten nach jedem Neustart prüft er, ob ein Lauf fällig ist.
+   nach Zeitplan ab (Standard: alle 7 Tage zu einer festen Uhrzeit nachts, einstellbar). Ein Neustart mitten im
+   Abgleich schadet nicht: Der Stand ist gespeichert, der Lauf wird fünf Minuten nach dem Start fortgesetzt.
 
 Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HOSTS` setzen (siehe Compose-Datei).
 
@@ -150,7 +151,8 @@ Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HO
 - `pokeapi.db`: Spieldaten, baut jeder Abgleich neu, wenn sich eine Quelle geändert hat
 - `user.db`: deine Teams, Favoriten, Gefangenen und Entscheidungen; der Abgleich berührt sie nie. Tägliche Kopie in `sicherung/` (14 Tage)
 - `sprites/`, `artwork/`: Bilder (Sprites 96 × 96, offizielle Artworks 475 × 475, zusammen gut 180 MB)
-- `settings.json`, `sync.json`: Einstellungen und Stand des Abgleichs
+- `settings.json`, `sync.json`: Einstellungen und Stand des Abgleichs (nach jeder Quelle gespeichert)
+- `ruhe.json`: Quellen und Server, die nach einer Sperre (403, 429) ruhen, mit dem Ende der Ruhe
 
 ## Entwicklung
 

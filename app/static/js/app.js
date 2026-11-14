@@ -617,17 +617,28 @@ function header() {
   if (a.running && !syncT) syncT = setTimeout(syncPoll, 5000);
 }
 let syncT = 0;
+/* 0.58.0: fragt den schlanken Stand ab (/api/stand, wenige hundert Byte) statt der ganzen Grunddaten. Solange der Lauf
+   läuft, nur die Kopfzeile; meldet der Server das Ende, gilt das sofort (die Meldung „Abgleich läuft“ verschwindet auch
+   dann, wenn das Nachladen der Grunddaten scheitert), danach einmal /api/meta für Zahlen, Spiele und neue Daten */
 async function syncPoll() {
   syncT = 0;
-  let m;
-  try { m = await api("/api/meta"); } catch (x) { m = null; }
-  if (!m) { if (!syncT) syncT = setTimeout(syncPoll, 15000); return; }
-  if (LOADED_VER && m.version && m.version !== LOADED_VER) { location.reload(); return; }
-  const fresh = !S.meta?.has_data && m.has_data;
-  S.meta = m;
-  S.types = Object.fromEntries((m.typen || []).map((t) => [t.id, t.name]));
+  let s;
+  try { s = await api("/api/stand"); } catch (x) { s = null; }
+  if (!s) { if (!syncT) syncT = setTimeout(syncPoll, 15000); return; }
+  if (LOADED_VER && s.version && s.version !== LOADED_VER) { location.reload(); return; }
+  if (!S.meta) return;
+  const fresh = !S.meta.has_data && s.has_data;
+  S.meta.abgleich = s.abgleich;
+  if (s.abgleich.running && !fresh) { header(); return; }
+  S.meta.has_data = s.has_data;
   header();
-  if (fresh) route();
+  try {
+    const m = await api("/api/meta");
+    S.meta = m;
+    S.types = Object.fromEntries((m.typen || []).map((t) => [t.id, t.name]));
+    header();
+  } catch (x) { console.warn("Grunddaten nach dem Abgleich nicht geladen:", x.message); }
+  if (fresh || !S.meta.has_data) route();
 }
 /* Hell, dunkel oder wie das Gerät: runder Knopf mit Menü, wie im VR-Navigator */
 const THEMES = [
@@ -685,11 +696,20 @@ function version() {
   b.hidden = false; b.textContent = "v" + v; b.classList.toggle("frisch", neu);
   const box = $("#neu");
   if (!neu) { box.innerHTML = ""; return; }
-  const cur = (S.meta.neu || []).find((n) => n[0] === v);
+  // 0.58.0: die Punkte dieser Version kommen bei Bedarf (/api/neuigkeiten?version=…), nicht mehr mit jeder Abfrage der Grunddaten
+  const cur = S.neuCur && S.neuCur[0] === v ? S.neuCur : null;
   box.innerHTML = `<div class="note neu"><b>Neu in Version ${esc(v)}</b>${cur ? `<ul>${cur[2].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${S.neuErr ? `<div class="hint">Die Punkte dieser Version ließen sich nicht laden (${esc(S.neuErr)}).</div>` : ""}
     <button data-act="neu">Alle Versionen</button> <button class="primary" data-act="neuok">Verstanden</button></div>`;
+  if (!cur && !S.neuErr && !S.neuLoad) {
+    S.neuLoad = true;
+    api("/api/neuigkeiten?version=" + encodeURIComponent(v)).then((d) => { S.neuCur = d[0] || [v, "", []]; }, (x) => { S.neuErr = x.message; })
+      .finally(() => { S.neuLoad = false; version(); });
+  }
 }
-function versionsDialog() {
+async function versionsDialog() {
+  let all, err = "";
+  try { all = S.neuAll || (S.neuAll = await api("/api/neuigkeiten")); } catch (x) { all = []; err = x.message; }
   let d = $("#vdlg");
   if (!d) {
     d = document.createElement("dialog"); d.id = "vdlg"; document.body.append(d);
@@ -697,7 +717,8 @@ function versionsDialog() {
     d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
   }
   d.innerHTML = `<div class="dh"><h2>Was ist neu?</h2><form method="dialog"><button class="x" aria-label="Schließen" title="Schließen">✕</button></form></div><div class="db">`
-    + (S.meta?.neu || []).map(([v, datum, punkte]) =>
+    + (err ? `<div class="note stop">Die Versionsgeschichte ließ sich nicht laden: ${esc(err)}</div>` : "")
+    + all.map(([v, datum, punkte]) =>
       `<h3>Version ${esc(v)} <span class="hint">${esc(datum)}</span></h3><ul>${punkte.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("") + `</div>`;
   d.showModal();
 }
@@ -859,7 +880,7 @@ function noData() {
       : "Der Abgleich holt die Daten von der PokéAPI und von Pokémon Showdown."}</p>
     <button class="primary" data-act="sync"${a.running ? " disabled" : ""}>Abgleich starten</button>
     <a class="btn" href="#einstellungen">Protokoll ansehen</a></div>`;
-  if (a.running) setTimeout(refreshMeta, 5000);
+  // 0.58.0: kein eigener Zeitgeber mehr; die Kopfzeile fragt den schlanken Stand ab (syncPoll) und lädt neu, sobald Daten da sind
 }
 let LOADED_VER = null;     // Version, mit der diese Seite geladen wurde
 async function refreshMeta() {
@@ -870,7 +891,7 @@ async function refreshMeta() {
   LOADED_VER = LOADED_VER || S.meta.version;
   S.types = Object.fromEntries((S.meta.typen || []).map((t) => [t.id, t.name]));
   header();
-  if (S.meta.has_data || !S.meta.abgleich?.running) route(); else setTimeout(refreshMeta, 5000);
+  route();
 }
 
 /* Farben der Gebiete in Legenden: Arceus (wie auf den Karten), damit gleiche Gebiete in langen Listen auffallen */
@@ -4171,6 +4192,11 @@ async function diskBox(neu) {
     ${d.teile.filter((t) => t.bytes > 0).map((t) => row(t, 0)).join("")}`;
   $("#diskneu").addEventListener("click", () => { el.innerHTML = `<p class="hint">Zählt …</p>`; diskBox(true); });
 }
+/* Uhrzeit des Abgleichs: Der Server führt sie als Weltzeit (UTC, „HH:MM“), das Feld zeigt die Ortszeit des Browsers */
+const uhrShift = (hm, sign) => { const m = /^(\d\d):(\d\d)$/.exec(hm || ""); if (!m) return "";
+  const t = ((+m[1] * 60 + +m[2] + sign * new Date().getTimezoneOffset()) % 1440 + 1440) % 1440;
+  return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); };
+const uhrLocal = (utc) => uhrShift(utc || "02:30", -1), uhrUtc = (local) => uhrShift(local, 1);
 async function settingsView() {
   const rid = RID;
   const [st, pr] = await Promise.all([api("/api/status"), S.meta?.has_data ? api("/api/pruefung") : []]);
@@ -4184,13 +4210,16 @@ async function settingsView() {
   main.innerHTML = `<div class="cols">
     <div class="box"><h2>Abgleich</h2>
       ${st.running ? `<div class="note info">Läuft: ${esc(st.step || "")}${st.total ? ` (${st.done}/${st.total})` : ""}</div>` : ""}
-      <p>Letzter Lauf: ${st.started ? esc(deTime(st.started)) + (st.ok === false ? " <b>mit Fehlern</b>" : "") : "noch keiner"}
+      ${st.unterbrochen ? `<div class="note info">Der letzte Lauf wurde von einem Neustart unterbrochen. Er wird in wenigen Minuten fortgesetzt; was schon geholt war, bleibt.</div>` : ""}
+      <p>Letzter Lauf: ${st.started ? esc(deTime(st.started)) + (st.unterbrochen ? " <b>unterbrochen</b>" : st.ok === false ? " <b>mit Fehlern</b>" : "") : "noch keiner"}
+      ${st.naechster && !st.running ? `<br>Nächster Lauf nach Zeitplan: ${esc(deTime(st.naechster))}` : ""}
       ${st.built ? `<br>Datenbank gebaut: ${esc(deTime(st.built))}` : ""}
       ${bad.length ? `<br><b class="errc">${bad.length} ${bad.length === 1 ? "Quelle" : "Quellen"} mit Problem</b> (${esc(bad.join(", "))})` : ""}</p>
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
       <div class="plan"><h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
-        <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
+        <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage
+        <label data-tip="Feste Uhrzeit in deiner Ortszeit. Der Server merkt sie sich als Weltzeit (UTC); mit der Zeitumstellung verschiebt sie sich um eine Stunde.">um <input type="time" id="uhr" value="${esc(uhrLocal(s.uhr))}" style="width:96px"> Uhr</label></div>
       <div class="bar"><label><input type="checkbox" id="sprites"${s.sprites ? " checked" : ""}> Bilder laden (Sprites 96 × 96 und offizielle Artworks 475 × 475, zusammen gut 180 MB; dazu schillernde und animierte Sprites, Rufe und Item-Bilder, gut 45 MB)</label></div>
       <p class="hint">Ändert sich bei keiner Quelle etwas, bleibt die Datenbank. Eine neue gilt erst nach bestandener Selbstprüfung; deine Teams liegen getrennt (user.db) und werden täglich gesichert.</p></div>
       ${srcKeys.length ? `<details class="sub"${bad.length ? " open" : ""}><summary><b>Quellen</b> ${okN ? `<span class="badge ok">${okN} ok</span>` : ""}${bad.length ? `<span class="badge bad">${bad.length} mit Problem</span>` : ""}</summary>
@@ -4253,9 +4282,10 @@ async function settingsView() {
   foldBoxes(main);
   diag(false);                                          // laufenden Test oder letztes Ergebnis zeigen
   const saveSet = async () => {
-    S.meta.einstellungen = await api("/api/einstellungen", {auto: $("#auto").checked, tage: +$("#tage").value, sprites: $("#sprites").checked});
+    const uhr = uhrUtc($("#uhr").value);
+    S.meta.einstellungen = await api("/api/einstellungen", {auto: $("#auto").checked, tage: +$("#tage").value, sprites: $("#sprites").checked, ...(uhr ? {uhr} : {})});
   };
-  ["auto", "tage", "sprites"].forEach((k) => $("#" + k).addEventListener("change", saveSet));
+  ["auto", "tage", "sprites", "uhr"].forEach((k) => $("#" + k).addEventListener("change", saveSet));
   { const dk = $("#diskd"); if (dk.open) diskBox(); dk.addEventListener("toggle", () => { store.set("diskOpen", dk.open); if (dk.open) diskBox(); }); }   // zählt nur aufgeklappt
   $("#sichinfo").addEventListener("toggle", (e) => store.set("sichInfo", e.target.open));
   $("#restore").addEventListener("change", async (e) => {

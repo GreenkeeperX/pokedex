@@ -1,6 +1,7 @@
 """Kleiner Webserver: liefert die Oberfläche, die Sprites und eine JSON-Schnittstelle. Wie im VR-Navigator."""
 import datetime
 import gzip
+import hashlib
 import io
 import ipaddress
 import json
@@ -461,10 +462,74 @@ def decide(body):
 
 
 def meta():
-    st = abruf.status()
-    return {"app": "pokedex", "version": sources.VERSION, "neu": sources.NEUIGKEITEN, "has_data": db.has_data(), **abfragen.meta(),
-            "spiele": abfragen.games(), "einstellungen": abruf.load_settings(),
-            "abgleich": {k: st.get(k) for k in ("running", "started", "finished", "ok", "built", "step")}}
+    """Grunddaten für die Oberfläche, einmal beim Laden und nach einem Abgleich. Seit 0.58.0 ohne die Versionsgeschichte
+    (vorher „neu“: rund 50 KB bei jeder Abfrage); die holt die Oberfläche bei Bedarf über /api/neuigkeiten."""
+    return {"app": "pokedex", "version": sources.VERSION, "has_data": db.has_data(), **abfragen.meta(),
+            "spiele": abfragen.games(), "einstellungen": abruf.load_settings(), "abgleich": abruf.brief()}
+
+
+def stand():
+    """Schlanker Stand für die regelmäßige Abfrage während eines Abgleichs (/api/stand): Version, ob es Daten gibt,
+    und der Lauf in wenigen Feldern. Wenige hundert Byte statt der ganzen Grunddaten."""
+    return {"version": sources.VERSION, "has_data": db.has_data(), "abgleich": abruf.brief()}
+
+
+def neuigkeiten(version=None):
+    """Versionsgeschichte [[Version, Datum, [Punkte]]]; mit version nur dieser Eintrag (für „Neu in Version …“)."""
+    return [n for n in sources.NEUIGKEITEN if version is None or n[0] == version]
+
+
+_STATIC = {}
+_STATIC_LOCK = threading.Lock()
+
+
+def _etag(*parts):
+    h = hashlib.sha256()
+    for x in parts:
+        h.update(x if isinstance(x, bytes) else str(x).encode("utf-8"))
+        h.update(b"\0")
+    return '"' + h.hexdigest()[:20] + '"'
+
+
+def static_file(rel):
+    """Eine Datei der Oberfläche: (Inhalt, gepackt, ETag). Einmal gelesen und gepackt, solange die Datei sich nicht
+    ändert (Änderungszeit und Größe); vorher las und packte der Server sie bei jedem Abruf neu."""
+    path = os.path.join(STATIC, rel)
+    stt = os.stat(path)
+    key = (stt.st_mtime_ns, stt.st_size)
+    hit = _STATIC.get(rel)
+    if hit and hit[0] == key:
+        return hit[1:]
+    with _STATIC_LOCK:
+        with open(path, "rb") as f:
+            body = f.read()
+        got = (key, body, gzip.compress(body, compresslevel=9), _etag(body))
+        _STATIC[rel] = got
+        return got[1:]
+
+
+def static_tag(rel):
+    """Kennung für die Adresse einer Datei der Oberfläche: Version und Prüfsumme des Inhalts. Die Adresse ändert sich
+    genau dann, wenn sich der Inhalt ändert; deshalb darf der Browser sie unbegrenzt behalten."""
+    return f"{sources.VERSION}-{static_file(rel)[2][1:11]}"
+
+
+def index_page():
+    """index.html mit den Adressen von CSS und JS samt Kennung (static_tag): (Inhalt, gepackt, ETag)."""
+    body, _, _ = static_file("index.html")
+    tags = {rel: static_tag(rel) for rel in ("style.css", "js/app.js")}
+    key = ("index", body, tuple(tags.values()))
+    hit = _STATIC.get("/")
+    if hit and hit[0] == key:
+        return hit[1:]
+    page = body.decode("utf-8").replace('href="style.css"', f'href="style.css?v={tags["style.css"]}"').replace(
+        'src="js/app.js"', f'src="js/app.js?v={tags["js/app.js"]}"').encode("utf-8")
+    got = (key, page, gzip.compress(page, compresslevel=9), _etag(page))
+    _STATIC["/"] = got
+    return got[1:]
+
+
+IMMUTABLE = "public, max-age=31536000, immutable"
 
 
 # ------------------------------------------------------------------ HTTP
@@ -593,11 +658,30 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
+    def _not_modified(self, etag):
+        """Hat der Browser genau diesen Stand schon (If-None-Match)?"""
+        got = self.headers.get("If-None-Match") or ""
+        return bool(etag) and etag in [x.strip().removeprefix("W/") for x in got.split(",")]
+
+    def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None, gz=None):
+        """Antwort senden. extra: weitere Kopfzeilen; mit „ETag“ und passender Anfrage geht 304 ohne Inhalt.
+        gz: der Inhalt schon gepackt (Dateien der Oberfläche)."""
+        extra = dict(extra or {})
+        if code == 200 and self._not_modified(extra.get("ETag")):
+            self.send_response(304)
+            self.send_header("ETag", extra["ETag"])
+            self.send_header("Cache-Control", extra.get("Cache-Control", "no-cache"))
+            self.send_header("Vary", "Accept-Encoding")
+            if self.close_connection:
+                self.send_header("Connection", "close")
+            self.end_headers()
+            return
         if not isinstance(body, bytes):
             body = json.dumps(body, ensure_ascii=False).encode("utf-8")
         packed = len(body) > 20_000 and ctype.startswith(("application/json", "text/")) and "gzip" in (self.headers.get("Accept-Encoding") or "")
-        if packed:
+        if packed and gz is not None:
+            body = gz
+        elif packed:
             hit = _GZ.get(id(body))
             if hit and hit[0] is body:
                 body = hit[1]
@@ -614,13 +698,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Encoding", "gzip")
             self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", (extra or {}).pop("Cache-Control", "no-store"))
+        self.send_header("Cache-Control", extra.pop("Cache-Control", "no-store"))
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         if self.close_connection:
             self.send_header("Connection", "close")
-        for k, v in (extra or {}).items():
+        for k, v in extra.items():
             self.send_header(k, v)
         self.end_headers()
         if self.command != "HEAD":
@@ -646,8 +730,23 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def _file(self, path, cache="no-cache"):
+        """Eine Datei aus dem Datenordner (Bild, Kachel, Ton). ETag aus Änderungszeit und Größe: Nach Ablauf der
+        Frist fragt der Browser nach und bekommt 304, ohne dass der Server die Datei liest."""
+        stt = os.stat(path)
+        extra = {"Cache-Control": cache, "ETag": f'"{stt.st_mtime_ns:x}-{stt.st_size:x}"'}
+        ctype = TYPES.get(os.path.splitext(path)[1], "application/octet-stream")
+        if self._not_modified(extra["ETag"]):
+            return self._send(200, b"", ctype, extra)
         with open(path, "rb") as f:
-            self._send(200, f.read(), TYPES.get(os.path.splitext(path)[1], "application/octet-stream"), {"Cache-Control": cache})
+            self._send(200, f.read(), ctype, extra)
+
+    def _static(self, rel, q):
+        """Datei der Oberfläche: einmal gelesen und gepackt. Trägt die Adresse die Kennung des jetzigen Inhalts
+        (?v=…, von index.html gesetzt), darf der Browser sie unbegrenzt behalten; sonst fragt er mit ETag nach."""
+        body, gz, etag = static_file(rel)
+        fresh = q.get("v") == static_tag(rel)
+        self._send(200, body, TYPES.get(os.path.splitext(rel)[1], "application/octet-stream"),
+                   {"Cache-Control": IMMUTABLE if fresh else "no-cache", "ETag": etag}, gz=gz)
 
     def do_HEAD(self):
         self.do_GET()
@@ -660,13 +759,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             if path in ("/", "/index.html"):
-                # 0.48.6: CSS und JS mit der Version in der Adresse, damit der Browser nach einem Update nie alte Dateien nimmt
-                with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
-                    page = f.read().replace('href="style.css"', f'href="style.css?v={sources.VERSION}"').replace(
-                        'src="js/app.js"', f'src="js/app.js?v={sources.VERSION}"')
-                self._send(200, page.encode("utf-8"), "text/html; charset=utf-8", {"Cache-Control": "no-cache"})
+                # 0.48.6: CSS und JS mit der Version in der Adresse, damit der Browser nach einem Update nie alte Dateien nimmt;
+                # 0.58.0: dazu die Prüfsumme des Inhalts, die Seite selbst mit ETag (304, wenn sich nichts geändert hat)
+                page, gz, etag = index_page()
+                self._send(200, page, "text/html; charset=utf-8", {"Cache-Control": "no-cache", "ETag": etag}, gz=gz)
             elif re.fullmatch(r"/(style\.css|icon\.svg|js/[a-z-]+\.js)", path) and os.path.isfile(os.path.join(STATIC, path[1:])):
-                self._file(os.path.join(STATIC, path[1:]))
+                self._static(path[1:], q)
             elif m := re.fullmatch(r"/(sprites|artwork)/(\d{1,6})\.png", path):
                 # Artwork fehlt (noch nicht geladen): das kleine Sprite statt dessen
                 for kind in ((m.group(1), "sprites") if m.group(1) == "artwork" else ("sprites",)):
@@ -727,7 +825,12 @@ class Handler(BaseHTTPRequestHandler):
                 if d and q.get("karte"):
                     m = next((m for m in d["karten"] if m["slug"] == q["karte"]), None)
                     if m:
-                        self._send(200, _map_body(m, d["spiel"], d["am"]))
+                        # dieselbe Karte im selben Stand: 304 statt mehrerer hundert KB (Schlüssel wie der Kartencache)
+                        tag = _etag("karte", d["spiel"], m.get("slug"), m.get("id"), d["am"], abfragen._stamp(), sources.VERSION)
+                        if self._not_modified(tag):
+                            self._send(200, b"", extra={"Cache-Control": "no-cache", "ETag": tag})
+                        else:
+                            self._send(200, _map_body(m, d["spiel"], d["am"]), extra={"Cache-Control": "no-cache", "ETag": tag})
                     else:
                         self._send(404, {"error": "keine Karte"})
                 else:
@@ -748,6 +851,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, "version": sources.VERSION})
             elif path == "/api/meta":
                 self._send(200, meta())
+            elif path == "/api/stand":
+                self._send(200, stand())
+            elif path == "/api/neuigkeiten":
+                # ändert sich nur mit der Version: der Browser fragt mit ETag nach und bekommt 304
+                self._send(200, neuigkeiten(q.get("version")), extra={"Cache-Control": "no-cache", "ETag": _etag("neu", sources.VERSION, q.get("version"))})
             elif path == "/api/pokemon":
                 self._send(200, abfragen.search(q))
             elif m := re.fullmatch(r"/api/pokemon/(\d{1,6})/attacken", path):

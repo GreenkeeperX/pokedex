@@ -9,6 +9,10 @@ Quellen und ihre Rolle:
 Ablauf: Hat sich bei keiner Quelle etwas geändert, wird nichts neu gebaut. Sonst entsteht die neue Datenbank
 in einer eigenen Datei und ersetzt die alte erst nach bestandener Selbstprüfung. Scheitert etwas, bleibt die
 alte Datenbank. Nach einer Sperre (HTTP 403, 429) oder Prüfseite ruht eine Quelle REST_H Stunden.
+
+Neustart mitten im Lauf (seit 0.58.0): Der Stand (sync.json) geht nach jeder abgeschlossenen Quelle auf die Platte, die
+Ruhezeiten (ruhe.json) im Augenblick der Sperre. Ein unterbrochener Lauf trägt „laeuft“ und wird nach dem Start
+fortgesetzt, mit seinem Protokoll. Der Zeitplan hat eine feste Uhrzeit (Einstellung „uhr“, UTC).
 """
 import base64
 import gzip
@@ -40,7 +44,10 @@ SPRITE_RAW = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/p
 POKEWIKI_API = "https://www.pokewiki.de/api.php"
 EXTRA_DIR = os.path.join(os.path.dirname(__file__), "..", "extra")
 
-SETTINGS = {"auto": True, "tage": 7, "sprites": True}
+SETTINGS = {"auto": True, "tage": 7, "sprites": True, "uhr": "02:30"}    # uhr: feste Uhrzeit des Abgleichs (UTC)
+UHR = re.compile(r"([01]\d|2[0-3]):([0-5]\d)")
+RESUME_MAX = 2              # so oft wird ein vom Neustart unterbrochener Lauf gleich fortgesetzt, danach wie ein Fehlschlag
+REST_FILE = "ruhe.json"     # Ruhezeiten je Quelle {Schlüssel: bis (ISO)}; sofort gespeichert, übersteht den Neustart
 NAMES = {"pokeapi": "PokéAPI", "showdown": "Showdown", "sprites": "Sprites", "pkhex": "PKHeX", "spawns": "Spawnpunkte",
          "karten": "Kartenbilder", "extras": "Extras (schillernd, animiert, Rufe)", "pokewiki": "PokéWiki",
          "altissimo": "Altissimo (Kartensymbole, Rezepte)", "companion": "PLA Companion (Schnellreise, Lager)",
@@ -106,9 +113,77 @@ def _ago(iso, at):
         return None
 
 
+_rest_lock = threading.Lock()
+_REST = {}
+
+
+def _rests():
+    """Ruhezeiten von der Platte, einmal je Start (und je Datenordner) gelesen. Nur unter _rest_lock aufrufen."""
+    if _REST.get("dir") != store.DATA_DIR:
+        got = store.load_json(REST_FILE, {})
+        _REST.clear()
+        _REST.update(dir=store.DATA_DIR, bis={k: v for k, v in got.items() if isinstance(v, str)})
+    return _REST["bis"]
+
+
+def rest_set(key, hours=REST_H, at=None):
+    """Eine Quelle ruhen lassen und das sofort speichern: Die Ruhe gilt auch nach einem Neustart. Eine längere Ruhe
+    bleibt; abgelaufene Einträge fallen weg. Gibt das Ende zurück (ISO)."""
+    at = at or now()
+    until = _iso(at + timedelta(hours=hours))
+    with _rest_lock:
+        bis = _rests()
+        if bis.get(key, "") < until:
+            bis[key] = until
+        for k in [k for k, v in bis.items() if v <= _iso(at)]:
+            del bis[k]
+        try:
+            store.save_json(REST_FILE, dict(bis))
+        except OSError as e:
+            print("Ruhezeiten speichern:", e, file=sys.stderr)
+        return bis[key]
+
+
+def server_rest(url):
+    """Schlüssel der Ruhezeit eines Servers ("server:<Name>"). Der Abgleich lässt Quellen ruhen (eine Quelle, ein
+    Schlüssel); dazu merkt er sich den Server, der gesperrt hat, damit der Verbindungstest ihn nicht gleich wieder fragt."""
+    return "server:" + (urllib.parse.urlsplit(url).hostname or "")
+
+
+def rest_until(key, at=None):
+    """Bis wann die Quelle ruht (ISO) oder ""."""
+    with _rest_lock:
+        until = _rests().get(key, "")
+    return until if until > _iso(at or now()) else ""
+
+
+def rest_clear(key=None):
+    """Ruhezeit einer Quelle (oder alle) aufheben und das speichern. Der Abgleich ruft das nie selbst auf: Eine Ruhe
+    endet von allein. Gedacht für Tests und für einen bewussten Eingriff von Hand."""
+    with _rest_lock:
+        bis = _rests()
+        if key is None:
+            bis.clear()
+        else:
+            bis.pop(key, None)
+        try:
+            store.save_json(REST_FILE, dict(bis))
+        except OSError as e:
+            print("Ruhezeiten speichern:", e, file=sys.stderr)
+
+
+def rests(at=None):
+    """Alle laufenden Ruhezeiten {Schlüssel: bis}."""
+    cur = _iso(at or now())
+    with _rest_lock:
+        return {k: v for k, v in _rests().items() if v > cur}
+
+
 def load_settings():
     s = dict(SETTINGS)
     s.update({k: v for k, v in store.load_json("settings.json", {}).items() if k in SETTINGS})
+    if not UHR.fullmatch(str(s["uhr"])):
+        s["uhr"] = SETTINGS["uhr"]
     return s
 
 
@@ -122,31 +197,85 @@ def save_settings(body):
             s["tage"] = min(30, max(1, int(body["tage"])))
         except (TypeError, ValueError):
             raise ValueError("Abstand in Tagen: eine Zahl von 1 bis 30")
+    if "uhr" in body:
+        if not UHR.fullmatch(str(body["uhr"])):
+            raise ValueError("Uhrzeit: HH:MM von 00:00 bis 23:59")
+        s["uhr"] = str(body["uhr"])
     store.save_json("settings.json", s)
     return s
 
 
 def status():
+    """Stand des Abgleichs mit Protokoll (Einstellungen). „unterbrochen“: Der letzte Lauf endete nicht (Neustart)."""
     st = store.load_json("sync.json", {})
     st["running"] = _running.locked()
     if st["running"]:
         st.update(started=STATE["started"], step=STATE["step"], done=STATE["done"], total=STATE["total"], log=list(STATE["log"]))
+    st["unterbrochen"] = bool(st.pop("laeuft", False)) and not st["running"]
+    st["rest"] = dict(st.get("rest") or {}, **rests())
+    st["naechster"] = next_run()
     st["has_data"] = db.has_data()
     return st
 
 
-def due(settings=None, at=None, boot=False):
-    """Lauf nach Zeitplan fällig? Ohne Datenbank immer; nach einem Fehlschlag frühestens nach einer Stunde."""
+def brief():
+    """Der Stand in wenigen Feldern, für die regelmäßige Abfrage der Oberfläche (/api/stand): ohne Protokoll, ohne
+    Quellen, ohne Versionsgeschichte."""
+    st = store.load_json("sync.json", {})
+    running = _running.locked()
+    out = {k: st.get(k) for k in ("started", "finished", "ok", "built")}
+    out.update(running=running, step=STATE["step"] if running else "", done=STATE["done"] if running else 0,
+               total=STATE["total"] if running else 0, unterbrochen=bool(st.get("laeuft")) and not running)
+    if running:
+        out["started"] = STATE["started"]
+    return out
+
+
+def _termin(s, at):
+    """Der letzte Termin des Zeitplans (feste Uhrzeit „uhr“, UTC), der nicht nach at liegt."""
+    h, m = (int(x) for x in UHR.fullmatch(s["uhr"]).groups())
+    t = at.astimezone(timezone.utc).replace(hour=h, minute=m, second=0, microsecond=0)
+    return t if t <= at else t - timedelta(days=1)
+
+
+def _start_of(last):
+    try:
+        return datetime.fromisoformat(last.get("started")).astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def next_run(settings=None, at=None):
+    """Nächster Lauf nach Zeitplan (ISO, UTC) oder "", wenn der Zeitplan aus ist."""
     s = settings or load_settings()
+    if not s["auto"]:
+        return ""
+    at = at or now()
+    t = _termin(s, at) + timedelta(days=1)
+    start = _start_of(store.load_json("sync.json", {}))
+    if start is not None:
+        first = t.replace(year=start.year, month=start.month, day=start.day) + timedelta(days=s["tage"])
+        t = max(t, first)
+    return _iso(t)
+
+
+def due(settings=None, at=None, boot=False):
+    """Lauf fällig? Ohne Datenbank immer; nach einem Fehlschlag frühestens nach einer Stunde; ein vom Neustart
+    unterbrochener Lauf („laeuft“ steht noch im Stand) wird fortgesetzt, höchstens RESUME_MAX-mal nacheinander.
+    Sonst nach Zeitplan: zur festen Uhrzeit, wenn der letzte Lauf mindestens „tage“ Kalendertage zurückliegt. Der
+    Termin hängt damit nicht mehr an der Uhrzeit des letzten Laufs (bis 0.57.0: „tage“ × 24 Stunden nach dessen Beginn)."""
+    if _running.locked():
+        return False
+    s = settings or load_settings()
+    at = at or now()
+    last = store.load_json("sync.json", {})
+    since = _ago(last.get("started"), at)
+    if last.get("laeuft") and (last.get("versuch") or 1) <= RESUME_MAX:
+        return True
     if not db.has_data():
-        last = store.load_json("sync.json", {})
-        since = _ago(last.get("started"), at or now())
         return since is None or last.get("ok") is not False or since >= timedelta(hours=1)
     if not s["auto"]:
         return False
-    last = store.load_json("sync.json", {})
-    at = at or now()
-    since = _ago(last.get("started"), at)
     if since is None:
         return True
     if last.get("ok") is False:
@@ -154,22 +283,26 @@ def due(settings=None, at=None, boot=False):
     # Nach einem Update mit neuen Tabellen sofort neu bauen, sonst fehlt Neues bis zum nächsten Termin
     if (last.get("stand") or {}).get("importer") not in (None, importer.VERSION) and since >= timedelta(hours=1):
         return True
-    return since >= timedelta(days=s["tage"])
+    t, start = _termin(s, at), _start_of(last)
+    return start < t and (t.date() - start.date()).days >= s["tage"]
 
 
 class _Source:
     """Eine Quelle in einem Lauf: Pausen, Fehlerzähler, zweiter Versuch nach Netzfehler, Ende bei Sperre."""
 
-    def __init__(self, key, log, pause=PAUSE):
+    def __init__(self, key, log, pause=PAUSE, ruhe=None):
         self.key, self.name, self.log, self.pause = key, NAMES.get(key, key), log, pause
+        self.ruhe = ruhe or key          # Schlüssel der Ruhezeit (weicht ab, wenn mehrere Abläufe eine Quelle teilen)
         self.n = self.errors = 0
         self.stopped = ""
         self.blocked = False
         self._last = {}
 
-    def _stop(self, why, where):
+    def _stop(self, why, url):
         self.stopped, self.blocked = why, True
-        self.log(f"{self.name}: {why} bei {where}, Quelle ruht {REST_H} Stunden")
+        rest_set(self.ruhe)              # sofort auf die Platte: gilt auch, wenn der Container gleich neu startet
+        rest_set(server_rest(url))       # und je Server, für den Verbindungstest
+        self.log(f"{self.name}: {why} bei {_short(url)}, Quelle ruht {REST_H} Stunden")
 
     def get(self, url, raw=False, absent=(), data=None):
         """Text (mit raw Bytes) oder None bei Fehler; "" für Statuscodes aus absent („gibt es nicht“).
@@ -201,7 +334,7 @@ class _Source:
                 if e.status in absent:
                     return b"" if raw else ""
                 if e.status in sources.BLOCKED:
-                    self._stop(f"gesperrt (HTTP {e.status})", _short(url))
+                    self._stop(f"gesperrt (HTTP {e.status})", url)
                 else:
                     self.errors += 1
                     self.log(f"{self.name}: {'HTTP ' + str(e.status) if e.status else 'keine Verbindung'} bei {_short(url)}")
@@ -211,7 +344,7 @@ class _Source:
                 return None
         why = sources.challenge(body[:4000].decode("utf-8", "replace") if raw else body)
         if why:
-            self._stop(why, _short(url))
+            self._stop(why, url)
             return None
         return body
 
@@ -226,7 +359,8 @@ def _short(url):
 
 
 def _resting(st, key, at):
-    until = ((st.get("rest") or {}).get(key)) or ""
+    """Ruht die Quelle? Ende der Ruhe (ISO) oder "". Gilt, was im Stand des Laufs oder in ruhe.json steht."""
+    until = max(((st.get("rest") or {}).get(key)) or "", rest_until(key, at))
     return until if until > _iso(at) else ""
 
 
@@ -450,7 +584,8 @@ def file_kind(body):
 
 def _images(kind, log, limit=SPRITES_MAX):
     """Fehlende Bilder nach data/<kind>/<id>.png (Extras auch .gif, .mp3, .ogg). Gibt das Ergebnis der Quelle zurück."""
-    src = _Source("extras" if kind in EXTRAS else "sprites", log, pause=1.0 if kind == "itemhq" else 0.2)
+    src = _Source("extras" if kind in EXTRAS else "sprites", log, pause=1.0 if kind == "itemhq" else 0.2,
+                  ruhe="itemhq" if kind == "itemhq" else None)
     if kind == "itemhq":
         limit = min(limit, ITEM_HQ_MAX)
     prefix, ext = EXTRAS.get(kind, (IMAGES.get(kind), ".png"))
@@ -555,31 +690,64 @@ def run(by_hand=False, force=False):
         _running.release()
 
 
+_st_lock = threading.RLock()        # schützt den Stand des Laufs (mehrere Fäden schreiben Quellen, Ruhezeiten, Protokoll)
+_save_lock = threading.Lock()       # ein Speichern zur Zeit, damit nie ein älterer Stand einen neueren überschreibt
+
+
+class _Merker(dict):
+    """Teil des Laufzustands (Quellen, Ruhezeiten), der bei jeder Änderung sofort auf die Platte geht: Ist eine Quelle
+    fertig oder gesperrt, steht das im Stand, auch wenn der Container gleich danach neu startet."""
+
+    def __init__(self, data, save):
+        super().__init__(data)
+        self._save = save
+
+    def __setitem__(self, key, value):
+        with _st_lock:
+            super().__setitem__(key, value)
+        self._save()
+
+
 def _run(by_hand, force):
     begun = time.monotonic()
     at = now()
     settings = load_settings()
     prev = store.load_json("sync.json", {})
-    st = {"started": _iso(at), "by_hand": by_hand, "ok": False, "log": [], "sources": dict(prev.get("sources") or {}),
-          "rest": {k: v for k, v in (prev.get("rest") or {}).items() if v > _iso(at)}, "stand": dict(prev.get("stand") or {}),
+    offen = bool(prev.get("laeuft"))            # der letzte Lauf endete nicht: Neustart mittendrin
+    st = {"started": _iso(at), "by_hand": by_hand, "ok": False, "laeuft": True, "versuch": (prev.get("versuch") or 1) + 1 if offen else 1,
+          "log": list(prev.get("log") or [])[-LOG_LINES // 2:] if offen else [], "stand": dict(prev.get("stand") or {}),
           "stats": prev.get("stats") or {}, "built": prev.get("built") or ""}
-    STATE.update(started=st["started"], log=st["log"])
+
+    def save():
+        """Stand auf die Platte. Ein Fehler beim Schreiben (Platte voll) hält den Lauf nicht auf."""
+        with _save_lock:
+            with _st_lock:
+                snap = json.loads(json.dumps(dict(st, log=st["log"][-LOG_LINES:])))
+            try:
+                store.save_json("sync.json", snap)
+            except OSError as e:
+                print("Stand des Abgleichs speichern:", e, file=sys.stderr)
 
     def log(msg):
         line = now().strftime("%H:%M:%S ") + msg
-        st["log"].append(line)
-        del st["log"][:-LOG_LINES]
+        with _st_lock:
+            st["log"].append(line)
+            del st["log"][:-LOG_LINES]
 
-    def save():
-        store.save_json("sync.json", dict(st, log=st["log"][-LOG_LINES:]))
-
-    log(f"Abgleich gestartet ({'von Hand' if by_hand else 'Zeitplan'}), Pokédex {sources.VERSION}")
-    db.migrate()
-    name = db.backup()
-    if name:
-        log(f"Sicherung deiner Daten: sicherung/{name}")
+    st["sources"] = _Merker(prev.get("sources") or {}, save)
+    st["rest"] = _Merker(dict({k: v for k, v in (prev.get("rest") or {}).items() if v > _iso(at)}, **rests(at)), save)
+    STATE.update(started=st["started"], log=st["log"])
     try:
+        if offen:
+            log(f"Der Lauf vom {str(prev.get('started'))[:16].replace('T', ' ')} UTC wurde unterbrochen (Neustart); neuer Anlauf, Versuch {st['versuch']}")
+        log(f"Abgleich gestartet ({'von Hand' if by_hand else 'Zeitplan'}), Pokédex {sources.VERSION}")
+        save()                                  # der Beginn steht auf der Platte, bevor die erste Quelle gefragt wird
+        db.migrate()
+        name = db.backup()
+        if name:
+            log(f"Sicherung deiner Daten: sicherung/{name}")
         ok = _build(st, log, force, at)
+        save()                                  # neue Datenbank und ihr Stand
         STATE["step"] = "Bilder, Karten und Map Genie (parallel)"
         res = _parallel({"bilder": lambda: _media(st, log, settings, at), "karten": lambda: _media_tiles(st, log, settings, at),
                          "mapgenie": lambda: _media_mg(st, log, at), "itemhq": lambda: _media_itemhq(st, log, settings, at),
@@ -591,10 +759,14 @@ def _run(by_hand, force):
     except Exception as e:          # ein Fehler im Code soll den Dienst nicht beenden
         log(f"Abgebrochen: {type(e).__name__}: {e}")
         st["ok"] = False
-    s = int(time.monotonic() - begun)
-    st["finished"] = _iso(now())
-    log(f"fertig nach {s // 60}:{s % 60:02d} min" + ("" if st["ok"] else ", mit Fehlern"))
-    save()
+    finally:
+        # auch nach einem Fehler außerhalb der Quellen: Ende, Protokoll und Ruhezeiten stehen im Stand
+        s = int(time.monotonic() - begun)
+        with _st_lock:
+            st["finished"] = _iso(now())
+            st.pop("laeuft", None)
+        log(f"fertig nach {s // 60}:{s % 60:02d} min" + ("" if st["ok"] else ", mit Fehlern"))
+        save()
     start_stock()
     return True
 
@@ -1495,7 +1667,13 @@ _mg_cache = {}
 
 
 _mg_lock = threading.Lock()
-_mg = {"last": 0.0, "rest": "", "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": "", "rest_pokemoncompletion": "", "rest_ign": "", "rest_dittobase": "", "rest_rankedboost": "", "rest_ironmon": "", "rest_raidnester": "", "rest_pokearth": ""}
+_mg = {"last": 0.0, "miss": set(), "fehler": "", "n403": 0, "vorrat": {}, "laeuft": False, "ok": ""}
+
+
+def _tile_rest(quelle=None):
+    """Schlüssel der Ruhezeit für Kacheln: Map Genie "kacheln", andere Quellen "kacheln:<Quelle>". Seit 0.58.0 in
+    ruhe.json (rest_set, rest_until); vorher nur im Speicher, ein Neustart fragte eine gesperrte Quelle sofort wieder."""
+    return "kacheln:" + quelle if quelle in TILE_SRC else "kacheln"
 
 
 def _miss_load():
@@ -1532,7 +1710,7 @@ def mg_status():
     """Zustand der Kacheln für die Oberfläche: ruht bis (ISO oder leer), letzter Fehler, Vorrat je Karte
     {"<Spiel>/<Karte>": {"da": n, "alle": m, "bis": Zoom}} und ob der Vorrat gerade lädt."""
     _miss_load()
-    return {"ruht": _mg["rest"] if _mg["rest"] > _iso(now()) else "", "fehler": _mg["fehler"],
+    return {"ruht": rest_until(_tile_rest()), "fehler": _mg["fehler"],
             "vorrat": dict(_mg["vorrat"]), "laedt": _mg["laeuft"]}
 
 
@@ -1557,7 +1735,7 @@ def mg_stock():
             key = f"{spiel}/{m['slug']}"
             have = 0
             for i, (z, x, y) in enumerate(ts):
-                if _mg["rest_" + q if q in TILE_SRC else "rest"] > _iso(now()):
+                if rest_until(_tile_rest(q)):
                     break
                 rel = _tile_of(m, z, x, y)[0]
                 if not rel or rel in _mg["miss"]:
@@ -1634,7 +1812,7 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE, stock=False):
     with _mg_lock:
         if os.path.isfile(f):
             return f
-        if rel in _mg["miss"] or _mg["rest"] > _iso(now()):
+        if rel in _mg["miss"] or rest_until(_tile_rest()):
             return None
         wait = _mg["last"] + pause - time.monotonic()
         if wait > 0:
@@ -1648,7 +1826,8 @@ def mg_tile(spiel, karte, z, x, y, pause=MG_TILE_PAUSE, stock=False):
                 _mg["n403"] = 0          # bekannte Kachel kommt noch: am Rand gibt es eben viele leere Kacheln
                 _mg["r403"] = []
             if e.status == 429 or _mg["n403"] >= MG_403_MAX:
-                _mg["rest"] = _iso(now() + timedelta(hours=REST_H))
+                rest_set(_tile_rest())
+                rest_set(server_rest(mapgenie.TILES))
                 for r in _mg.get("r403") or []:            # das war eine Sperre, keine fehlenden Kacheln
                     _mg["miss"].discard(r)
                     (_mg.get("miss_am") or {}).pop(r, None)
@@ -1680,7 +1859,7 @@ def _cdn_tile(rel, url, f, pause, quelle):
     with _mg_lock:
         if os.path.isfile(f):
             return f
-        if rel in _mg["miss"] or _mg["rest_" + quelle] > _iso(now()):
+        if rel in _mg["miss"] or rest_until(_tile_rest(quelle)):
             return None
         wait = _mg["last"] + pause - time.monotonic()
         if wait > 0:
@@ -1690,7 +1869,8 @@ def _cdn_tile(rel, url, f, pause, quelle):
         except sources.FetchError as e:
             _mg["fehler"] = f"{quelle}: HTTP {e.status or '?'} bei {rel} ({_iso(now())[:16].replace('T', ' ')})"
             if e.status in (403, 429):
-                _mg["rest_" + quelle] = _iso(now() + timedelta(hours=REST_H))
+                rest_set(_tile_rest(quelle))
+                rest_set(server_rest(url))
             elif e.status:
                 _miss_add(rel, e.status == 404)
             return None
@@ -2151,10 +2331,20 @@ def diagnose(proben=None, stand=None):
             stand["laeuft"].append(name)
         try:
             post = {"data": data} if data is not None else {}
-            r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT, **post)
-            if r["error"] and "Errno -3" in r["error"]:      # Namensauflösung kurz überlastet: einmal nachfassen
-                sleep(2)
-                r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT, **post)
+            host = urllib.parse.urlsplit(url).hostname or ""
+            # 0.58.0: dieselbe Sperre und dieselbe Pause je Server wie der Abgleich: läuft er gerade, fragt der Test
+            # denselben Server nie gleichzeitig und nie schneller als erlaubt
+            with _host_lock(host):
+                wait = _HOST_LAST.get(host, 0) + pause - time.monotonic()
+                if wait > 0:
+                    sleep(wait)
+                try:
+                    r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT, **post)
+                    if r["error"] and "Errno -3" in r["error"]:      # Namensauflösung kurz überlastet: einmal nachfassen
+                        sleep(2)
+                        r = sources.request(url, timeout=DIAG_TIMEOUT, raw=raw, headers=headers, limit=DIAG_LIMIT, **post)
+                finally:
+                    _HOST_LAST[host] = time.monotonic()
             if r["error"]:
                 lines[slot] = f"{name}: keine Verbindung ({r['error']})"
                 return None
@@ -2183,12 +2373,18 @@ def diagnose(proben=None, stand=None):
                 stand["laeuft"].remove(name)
                 stand["fertig"] += 1
             gate.release()
-            if r is not None and not r.get("error"):
-                sleep(pause)
 
     def probe(name, url, info, raw=False, keep=False, headers=None, data=None):
         """Reiht die Abfrage beim Server ein; gibt ein Future zurück (.result(): Antwort oder None)."""
         host = urllib.parse.urlsplit(url).hostname or ""
+        until = rest_until(server_rest(url))
+        if until:
+            # 0.58.0: Ein Server, der den Abgleich gesperrt hat (403, 429, Prüfseite), wird in seiner Ruhezeit auch vom
+            # Test nicht gefragt
+            lines.append(f"{name}: nicht gefragt, {host} ruht nach einer Sperre bis {until[:16].replace('T', ' ')} UTC")
+            f = cf.Future()
+            f.set_result(None)
+            return f
         if host not in pools:
             pools[host] = cf.ThreadPoolExecutor(1, thread_name_prefix="test-" + host)
         lines.append(f"{name}: keine Antwort")

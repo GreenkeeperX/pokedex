@@ -1677,7 +1677,14 @@ class Server(TempData):
             for x in range(4, 4 + abruf.MG_403_MAX):
                 abruf.mg_tile("scarlet-violet", "erfunden", 10, x, 3, pause=0)
             self.assertNotEqual(abruf.mg_status()["ruht"], "")
-        abruf._mg.update(rest="", n403=0, miss=set())
+            # 0.58.0: die Ruhe steht in ruhe.json und gilt nach einem Neustart weiter (vorher nur im Speicher)
+            abruf._REST.clear()
+            self.assertNotEqual(abruf.mg_status()["ruht"], "")
+            n = len(calls)
+            self.assertIsNone(abruf.mg_tile("scarlet-violet", "erfunden", 10, 900, 3, pause=0))
+            self.assertEqual(len(calls), n)                       # ruhende Quelle wird nicht gefragt
+        abruf.rest_clear()
+        abruf._mg.update(n403=0, miss=set())
         # kommt eine bekannte Kachel noch, fehlen nur Kacheln am Rand: keine Pause
         def edge(url, **kw):
             if url.endswith("/ok.png"):
@@ -1688,7 +1695,8 @@ class Server(TempData):
             for x in range(20, 20 + 2 * abruf.MG_403_MAX):
                 abruf.mg_tile("scarlet-violet", "erfunden", 10, x % 1024, 5, pause=0)
             self.assertEqual(abruf.mg_status()["ruht"], "")
-        abruf._mg.update(rest="", n403=0, miss=set(), ok="")
+        abruf.rest_clear()
+        abruf._mg.update(n403=0, miss=set(), ok="")
         # der Vorrat holt alle Stufen: erst bis eine unter der größten, dann die größte
         abruf.store.save_json("mapgenie/scarlet-violet.json", {"spiel": "scarlet-violet", "am": "2026-11-11", "karten": [
             {"slug": "erfunden", "titel": "Erfunden", "kacheln": "spiel/erfunden/{z}/{x}/{y}.png", "min_zoom": 9, "max_zoom": 10,
@@ -1707,7 +1715,8 @@ class Server(TempData):
             self.assertEqual(calls, [])
         abruf._mg["vorrat"].clear()
         # fehlende Kacheln (einzelnes 403) stehen mit Datum in fehlt.json; bei einer Sperre werden sie wieder vergessen
-        abruf._mg.update(rest="", n403=0, miss=set(), miss_am={}, r403=[])
+        abruf.rest_clear()
+        abruf._mg.update(n403=0, miss=set(), miss_am={}, r403=[])
         with mock.patch.object(abruf.sources, "fetch", deny):
             abruf.mg_tile("scarlet-violet", "erfunden", 10, 508, 508, pause=0)
             self.assertIn("spiel/erfunden/10/508/508.png", abruf._mg["miss_am"])
@@ -1715,7 +1724,8 @@ class Server(TempData):
                 abruf.mg_tile("scarlet-violet", "erfunden", 10, 508 + x % 4, 509 + x // 4, pause=0)
         self.assertNotEqual(abruf.mg_status()["ruht"], "")
         self.assertEqual(abruf._mg["miss_am"], {})
-        abruf._mg.update(rest="", n403=0, miss=set(), miss_am={}, r403=[])
+        abruf.rest_clear()
+        abruf._mg.update(n403=0, miss=set(), miss_am={}, r403=[])
 
     def test_0_39_0_schwester_karten(self):
         # Gold/Silber: eigene Karte von DittoBase vorn, von Kristall nur die Karten anderer Quellen
@@ -2350,6 +2360,302 @@ rect 0 0 9 9 [[Außerhalb]]"""
         self.assertEqual(len(os.listdir(os.path.join(self.dir, "sicherung"))), db.BACKUP_KEEP)
 
 
+class Betrieb(TempData):
+    """0.58.0: Der Abgleich übersteht einen Neustart, der Zeitplan hat eine feste Uhrzeit, der Stand ist schlank."""
+
+    def setUp(self):
+        super().setUp()
+        abruf._REST.clear()
+
+    def tearDown(self):
+        abruf._REST.clear()
+        super().tearDown()
+
+    def test_zeitplan_feste_uhrzeit(self):
+        open(db.pokeapi_path(), "w").close()
+        utc = lambda *a: datetime(*a, tzinfo=timezone.utc)
+        self.assertEqual(abruf.load_settings()["uhr"], "02:30")
+        # von Hand am Nachmittag gestartet: Der nächste Lauf hängt nicht an dieser Uhrzeit, sondern am festen Termin
+        store.save_json("sync.json", {"started": utc(2026, 11, 1, 15, 0).isoformat(), "finished": utc(2026, 11, 1, 15, 9).isoformat(), "ok": True})
+        self.assertFalse(abruf.due(at=utc(2026, 11, 7, 23, 0)))
+        self.assertFalse(abruf.due(at=utc(2026, 11, 8, 2, 29)))
+        self.assertTrue(abruf.due(at=utc(2026, 11, 8, 2, 30)))
+        self.assertTrue(abruf.due(at=utc(2026, 11, 8, 15, 0)))          # verpasst (Server war aus): am selben Tag nachholen
+        self.assertEqual(abruf.next_run(at=utc(2026, 11, 2, 0, 0)), "2026-11-08T02:30:00+00:00")
+        self.assertEqual(abruf.next_run(at=utc(2026, 11, 20, 12, 0)), "2026-11-21T02:30:00+00:00")
+        # andere Uhrzeit, jeden Tag
+        self.assertEqual(abruf.save_settings({"uhr": "23:15", "tage": 1})["uhr"], "23:15")
+        store.save_json("sync.json", {"started": utc(2026, 11, 5, 23, 15).isoformat(), "finished": "x", "ok": True})
+        self.assertFalse(abruf.due(at=utc(2026, 11, 6, 23, 14)))
+        self.assertTrue(abruf.due(at=utc(2026, 11, 6, 23, 15)))
+        # ein Lauf kurz vor dem Termin desselben Tages zählt für diesen Tag
+        store.save_json("sync.json", {"started": utc(2026, 11, 6, 22, 0).isoformat(), "finished": "x", "ok": True})
+        self.assertFalse(abruf.due(at=utc(2026, 11, 6, 23, 30)))
+        self.assertTrue(abruf.due(at=utc(2026, 11, 7, 23, 30)))
+        for bad in ("24:00", "7:5", "", None, "02:30:00"):
+            with self.assertRaises(ValueError):
+                abruf.save_settings({"uhr": bad})
+        # kaputte Einstellung von Hand: Vorgabe statt Absturz des Zeitplans
+        store.save_json("settings.json", {"auto": True, "tage": 7, "sprites": True, "uhr": "abends"})
+        self.assertEqual(abruf.load_settings()["uhr"], "02:30")
+        abruf.save_settings({"auto": False})
+        self.assertEqual(abruf.next_run(), "")
+        self.assertFalse(abruf.due(at=utc(2027, 1, 1, 3, 0)))
+
+    def test_sperre_uebersteht_neustart(self):
+        def fake(url, timeout=40, headers=None, raw=False):
+            raise sources.FetchError(url, 429)
+        log = []
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            src = abruf._Source("smogon", log.append, pause=0)
+            self.assertIsNone(src.get("https://beispiel.invalid/a"))
+            self.assertIsNone(src.get("https://beispiel.invalid/b"))
+        self.assertEqual((src.n, src.blocked), (1, True))                # nach der Sperre keine zweite Anfrage
+        at = abruf.now()
+        until = abruf.rest_until("smogon")
+        self.assertTrue(abruf._iso(at + timedelta(hours=23)) < until <= abruf._iso(at + timedelta(hours=24, minutes=1)))
+        # die Quelle ruht und, für den Verbindungstest, der Server, der gesperrt hat
+        self.assertEqual(store.load_json(abruf.REST_FILE, {}), {"smogon": until, "server:beispiel.invalid": until})
+        abruf._REST.clear()                                              # Neustart: nichts mehr im Speicher
+        self.assertEqual(abruf._resting({}, "smogon", at), until)
+        self.assertEqual(abruf._resting({}, "pokeapi", at), "")
+        self.assertEqual(abruf.status()["rest"]["smogon"], until)
+        # eine kürzere Ruhe verkürzt eine längere nicht; abgelaufene fallen weg
+        self.assertEqual(abruf.rest_set("smogon", hours=1), until)
+        abruf.rest_set("alt", hours=1, at=at - timedelta(hours=3))
+        abruf.rest_set("neu", hours=1)
+        self.assertEqual(sorted(store.load_json(abruf.REST_FILE, {})), ["neu", "server:beispiel.invalid", "smogon"])
+        # große Item-Bilder (Serebii) lassen die Extras von GitHub nicht mitruhen
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            abruf._Source("extras", log.append, pause=0, ruhe="itemhq").get("https://beispiel.invalid/c")
+        self.assertTrue(abruf.rest_until("itemhq"))
+        self.assertEqual(abruf.rest_until("extras"), "")
+
+    def test_verbindungstest_fragt_ruhende_server_nicht(self):
+        host = "raw.githubusercontent.com"
+        until = abruf.rest_set("server:" + host)
+        seen = []
+        def fake(url, timeout=40, encoding="", headers=None, raw=False, limit=None, data=None):
+            seen.append(url)
+            return {"error": "", "status": 404, "server": "x", "text": "nicht da", "body": b""}
+        abruf._HOST_LAST.pop("www.serebii.net", None)
+        with mock.patch.object(sources, "request", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            lines = abruf.diagnose({}, {})
+        self.assertTrue(seen and not any(host in u for u in seen))
+        ruht = [x for x in lines if "nicht gefragt" in x]
+        self.assertTrue(ruht and all(f"{host} ruht nach einer Sperre bis {until[:16].replace('T', ' ')} UTC" in x for x in ruht))
+        self.assertTrue(any(x.startswith("PokéAPI, types.csv: nicht gefragt") for x in ruht))
+        self.assertFalse(any(x.endswith(": keine Antwort") for x in lines))
+        # der Test führt dieselbe Uhr je Server wie der Abgleich (gemeinsame Pause)
+        self.assertIn("www.serebii.net", abruf._HOST_LAST)
+
+    def _lauf(self, *patches):
+        def fake(url, timeout=40, headers=None, raw=False):
+            raise sources.FetchError(url, 404)
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None), \
+                mock.patch.object(abruf, "start_stock", lambda: None):
+            ps = [mock.patch.object(*x) for x in patches]
+            for x in ps:
+                x.start()
+            try:
+                return abruf.run()
+            finally:
+                for x in ps:
+                    x.stop()
+
+    def test_stand_nach_jeder_quelle(self):
+        snaps = []
+        def smogon(st, log, at):
+            snaps.append(store.load_json("sync.json", {}))               # was stünde nach einem Neustart genau jetzt da?
+            st["sources"]["smogon"] = {"ok": True, "requests": 0}
+            snaps.append(store.load_json("sync.json", {}))
+            st["rest"]["smogon"] = "2099-01-01T00:00:00+00:00"
+            snaps.append(store.load_json("sync.json", {}))
+        self.assertTrue(self._lauf((abruf, "_smogon", smogon)))
+        a, b, c = snaps
+        self.assertTrue(a["laeuft"] and "finished" not in a)
+        self.assertTrue(any("Abgleich gestartet" in x for x in a["log"]))
+        self.assertIn("pokeapi", a["sources"])                           # die fertige Quelle steht schon auf der Platte
+        self.assertNotIn("smogon", a["sources"])
+        self.assertEqual(b["sources"]["smogon"], {"ok": True, "requests": 0})
+        self.assertEqual(c["rest"]["smogon"], "2099-01-01T00:00:00+00:00")
+        end = store.load_json("sync.json", {})
+        self.assertTrue(end["finished"] and "laeuft" not in end and end["versuch"] == 1)
+        self.assertFalse(abruf.status()["unterbrochen"])
+        self.assertFalse(abruf._running.locked())
+
+    def test_unterbrochener_lauf_wird_fortgesetzt(self):
+        open(db.pokeapi_path(), "w").close()
+        abruf.save_settings({"auto": False})
+        at = abruf.now()
+        halb = {"started": abruf._iso(at - timedelta(minutes=3)), "ok": False, "laeuft": True, "versuch": 1,
+                "log": ["02:30:00 Abgleich gestartet (Zeitplan)", "02:31:10 PokéAPI: 204 Dateien"],
+                "sources": {"pokeapi": {"ok": True}}, "rest": {"showdown": "2099-01-01T00:00:00+00:00"}}
+        store.save_json("sync.json", halb)
+        self.assertTrue(abruf.status()["unterbrochen"])
+        self.assertTrue(abruf.brief()["unterbrochen"])
+        self.assertTrue(abruf.due(at=at))                                # auch ohne Zeitplan: ein begonnener Lauf wird beendet
+        os.remove(db.pokeapi_path())
+        self.assertTrue(self._lauf())
+        end = store.load_json("sync.json", {})
+        self.assertEqual(end["log"][:2], halb["log"])                    # das Protokoll des unterbrochenen Laufs bleibt
+        self.assertTrue(any("unterbrochen" in x and "Versuch 2" in x for x in end["log"]))
+        self.assertEqual((end["versuch"], "laeuft" in end), (2, False))
+        self.assertEqual(end["rest"]["showdown"], "2099-01-01T00:00:00+00:00")     # Ruhezeiten übernommen
+        # stürzt der Lauf jedes Mal mit ab, wird er nicht endlos sofort wiederholt
+        open(db.pokeapi_path(), "w").close()
+        store.save_json("sync.json", dict(halb, versuch=abruf.RESUME_MAX + 1))
+        self.assertFalse(abruf.due(at=at))
+        self.assertTrue(abruf.due(at=at + timedelta(hours=1)) is False)  # Zeitplan aus: dann gar nicht von selbst
+        abruf.save_settings({"auto": True})
+        self.assertTrue(abruf.due(at=at + timedelta(hours=1)))           # mit Zeitplan wie nach einem Fehlschlag: nach einer Stunde
+
+    def test_prozess_mitten_im_lauf_beendet(self):
+        """Wie ein Neustart des Containers: ein eigener Prozess beginnt den Abgleich und wird hart beendet (SIGKILL),
+        während die erste Quelle noch antwortet. Der Stand auf der Platte reicht, um den Lauf fortzusetzen."""
+        import subprocess
+        import sys
+        code = ("import time\nfrom app import abruf, sources\n"
+                "sources.fetch = lambda url, **kw: time.sleep(60)\nabruf.start_stock = lambda: None\nabruf.run()\n")
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        child = subprocess.Popen([sys.executable, "-c", code], cwd=root, env=dict(os.environ, DATA_DIR=self.dir),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                if store.load_json("sync.json", {}).get("laeuft"):
+                    break
+                time.sleep(0.1)
+        finally:
+            child.kill()
+            child.wait(10)
+        halb = store.load_json("sync.json", {})
+        self.assertTrue(halb.get("laeuft") and "finished" not in halb)
+        self.assertTrue(any("Abgleich gestartet" in x for x in halb["log"]))
+        self.assertTrue(abruf.status()["unterbrochen"])
+        self.assertTrue(abruf.due())
+        self.assertTrue(self._lauf())
+        end = store.load_json("sync.json", {})
+        self.assertEqual(end["log"][0], halb["log"][0])
+        self.assertTrue(any("unterbrochen" in x for x in end["log"]))
+        self.assertTrue(end["finished"] and "laeuft" not in end)
+
+    def test_fehler_ausserhalb_der_quellen(self):
+        def kaputt():
+            raise RuntimeError("Platte weg")
+        self.assertTrue(self._lauf((db, "backup", kaputt)))
+        end = store.load_json("sync.json", {})
+        self.assertTrue(end["finished"] and "laeuft" not in end)
+        self.assertIs(end["ok"], False)
+        self.assertTrue(any("Abgebrochen: RuntimeError: Platte weg" in x for x in end["log"]))
+        self.assertFalse(abruf._running.locked())
+        # lässt sich der Stand nicht schreiben, läuft der Abgleich trotzdem zu Ende
+        def voll(name, obj):
+            raise OSError("kein Platz")
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertTrue(self._lauf((store, "save_json", voll)))
+        self.assertIn("Stand des Abgleichs speichern: kein Platz", err.getvalue())
+        self.assertFalse(abruf._running.locked())
+
+
+class Http(TempData):
+    """0.58.0: der Server über HTTP auf einem freien Port, ohne Spieldaten und ohne Netz."""
+
+    def setUp(self):
+        super().setUp()
+        from http.server import ThreadingHTTPServer
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+        super().tearDown()
+
+    def get(self, path, **headers):
+        import http.client
+        c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=10)
+        try:
+            c.request("GET", path, headers=headers)
+            r = c.getresponse()
+            return r.status, dict(r.getheaders()), r.read()
+        finally:
+            c.close()
+
+    def test_stand_ist_schlank(self):
+        code, h, body = self.get("/api/stand")
+        self.assertEqual(code, 200)
+        d = json.loads(body)
+        self.assertEqual(sorted(d), ["abgleich", "has_data", "version"])
+        self.assertEqual(d["version"], sources.VERSION)
+        self.assertEqual(sorted(d["abgleich"]), ["built", "done", "finished", "ok", "running", "started", "step", "total", "unterbrochen"])
+        self.assertLess(len(body), 400)
+        self.assertEqual(h["Cache-Control"], "no-store")
+        # der Stand folgt dem Lauf: läuft, dann zuverlässig zu Ende
+        self.assertFalse(d["abgleich"]["running"])
+        with abruf._running:
+            abruf.STATE.update(started="2026-11-14T02:30:00+00:00", step="PokéAPI: types.csv", done=3, total=9)
+            a = json.loads(self.get("/api/stand")[2])["abgleich"]
+            self.assertEqual((a["running"], a["step"], a["done"], a["total"]), (True, "PokéAPI: types.csv", 3, 9))
+        abruf.STATE.update(started="", step="", done=0, total=0)
+        self.assertFalse(json.loads(self.get("/api/stand")[2])["abgleich"]["running"])
+
+    def test_neuigkeiten_nur_auf_abruf(self):
+        self.assertNotIn("neu", server.meta.__code__.co_names)
+        code, h, body = self.get("/api/neuigkeiten")
+        alle = json.loads(body)
+        self.assertEqual((code, len(alle), alle[0][0]), (200, len(sources.NEUIGKEITEN), sources.VERSION))
+        eine = json.loads(self.get("/api/neuigkeiten?version=" + sources.VERSION)[2])
+        self.assertEqual((len(eine), eine[0][0]), (1, sources.VERSION))
+        self.assertEqual(json.loads(self.get("/api/neuigkeiten?version=0.0.0")[2]), [])
+        # unverändert: 304 ohne Inhalt
+        code, h2, body = self.get("/api/neuigkeiten", **{"If-None-Match": h["ETag"]})
+        self.assertEqual((code, body, h2["ETag"]), (304, b"", h["ETag"]))
+        self.assertNotEqual(self.get("/api/neuigkeiten?version=" + sources.VERSION)[1]["ETag"], h["ETag"])
+
+    def test_dateien_der_oberflaeche(self):
+        code, h, page = self.get("/")
+        self.assertEqual((code, h["Cache-Control"]), (200, "no-cache"))
+        m = re.search(r'src="(js/app\.js\?v=[^"]+)"', page.decode("utf-8"))
+        self.assertTrue(m and m.group(1).split("=")[1].startswith(sources.VERSION + "-"))
+        self.assertIn('href="style.css?v=' + sources.VERSION + "-", page.decode("utf-8"))
+        self.assertEqual(self.get("/", **{"If-None-Match": h["ETag"]})[0], 304)
+        # mit der Kennung des Inhalts in der Adresse: unbegrenzt haltbar, gepackt, ETag
+        code, h, body = self.get("/" + m.group(1), **{"Accept-Encoding": "gzip"})
+        self.assertEqual((code, h["Cache-Control"], h["Content-Encoding"]), (200, server.IMMUTABLE, "gzip"))
+        import gzip as _gzip
+        with open(os.path.join(server.STATIC, "js", "app.js"), "rb") as f:
+            self.assertEqual(_gzip.decompress(body), f.read())
+        self.assertEqual(self.get("/" + m.group(1), **{"If-None-Match": h["ETag"]})[:1], (304,))
+        # ohne oder mit alter Kennung: der Browser fragt jedes Mal nach
+        for path in ("/js/app.js", "/js/app.js?v=0.1.0-0000000000", "/style.css", "/icon.svg"):
+            code, h, body = self.get(path)
+            self.assertEqual((code, h["Cache-Control"], bool(h["ETag"])), (200, "no-cache", True), path)
+        self.assertEqual(self.get("/js/app.js", **{"If-None-Match": '"anders"'})[0], 200)
+        # einmal gelesen und gepackt, nicht bei jedem Abruf
+        hit = server._STATIC["js/app.js"]
+        self.get("/js/app.js")
+        self.assertIs(server._STATIC["js/app.js"], hit)
+
+    def test_bilder_mit_etag(self):
+        os.makedirs(os.path.join(self.dir, "sprites"))
+        with open(os.path.join(self.dir, "sprites", "25.png"), "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\n" + b"0" * 50)
+        code, h, body = self.get("/sprites/25.png")
+        self.assertEqual((code, len(body), h["Cache-Control"]), (200, 58, "max-age=604800"))
+        code, h2, body = self.get("/sprites/25.png", **{"If-None-Match": h["ETag"]})
+        self.assertEqual((code, body), (304, b""))
+        with open(os.path.join(self.dir, "sprites", "25.png"), "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\n" + b"1" * 70)
+        self.assertEqual(self.get("/sprites/25.png", **{"If-None-Match": h["ETag"]})[0], 200)
+        self.assertEqual(self.get("/sprites/26.png")[0], 404)
+
+    def test_fremde_adresse(self):
+        self.assertEqual(self.get("/api/stand", Host="pokedex.beispiel.invalid")[0], 421)
+
+
 @unittest.skipUnless(os.environ.get("POKEAPI_DB"), "POKEAPI_DB: Pfad zu einer gebauten pokeapi.db")
 class MitDatenbank(TempData):
     """Gegen eine echte Datenbank (lokal, nicht in CI): POKEAPI_DB=/pfad/pokeapi.db python -m unittest tests.test_all"""
@@ -2358,6 +2664,21 @@ class MitDatenbank(TempData):
         super().setUp()
         os.symlink(os.environ["POKEAPI_DB"], db.pokeapi_path())
         db.migrate()
+
+    def test_gebiete_je_spiel(self):
+        """0.58.0: Die Gebiete zweier Spiele bleiben nebeneinander bereit (vorher verdrängte jedes Spiel das vorige)."""
+        from app import abfragen
+        abfragen._AREAS.clear()
+        a = abfragen.areas({"spiel": "emerald"})
+        b = abfragen.areas({"spiel": "platinum"})
+        self.assertTrue(a["gebiete"] and b["gebiete"])
+        self.assertIs(abfragen.areas({"spiel": "emerald"}), a)
+        self.assertIs(abfragen.areas({"spiel": "platinum"}), b)
+        self.assertEqual(len(abfragen._AREAS), 2)
+        for g in ("ruby-sapphire", "firered-leafgreen", "diamond-pearl", "heartgold-soulsilver", "black-white", "x-y"):
+            abfragen.areas({"spiel": g})
+        self.assertEqual(len(abfragen._AREAS), abfragen.AREAS_MAX)
+        abfragen._AREAS.clear()
 
     def test_showdown_import_export(self):
         from app import abfragen

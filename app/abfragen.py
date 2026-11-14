@@ -1422,7 +1422,8 @@ def _enc(con, g, pid):
     return out
 
 
-_AREAS = {}
+_AREAS = {}                 # {(Spiel, Stand der Datenbank): Gebiete}, je Spiel getrennt (seit 0.58.0; vorher nur das letzte Spiel)
+AREAS_MAX = 6               # so viele Spiele bleiben bereit; das am längsten nicht gefragte fällt zuerst weg
 
 
 # 0.54: Begegnungsarten der PokéAPI, die es nur englisch gibt (ab Nr. 18), auf Deutsch
@@ -1471,8 +1472,10 @@ def areas(p):
         key = (g["kennung"], os.path.getmtime(db.pokeapi_path()))
     except OSError:
         return None
-    if key in _AREAS:
-        return _AREAS[key]
+    hit = _AREAS.pop(key, None)
+    if hit is not None:
+        _AREAS[key] = hit                       # zuletzt gefragt: ans Ende
+        return hit
     con = db.game()
     try:
         out = _areas_pkhex(con, D, g)
@@ -1483,7 +1486,10 @@ def areas(p):
         con.close()
     res = {"spiel": g["kennung"], "quelle": quelle,
            "gebiete": [{"ort": k, "mons": sorted(v, key=lambda m: (m["methode"], -(m["anteil"] or 0), m["name"]))} for k, v in out.items()]}
-    _AREAS.clear()
+    for k in [k for k in _AREAS if k[1] != key[1]]:      # neue Datenbank: alles Alte weg
+        _AREAS.pop(k, None)
+    while len(_AREAS) >= AREAS_MAX:
+        _AREAS.pop(next(iter(_AREAS)), None)
     _AREAS[key] = res
     return res
 

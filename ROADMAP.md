@@ -1,5 +1,33 @@
 # Roadmap
 
+## 0.58.0 (14.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 2, erster Teil: Betrieb (Review P8 bis P12).
+
+- **Neustart mitten im Abgleich** (`abruf._run`, `_Merker`, `due`): Stand nach jeder Quelle auf der Platte,
+  `try/finally` um den ganzen Lauf, unterbrochene Läufe werden fortgesetzt. Einzelheiten in `docs/abrufe.md`.
+- **Ruhezeiten dauerhaft** (`ruhe.json`, `rest_set`, `rest_until`): geschrieben im Augenblick der Sperre. Neu gefunden:
+  Die Ruhe der Kartenkacheln stand nur im Speicher (`_mg["rest"]`), nach einem Neustart fragte der Kachelvorrat eine
+  gesperrte Quelle sofort wieder.
+- **Zeitplan mit fester Uhrzeit** (`uhr`, `next_run`): unabhängig vom Zeitpunkt des letzten Laufs und vom Neustart
+  durch ein Update.
+- **Schlanker Stand** (`/api/stand`, `abruf.brief`) und **Neuigkeiten auf Abruf** (`/api/neuigkeiten`); `/api/meta`
+  ohne Versionsgeschichte.
+- **Dateien der Oberfläche**: einmal gelesen und gepackt (`server.static_file`), Adresse mit Prüfsumme, unbegrenzt
+  haltbar; `ETag` und 304 für Seite, Dateien, Bilder, Kacheln, Karten und Neuigkeiten.
+- **Gebiete je Spiel** (`abfragen._AREAS`, höchstens `AREAS_MAX` Spiele).
+- **Verbindungstest**: fragt ruhende Server nicht, teilt Sperre und Pause je Server mit dem Abgleich.
+- **Tests über HTTP** (`tests.test_all.Http`): der Server auf einem freien Port, ohne Spieldaten.
+
+Offen aus Abschnitt 2 (zweiter Teil):
+
+- Fehler sichtbar machen: `except Exception` und `.catch(() => …)` durchgehen, Fehler je Quelle mit Zeitpunkt, Art
+  und Häufigkeit erfassen, begrenzte Historie.
+- Speicher der Karten: erst auf dem Server messen (Leistungstest in der Statuskarte), dann entscheiden.
+- Vorwärmen nach Bedarf statt fester Liste (`server.WARM_GAMES`).
+- Zu entscheiden: Ruhe je Server statt je Quelle auch im Abgleich (heute fragt eine zweite Quelle am selben Server
+  weiter, wenn die erste gesperrt wurde).
+
 ## 0.57.0 (13.11.2026)
 
 Arbeitsauftrag vom 13.11.2026, Abschnitt 1: richtige Zahlen (Review P1 bis P5). Formeln, Quellen und offene Punkte
@@ -35,6 +63,24 @@ stehen in `docs/formeln.md`.
 
 Was beim Arbeiten am Pokédex auffällt und für eShopKompass oder VR-Navigator taugen könnte. Nur Empfehlungen; die
 anderen Repositories ändert niemand von hier aus.
+
+- **14.11.2026, Stand des Abgleichs nach jeder Quelle speichern.** Teile des Zustands, die sich im Lauf ändern (Quellen,
+  Ruhezeiten), als Wörterbuch, das bei jeder Änderung speichert; ein Kennzeichen „läuft“ im Stand, an dem der Dienst
+  nach dem Start einen unterbrochenen Lauf erkennt und fortsetzt (begrenzt oft). Das Review nennt denselben Befund für
+  den VR-Navigator (Fehler außerhalb der Stränge überspringt das Speichern). Empfehlung: dort übernehmen; im
+  eShopKompass prüfen, ob der Stand mitten im Lauf geschrieben wird.
+- **14.11.2026, Ruhezeiten in eigener kleiner Datei, geschrieben im Augenblick der Sperre.** Im Pokédex lag eine
+  Ruhezeit nur im Speicher (Kartenkacheln). Das Review nennt für den eShopKompass, dass die Ruhe nur für zwei Quellen
+  dauerhaft gemerkt wird. Empfehlung: in beiden Geschwistern jede Stelle suchen, die nach 403 oder 429 eine Ruhe nur im
+  Speicher setzt.
+- **14.11.2026, Verbindungstest und Ruhezeit.** Der Test fragt keinen Server, der nach einer Sperre ruht, und teilt
+  Sperre und Pause je Server mit dem Abgleich. Das Review nennt den Befund für beide Geschwister. Empfehlung: übernehmen.
+- **14.11.2026, schlanker Stand und Adressen mit Prüfsumme.** Ein Endpunkt nur für den Stand des Abgleichs; Dateien der
+  Oberfläche mit der Prüfsumme des Inhalts in der Adresse und unbegrenzter Haltbarkeit, einmal gepackt. Die Prüfsumme
+  statt der Versionsnummer schützt davor, dass eine geänderte Datei bei gleicher Nummer ein Jahr im Browser bleibt.
+  Empfehlung: für beide Geschwister übernehmbar.
+- **14.11.2026, feste Uhrzeit als Weltzeit.** Der Container kennt keine Zeitzone; die Oberfläche rechnet in die
+  Ortszeit des Browsers um. Nur übernehmen, wo ein Zeitplan nach dem letzten Lauf stört; kein Handlungsbedarf erkannt.
 
 - **13.11.2026, Test gegen Privates im Repository.** Der Test liest `git ls-files` und scheitert bei Dateien, die nicht
   in eine erlaubte Liste passen (Wurzelverzeichnis, `*.log`, `*.db`, Bilder außerhalb von `app/static`), und bei Mustern
