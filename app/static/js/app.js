@@ -65,8 +65,12 @@ const gameName = (k = S.game) => (S.meta?.spiele || []).find((g) => g.kennung ==
 
 /* ------------------------------------------------------------------ Bausteine */
 const tname = (t) => S.types[t] || String(t);
-const fl = (f) => ({0: "0", 0.25: "¼", 0.5: "½", 1: "1", 2: "2", 4: "4"}[f] ?? String(f));
-const fcls = (f) => f === 0 ? "f0" : f >= 4 ? "f4" : f > 1 ? "f2" : f <= 0.25 ? "f025" : f < 1 ? "f05" : "f1";
+const fl = (f) => ({0: "0", 0.25: "¼", 0.4: "0,4", 0.5: "½", 1: "1", 2: "2", 2.5: "2,5", 4: "4"}[f] ?? String(f));
+// doppelte Schwäche oder Resistenz: ×4 und ×¼, in Legenden: Arceus ×2,5 und ×0,4 (darum „über 2“ und „unter ½“)
+const fcls = (f) => f === 0 ? "f0" : f > 2 ? "f4" : f > 1 ? "f2" : f < 0.5 ? "f025" : f < 1 ? "f05" : "f1";
+/* Wirkung gegen mehrere Typen: das Produkt, außer das Spiel hat eine eigene Regel (S.chartDoppelt vom Server:
+   [doppelt sehr effektiv, doppelt nicht sehr effektiv], in Legenden: Arceus [2,5, 0,4]). Die einzige Stelle, die multipliziert */
+const effMul = (fs) => { const f = fs.reduce((a, b) => a * b, 1), dd = S.chartDoppelt; return dd && f > 2 ? dd[0] : dd && f > 0 && f < 0.5 ? dd[1] : f; };
 const statHue = (v) => Math.min(v, 150) * 0.85;
 const statColor = (v) => `hsl(${statHue(v)} 62% 44%)`;
 /* Zeile im Werte- und Effort-Diagramm wie bei den Basiswerten: Name, Wert, Balken in der Farbe des Basiswerts (die Teile
@@ -92,7 +96,7 @@ const img = (id, cls = "", art = false) => `<img class="spr ${cls}" src="${art ?
 function defense(types) {
   const ch = S.chart, out = {};
   if (!ch) return out;
-  for (const a of Object.keys(ch)) out[a] = types.reduce((f, d) => f * (ch[a][d] ?? 1), 1);
+  for (const a of Object.keys(ch)) out[a] = effMul(types.map((d) => ch[a][d] ?? 1));
   return out;
 }
 function pct(i, v) {
@@ -156,10 +160,12 @@ function partsTip(title, parts, total, formulas) {
 const de = (v) => String(v).replace(".", ",");
 /* Kleine Tabelle für Rechenwege: [Bezeichnung, Wert, Erklärung]; leere Zeilen fallen weg */
 const calcRows = (rows) => `<table class="ctip">${rows.filter(Boolean).map(([l, v, h]) => `<tr><td>${esc(l)}</td><td class="n">${v}</td><td class="muted">${esc(h || "")}</td></tr>`).join("")}</table>`;
-/* Fangchance: a = (3 − 2 × KP-Anteil) / 3 × Fangrate × Ball × Status, dann je nach Generation */
-function catchTip(m, f, hpLabel, share, st, stLabel, v) {
+/* Fangchance: a = (3 − 2 × KP-Anteil) / 3 × Fangrate × Ball × Status, dann je nach Generation. Gerechnet hat der Server
+   (catch_steps): f.b[col] ist der Wert der Rüttelprobe, f.proben die Zahl der Proben; hier steht nur der Rechenweg */
+function catchTip(m, f, hpLabel, share, st, stLabel, v, col) {
   const gen = m.fang_gen || 9, rate = Math.max(1, m.fangrate + (f.plus || 0)), a = (3 - 2 * share) / 3 * rate * f.faktor * st;
-  const n = gen === 5 ? 3 : 4, b = a < 255 && a > 0 ? Math.floor(65536 / (255 / a) ** 0.1875) : 0;
+  const n = f.proben, b = f.b ? f.b[col] : null;
+  const bf = gen <= 4 ? "⌊1048560 / ⌊√⌊√⌊16711680 / ⌊a⌋⌋⌋⌋⌋" : `⌊65536 × (a / 255)<sup>${gen === 5 ? "0,25" : "0,1875"}</sup>⌋`;
   return `<div class="tt">${esc(f.ball)}, ${esc(hpLabel)}${stLabel ? ", " + esc(stLabel) : ""}</div>
     ${calcRows([["Fangrate", rate, f.plus ? `der Art ${m.fangrate}, Schwerball ${f.plus > 0 ? "+" : ""}${f.plus}` : "der Art, 3 bis 255"], ["KP", `×${share ? "⅓" : "1"}`, share ? "volle KP: (3 − 2) / 3" : "fast keine KP: (3 − 0) / 3"],
       ["Ball", `×${de(f.faktor)}`, ""], st !== 1 ? ["Status", `×${de(st)}`, stLabel] : null])}
@@ -167,8 +173,8 @@ function catchTip(m, f, hpLabel, share, st, stLabel, v) {
     <div class="muted">= ${share ? "⅓" : "1"} × ${rate} × ${de(f.faktor)}${st !== 1 ? " × " + de(st) : ""} = <b style="color:#fff">${de(Math.round(a * 10) / 10)}</b></div>
     <div class="tt">Chance je Wurf</div>
     ${a >= 255 ? `<div>a ab 255: der Ball fängt immer</div>`
-      : gen <= 4 ? `<div>a / 255 = ${de(Math.round(a * 10) / 10)} / 255</div>`
-      : `<div>${n} Rüttelproben, jede mit b / 65536</div><div class="muted">b = ⌊65536 / (255 / a)<sup>0,1875</sup>⌋ = ${b}; (${b} / 65536)<sup>${n}</sup></div>`}
+      : b == null ? `<div>a / 255 = ${de(Math.round(a * 10) / 10)} / 255</div>`
+      : `<div>${n} Rüttelproben, jede mit b / 65536</div><div class="muted">b = ${bf} = ${b}; (${b} / 65536)<sup>${n}</sup></div>`}
     <div class="tt">Ergebnis</div><div><b>${de(v)} %</b>${m.fang_grob ? " (Richtwert: dieses Spiel rechnet anders)" : ""}</div>`;
 }
 /* Initiative-Wert: Werte, Formel mit Zahlen, Faktoren (Item, Rückenwind, Wahlschal), Ergebnis */
@@ -179,8 +185,8 @@ function speedTip(title, o) {
     const fk = EL_FAKTOR[el];
     val = laStat(base, lv, el, nat);
     rows = [["Basis", base], ["Level", lv], ["Effort Level", el, `Faktor ${fk}`], nat !== 1 ? ["Wesen", `×${de(nat)}`] : null];
-    form = "⌊(Level / 50 + 1) × Basis / 1,5 × Wesen⌋ + ⌊(√Basis × Faktor + Level) / 2,5 + 0,5⌋";
-    nums = `⌊(${lv} / 50 + 1) × ${base} / 1,5${nat !== 1 ? " × " + de(nat) : ""}⌋ + ⌊(√${base} × ${fk} + ${lv}) / 2,5 + 0,5⌋`;
+    form = "⌊⌊(Level / 50 + 1) × Basis / 1,5⌋ × Wesen⌋ + ⌊(√Basis × Faktor + Level) / 2,5 + 0,5⌋";
+    nums = `⌊⌊(${lv} / 50 + 1) × ${base} / 1,5⌋${nat !== 1 ? " × " + de(nat) : ""}⌋ + ⌊(√${base} × ${fk} + ${lv}) / 2,5 + 0,5⌋`;
   } else if (gen <= 2) {
     val = speedStat(base, lv, iv, ev, 1, gen);
     const r = Math.min(255, Math.ceil(Math.sqrt(ev)));
@@ -211,8 +217,9 @@ function dmgTip(r, x) {
       <tr><td>Verteidigung</td><td class="n">${x.verteidigung}</td><td class="muted">${esc(x.d_info || "")}</td></tr>
       <tr><td>KP</td><td class="n">${x.kp}</td><td></td></tr></table>
     <div class="tt">Grundschaden</div>
-    <div>${old ? "min(" : ""}⌊⌊(2 × Level / 5 + 2) × Stärke × Angriff / Verteidigung⌋ / 50⌋${old ? ", 997)" : ""} + 2</div>
-    <div class="muted">${old ? "min(" : ""}⌊⌊${k} × ${x.staerke} × ${x.angriff} / ${x.verteidigung}⌋ / 50⌋${old ? ", 997)" : ""} + 2 = <b style="color:#fff">${x.grund}</b>${old && (x.angriff > 255 || x.verteidigung > 255) ? " (Werte über 255: beide geviertelt)" : ""}</div>
+    ${x.formel ? `<div>${esc(x.formel[0])}</div><div class="muted">${esc(x.formel[1])} = <b style="color:#fff">${x.grund}</b></div>`
+      : `<div>${old ? "min(" : ""}⌊⌊(2 × Level / 5 + 2) × Stärke × Angriff / Verteidigung⌋ / 50⌋${old ? ", 997)" : ""} + 2</div>
+    <div class="muted">${old ? "min(" : ""}⌊⌊${k} × ${x.staerke} × ${x.angriff} / ${x.verteidigung}⌋ / 50⌋${old ? ", 997)" : ""} + 2 = <b style="color:#fff">${x.grund}</b>${old && (x.angriff > 255 || x.verteidigung > 255) ? " (Werte über 255: beide geviertelt)" : ""}</div>`}
     <div class="tt">Dann der Reihe nach</div><div class="tg">${fx}</div>
     <div class="tt">Ergebnis</div><div><b>${x.min}–${x.max}</b> von ${x.kp} KP = ${String(x.min_pct).replace(".", ",")}–${String(x.max_pct).replace(".", ",")} %</div>`;
 }
@@ -303,7 +310,7 @@ function duel(own, t) {
   const ch = S.chart || {};
   let dealt = 1, best = null;
   own.forEach((a) => { const f = ch[a]?.[t] ?? 1; if (best === null || f > dealt) { dealt = f; best = a; } });
-  const taken = own.reduce((f, d) => f * (ch[t]?.[d] ?? 1), 1);
+  const taken = effMul(own.map((d) => ch[t]?.[d] ?? 1));
   const level = dealt > 1 && taken <= 0.5 ? 2 : dealt > 1 && taken <= 1 ? 1 : taken > 1 && dealt <= 1 ? -1 : 0;
   return {dealt, taken, level, best};
 }
@@ -316,7 +323,7 @@ function defRows(d, factors) {
 }
 function defHtml(d, short = false) {
   const sec = (title, factors) => { const body = defRows(d, factors); return body ? (short ? `<div class="et">${title}</div>` : `<h3>${title}</h3>`) + body : ""; };
-  return sec("Schwach gegen", [4, 2]) + sec("Resistent gegen", [0.5, 0.25]) + sec("Immun gegen (keine Wirkung)", [0])
+  return sec("Schwach gegen", [4, 2.5, 2]) + sec("Resistent gegen", [0.5, 0.4, 0.25]) + sec("Immun gegen (keine Wirkung)", [0])
     || `<p class="hint">Keine Schwäche, keine Resistenz.</p>`;
 }
 /* Hover-Karte: auf einen Blick, was die eigenen Typen austeilen (bester eigener Typ je Ziel), was sie einstecken
@@ -324,13 +331,13 @@ function defHtml(d, short = false) {
 function glanceHtml(own, d) {
   const ch = S.chart || {}, all = Object.keys(ch);
   const best = (t) => Math.max(...own.map((a) => ch[a]?.[t] ?? 1));
-  const acls = (f) => f >= 4 ? "fd4" : f > 1 ? "fd" : f === 0 ? "fa0" : f < 1 ? "fa05" : "f1";
+  const acls = (f) => f > 2 ? "fd4" : f > 1 ? "fd" : f === 0 ? "fa0" : f < 1 ? "fa05" : "f1";
   const rows = (pairs, factors, cls) => factors.map((f) => { const ts = pairs.filter(([, x]) => x === f).map(([t]) => t);
     return ts.length ? erow(`<span class="f ${cls(f)}">×${fl(f)}</span>`, ts.map(tchip).join("")) : ""; }).join("");
   const off = all.map((t) => [t, best(t)]), def = all.map((t) => [t, d[t] ?? 1]);
-  const offBody = rows(off, [4, 2, 0.5, 0.25, 0], acls);
-  const weak = rows(def, [4, 2], fcls), tough = rows(def, [0.5, 0.25, 0], fcls);
-  const ideal = all.filter((t) => best(t) > 1 && (ch[t] ? own.reduce((f, x) => f * (ch[t][x] ?? 1), 1) : 1) <= 0.5);
+  const offBody = rows(off, [4, 2.5, 2, 0.5, 0.4, 0.25, 0], acls);
+  const weak = rows(def, [4, 2.5, 2], fcls), tough = rows(def, [0.5, 0.4, 0.25, 0], fcls);
+  const ideal = all.filter((t) => best(t) > 1 && (ch[t] ? effMul(own.map((x) => ch[t][x] ?? 1)) : 1) <= 0.5);
   const blk = (cls, title, sub, body) => `<div class="hc-blk ${cls}"><h4>${title} <span class="muted">${sub}</span></h4>${body}</div>`;
   return blk("off", "Angriff", "mit Attacken der eigenen Typen", offBody || `<div class="muted">überall normal</div>`)
     + blk("def", "Verteidigung", "wird getroffen", (weak ? `<div class="et">verwundbar</div>${weak}` : "") + (tough ? `<div class="et">hält aus</div>${tough}` : "") || `<div class="muted">überall normal</div>`)
@@ -344,7 +351,7 @@ function duelTip(name, own, t, x) {
 }
 function duelHtml(name, own, short = false) {
   const xs = Object.keys(S.chart || {}).map((t) => [t, duel(own, t)]);
-  const dcls = (f) => f >= 4 ? "fd4" : f > 1 ? "fd" : f < 1 ? "f2" : "f1";
+  const dcls = (f) => f > 2 ? "fd4" : f > 1 ? "fd" : f < 1 ? "f2" : "f1";
   // je Stufe eine Zeile je Paar (austeilen, einstecken), stärkste zuerst
   const rows = (lv) => {
     const groups = {};
@@ -835,6 +842,7 @@ async function loadChart() {
   if (S.chart && S.chartGame === S.game) return;
   const d = await api("/api/typen?" + qs({spiel: S.game}));
   S.chart = d.tabelle;
+  S.chartDoppelt = d.doppelt || null;
   S.chartGen = d.gen;
   S.chartGame = S.game;
 }
@@ -1576,7 +1584,7 @@ async function raidsView(arg) {
   const ev = S.team.ids.length ? await api("/api/team/bewerten", {spiel: S.game, ids: S.team.ids, details: S.team.details, kurz: 1}) : {mitglieder: []};
   if (rid !== RID) return;
   const team = ev.mitglieder || [];
-  const hitF = (atk, defT) => defT.reduce((f, d) => f * (S.chart?.[atk]?.[d] ?? 1), 1);
+  const hitF = (atk, defT) => effMul(defT.map((d) => S.chart?.[atk]?.[d] ?? 1));
   const names = (xs) => xs.map((m) => esc(m.name)).join(", ");
   $("#rlist").innerHTML = r.rows.length ? `<div class="scroll sticky"><table class="rows sort raids"><thead><tr>${th("Pokémon")}${thc("Level")}${th("Tera")}${th("Attacken", "", true)}${team.length ? th("Konter", "", true) + th("Gefahr", "", true) : ""}${th("Gebiet")}</tr></thead>
     <tbody>${r.rows.map((x) => { const def = x.tera ? [String(x.tera)] : x.typen.map(String);
@@ -1840,10 +1848,10 @@ function catchHtml(d) {
   const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
   return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
     <table class="rows sort catch"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: der beste Fall, etwa dreimal so gut wie volle KP. Die Chance steigt gleichmäßig, je weniger KP übrig sind, ohne Schwellen")}${thc("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${thc("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
-    <tbody>${m.fangen.map((f) => { const ct = (lbl, sh, st, stl, v) => f.faktor != null ? tipRef(catchTip(m, f, lbl, sh, st, stl, v)) : "";
-      return `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}" ${ct("volle KP", 1, 1, "", f.voll)}>${pc(f.voll)}</td><td class="c" data-s="${f.rot}" ${ct("1 KP", 0, 1, "", f.rot)}>${pc(f.rot)}</td>
-        <td class="c" data-s="${f.status ?? ""}" ${f.status != null ? ct("1 KP", 0, 1.5, "gelähmt, vergiftet oder verbrannt", f.status) : ""}>${f.status != null ? pc(f.status) : "–"}</td>
-        <td class="c" data-s="${f.schlaf}" ${ct("1 KP", 0, +String(m.schlaf_faktor || 2.5).replace(",", "."), "schlafend oder eingefroren", f.schlaf)}>${pc(f.schlaf)}</td></tr>`; }).join("")}</tbody></table>
+    <tbody>${m.fangen.map((f) => { const ct = (lbl, sh, st, stl, v, col) => f.faktor != null ? tipRef(catchTip(m, f, lbl, sh, st, stl, v, col)) : "";
+      return `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}" ${ct("volle KP", 1, 1, "", f.voll, "voll")}>${pc(f.voll)}</td><td class="c" data-s="${f.rot}" ${ct("1 KP", 0, 1, "", f.rot, "rot")}>${pc(f.rot)}</td>
+        <td class="c" data-s="${f.status ?? ""}" ${f.status != null ? ct("1 KP", 0, 1.5, "gelähmt, vergiftet oder verbrannt", f.status, "status") : ""}>${f.status != null ? pc(f.status) : "–"}</td>
+        <td class="c" data-s="${f.schlaf}" ${ct("1 KP", 0, +String(m.schlaf_faktor || 2.5).replace(",", "."), "schlafend oder eingefroren", f.schlaf, "schlaf")}>${pc(f.schlaf)}</td></tr>`; }).join("")}</tbody></table>
     <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
       : grob && S.game.startsWith("lets-go") ? ". Let’s Go rechnet anders (siehe unten); die Werte geben nur eine Richtung."
       : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p>${wissenHtml(d.spielwissen)}</details>`;
@@ -3477,13 +3485,10 @@ const BALL = {"Pokéball": [1, ""], "Superball": [1.5, ""], "Hyperball": [2, ""]
   "Schwerball": [1, "besser bei schweren Pokémon"], "Sympaball": [8, "×8 bei gleicher Art und anderem Geschlecht"], "Freundesball": [1, "startet mit hoher Freundschaft"],
   "Mondball": [4, "×4 bei Pokémon, die sich mit Mondstein entwickeln"], "Turnierball": [1.5, "nur beim Käferturnier"], "Parkball": [0, "fängt immer (Park)"],
   "Traumball": [4, "×4 bei schlafenden Pokémon"], "Ultraball": [5, "×5 bei Ultrabestien, sonst ×0,1"], "Kirschball": [1, ""], "Kirschenball": [1, ""]};
-// 0.50: Faktoren nach Bulbapedia (Catch rate)
-const BALL_HISUI = {"Pokéball": [0.75, ""], "Superball": [1.5, ""], "Hyperball": [2.25, ""], "Federball": [1, "×1,25 bei bestimmten fliegenden Pokémon; fliegt weit"],
-  "Flügelball": [1.25, "×2 bei fliegenden Pokémon; fliegt weiter"], "Düsenball": [2, "×2,75 bei fliegenden Pokémon; fliegt am weitesten"],
-  "Schwerball": [1, "×1,25, wenn das Pokémon dich nicht bemerkt hat; fliegt kurz"], "Zentnerball": [1.75, "×2, wenn das Pokémon dich nicht bemerkt hat"],
-  "Tonnenball": [2.5, "×2,75, wenn das Pokémon dich nicht bemerkt hat"], "Urball": [0, "fängt immer"], "Rätselball": [1, ""]};
+// 0.57.0: Die Bälle aus Hisui kommen vom Server (/api/meta, hisui_baelle); hier steht keine eigene Tabelle mehr
+const ballHisui = (n) => { const b = (S.meta?.hisui_baelle || []).find((x) => x[0] === n); return b ? [b[1], b[4] || ""] : null; };
 const ballOf = (x) => { const h = / \(Hisui\)$/.test(x.name) || S.game === "legends-arceus"; const n = x.name.replace(/ \(Hisui\)$/, "");
-  return (h ? BALL_HISUI[n] : null) || BALL[n] || null; };
+  return (h ? ballHisui(n) : null) || BALL[n] || null; };
 /* Wirkung von Medizin und Beeren in schmalen Spalten: KP, AP, EP und die Statusprobleme. Aus Kurztext und Beschreibung
    des Spiels gelesen (die Beschreibung gilt, wenn sie eine Zahl nennt: Werte ändern sich zwischen den Spielen) */
 const FXCOLS = [["kp", "KP", "Füllt KP auf"], ["ap", "AP", "Füllt AP auf"], ["ep", "EP", "Erfahrung oder Level"], ["slp", "zZz", "Weckt aus dem Schlaf"],
@@ -3627,9 +3632,9 @@ const typeFilter = (key, ts, pick, tip) => `<div class="bar tpick" data-tip="${e
 /* Zählspalte farbig: gut grün, schlecht rot, kräftiger je mehr (bezogen auf max); 0 bleibt blass */
 const cntTd = (v, good, max, c, tip = "") => `<td class="c num cnt${v ? (good ? " cg" : " cb") : " zero"}" data-c="${c}" data-s="${v}"${tip ? ` data-tip="${esc(`${tip}: ${v}`)}"` : ""}>${v}</td>`;
 // Zählung je Zeile aus den Faktoren: Verteidigung [Schw., ×4, Res., Imm.], Angriff [stark, schwach, ohne Wirkung]
-const defCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f >= 4).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
+const defCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f > 2).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
 const attCnt = (fs) => [fs.filter((f) => f > 1).length, fs.filter((f) => f < 1 && f > 0).length, fs.filter((f) => f === 0).length];
-const DEFC = [["Schw.", "Schwächen: Angriffstypen mit ×2 oder mehr", false, 8], ["×4", "4-fache Schwächen", false, 2], ["Res.", "Resistenzen: ×½ oder weniger", true, 8], ["Imm.", "Immun: keine Wirkung", true, 2]];
+const DEFC = [["Schw.", "Schwächen: Angriffstypen mit ×2 oder mehr", false, 8], ["×4", "Doppelte Schwächen: ×4, in Legenden: Arceus ×2,5", false, 2], ["Res.", "Resistenzen: ×½ oder weniger", true, 8], ["Imm.", "Immun: keine Wirkung", true, 2]];
 const ATTC = [["Stark", "Verteidigende Typen, die sehr effektiv getroffen werden", true, 8], ["Schwach", "Typen, gegen die es nur ×½ schafft", false, 8], ["Imm.", "Typen, gegen die nichts wirkt", false, 2]];
 const cntHeads = (cs) => cs.map(([n, tip]) => `<th class="c cnth" data-tip="${esc(tip)}">${n}</th>`).join("");
 const cntCells = (cs, vs, base) => vs.map((v, i) => cntTd(v, cs[i][2], cs[i][3], typeof base === "number" ? base + i : base + i, cs[i][1])).join("");
@@ -3637,7 +3642,7 @@ const cntCells = (cs, vs, base) => vs.map((v, i) => cntTd(v, cs[i][2], cs[i][3],
    Eigentypen treffen (Angriff, der bessere der beiden). Zeilen sind die Mitglieder, Spalten die 18 Typen */
 function teamTypeHtml(ms, all) {
   const ch = S.chart;
-  const def = (m, a) => m.typen.reduce((f, t) => f * (ch[a]?.[t] ?? 1), 1);
+  const def = (m, a) => effMul(m.typen.map((t) => ch[a]?.[t] ?? 1));
   const att = (m, v) => Math.max(...m.typen.map((t) => ch[t]?.[v] ?? 1));
   const one = (k, title, hint, fn, good) => {
     const tp = typePick(`ttPick${k}`, all), ts = tp.size ? all.filter((t) => tp.has(t)) : all;
@@ -3708,11 +3713,15 @@ async function chartView() {
 // Initiative-Wert ab Generation 3: ((2·Basis + DV + EV/4) · Level/100 + 5) · Wesen; bis Generation 2 mit DV (0–15) und Stat Exp
 function speedStat(base, lv, iv, ev, nat, gen) {
   if (gen <= 2) return Math.floor(((base + iv) * 2 + Math.floor(Math.min(255, Math.ceil(Math.sqrt(ev))) / 4)) * lv / 100) + 5;
-  return Math.floor((Math.floor((2 * base + iv + Math.floor(ev / 4)) * lv / 100) + 5) * nat);
+  return natAmp(Math.floor((2 * base + iv + Math.floor(ev / 4)) * lv / 100) + 5, nat);
 }
+// Wesen wie im Spiel und in app/schaden.py (nature_amp): ganzzahlig × 110 / 100 oder × 90 / 100, abgerundet
+const natAmp = (x, nat) => nat > 1 ? Math.floor(110 * x / 100) : nat < 1 ? Math.floor(90 * x / 100) : x;
 /* Legenden: Arceus: andere Formel, Effort Level 0–10 statt EVs und DVs (wie app/effort.py) */
 const EL_FAKTOR = [0, 2, 3, 4, 7, 8, 9, 14, 15, 16, 25];
-const laStat = (base, lv, el, nat = 1) => Math.floor((lv / 50 + 1) * base / 1.5 * nat) + Math.floor((Math.sqrt(base) * EL_FAKTOR[el] + lv) / 2.5 + 0.5);
+// 0.57.0: wie app/effort.py: das Spiel rechnet mit einfacher Genauigkeit (Math.fround), das Wesen wirkt auf den abgerundeten Grundwert
+const laStat = (base, lv, el, nat = 1) => { const f = Math.fround;
+  return natAmp(Math.trunc(f(f(f(f(lv / 50) + 1) * base) / 1.5)), nat) + Math.floor(f(f(f(Math.sqrt(base) * EL_FAKTOR[el]) + lv) / 2.5) + 0.5); };
 const LA = () => S.game === "legends-arceus";
 /* Rechenweg einer Zelle der Initiative-Liste (Spalte k: minimal, neutral, maximal, maximal +), Einstellungen aus SPO */
 let SPO = {};
@@ -3778,7 +3787,7 @@ async function usageBox() {
   }
   u.rows.forEach((r) => { if (r.id) ROWS[r.id] = Object.assign(ROWS[r.id] || {}, {id: r.id, name: r.name, typen: r.typen, werte: r.werte}); });
   const team = S.team.ids.map((id) => ROWS[id]).filter((m) => m?.typen);
-  const hitF = (atk, defT) => defT.reduce((f, d) => f * (S.chart?.[atk]?.[d] ?? 1), 1);
+  const hitF = (atk, defT) => effMul(defT.map((d) => S.chart?.[atk]?.[d] ?? 1));
   // Gefahr: welche Mitglieder ein Eigentyp des Gegners sehr effektiv trifft; Antwort: wer ihn selbst mit einem Eigentyp sehr effektiv trifft
   const threat = (r) => team.filter((m) => r.typen.some((t) => hitF(String(t), m.typen.map(String)) > 1));
   const answer = (r) => team.filter((m) => m.typen.some((t) => hitF(String(t), r.typen.map(String)) > 1));
@@ -4028,7 +4037,7 @@ async function compareView(a, b) {
   }).join("") : "";
   const ts = Object.keys(S.chart || {});
   // Verteidigung: je Angriffstyp der Faktor beider; wer weniger einsteckt, bekommt die Zelle grün hinterlegt und ein ✓
-  const fword = (f) => f === 0 ? "keine Wirkung" : f >= 4 ? "4-fach schwach" : f > 1 ? "schwach" : f <= 0.25 ? "4-fach resistent" : f < 1 ? "resistent" : "neutral";
+  const fword = (f) => f === 0 ? "keine Wirkung" : f > 2 ? "doppelt schwach" : f > 1 ? "schwach" : f < 0.5 ? "doppelt resistent" : f < 1 ? "resistent" : "neutral";
   const dcell = (d, f, other, t) => `<td class="c${f < other ? " better" : f > other ? " worse" : ""}" data-tip="${esc(`${tname(t)}-Attacken gegen ${d.name}: ×${fl(f)} (${fword(f)})${f < other ? `; steckt weniger ein als ${(d === A ? B : A).name}` : f > other ? `; steckt mehr ein als ${(d === A ? B : A).name}` : ""}`)}">${f === 1 ? `<span class="hint">1</span>` : `<span class="f ${fcls(f)}">${fl(f)}</span>`}${f < other ? ` <span class="ok">✓</span>` : ""}</td>`;
   const defRow = A && B ? ts.map((t) => { const x = A.wirkung[t] ?? 1, y = B.wirkung[t] ?? 1;
     return `<tr data-r="${t}">${dcell(A, x, y, t)}<th class="c" data-tip="${esc(`${tname(t)}-Attacken: links gegen ${A.name}, rechts gegen ${B.name}. Grün = steckt weniger ein, rot = mehr`)}">${tchip(t)}</th>${dcell(B, y, x, t)}</tr>`; }).join("") : "";
@@ -4050,7 +4059,7 @@ async function compareView(a, b) {
   if (A && B) {
     const gen = S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;
     const sp = (d) => speedCols(d.werte[5], 50, gen)[2];
-    const fac = (t, y) => y.typen.reduce((f, d) => f * (S.chart?.[t]?.[d] ?? 1), 1);
+    const fac = (t, y) => effMul(y.typen.map((d) => S.chart?.[t]?.[d] ?? 1));
     const best = (x, y) => x.typen.reduce((b, t) => fac(t, y) > fac(b, y) ? t : b, x.typen[0]);
     const ta = best(A, B), tb = best(B, A), ha = fac(ta, B), hb = fac(tb, A), sa = sp(A), sb = sp(B);
     const win = (v, o, low) => (low ? v < o : v > o) ? `<b class="fz-g">${v}</b>` : (low ? v > o : v < o) ? `<b class="fz-r">${v}</b>` : `<b>${v}</b>`;
@@ -4094,7 +4103,7 @@ function combosHtml(ch) {
   const shown = combos.filter((c) => [...pick].every((t) => c.includes(t)));
   const rows = shown.map((c) => {
     // Verteidiger: Spalte greift an, Faktoren multiplizieren sich. Angreifer: Spalte verteidigt, es zählt der bessere Eigentyp
-    const fs = ts.map((t) => att ? Math.max(...c.map((a) => ch[a]?.[t] ?? 1)) : c.reduce((f, d) => f * (ch[t]?.[d] ?? 1), 1));
+    const fs = ts.map((t) => att ? Math.max(...c.map((a) => ch[a]?.[t] ?? 1)) : effMul(c.map((d) => ch[t]?.[d] ?? 1)));
     const cnt = att ? attCnt(fs) : defCnt(fs);
     // als Verteidiger ist ½ gut (grün), als Angreifer ist 2 gut: dann Farben umdrehen
     return `<tr data-r="${c.join(",")}"><th class="r" data-pr="${c.join(",")}" data-s="${esc(c.map(tname).join(" "))}">${tchips(c)}</th>

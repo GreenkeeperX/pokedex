@@ -56,7 +56,7 @@ def score(move, mon, ch=None):
         s *= avg
         why.append(f"trifft {lo}- bis {hi}-mal" if lo != hi else f"trifft {lo}-mal")
     if move.get("typ") in (mon.get("typen") or []):
-        bonus = 2.0 if mon.get("faehigkeit") == "adaptability" else 1.5
+        bonus = 2.0 if mon.get("faehigkeit") == "adaptability" else getattr(ch, "stab", 1.5)   # Legenden: Arceus 1,25
         s *= bonus
         why.append("Eigentyp-Bonus" + (" (Anpassungsfähigkeit)" if bonus == 2 else ""))
     atk, spa = mon.get("ang") or 1, mon.get("spang") or 1

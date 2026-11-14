@@ -1,6 +1,7 @@
 """Tests ohne Netz: Rechenlogik, Leser, Abgleich mit Attrappe, Server-Hilfen. Start: python -m unittest discover -s tests"""
 import json
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -293,11 +294,30 @@ class Leser(unittest.TestCase):
         from app import abfragen
         self.assertLess(abfragen.catch_chance(255, gen=9), 100.0)             # volle KP: a = 85, kein sicherer Fang
         self.assertEqual(abfragen.catch_chance(255, hp_share=0, gen=9), 100.0)  # 1 KP: a = 255
-        self.assertEqual(abfragen.catch_chance(3, gen=4), round(100 * 1 / 255, 1))
+        self.assertEqual(abfragen.catch_chance(3, gen=2), round(100 * 1 / 255, 1))   # bis Generation 2 Richtwert a/255
         low = abfragen.catch_chance(3, gen=9)
         self.assertTrue(1 < low < 2)                                          # Rüttelproben: gut 1,5 %, nicht 0,4 %
         self.assertGreater(abfragen.catch_chance(45, 2, gen=9), abfragen.catch_chance(45, 1, gen=9))
-        self.assertGreater(abfragen.catch_chance(45, gen=5), abfragen.catch_chance(45, gen=6))   # drei statt vier Proben
+        # 0.57.0: Generation 5 hat drei Proben mit dem Exponenten 0,25, ab Generation 6 vier mit 0,1875: beide (a/255)^0,75.
+        # Vorher stand hier „Generation 5 liegt über Generation 6“ und hielt den Fehler fest (20,3 % statt 11,9 %).
+        self.assertEqual(abfragen.catch_chance(45, gen=5), 11.9)
+        self.assertEqual(abfragen.catch_steps(45, gen=5)[2:], (int(65536 * (15 / 255) ** 0.25), 3))
+        self.assertEqual(abfragen.catch_steps(45, gen=6)[2:], (int(65536 * (15 / 255) ** 0.1875), 4))
+        # Referenzwerte Generation 5: (Fangrate, Ball, KP-Anteil, Status) → %; von Hand aus b = ⌊65536 · (a/255)^0,25⌋, (b/65536)³
+        for (rate, ball, hp, st), want in {(3, 1, 1.0, 1.0): 1.6, (45, 1, 1.0, 1.0): 11.9, (45, 1, 0, 1.0): 27.2, (45, 1.5, 0, 2.5): 73.4,
+                                           (45, 2, 0, 1.5): 62.1, (120, 1, 1.0, 1.0): 24.9, (190, 1, 1.0, 1.5): 47.7, (255, 1, 1.0, 1.0): 43.9,
+                                           (255, 1, 0.5, 1.0): 73.8, (75, 2, 0.5, 2.5): 98.5, (3, 2, 0, 2.5): 11.9, (25, 1, 0, 2.5): 34.8}.items():
+            a = (3 - 2 * hp) / 3 * rate * ball * st
+            self.assertEqual(want, round(100 * (int(65536 * (a / 255) ** 0.25) / 65536) ** 3, 1), (rate, ball, hp, st))
+            self.assertEqual(abfragen.catch_chance(rate, ball, hp, st, gen=5), want, (rate, ball, hp, st))
+            self.assertAlmostEqual(want, 100 * (a / 255) ** 0.75, delta=0.06)      # insgesamt (a/255)^0,75
+            self.assertEqual(abfragen.catch_chance(rate, ball, hp, st, gen=6), abfragen.catch_chance(rate, ball, hp, st, gen=9))
+            self.assertAlmostEqual(abfragen.catch_chance(rate, ball, hp, st, gen=6), want, delta=0.06)
+        # Generation 3 und 4: ganzzahlige Wurzeln wie im Spiel. a = 1: 16711680 → 4088 → 63, b = 16643; a = 15: b = 32767
+        self.assertEqual((abfragen.catch_b_gen34(1), abfragen.catch_b_gen34(15), abfragen.catch_b_gen34(254)), (16643, 32767, 65535))
+        self.assertEqual((abfragen.catch_chance(3, gen=4), abfragen.catch_chance(45, gen=3), abfragen.catch_chance(45, gen=4)), (0.4, 6.2, 6.2))
+        self.assertEqual(abfragen.catch_table(45, 4)[0]["b"]["voll"], 32767)
+        self.assertEqual(abfragen.catch_table(45, 2)[0]["b"]["voll"], None)           # Richtwert ohne Probe
         t = abfragen.catch_table(45, 9)
         self.assertEqual([x["ball"] for x in t], ["Pokéball", "Superball", "Hyperball"])
         self.assertEqual([x["faktor"] for x in t], [1, 1.5, 2])                    # für den Rechenweg im Tooltip
@@ -313,8 +333,16 @@ class Leser(unittest.TestCase):
         self.assertEqual(abfragen.ball_rows(4, {"Flottball", "Netzball"}, {"typen": [10], "werte": [0] * 6}), [("Flottball (erste Runde)", 4, 0)])
         t = abfragen.catch_table(45, 9, extra=[("Schwerball", 1, 20)])
         self.assertEqual(t[-1]["voll"], abfragen.catch_chance(65, 1, gen=9))
-        h = {x["ball"]: x["faktor"] for x in abfragen.catch_table(45, 8, abfragen.BALLS_HISUI)}   # 0.48.7: Hisui-Bälle
-        self.assertEqual((h["Hyperball"], h["Tonnenball, unbemerkt"], h["Düsenball, Pokémon fliegt"]), (2.25, 2.75, 2.75))
+        # 0.57.0: eine einzige Tabelle für die Bälle aus Hisui, der Server liefert sie (meta: hisui_baelle)
+        self.assertFalse(hasattr(abfragen, "BALLS_HISUI"))
+        h = {b[0]: b for b in abfragen.HISUI_BALLS}
+        self.assertEqual((h["Hyperball"][1], h["Tonnenball"][2], h["Düsenball"][2], h["Zentnerball"][1], h["Urball"][1]), (2.25, 2.75, 2.75, 1.75, 0))
+        self.assertTrue(all(len(b) == 5 for b in abfragen.HISUI_BALLS))
+        js = open(os.path.join(os.path.dirname(__file__), "..", "app", "static", "js", "app.js"), encoding="utf-8").read()
+        self.assertNotIn("BALL_HISUI", js)                                       # keine eigene Tabelle in der Oberfläche
+        self.assertIn("hisui_baelle", js)
+        for name in ("Zentnerball", "Tonnenball", "Flügelball", "Düsenball", "Federball"):
+            self.assertNotRegex(js, r'"%s": ?\[' % name)
         self.assertEqual((abfragen.sleep_factor(4), abfragen.sleep_factor(5)), (2, 2.5))
 
     def test_0_56_2_trainer_ohne_kategorien_neu(self):
@@ -2010,7 +2038,7 @@ rect 0 0 9 9 [[Außerhalb]]"""
         self.assertEqual([schaden._round(x * m["ende"]) for x in (10, 100, 522)], [13, 130, 678])
         self.assertEqual(schaden.modifiers(3, 100, "water", 1.0, "huge-power", "expert-belt")["texte"], [])   # Kraftkoloss nur physisch, Gurt nur sehr effektiv
         self.assertEqual(schaden.modifiers(2, 60, "normal", 1.0, "technician", "silk-scarf")["staerke"], 1.5 * 1.2)
-        self.assertEqual(schaden.modifiers(2, 60, "normal", 1.0, "technician", "silk-scarf", gen=3)["staerke"], 1.1)  # Techniker ab Gen. 4
+        self.assertEqual(schaden.modifiers(2, 60, "normal", 1.0, "technician", "silk-scarf", gen=3)["wert"], 1.1)  # Techniker ab Gen. 4; Typ-Item in Gen. 3 am Angriff
         self.assertEqual(schaden.modifiers(2, 90, "fire", 1.0, "adaptability")["stab"], 2.0)
         c3 = schaden.calc(50, 100, 2, WASSER, [80, 130, 95, 80, 85, 102], [WASSER], [95, 115, 90, 80, 90, 60], [FEUER], ch(),
                           spread=True, mods=schaden.modifiers(2, 100, "water", 2.0, None, "life-orb", "regen"))
@@ -2572,6 +2600,299 @@ new RaidTemplate(150, new[]{0u, 0u, 0u, 0u, 1u}, 5, 0, 3, 0, false, 0),
         pk, _, rest = abfragen.point_pics(r["orte"][0][5], "", mons, abfragen.names_rx(mons, True), {}, None)
         self.assertEqual(pk[1], [77, "Ponita", "Schwert und Schild", "Galar-Form, 5★, Gigadynamax"])
         self.assertEqual(rest, "**Ort:** Erfundenes Feld")
+
+
+class Rechnen(unittest.TestCase):
+    """0.57.0: Schadensformeln je Generation gegen Vergleichswerte (tests/schaden_referenz.json aus @smogon/calc, erzeugt
+    mit tools/schaden_referenz.js) und Legenden: Arceus gegen die im Spiel gemessenen Werte. Quellen: docs/formeln.md."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(os.path.dirname(__file__), "schaden_referenz.json"), encoding="utf-8") as f:
+            cls.ref = json.load(f)
+        cls.key = {v: k.lower() for k, v in cls.ref["typen"].items()}
+        cls.charts = {int(g): typen.Chart({int(a): {int(d): f for d, f in row.items()} for a, row in t.items()})
+                      for g, t in cls.ref["tabellen"].items()}
+
+    def rechne(self, c):
+        """Ein Fall der Vergleichsdatei, so zusammengesetzt wie in abfragen.damage_view."""
+        from app import schaden
+        g, ch, tkey = c["gen"], self.charts[c["gen"]], self.key[c["typ"]]
+        if g <= 2:
+            m = schaden.modifiers(c["klasse"], c["staerke"], tkey, 1.0, None,
+                                  c["item"] if g == 2 and c["item"] in schaden.TYPE_ITEMS_GEN2 else None, c["wetter"], g)
+            return schaden.calc_old(g, c["level"], c["staerke"], c["klasse"], c["typ"], c["a_basis"], c["a_typen"], c["d_basis"],
+                                    c["d_typen"], ch, crit=c["krit"], d_inv=(c["d_ev"][0] > 0, c["d_ev"][1] > 0),
+                                    d_level=c["level_vert"], item=m["staerke"], weather=m["wetter"])
+        eff = schaden.effect(ch, c["typ"], [c["tera_vert"]] if c["tera_vert"] else c["d_typen"])
+        m = schaden.modifiers(c["klasse"], c["staerke"], tkey, eff, c["faehigkeit"], c["item"], c["wetter"], g)
+        dm = typen.ABILITY_DEFENSE.get(c["faehigkeit_vert"], {}).get(c["typ"], 1.0)
+        return schaden.calc(c["level"], c["staerke"], c["klasse"], c["typ"], c["a_basis"], c["a_typen"], c["d_basis"], c["d_typen"], ch,
+                            a_tera=c["tera"], d_tera=c["tera_vert"], a_ev=c["a_ev"], a_nat=c["wesen"], d_ev=tuple(c["d_ev"]),
+                            spread=c["flaeche"], crit=c["krit"], crit_mult=2.0 if g <= 5 else 1.5, d_level=c["level_vert"], mods=m,
+                            d_mod=dm, gen=g, d_ability=c["faehigkeit_vert"])
+
+    def test_vergleichswerte_je_generation(self):
+        """Alle 16 (bis Generation 2: 39) Schadenswerte und die KP je Fall müssen stimmen, in jeder Generation."""
+        count = {}
+        for i, c in enumerate(self.ref["faelle"]):
+            r = self.rechne(c)
+            self.assertEqual((r["werte"], r["kp"]), (c["werte"], c["kp"]), f"Fall {i}: {c}")
+            self.assertEqual((r["min"], r["max"]), (c["werte"][0], c["werte"][-1]))
+            count[c["gen"]] = count.get(c["gen"], 0) + 1
+        for g in (2, 3, 4):
+            self.assertGreaterEqual(count[g], 20, f"Generation {g}: mindestens 20 Vergleichswerte")
+        self.assertEqual(sorted(count), list(range(1, 10)))
+
+    def test_vergleichswerte_decken_die_sonderfaelle(self):
+        """Die Datei muss die Fälle enthalten, um die es ging; sonst prüft der Test oben sie nicht."""
+        f = self.ref["faelle"]
+        has = lambda **kw: any(all(c[k] == v for k, v in kw.items()) for c in f)
+        self.assertTrue(has(gen=2, item="dragon-fang") and has(gen=2, item="dragon-scale"))
+        self.assertTrue(any(c["gen"] == 2 and c["krit"] and c["item"] for c in f))            # Volltreffer vor dem Item
+        for g in (3, 4):
+            self.assertTrue(any(c["gen"] == g and c["wetter"] for c in f) and any(c["gen"] == g and c["krit"] for c in f))
+            self.assertTrue(any(c["gen"] == g and len(c["d_typen"]) == 2 for c in f))
+        self.assertTrue(has(gen=3, item="choice-band") and has(gen=3, item="sea-incense") and has(gen=3, faehigkeit_vert="thick-fat"))
+        self.assertTrue(has(gen=4, item="life-orb") and has(gen=4, item="expert-belt") and has(gen=4, faehigkeit="technician")
+                        and has(gen=4, faehigkeit="adaptability"))
+        self.assertTrue(any(c["gen"] == 9 and c["faehigkeit"] == "adaptability" and c["tera"] == c["typ"] and c["typ"] in c["a_typen"] for c in f))
+
+    def test_generation_3_und_4_von_hand(self):
+        from app import schaden
+        # Generation 3, Level 100, Stärke 95, Angriff 300, Verteidigung 200: ⌊⌊42 × 95 × 300 / 200⌋ / 50⌋ = 119
+        self.assertEqual(schaden.rolls_gen3(100, 95, 300, 200, phys=False)[-1], 121)                       # + 2
+        self.assertEqual(schaden.rolls_gen3(100, 95, 300, 200, phys=False, weather=1.5)[-1], 180)          # ⌊119 × 1,5⌋ + 2, nicht ⌊121 × 1,5⌋
+        self.assertEqual(schaden.rolls_gen3(100, 95, 300, 200, phys=False, crit=True, stab=True)[-1], 363)   # (119 + 2) × 2 × 1,5
+        self.assertEqual(schaden.rolls_gen3(100, 95, 300, 200, (2.0, 0.5), phys=False)[0], 102)            # Zufall zuletzt: ⌊121 × 85 / 100⌋
+        self.assertEqual(schaden.rolls_gen3(5, 10, 5, 200)[0], 2)                                          # physisch: mindestens 1, dann + 2
+        # Generation 4: erst durch 50, dann durch die Verteidigung: ⌊⌊42 × 95 × 300 / 50⌋ / 200⌋ = 119
+        self.assertEqual(schaden.rolls_gen4(100, 95, 300, 200)[-1], 121)
+        self.assertEqual(schaden.rolls_gen4(100, 95, 300, 200, orb=True)[-1], 157)                          # ⌊121 × 1,3⌋ vor dem Zufall
+        self.assertEqual(schaden.rolls_gen4(100, 95, 300, 200, orb=True)[0], 133)                           # ⌊157 × 85 / 100⌋
+        self.assertEqual(schaden.rolls_gen4(100, 95, 300, 200, (2.0,), belt=True)[0], 244)                  # ⌊⌊102 × 2⌋ × 1,2⌋ nach der Wirkung
+        self.assertEqual(schaden.rolls_gen4(100, 95, 300, 200, (0.5,), belt=True)[0], 51)                   # Gurt nur bei sehr effektiv
+        self.assertEqual(schaden.rolls_gen4(100, 95, 300, 200, stab=2.0)[0], 204)                           # Anpassung
+        # Typ-Item: Generation 3 am Angriffswert (× 1,1), Generation 4 an der Stärke (× 1,2), Generation 2 am Schaden
+        self.assertEqual(schaden.type_item("charcoal", "fire", 3), 1.1)
+        self.assertEqual(schaden.type_item("sea-incense", "water", 3), 1.05)
+        self.assertEqual(schaden.type_item("charcoal", "fire", 4), 1.2)
+        self.assertEqual(schaden.type_item("charcoal", "water", 4), 1.0)
+        m3, m4 = (schaden.modifiers(3, 95, "fire", 1.0, None, "charcoal", gen=g) for g in (3, 4))
+        self.assertEqual((m3["wert"], m3["staerke"], m4["wert"], m4["staerke"]), (1.1, 1.0, 1.0, 1.2))
+        # Was es in der Generation noch nicht gibt, wirkt nicht: Leben-Orb und Anpassung ab 4, Wahlglas ab 4
+        m = schaden.modifiers(3, 95, "fire", 2.0, "adaptability", "life-orb", gen=3)
+        self.assertEqual((m["ende"], m["stab"], m["item"], m["faehigkeit"]), (1.0, None, "", ""))
+        self.assertEqual(schaden.modifiers(3, 95, "fire", 1.0, None, "choice-specs", gen=3)["wert"], 1.0)
+
+    def test_generation_2_drachenzahn_und_volltreffer(self):
+        from app import schaden
+        # Der Drachenzahn wirkt in Generation 2 nicht, die Drachenhaut verstärkt Drache; ab Generation 3 ist es richtig herum
+        self.assertEqual(schaden.type_item("dragon-fang", "dragon", 2), 1.0)
+        self.assertEqual(schaden.type_item("dragon-scale", "dragon", 2), 1.1)
+        self.assertEqual(schaden.type_item("dragon-fang", "dragon", 3), 1.1)
+        self.assertEqual(schaden.type_item("dragon-scale", "dragon", 3), 1.0)
+        self.assertEqual(schaden.type_item("pink-bow", "normal", 2), 1.1)
+        # Volltreffer vor dem Item: Grundwert 45 → × 2 = 90 → ⌊90 × 1,1⌋ = 99, + 2 = 101 (umgekehrt wären es ⌊49,5⌋ × 2 + 2 = 100)
+        self.assertEqual(schaden.rolls_old(2, 50, 100, 100, 97, crit=True, item=1.1)[-1], 101)
+        # Generation 2 nimmt beide Typen in einem Schritt (× 2 und × ½ = × 1), Generation 1 rundet dazwischen ab
+        self.assertEqual(schaden.rolls_old(2, 50, 100, 100, 97, effs=(0.5, 2.0))[-1], 47)
+        self.assertEqual(schaden.rolls_old(1, 50, 100, 100, 97, effs=(0.5, 2.0))[-1], 46)
+
+    def test_tera_und_anpassung(self):
+        from app import schaden
+        F, W = typen.FEUER, typen.WASSER
+        self.assertEqual(schaden.stab_of(F, [F]), 1.5)
+        self.assertEqual(schaden.stab_of(F, [W]), 1.0)
+        self.assertEqual(schaden.stab_of(F, [W], tera=F), 1.5)
+        self.assertEqual(schaden.stab_of(F, [F], tera=F), 2.0)
+        self.assertEqual(schaden.stab_of(F, [F], tera=W), 1.5)                 # der ursprüngliche Typ behält seinen Bonus
+        self.assertEqual(schaden.stab_of(F, [F], adapt=True), 2.0)
+        self.assertEqual(schaden.stab_of(F, [F], tera=F, adapt=True), 2.25)    # Tera-Typ = Originaltyp mit Anpassung
+        self.assertEqual(schaden.stab_of(F, [W], tera=F, adapt=True), 2.0)
+        self.assertEqual(schaden.stab_of(F, [F], tera=W, adapt=True), 1.5)     # Anpassung zählt nur für den Tera-Typ
+        ch = self.charts[9]
+        base = [100] * 6
+        kw = dict(a_ev=0, gen=9)
+        plain = schaden.calc(50, 80, 3, F, base, [F], base, [1], ch, a_tera=F, **kw)
+        adapt = schaden.calc(50, 80, 3, F, base, [F], base, [1], ch, a_tera=F, mods=schaden.modifiers(3, 80, "fire", 1.0, "adaptability"), **kw)
+        self.assertEqual((plain["stab"], adapt["stab"]), (2.0, 2.25))
+        self.assertEqual(adapt["max"], schaden._mul(plain["max"] * 4096 // 8192, 9216))        # ×2,25 statt ×2 auf denselben Wurf
+        # Tera-Typ: Attacken unter Stärke 60 zählen mit 60, aber erst nach Techniker (40 × 1,5 = 60 bleibt 60)
+        self.assertEqual(schaden.calc(50, 40, 3, F, base, [W], base, [1], ch, a_tera=F, **kw)["staerke"], 60)
+        self.assertEqual(schaden.calc(50, 40, 3, F, base, [W], base, [1], ch, a_tera=F, tera_min=False, **kw)["staerke"], 40)
+        self.assertEqual(schaden.calc(50, 40, 3, F, base, [W], base, [1], ch, a_tera=F,
+                                      mods=schaden.modifiers(3, 40, "fire", 1.0, "technician"), **kw)["staerke"], 60)
+        self.assertEqual(schaden.calc(50, 40, 3, F, base, [W], base, [1], ch, **kw)["staerke"], 40)
+
+    def test_wesen_ganzzahlig(self):
+        from app import schaden
+        for x in range(1, 800):
+            self.assertEqual(schaden.nature_amp(x, 1.1), x * 110 // 100)
+            self.assertEqual(schaden.nature_amp(x, 0.9), x * 90 // 100)
+            self.assertEqual(schaden.nature_amp(x, 1.0), x)
+        self.assertEqual(schaden.stat(100, 50, 31, 252, 1.1), 167)             # (2·100 + 31 + 63) · 50 / 100 + 5 = 152 → 167
+        self.assertEqual(schaden.stat(100, 50, 31, 252, 0.9), 136)
+        self.assertEqual(schaden._mul(3, 6144), 4)                             # 4,5 rundet ab
+        self.assertEqual(schaden._mul(5, 6144), 7)                             # 7,5 rundet ab
+        self.assertEqual(schaden._mul(100, 5324), 130)
+        self.assertEqual(schaden.chain([6144, 6144]), 9216)
+
+    def test_legenden_arceus_schaden(self):
+        """Gemessen im Spiel (Smogon-Forschungsfaden, Beitrag 107): Level 70, Angriff 204, Stärke 100 mit Eigentyp gegen
+        Verteidigung 44 ergibt genau diese 16 Werte. Die Rundung der Hauptreihe sagt an fünf Stellen 1 mehr voraus (306, 313, 331, 338, 342)."""
+        from app import schaden
+        gemessen = [305, 309, 312, 316, 320, 324, 327, 330, 334, 337, 341, 345, 349, 352, 356, 360]
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44, stab=True), gemessen)
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44)[-1], 288)                      # Grundschaden: 135400 / 94 / 5
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44)[0], 244)
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44, eff=2.5)[-1], 720)
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44, eff=0.4)[-1], 115)             # ⌊288 × 0,4⌋
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44, eff=0.4)[0], 97)               # ⌊244 × 0,4⌋ = ⌊97,6⌋
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44, eff=2.5)[1], 617)              # ⌊247 × 2,5⌋ = ⌊617,5⌋
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44, crit=True)[-1], 432)           # × 1,5 vor dem Zufall
+        self.assertEqual(schaden.rolls_la(70, 100, 204, 44, eff=0), [0] * 16)
+        self.assertEqual(schaden.rolls_la(1, 10, 1, 500)[0], 1)                            # mindestens 1
+        # mehr Vergleichswerte von Hand: (Level, Stärke, Angriff, Verteidigung) → Grundschaden ⌊⌊(100 + A + 15 L) × S / (V + 50)⌋ / 5⌋
+        for (lv, bp, a, d), want in {(50, 80, 150, 100): 106, (20, 40, 45, 40): 39, (100, 120, 400, 250): 160, (65, 90, 230, 180): 102,
+                                     (35, 60, 90, 75): 68, (85, 100, 310, 120): 198, (10, 50, 30, 25): 37, (55, 75, 170, 210): 63}.items():
+            self.assertEqual(want, (100 + a + 15 * lv) * bp // (d + 50) // 5)
+            self.assertEqual(schaden.rolls_la(lv, bp, a, d)[-1], want, (lv, bp, a, d))
+            self.assertEqual(schaden.rolls_la(lv, bp, a, d)[0], want * 85 // 100)
+            hi = schaden.rolls_la(lv, bp, a, d, stab=True)[-1]
+            self.assertIn(hi, (want * 5 // 4, want * 5 // 4 + 1))                           # × 1,25, über ,5 aufgerundet
+            self.assertEqual(hi, (want * 5120 + 2047) // 4096)
+
+    def test_legenden_arceus_typen(self):
+        from app import abfragen, schaden
+        ch = typen.Chart({a: dict(row) for a, row in self.charts[8].items()})
+        la = typen.for_la(ch)
+        self.assertEqual((ch.doppelt, ch.stab, la.doppelt, la.stab), (None, 1.5, (2.5, 0.4), 1.25))
+        E, P, K, B, G = typen.EIS, typen.PFLANZE, typen.KAEFER, typen.BODEN, typen.GESTEIN
+        F, W, FL, ST, D = typen.FEUER, typen.WASSER, typen.FLUG, typen.STAHL, typen.DRACHE
+        self.assertEqual((typen.product(ch, F, [P, K]), typen.product(la, F, [P, K])), (4.0, 2.5))       # doppelt sehr effektiv
+        self.assertEqual((typen.product(ch, P, [F, FL]), typen.product(la, P, [F, FL])), (0.25, 0.4))    # doppelt nicht effektiv
+        self.assertEqual((typen.product(la, F, [P]), typen.product(la, F, [W]), typen.product(la, F, [P, W])), (2.0, 0.5, 1.0))
+        self.assertEqual(typen.product(la, typen.ELEKTRO, [B, W]), 0.0)                                   # ohne Wirkung bleibt 0
+        d_main, d_la = typen.defense([P, K], ch), typen.defense([P, K], la)
+        self.assertEqual((d_main[F], d_la[F], d_main[FL], d_la[FL], d_la[B]), (4.0, 2.5, 4.0, 2.5, 0.4))
+        self.assertEqual((typen.attack(E, [D, FL], la), typen.attack(E, [D, FL], ch)), (2.5, 4.0))
+        self.assertEqual((typen.label(2.5), typen.label(0.4), typen.label(4), typen.label(0.25)), ("2,5", "0,4", "4", "¼"))
+        self.assertEqual(schaden.effect(la, F, [P, K]), 2.5)
+        # Schadensrechner: Eigentyp ×1,25 und Wirkung ×2,5 statt ×1,5 und ×4
+        r = schaden.calc_la(70, 100, 2, F, [F], la, [P, K], 204, (44, 300))
+        self.assertEqual((r["stab"], r["eff"], r["kp"]), (1.25, 2.5, 300))
+        self.assertEqual(r["werte"], [x * 5 // 2 for x in schaden.rolls_la(70, 100, 204, 44, stab=True)])
+        self.assertEqual(r["grund"], 288)
+        self.assertIn("100 + Angriff + 15 × Level", r["formel"][0])
+        # Teambewertung: die doppelte Schwäche zählt auch mit ×2,5 (vorher erst ab ×4)
+        m = {"id": 1, "art": 1, "name": "Erfunden", "typen": [P, K], "werte": [80] * 6, "summe": 480}
+        self.assertIn((F, "Erfunden"), team.evaluate([m], team.Ctx(la))["vierfach"])
+        self.assertIn((F, "Erfunden"), team.evaluate([m], team.Ctx(ch))["vierfach"])
+        self.assertEqual(abfragen.duel([P, K], F, la)[1], 2.5)                  # Typ-Duell: einstecken ×2,5
+        self.assertEqual(abfragen.duel([P, K], F, ch)[1], 4.0)
+        self.assertEqual(attacken.score({"staerke": 100, "klasse": 2, "genauigkeit": 100, "typ": F}, {"typen": [F], "ang": 100, "spang": 100}, la)[0]
+                         / attacken.score({"staerke": 100, "klasse": 2, "genauigkeit": 100, "typ": F}, {"typen": [F], "ang": 100, "spang": 100}, ch)[0], 1.25 / 1.5)
+
+    def test_legenden_arceus_werte(self):
+        """Werte wie in PKHeX (PA8.cs): Grundwert abrunden, dann das Wesen ganzzahlig, dazu der Bonus der Effort Levels."""
+        from app import effort
+        self.assertEqual(effort.grund(100, 50, 1), 133)                        # (50/50 + 1) × 100 / 1,5 = 133,3
+        self.assertEqual(effort.grund(100, 50, 0), 200)                        # (50/100 + 1) × 100 + 50
+        self.assertEqual(effort.bonus(100, 50, 0), 20)                         # (0 + 50) / 2,5
+        self.assertEqual(effort.bonus(100, 50, 10), 120)                       # (10 × 25 + 50) / 2,5
+        self.assertEqual(effort.bonus(90, 37, 7), 68)                          # (9,4868 × 14 + 37) / 2,5 = 67,93 → 68
+        self.assertEqual(effort.stat(100, 50, 10, 1), 253)
+        self.assertEqual(effort.stat(100, 50, 10, 1, 1.1), 146 + 120)          # ⌊133 × 1,1⌋ = 146
+        self.assertEqual(effort.stat(100, 50, 10, 1, 0.9), 119 + 120)          # ⌊133 × 0,9⌋ = 119
+        self.assertEqual(effort.stat(110, 50, 0, 1, 1.1), 160 + 20)            # ⌊146,67⌋ = 146 → ⌊160,6⌋ = 160 (vorher 161)
+        self.assertEqual(effort.stat(15, 55, 0, 1), 20 + 22)                   # einfache Genauigkeit: 2,1 × 15 / 1,5 knapp unter 21
+        for base in (1, 15, 45, 80, 100, 130, 255):
+            for lv in (1, 20, 55, 61, 100):
+                for el in (0, 3, 10):
+                    for i in (0, 1):
+                        for nat in (1.0,) if i == 0 else (0.9, 1.0, 1.1):
+                            self.assertEqual(sum(effort.parts(base, lv, el, i, nat).values()), effort.stat(base, lv, el, i, nat))
+        v = effort.view([100] * 6, 50, [10] * 6, None, (1, 3))
+        self.assertEqual([r["wert"] for r in v["rows"]][:4], [320, 266, 253, 239])
+
+
+class Oeffentlich(unittest.TestCase):
+    """0.57.0: Das Repository ist öffentlich. Dieser Test liest die eingecheckten Dateien (git ls-files) und scheitert bei
+    allem, was nach Privatem aussieht: unbekannte Dateien im Wurzelverzeichnis, Protokolle, Datenordner, Datenbanken,
+    Bilder außerhalb der Oberfläche, private Adressen, Zugangsdaten. Er ersetzt nicht das Lesen des eigenen Diffs:
+    einen Namen erkennt kein Muster."""
+    ROOT = os.path.join(os.path.dirname(__file__), "..")
+    ROOT_FILES = {".dockerignore", ".gitignore", "CLAUDE.md", "Dockerfile", "README.md", "ROADMAP.md", "docker-compose.yml"}
+    ROOT_DIRS = {".github", "app", "docs", "extra", "tests", "tools"}
+    BAD_NAME = re.compile(r"(^|/)(data|sicherung|backup|backups|export|exports|uploads|node_modules|__pycache__)/|"
+                          r"\.(log|db|sqlite3?|bak|tmp|pem|key|p12|pfx|env|pyc|zip|tar|gz|7z|sav|pk\d|csv)$|"
+                          r"(^|/)(\.env[^/]*|user\.db|settings\.json|sync\.json|id_rsa[^/]*|credentials[^/]*|secrets?[^/]*)$", re.I)
+    IMAGE = re.compile(r"\.(png|jpe?g|gif|webp|bmp|ico|svg)$", re.I)
+    # Muster im Inhalt; in Teilen geschrieben, damit diese Datei sich nicht selbst meldet
+    BAD_TEXT = [("private IPv4-Adresse", re.compile(r"(?<![\d.])(192\.168|10\.\d{1,3}|172\.(1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}(?![\d.])")),
+                ("E-Mail-Adresse", re.compile(r"[A-Za-z0-9._%+-]+@(?!example\.)[A-Za-z0-9-]+\.(de|com|net|org|eu|at|ch)\b")),
+                ("Zugangsdaten", re.compile(r"(passwor[dt]|passwd|secret|api[_-]?key|token)[\"']?\s*[:=]\s*[\"'][^\"'$ ]{8,}[\"']", re.I)),
+                ("Schlüssel", re.compile("gh" + r"[pousr]_[A-Za-z0-9]{20,}|github" + r"_pat_|BEGIN [A-Z ]*PRIVATE " + "KEY|xox" + r"[bap]-[A-Za-z0-9-]{10,}")),
+                ("Heimverzeichnis", re.compile(r"/home/(?!user/|runner/)[a-z][a-z0-9_-]*/|/Users/[A-Za-z]|[A-Z]:\\\\Users\\\\"))]
+
+    def files(self):
+        import subprocess
+        try:
+            out = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=self.ROOT,
+                                 capture_output=True, timeout=30, check=True).stdout.decode("utf-8")
+        except Exception as e:                                  # kein Git (etwa im Image): nichts zu prüfen
+            self.skipTest(f"git ls-files nicht möglich: {e}")
+        return [f for f in out.split("\0") if f]
+
+    def test_repository_ohne_privates(self):
+        files = self.files()
+        self.assertGreater(len(files), 30)
+        bad = []
+        for f in files:
+            top = f.split("/")[0]
+            if "/" not in f and f not in self.ROOT_FILES:
+                bad.append(f"{f}: unbekannte Datei im Wurzelverzeichnis")
+            elif "/" in f and top not in self.ROOT_DIRS:
+                bad.append(f"{f}: unbekannter Ordner im Wurzelverzeichnis")
+            if self.BAD_NAME.search(f):
+                bad.append(f"{f}: Protokoll, Datenordner, Datenbank oder Zugangsdatei")
+            if self.IMAGE.search(f) and not f.startswith("app/static/"):
+                bad.append(f"{f}: Bild außerhalb von app/static (Bildschirmfoto?)")
+        self.assertEqual(bad, [], "Vor dem Push klären:\n" + "\n".join(bad))
+
+    def test_inhalt_ohne_adressen_und_zugangsdaten(self):
+        bad = []
+        for f in self.files():
+            path = os.path.join(self.ROOT, f)
+            if self.IMAGE.search(f) or not os.path.isfile(path) or os.path.getsize(path) > 3_000_000:
+                continue
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    text = fh.read()
+            except (UnicodeDecodeError, OSError):
+                continue
+            for name, rx in self.BAD_TEXT:
+                for m in rx.finditer(text):
+                    bad.append(f"{f}:{text.count(chr(10), 0, m.start()) + 1}: {name}")
+        self.assertEqual(bad, [], "Vor dem Push klären:\n" + "\n".join(bad[:40]))
+
+    def test_muster_greifen(self):
+        """Die Muster müssen das finden, wofür sie da sind (sonst prüft der Test oben nichts)."""
+        hit = lambda t: [n for n, rx in self.BAD_TEXT if rx.search(t)]
+        self.assertEqual(hit("server = '192." + "168.1.20'"), ["private IPv4-Adresse"])
+        self.assertEqual(hit("http://10." + "0.0.5:8789/"), ["private IPv4-Adresse"])
+        self.assertEqual(hit("Version 110.0.0.5 und 0.10.0.5.1"), [])
+        self.assertEqual(hit("jemand@" + "postfach.de"), ["E-Mail-Adresse"])
+        self.assertEqual(hit("uses: actions/checkout@v5 und @smogon/calc"), [])
+        self.assertEqual(hit('TOKEN = "' + "abcdefgh12345678" + '"'), ["Zugangsdaten"])
+        self.assertEqual(hit("echo $GH_TOKEN | docker login"), [])
+        self.assertEqual(hit("gh" + "p_" + "a" * 36), ["Schlüssel"])
+        self.assertEqual(hit("/home/" + "jemand/Projekte"), ["Heimverzeichnis"])
+        for f in ("srv.log", "data/user.db", "notizen.txt", "sicherung/user-1.db", ".env", "tests/__pycache__/x.pyc"):
+            self.assertTrue(self.BAD_NAME.search(f) or ("/" not in f and f not in self.ROOT_FILES), f)
+        for f in ("app/server.py", "tests/schaden_referenz.json", "extra/spielwissen.json", "docs/formeln.md"):
+            self.assertFalse(self.BAD_NAME.search(f), f)
 
 
 if __name__ == "__main__":

@@ -158,4 +158,7 @@ Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HO
     DATA_DIR=./data python3 -m app.server      # http://localhost:8789, holt beim Start die Daten
 
 Mit einer gebauten Datenbank laufen zusätzliche Tests: `POKEAPI_DB=./data/pokeapi.db python3 -m unittest tests.test_all`.
+Formeln für Schaden, Statuswerte, Typwirkung und Fangchance mit Quellen: `docs/formeln.md`. Die Vergleichswerte der
+Schadensrechnung (`tests/schaden_referenz.json`) erzeugt `tools/schaden_referenz.js` aus `@smogon/calc`; das Werkzeug
+braucht Node, der Pokédex und seine Tests nicht.
 Hinweise zum Arbeiten am Repository: `CLAUDE.md`. Geplantes: `ROADMAP.md`.
