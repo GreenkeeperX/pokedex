@@ -1,5 +1,53 @@
 # Roadmap
 
+## 0.57.0 (13.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 1: richtige Zahlen (Review P1 bis P5). Formeln, Quellen und offene Punkte
+stehen in `docs/formeln.md`.
+
+- **Legenden: Arceus, Schaden** (`schaden.rolls_la`, `calc_la`): eigene Formel
+  `⌊⌊(100 + Angriff + 15 × Level) × Stärke / (Verteidigung + 50)⌋ / 5⌋`, Volltreffer × 1,5, Zufall, Eigentyp × 1,25,
+  Wirkung 2,5 / 2 / 0,5 / 0,4. Trifft die 16 im Spiel gemessenen Werte aus dem Smogon-Forschungsfaden. Vorher lief die
+  Formel der Hauptreihe mit den Werten aus den Effort Levels.
+- **Legenden: Arceus, Typwirkung** (`typen.Chart`, `for_la`, `combine`, `product`): Die Regel „doppelt = 2,5 und 0,4“ und
+  der Eigentyp-Bonus hängen an der Typtabelle des Spiels (`abfragen.chart_of`). Alle Stellen, die Faktoren
+  zusammenrechnen, gehen durch `typen.product` (Server) und `effMul` (Oberfläche, Regel aus `/api/typen`).
+- **Legenden: Arceus, Werte** (`effort.grund`, `bonus`, `f32`): wie PKHeX, Wesen auf den abgerundeten Grundwert,
+  einfache Genauigkeit.
+- **Fangchance** (`catch_steps`, `catch_b_gen34`): Generation 5 mit Exponent 0,25 und drei Proben; Generation 3 und 4
+  mit den ganzzahligen Wurzeln des Spiels. Der Server liefert `b` und die Zahl der Proben für den Tooltip mit.
+- **Bälle aus Hisui:** nur noch `abfragen.HISUI_BALLS`, an die Oberfläche über `/api/meta` (`hisui_baelle`).
+  Entfernt: `abfragen.BALLS_HISUI` (ältere Werte, nur noch von `_more` für die Tabelle `fangen` benutzt, die in diesem
+  Spiel niemand anzeigte) und `BALL_HISUI` in `app.js` (Item-Liste, `ballOf`). Ersatz: `ballHisui` liest die Tabelle des
+  Servers. Abgesichert durch `test_fangchance`. Keine Auswirkung auf gespeicherte Daten oder Einstellungen.
+- **Schaden, Generation 2 bis 4** (`rolls_old`, `rolls_gen3`, `rolls_gen4`): eigene Reihenfolge je Generation.
+  Generation 2: Drachenzahn ohne Wirkung, Drachenhaut verstärkt Drache, Volltreffer vor dem Item, beide Typen als ein
+  Produkt.
+- **Schaden ab Generation 5** (`rolls`, `chain`, `_mul`): Faktoren ganzzahlig in 4096steln; Tera-Typ gleich Originaltyp
+  mit Anpassung × 2,25 (`stab_of`); Tera-Mindeststärke 60; Fähigkeiten des Verteidigers an der richtigen Stelle
+  (`DEF_ABILITY_WHERE`); Wesen ganzzahlig (`nature_amp`).
+- **Vergleichswerte:** `tests/schaden_referenz.json`, 550 Fälle aus `@smogon/calc` 0.12.0, erzeugt mit
+  `tools/schaden_referenz.js`. Kein Paket zur Laufzeit; das Image enthält weder `tests/` noch `tools/`.
+- **Test gegen Privates im Repository** (`test_repository_ohne_privates`): unbekannte Dateien im Wurzelverzeichnis,
+  Protokolle, Datenordner, Datenbanken, private Adressen und Zugangsdaten lassen den Test scheitern.
+
+## Von den Geschwistern
+
+Was beim Arbeiten am Pokédex auffällt und für eShopKompass oder VR-Navigator taugen könnte. Nur Empfehlungen; die
+anderen Repositories ändert niemand von hier aus.
+
+- **13.11.2026, Test gegen Privates im Repository.** Der Test liest `git ls-files` und scheitert bei Dateien, die nicht
+  in eine erlaubte Liste passen (Wurzelverzeichnis, `*.log`, `*.db`, Bilder außerhalb von `app/static`), und bei Mustern
+  für private Adressen und Zugangsdaten im Inhalt. Anlass war eine versehentlich eingecheckte `srv.log` im Pokédex
+  (0.56.1). Empfehlung: in beiden Geschwistern übernehmen, mit je eigener Liste erlaubter Dateien.
+- **13.11.2026, Vergleichswerte aus einer fremden Referenz.** Für Rechenlogik eine Datei mit Fällen aus einer
+  anerkannten Referenz erzeugen (festes Werkzeug unter `tools/`, fester Startwert) und nur die Datei im Test lesen. Das
+  Werkzeug ist keine Abhängigkeit. Für die Geschwister nur dort sinnvoll, wo es eine solche Referenz gibt (etwa
+  Preis- und Währungsumrechnung im eShopKompass); kein Handlungsbedarf erkannt.
+- **13.11.2026, Formeln mit Quelle in einer eigenen Datei** (`docs/formeln.md`, mit dem Abschnitt „Offen“ für alles, was
+  angenommen statt belegt ist). Entspricht dem Leitsatz „Lieber melden als raten“ des eShopKompass; dort und im
+  VR-Navigator für Bewertungs- und Sortierregeln denkbar.
+
 ## 0.56.2 (13.11.2026)
 
 Rückmeldung vom 13.11.2026 zu 0.56.0:

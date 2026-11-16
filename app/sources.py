@@ -12,11 +12,27 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.56.2"
+VERSION = "0.57.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.57.0", "13.11.2026", [
+        "Legenden: Arceus rechnet jetzt mit der eigenen Schadensformel des Spiels: Eigentyp ×1,25, doppelt sehr effektiv ×2,5 "
+        "statt ×4, doppelt nicht sehr effektiv ×0,4 statt ×¼. Das gilt im Schadensrechner, in der Typwirkung auf der "
+        "Detailseite, im Typ-Duell und in der Teambewertung",
+        "Legenden: Arceus, Werte: Das Wesen wirkt wie im Spiel auf den abgerundeten Grundwert; einzelne Werte ändern sich um 1",
+        "Fangchance in Generation 5 war zu hoch (Fangrate 45, volle KP, Pokéball: 11,9 % statt 20,3 %); Generation 3 und 4 "
+        "runden jetzt wie das Spiel",
+        "Bälle aus Hisui: überall dieselben Faktoren (vorher drei Tabellen, die sich widersprachen)",
+        "Schadensrechner, Generation 3 und 4: eigene Reihenfolge und Rundung statt der ab Generation 5; das ändert Ergebnisse "
+        "um einzelne KP, vor allem mit Wetter, Leben-Orb und Typ-Items",
+        "Schadensrechner, Generation 2: Der Drachenzahn wirkt nicht (im Spiel verstärkt die Drachenhaut), der Volltreffer "
+        "zählt vor dem Item",
+        "Schadensrechner, Tera: Tera-Typ gleich Originaltyp mit Anpassung ergibt ×2,25; Attacken des Tera-Typs unter "
+        "Stärke 60 zählen mit 60. Speckschicht, Hitzeschutz und Trockenheit wirken an der Stelle, an der das Spiel sie einrechnet",
+        "Der Rechenweg im Tooltip zeigt die Formel und die Reihenfolge des gewählten Spiels",
+    ]),
     ("0.56.2", "13.11.2026", [
         "Was fehlt mir noch?: die gewohnten Pokémon-Karten mit Hover-Karte, dazu nur der Weg (wild fangen, entwickeln …); "
         "„Zurück“ auf der Detailseite führt wieder dorthin, ebenso zur Karte, zu Items und Aufträgen",

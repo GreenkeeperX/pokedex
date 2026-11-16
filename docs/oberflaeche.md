@@ -157,8 +157,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   nimmt `vorschlag` (die vier lernbaren mit der höchsten Wertung, Status zuletzt).
 - Items (`itemsView`, `#items`): Daten aus `/api/items?spiel=…`; Suche, Tasche und Art filtern im Browser, höchstens 400
   Zeilen auf einmal. Spalten je Tasche (`COLS`): KP, AP, EP und Statusprobleme bei Medizin und Beeren (`itemFx`, aus Kurztext
-  und Beschreibung des Spiels), Fangfaktor und Bedingung bei Bällen (`BALL`, in Legenden: Arceus `BALL_HISUI` als
-  Richtwerte), die Attacke des Spiels bei Maschinen. Preise farbig (`priceColor`).
+  und Beschreibung des Spiels), Fangfaktor und Bedingung bei Bällen (`BALL`; in Legenden: Arceus die Tabelle des
+  Servers, `hisui_baelle` aus `/api/meta`, gelesen von `ballHisui`), die Attacke des Spiels bei Maschinen. Preise farbig (`priceColor`).
   Bilder unter `itembild/<Nummer>`; unfertige Einträge (`unfertig`) nur mit dem Schalter.
 - Karten (`mgView`), seit 0.56.2: Einstieg je Karte in `MGSTART` (Zahl: Stufen näher als „ganze Karte im Bild“, eine
   Mausrad-Raste ist eine halbe Stufe; als Liste mit der Mitte in Anteilen von links und von oben; Schlüssel `spiel/karte`,

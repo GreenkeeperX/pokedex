@@ -20,6 +20,8 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - nur die Python-Standardbibliothek und reines JavaScript ohne Build, keine Abhängigkeiten,
 - Quellen schonend abrufen: Pausen je Server, Abbruch bei 403 und 429 (Quelle ruht 24 Stunden), ehrliche Kennung,
 - die Härtung des Containers bleibt (read_only, cap_drop ALL, no-new-privileges, Benutzer 10001),
+- keine Formel aus dem Gedächtnis: Quelle und Herleitung nach `docs/formeln.md`, Angenommenes dort unter „Offen“,
+  Vergleichswerte als Test,
 - jede Version mit Tests (`python3 -m unittest tests.test_all`), neuer Nummer und Eintrag in `NEUIGKEITEN` in `app/sources.py`,
   aktueller README und ROADMAP.md,
 - user.db lädt nach jedem Update weiter: nur neue Tabellen und Spalten, nie löschen (`app/db.py`),
@@ -33,7 +35,8 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/importer.py`: baut pokeapi.db aus den CSV-Texten der PokéAPI, Showdown und `extra/` (ohne Netz), Selbstprüfung
 - `app/showdown.py`: liest `pokedex.ts` und `moves.ts` von Pokémon Showdown (ohne Netz)
 - `app/smogon.py`: Nutzungsstatistik von Smogon kürzen (ohne Netz), für „Häufige Gegner“
-- `app/schaden.py`: Schadensrechnung ab Generation 3 (ohne Netz)
+- `app/schaden.py`: Schadensrechnung je Generation und für Legenden: Arceus (ohne Netz); Formeln und Quellen in
+  `docs/formeln.md`, Vergleichswerte in `tests/schaden_referenz.json` (erzeugt mit `tools/schaden_referenz.js`)
 - `app/effort.py`: Effort Levels in Legenden: Arceus (Werte, Kosten bis zum Ziel, ohne Netz)
 - `app/abruf.py`: Abgleich (holen, bauen, Sprites), Zeitplan, Einstellungen, Verbindungstest; siehe `docs/abrufe.md`
 - `app/typen.py`, `app/attacken.py`, `app/team.py`: Rechenlogik ohne Datenbank (Typwirkung je Generation,

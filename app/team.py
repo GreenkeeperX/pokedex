@@ -67,7 +67,7 @@ def evaluate(members, ctx, weights=None):
                 weak += 1
             elif f < 1:
                 res += 1
-            if f >= 4:
+            if f > 2:                      # doppelte Schwäche: ×4, in Legenden: Arceus ×2,5
                 four.append((a, m["name"]))
             if f == 0:
                 immune.append((a, m["name"]))
@@ -208,7 +208,7 @@ def matchup(team, enemy, ctx, tname=str):
         # Mit gewählten Attacken zählt der Eigentyp-Bonus: eine Attacke ohne ihn trifft ein Drittel schwächer
         # (× 1,5 gegen × 1). Maßstab bleibt der Eigentyp, damit die Urteile für Pokémon ohne Attacken gleich bleiben
         own = m.get("angriffstypen") or m["typen"]
-        stab = lambda t: 1.0 if t in m["typen"] or not m.get("angriffstypen") else 1 / 1.5
+        stab = lambda t: 1.0 if t in m["typen"] or not m.get("angriffstypen") else 1 / getattr(ctx.ch, "stab", 1.5)
         dealt, best_t = max(((typen.attack(t, enemy["typen"], ctx.ch) * stab(t), t) for t in own), default=(1.0, None))
         faster = None if enemy.get("init") is None else (m["werte"][5] > enemy["init"])
         sc = dealt / max(taken, 0.125) * (1.15 if faster else 1.0)

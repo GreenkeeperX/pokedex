@@ -163,7 +163,16 @@ def game_of(D, kennung):
     """(Spiel oder None, Generation, Typtabelle)."""
     g = D.game_by.get(kennung or "")
     gen = g["gen"] if g else D.max_gen
-    return g, gen, D.chart(gen)
+    return g, gen, chart_of(D, g, gen)
+
+
+def chart_of(D, g, gen):
+    """Typtabelle des Spiels: die der Generation, in Legenden: Arceus mit eigener Regel (×2,5 und ×0,4, Eigentyp ×1,25)."""
+    if g and g["kennung"] == LA:
+        if ("la", gen) not in D.charts:
+            D.charts[("la", gen)] = typen.for_la(D.chart(gen))
+        return D.charts[("la", gen)]
+    return D.chart(gen)
 
 
 def form_types(D, f, gen):
@@ -243,9 +252,7 @@ def duel(own, target, ch):
     trifft höchstens normal). Tentoxa (Wasser/Gift) gegen Pflanze: Gift trifft ×2, Pflanze trifft Wasser ×2, Gift ×½,
     zusammen ×1: Stufe 1. Gegen Feuer: Wasser trifft ×2, Feuer trifft ×½: Stufe 2."""
     dealt = max(((ch.get(a) or {}).get(target, 1) for a in own), default=1)
-    taken = 1.0
-    for d in own:
-        taken *= (ch.get(target) or {}).get(d, 1)
+    taken = typen.product(ch, target, own)
     if dealt > 1 and taken <= 0.5:
         level = 2
     elif dealt > 1 and taken <= 1:
@@ -692,7 +699,7 @@ def ranked_moves(con, D, f, g, gen, level=None):
     ls, used = learnset(con, D, f, g)
     # 0.53: hat der User TMs abgehakt, zählen reine TM-Attacken ohne vorhandene TM nicht als „jetzt verfügbar“
     missing = _tm_missing(con, used["id"], owned_tms(g["kennung"])) if g and used and used["id"] == g["id"] else {}
-    ch = D.chart(gen)
+    ch = chart_of(D, g, gen)
     mon = {"typen": form_types(D, f, gen), "ang": f["ang"], "spang": f["spang"], "faehigkeit": ability_of(D, f, used)}
     by_move = {}
     for mid, meth, lv, mastery in ls:
@@ -1538,11 +1545,21 @@ def _areas_pokeapi(con, D, g):
 
 
 BALLS = (("Pokéball", 1), ("Superball", 1.5), ("Hyperball", 2))
-# 0.50: Bälle in Legenden: Arceus nach Bulbapedia (Catch rate): [Name, Faktor, Faktor verstärkt, wann verstärkt].
-# Schwer-Bälle verstärkt, wenn das Pokémon dich nicht bemerkt hat oder im Kampf; Feder-Bälle bei fliegenden Pokémon
-HISUI_BALLS = [["Pokéball", 0.75, 0.75, ""], ["Superball", 1.5, 1.5, ""], ["Hyperball", 2.25, 2.25, ""],
-               ["Schwerball", 1, 1.25, "unbemerkt"], ["Zentnerball", 1.75, 2, "unbemerkt"], ["Tonnenball", 2.5, 2.75, "unbemerkt"],
-               ["Federball", 1, 1.25, "fliegt"], ["Flügelball", 1.25, 2, "fliegt"], ["Düsenball", 2, 2.75, "fliegt"]]
+# Bälle in Legenden: Arceus. Seit 0.57.0 die einzige Tabelle: Fangchance, Item-Liste und Oberfläche lesen sie von hier
+# (über /api/meta als "hisui_baelle"); vorher standen drei Tabellen mit verschiedenen Werten nebeneinander.
+# [Name, Faktor, Faktor verstärkt, wann verstärkt, Text für die Item-Liste]; Faktor 0 = fängt immer.
+# Quelle: Bulbapedia „Catch rate“ (Abschnitt Legends: Arceus). Schwer-Bälle verstärkt, wenn das Pokémon dich nicht bemerkt
+# hat oder im Kampf; Feder-Bälle bei fliegenden Pokémon. Federball: Die Tabelle dort nennt 0,5, der Artikel „Feather Ball“
+# ×1 und ×1,25 nur bei bestimmten fliegenden Begegnungen; hier gilt der Artikel zum Ball (siehe docs/formeln.md).
+HISUI_BALLS = [["Pokéball", 0.75, 0.75, "", ""], ["Superball", 1.5, 1.5, "", ""], ["Hyperball", 2.25, 2.25, "", ""],
+               ["Schwerball", 1, 1.25, "unbemerkt", "×1,25, wenn das Pokémon dich nicht bemerkt hat; fliegt kurz"],
+               ["Zentnerball", 1.75, 2, "unbemerkt", "×2, wenn das Pokémon dich nicht bemerkt hat"],
+               ["Tonnenball", 2.5, 2.75, "unbemerkt", "×2,75, wenn das Pokémon dich nicht bemerkt hat"],
+               ["Federball", 1, 1.25, "fliegt", "×1,25 bei bestimmten fliegenden Pokémon; fliegt weit"],
+               ["Flügelball", 1.25, 2, "fliegt", "×2 bei fliegenden Pokémon; fliegt weiter"],
+               ["Düsenball", 2, 2.75, "fliegt", "×2,75 bei fliegenden Pokémon; fliegt am weitesten"],
+               ["Urball", 0, 0, "", "fängt immer"], ["Rätselball", 1, 1, "", ""]]
+HISUI_NO_TABLE = ("Urball", "Rätselball")        # stehen in der Item-Liste, nicht in der Fangtabelle
 
 
 def catch_chance_la(rate, ball=0.75, hp_share=1.0, status=1.0, behavior=2.0, back=1.0, berry=1.0, rank=0, outbreak=False):
@@ -1563,40 +1580,62 @@ def rank_la(level, alpha=False, player=10):
     ⌊(Level − 1)/10 + 1⌋, Alpha +4, höchstens 10."""
     poke = min(10, int((level - 1) / 10 + 1) + (4 if alpha else 0))
     return max(-5, min(0, player - poke + 1))
-# 0.48.7: Bälle in Legenden: Arceus (Faktoren wie in der Item-Liste, BALL_HISUI in app.js); die Schwer-Bälle zusätzlich mit dem
-# Faktor, wenn das Pokémon dich nicht bemerkt hat, der Düsenball bei fliegenden Pokémon. Urball (fängt immer) fehlt
-BALLS_HISUI = (("Pokéball", 1), ("Superball", 1.5), ("Hyperball", 2.25), ("Federball", 1), ("Flügelball", 1.5), ("Düsenball", 2),
-               ("Düsenball, Pokémon fliegt", 2.75), ("Schwerball", 1), ("Schwerball, unbemerkt", 1.25), ("Zentnerball", 1.25),
-               ("Zentnerball, unbemerkt", 2), ("Tonnenball", 2.5), ("Tonnenball, unbemerkt", 2.75))
 GROWTH_DE = {"slow": "langsam", "medium": "mittel", "fast": "schnell", "medium-slow": "mittel-langsam",
              "slow-then-very-fast": "erratisch", "fast-then-very-slow": "fluktuierend"}
 STAT_KEYS = ("kp", "ang", "vert", "spang", "spvert", "init")
 
 
 def catch_chance(rate, ball=1.0, hp_share=1.0, status=1.0, gen=9):
-    """Fangchance in % (ohne kritischen Fang und Level-Boni): a = (3 − 2·KP-Anteil)/3 · Fangrate · Ball · Status.
-    Bis Generation 4 gelingt der Fang mit a/255; ab Generation 5 muss jede Rüttelprobe mit (65536 / (255/a)^0.1875)
-    / 65536 gelingen, in Generation 5 dreimal, ab Generation 6 viermal."""
+    """Fangchance in % (ohne kritischen Fang und Level-Boni): a = (3 − 2·KP-Anteil)/3 · Fangrate · Ball · Status; ab
+    a = 255 fängt der Ball immer. Danach je Generation (Bulbapedia, „Catch rate“):
+    Generation 3 und 4: b = ⌊1048560 / ⌊√⌊√⌊16711680 / a⌋⌋⌋⌋ mit ganzzahligem a (mindestens 1), vier Proben mit b/65536.
+    Generation 5: b = ⌊65536 · (a/255)^0,25⌋, drei Proben. Ab Generation 6: b = ⌊65536 · (a/255)^0,1875⌋, vier Proben.
+    Generation 5 und spätere kommen so beide auf (a/255)^0,75. Bis 0.56.2 rechnete Generation 5 mit dem Exponenten der
+    Generation 6 und nur drei Proben (zu hoch), Generation 3 und 4 mit a/255 ohne die Rundungen des Spiels.
+    Generation 1 und 2 rechnen anders; hier bleibt a/255 als Richtwert (fang_grob)."""
+    return catch_steps(rate, ball, hp_share, status, gen)[0]
+
+
+def catch_steps(rate, ball=1.0, hp_share=1.0, status=1.0, gen=9):
+    """(Chance in %, a, b, Zahl der Proben) für den Rechenweg im Tooltip; b und Proben None, wo es keine Probe gibt
+    (sicherer Fang, kein Fang, Richtwert a/255 bis Generation 2)."""
     a = (3 - 2 * hp_share) / 3 * rate * ball * status
     if a >= 255:
-        return 100.0
+        return 100.0, a, None, None
     if a <= 0:
-        return 0.0
+        return 0.0, a, None, None
+    if gen <= 2:
+        return round(100 * a / 255, 1), a, None, None
     if gen <= 4:
-        return round(100 * a / 255, 1)
-    b = int(65536 / (255 / a) ** 0.1875)
-    return round(100 * (b / 65536) ** (3 if gen == 5 else 4), 1)
+        b, n = catch_b_gen34(a), 4
+    else:
+        b, n = int(65536 * (a / 255) ** (0.25 if gen == 5 else 0.1875)), 3 if gen == 5 else 4
+    return round(100 * (b / 65536) ** n, 1), a, b, n
+
+
+def catch_b_gen34(a):
+    """Wert b der Rüttelprobe in Generation 3 und 4: alle Divisionen und Wurzeln runden ab."""
+    import math
+    a = max(1, int(a))
+    return min(65536, 1048560 // max(1, math.isqrt(math.isqrt(16711680 // a))))
 
 
 def catch_table(rate, gen, balls=BALLS, extra=()):
     """Fangchance je Ball bei vollen KP, bei 1 KP, bei 1 KP mit Paralyse, Gift oder Verbrennung (×1,5) und bei 1 KP mit
-    Schlaf oder Einfrieren (ab Generation 5 ×2,5, sonst ×2)."""
+    Schlaf oder Einfrieren (ab Generation 5 ×2,5, sonst ×2). "b" je Spalte: Wert der Rüttelprobe für den Rechenweg
+    (None ohne Probe), "proben": wie viele Proben gelingen müssen."""
     sleep = sleep_factor(gen)
-    return [{"ball": n, "faktor": f, "voll": catch_chance(rate, f, gen=gen), "rot": catch_chance(rate, f, 0, gen=gen),
-             "status": catch_chance(rate, f, 0, 1.5, gen=gen), "schlaf": catch_chance(rate, f, 0, sleep, gen=gen)} for n, f in balls] + [
-        {"ball": n, "faktor": f, "plus": plus or None, "voll": catch_chance(max(1, rate + plus), f, gen=gen),
-         "rot": catch_chance(max(1, rate + plus), f, 0, gen=gen), "status": catch_chance(max(1, rate + plus), f, 0, 1.5, gen=gen),
-         "schlaf": catch_chance(max(1, rate + plus), f, 0, sleep, gen=gen)} for n, f, plus in extra]
+    out = []
+    for n, f, plus, is_extra in [(n, f, 0, False) for n, f in balls] + [(n, f, plus, True) for n, f, plus in extra]:
+        r = max(1, rate + plus) if is_extra else rate
+        cols = {"voll": catch_steps(r, f, 1.0, 1.0, gen), "rot": catch_steps(r, f, 0, 1.0, gen),
+                "status": catch_steps(r, f, 0, 1.5, gen), "schlaf": catch_steps(r, f, 0, sleep, gen)}
+        row = {"ball": n, "faktor": f, **{k: v[0] for k, v in cols.items()}, "b": {k: v[2] for k, v in cols.items()},
+               "proben": next((v[3] for v in cols.values() if v[3]), None)}
+        if is_extra:
+            row["plus"] = plus or None
+        out.append(row)
+    return out
 
 
 MOON_SPECIES = {30, 33, 35, 39, 300, 517}          # entwickeln sich mit dem Mondstein (Nidorina, Nidorino, Piepi, Pummeluff, Eneco, Somniam)
@@ -1667,7 +1706,7 @@ def _more(con, f, g, gen):
             except Exception:
                 r = None
             out["fangrate_la"] = r[0] if r else None
-            out["fang_hisui"] = HISUI_BALLS
+            out["fang_hisui"] = [b[:4] for b in HISUI_BALLS if b[0] not in HISUI_NO_TABLE]
         extra = ()
         if g and kennung != "legends-arceus":
             try:
@@ -1677,10 +1716,16 @@ def _more(con, f, g, gen):
                 extra = ball_rows(gen, have, f, w[0] / 10 if w and w[0] is not None else None)
             except Exception:
                 extra = ()
-        out["fangen"] = catch_table(sp["capture_rate"], gen, BALLS_HISUI if kennung == "legends-arceus" else BALLS, extra)
+        if kennung == "legends-arceus":       # dieselbe Tabelle und Formel wie die Oberfläche (Sternrang 10, Level bis 10)
+            rate_la = out.get("fangrate_la") or sp["capture_rate"]
+            out["fangen"] = [{"ball": b[0], "faktor": b[1], "voll": catch_chance_la(rate_la, b[1]), "rot": catch_chance_la(rate_la, b[1], 0),
+                              "status": catch_chance_la(rate_la, b[1], 0, 2.0), "schlaf": catch_chance_la(rate_la, b[1], 0, 2.0)}
+                             for b in HISUI_BALLS if b[0] not in HISUI_NO_TABLE]
+        else:
+            out["fangen"] = catch_table(sp["capture_rate"], gen, BALLS, extra)
         out["schlaf_faktor"] = str(sleep_factor(gen)).replace(".", ",")
         out["fang_gen"] = gen
-        out["fang_grob"] = gen <= 2 or kennung.startswith("legends-") or kennung.startswith("lets-go")
+        out["fang_grob"] = gen <= 2 or (kennung.startswith("legends-") and kennung != LA) or kennung.startswith("lets-go")
     if sp["gender_rate"] is not None and gen >= 2:
         gr = sp["gender_rate"]
         out["geschlecht"] = "geschlechtslos" if gr < 0 else f"{100 - gr * 12.5:g} % männlich, {gr * 12.5:g} % weiblich"
@@ -2039,7 +2084,7 @@ def type_chart(p):
     if not D:
         return {}
     g, gen, ch = game_of(D, p.get("spiel"))
-    return {"gen": gen, "typen": [{"id": t, "name": D.tname(t)} for t in ch],
+    return {"gen": gen, "typen": [{"id": t, "name": D.tname(t)} for t in ch], "doppelt": list(ch.doppelt) if ch.doppelt else None,
             "tabelle": {str(a): {str(d): f for d, f in ch[a].items()} for a in ch}}
 
 
@@ -2695,6 +2740,7 @@ def meta():
         return {}
     rel = [f for f in D.forms.values() if f["relevant"] and not f["kampfform"]]
     return {"typen": [{"id": t, "name": n, "kennung": D.type_key.get(t)} for t, n in D.types.items()],
+            "hisui_baelle": HISUI_BALLS,
             "formen": len([f for f in D.forms.values() if f["relevant"]]), "attacken": len(D.moves), "max_gen": D.max_gen,
             "verteilung": {"werte": [sorted(f["werte"][i] for f in rel) for i in range(6)], "summe": sorted(f["summe"] for f in rel)}}
 
@@ -3143,6 +3189,9 @@ def damage_view(body):
     a_el, a_av = six(d.get("el"), 0), six(d.get("avs"), 0)
     if art:
         a_item = a_abil = ""
+    if art == "la":                        # kein Tera, keine Flächenregel der Doppelkämpfe; Wetter rechnen wir dort nicht ein
+        tera = d_tera = None
+        spread, wetter = False, ""
     rows, used = [], []
     vdet = body.get("verteidiger_details") if isinstance(body.get("verteidiger_details"), list) else []
     d_level0 = d_level
@@ -3158,7 +3207,7 @@ def damage_view(body):
         if gen <= 2:
             exp = schaden.EXP_MAX                                    # bis Generation 2: volle DVs und Stat Exp
             m = schaden.modifiers(mv["klasse"], mv["staerke"], tkey, 1.0, None,
-                                  a_item if gen == 2 and a_item in schaden.TYPE_ITEMS else None, wetter, gen)
+                                  a_item if gen == 2 and a_item in schaden.TYPE_ITEMS_GEN2 else None, wetter, gen)
             r = schaden.calc_old(gen, level, mv["staerke"], mv["klasse"], mv["typ"], form_stats(D, f, gen)[0], a_types,
                                  form_stats(D, v, gen)[0], v_types, ch, crit=bool(body.get("krit")),
                                  d_inv=(inv[0] > 0, inv[1] > 0), d_level=d_level, a_exp=exp, item=m["staerke"], weather=m["wetter"])
@@ -3178,10 +3227,15 @@ def damage_view(body):
             dm = typen.ABILITY_DEFENSE.get(d_ab or "", {}).get(mv["typ"], 1.0)
             di_ = schaden.DEF_ITEMS.get(v_item)
             d_mult = di_[1] if di_ and di_[0] in (0, mv["klasse"]) and gen >= 4 and (v_item != "eviolite" or not v["endstufe"]) else 1.0
-            r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], a_base, a_types, form_stats(D, v, gen)[0], v_types, ch,
-                             a_tera=tera, d_tera=d_tera, a_ev=EV_ALL if art else a_ev, a_iv=a_iv, a_nat=nat, d_ev=inv, spread=spread,
-                             crit=bool(body.get("krit")), crit_mult=2.0 if gen <= 5 else 1.5, d_level=d_level, mods=m, d_mod=dm,
-                             d_stats=sv if art else None, a_stat=a_stat if art else None, d_mult=d_mult)
+            if art == "la":                    # 0.57.0: eigene Schadensformel, Eigentyp ×1,25, Wirkung 2,5 und 0,4
+                r = schaden.calc_la(level, mv["staerke"], mv["klasse"], mv["typ"], a_types, ch, v_types, a_stat, sv,
+                                    crit=bool(body.get("krit")))
+            else:
+                r = schaden.calc(level, mv["staerke"], mv["klasse"], mv["typ"], a_base, a_types, form_stats(D, v, gen)[0], v_types, ch,
+                                 a_tera=tera, d_tera=d_tera, a_ev=EV_ALL if art else a_ev, a_iv=a_iv, a_nat=nat, d_ev=inv, spread=spread,
+                                 crit=bool(body.get("krit")), crit_mult=2.0 if gen <= 5 else 1.5, d_level=d_level, mods=m, d_mod=dm,
+                                 d_stats=sv if art else None, a_stat=a_stat if art else None, d_mult=d_mult, gen=gen, d_ability=d_ab,
+                                 tera_min=not mv.get("mehrfach") and (mv.get("prio") or 0) <= 0)
             if d_mult != 1.0:
                 r["item_vert"] = f"{names['item_de'].get(v_item, v_item)}: {di_[2]}"
             if dm != 1.0:
@@ -3198,8 +3252,8 @@ def damage_view(body):
     label = {"faehigkeit": lambda k: names["abil"].get(k, k), "item": lambda k: names["item_de"].get(k, k),
              "wetter": lambda k: {"sonne": "Sonne", "regen": "Regen"}.get(k, k)}
     return {"angreifer": f["name"], "attacke": mv["name"], "typ": mv["typ"], "klasse": mv["klasse"], "staerke": mv["staerke"],
-            "stab": schaden.stab_of(mv["typ"], a_types, tera), "level": level, "level_vert": d_level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "gen": gen,
-            "krit": 2.0 if gen <= 5 else 1.5, "rows": rows, "wetter": wetter, "art": art,
+            "stab": (schaden.LA_STAB if mv["typ"] in a_types else 1.0) if art == "la" else schaden.stab_of(mv["typ"], a_types, tera, a_abil == "adaptability" and gen >= 4) if gen >= 4 else (1.5 if mv["typ"] in a_types else 1.0), "level": level, "level_vert": d_level, "flaeche": spread, "tera": tera, "wesen": nat, "ev": a_ev, "gen": gen,
+            "krit": 1.5 if art == "la" else 2.0 if gen <= 5 else 1.5, "rows": rows, "wetter": wetter, "art": art,
             "el": a_el[ai] if art == "la" else None, "av": a_av[ai] if art == "lgpe" else None,
             "eingerechnet": [f"{label[kind](k)}: {txt}" for kind, k, txt in used]}
 
@@ -3235,21 +3289,46 @@ def _calc_steps(gen, art, mv, m, r, level, d_level, a_base, ai, a_iv, a_ev, a_el
             fx.append(["Eigentyp", r["stab"]])
         fx.append(["Wirkung", r["eff"]])
         fx.append(["Zufall", "217–255 / 255"])
-    else:
-        if m.get("staerke", 1.0) != 1.0:
-            fx.append([f"Stärke {mv['staerke']} → {r['staerke']}", None])
-        if spread:
-            fx.append(["Fläche", 0.75])
-        if m.get("wetter", 1.0) != 1.0:
-            fx.append([{"sonne": "Sonne", "regen": "Regen"}.get(wetter, wetter), m["wetter"]])
+    elif art == "la":                      # Legenden: Arceus: eigene Reihenfolge, keine Items, kein Wetter
         if crit:
-            fx.append(["Volltreffer", 2.0 if gen <= 5 else 1.5])
+            fx.append(["Volltreffer", 1.5])
         fx.append(["Zufall", "0,85–1"])
         if r["stab"] > 1:
             fx.append(["Eigentyp", r["stab"]])
         fx.append(["Wirkung", r["eff"]])
-        if m.get("ende", 1.0) != 1.0:
-            fx.append(["Item", round(m["ende"], 2)])
+    else:
+        wname = {"sonne": "Sonne", "regen": "Regen"}.get(wetter, wetter)
+        eff_typ, d_wo = r.get("eff_typ", r["eff"]), r.get("d_wo")       # Fähigkeit des Ziels: an ihrer Stelle, nicht in der Wirkung
+        if d_wo in ("at", "bp"):
+            fx.append(["Fähigkeit des Ziels, " + ("am Angriffswert" if d_wo == "at" else "an der Stärke"), r["d_faktor"]])
+        if mv["staerke"] != r["staerke"]:
+            fx.append([f"Stärke {mv['staerke']} → {r['staerke']}", None])
+        if spread:
+            fx.append(["Fläche", 0.5 if gen == 3 else 0.75])
+        if m.get("wetter", 1.0) != 1.0:
+            fx.append([wname, m["wetter"]])
+        if gen <= 4:                       # bis Generation 4 kommt das „+ 2“ erst hier, nach Fläche und Wetter
+            fx.append(["+ 2", None])
+        if crit:
+            fx.append(["Volltreffer", 2.0 if gen <= 5 else 1.5])
+        if gen == 3:                       # Generation 3: Eigentyp und Wirkung vor dem Zufall
+            if r["stab"] > 1:
+                fx.append(["Eigentyp", r["stab"]])
+            fx.append(["Wirkung", eff_typ])
+            fx.append(["Zufall", "0,85–1"])
+        else:
+            if gen == 4 and m.get("item") == "life-orb":
+                fx.append(["Leben-Orb", 1.3])
+            fx.append(["Zufall", "0,85–1"])
+            if r["stab"] > 1:
+                fx.append(["Eigentyp", r["stab"]])
+            fx.append(["Wirkung", eff_typ])
+            if gen == 4 and m.get("item") == "expert-belt":
+                fx.append(["Expertengurt", 1.2])
+            elif gen >= 5 and m.get("ende", 1.0) != 1.0:
+                fx.append(["Item", round(m["ende"], 2)])
+            if d_wo == "ende":
+                fx.append(["Fähigkeit des Ziels", r["d_faktor"]])
     return {"a_info": a_info, "d_info": d_info, "faktoren": fx}
 
 

@@ -6,6 +6,7 @@ Attacken als dicts mit kennung, name, typ, ziel, schaden) und lernbar ({Kennung:
 Bewertet werden Rollen, die im Doppel zählen (je eine Attacke oder Fähigkeit reicht), Flächenattacken und ob sie den
 Partner treffen, und die Tempo-Strategie (Rückenwind für schnelle, Bizarroraum für langsame Teams).
 """
+from . import typen
 ROLES = (
     ("schutz", "Schutz", "Schützt sich eine Runde, während der Partner angreift",
      ("protect", "detect", "spiky-shield", "kings-shield", "baneful-bunker", "silk-trap", "burning-bulwark", "obstruct", "max-guard")),
@@ -32,10 +33,7 @@ SLOW, FAST = 60, 95               # Basis-Initiative: bis SLOW profitiert vom Bi
 
 
 def _factor(ch, atk, types):
-    f = 1.0
-    for t in types:
-        f *= ch.get(atk, {}).get(t, 1.0)
-    return f
+    return typen.product(ch, atk, types)
 
 
 def evaluate(ms, ch, type_key):
