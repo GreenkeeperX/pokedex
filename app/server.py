@@ -1,6 +1,7 @@
 """Kleiner Webserver: liefert die Oberfläche, die Sprites und eine JSON-Schnittstelle. Wie im VR-Navigator."""
 import datetime
 import gzip
+import hashlib
 import io
 import ipaddress
 import json
@@ -9,12 +10,11 @@ import re
 import sys
 import threading
 import time
-import traceback
 import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, mapgenie, sources, store
+from . import abfragen, abruf, altissimo, aufgaben, db, fehler, mapgenie, sources, store
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -66,7 +66,7 @@ def start_diag():
         try:
             lines, error = abruf.diagnose(proben, DIAG["stand"]), ""
         except Exception as e:
-            traceback.print_exc()
+            fehler.melden(e, "Verbindungstest", "server", immer=True)
             lines, error = None, type(e).__name__
         with _diag_lock:
             DIAG.update(running=False, lines=lines, error=error, proben=proben, dauer=round(time.monotonic() - t0))
@@ -461,10 +461,74 @@ def decide(body):
 
 
 def meta():
-    st = abruf.status()
-    return {"app": "pokedex", "version": sources.VERSION, "neu": sources.NEUIGKEITEN, "has_data": db.has_data(), **abfragen.meta(),
-            "spiele": abfragen.games(), "einstellungen": abruf.load_settings(),
-            "abgleich": {k: st.get(k) for k in ("running", "started", "finished", "ok", "built", "step")}}
+    """Grunddaten für die Oberfläche, einmal beim Laden und nach einem Abgleich. Seit 0.58.0 ohne die Versionsgeschichte
+    (vorher „neu“: rund 50 KB bei jeder Abfrage); die holt die Oberfläche bei Bedarf über /api/neuigkeiten."""
+    return {"app": "pokedex", "version": sources.VERSION, "has_data": db.has_data(), **abfragen.meta(),
+            "spiele": abfragen.games(), "einstellungen": abruf.load_settings(), "abgleich": abruf.brief()}
+
+
+def stand():
+    """Schlanker Stand für die regelmäßige Abfrage während eines Abgleichs (/api/stand): Version, ob es Daten gibt,
+    und der Lauf in wenigen Feldern. Wenige hundert Byte statt der ganzen Grunddaten."""
+    return {"version": sources.VERSION, "has_data": db.has_data(), "abgleich": abruf.brief()}
+
+
+def neuigkeiten(version=None):
+    """Versionsgeschichte [[Version, Datum, [Punkte]]]; mit version nur dieser Eintrag (für „Neu in Version …“)."""
+    return [n for n in sources.NEUIGKEITEN if version is None or n[0] == version]
+
+
+_STATIC = {}
+_STATIC_LOCK = threading.Lock()
+
+
+def _etag(*parts):
+    h = hashlib.sha256()
+    for x in parts:
+        h.update(x if isinstance(x, bytes) else str(x).encode("utf-8"))
+        h.update(b"\0")
+    return '"' + h.hexdigest()[:20] + '"'
+
+
+def static_file(rel):
+    """Eine Datei der Oberfläche: (Inhalt, gepackt, ETag). Einmal gelesen und gepackt, solange die Datei sich nicht
+    ändert (Änderungszeit und Größe); vorher las und packte der Server sie bei jedem Abruf neu."""
+    path = os.path.join(STATIC, rel)
+    stt = os.stat(path)
+    key = (stt.st_mtime_ns, stt.st_size)
+    hit = _STATIC.get(rel)
+    if hit and hit[0] == key:
+        return hit[1:]
+    with _STATIC_LOCK:
+        with open(path, "rb") as f:
+            body = f.read()
+        got = (key, body, gzip.compress(body, compresslevel=9), _etag(body))
+        _STATIC[rel] = got
+        return got[1:]
+
+
+def static_tag(rel):
+    """Kennung für die Adresse einer Datei der Oberfläche: Version und Prüfsumme des Inhalts. Die Adresse ändert sich
+    genau dann, wenn sich der Inhalt ändert; deshalb darf der Browser sie unbegrenzt behalten."""
+    return f"{sources.VERSION}-{static_file(rel)[2][1:11]}"
+
+
+def index_page():
+    """index.html mit den Adressen von CSS und JS samt Kennung (static_tag): (Inhalt, gepackt, ETag)."""
+    body, _, _ = static_file("index.html")
+    tags = {rel: static_tag(rel) for rel in ("style.css", "js/app.js")}
+    key = ("index", body, tuple(tags.values()))
+    hit = _STATIC.get("/")
+    if hit and hit[0] == key:
+        return hit[1:]
+    page = body.decode("utf-8").replace('href="style.css"', f'href="style.css?v={tags["style.css"]}"').replace(
+        'src="js/app.js"', f'src="js/app.js?v={tags["js/app.js"]}"').encode("utf-8")
+    got = (key, page, gzip.compress(page, compresslevel=9), _etag(page))
+    _STATIC["/"] = got
+    return got[1:]
+
+
+IMMUTABLE = "public, max-age=31536000, immutable"
 
 
 # ------------------------------------------------------------------ HTTP
@@ -505,7 +569,7 @@ def _prewarm(d):
                 print(f"Karte bereit: {d['spiel']}/{m.get('slug')} in {time.time() - t0:.1f} s, "
                       f"{len(body) // 1024} KB", file=sys.stderr, flush=True)
             except Exception as e:
-                print("Karte vorbereiten:", e, file=sys.stderr)
+                fehler.melden(e, f"Karte vorbereiten: {m.get('slug')}", "karte")
     threading.Thread(target=run, daemon=True, name="karten-vorbereiten").start()
 
 
@@ -558,24 +622,51 @@ def _map_body(m, spiel, am):
         return body
 
 
-WARM_GAMES = ("legends-arceus",)    # 0.52: diese Karten führt der Server schon beim Start zusammen (Arceus ist das Startspiel)
+NEED_FILE = "bedarf.json"           # {"karten": Spiel}: für welches Spiel zuletzt Karten geöffnet wurden
+_NEED = {}
+
+
+def map_need(spiel=None):
+    """0.58.1: Vorbereiten nach Bedarf. Mit spiel: merken, dass für dieses Spiel Karten geöffnet wurden (geschrieben wird
+    nur, wenn es ein anderes ist als zuletzt). Ohne: das zuletzt gemerkte Spiel oder "", auch nach einem Neustart."""
+    if _NEED.get("dir") != store.DATA_DIR:
+        got = store.load_json(NEED_FILE, {}).get("karten")
+        _NEED.update(dir=store.DATA_DIR, karten=got if isinstance(got, str) and re.fullmatch(r"[a-z0-9-]{1,40}", got) else "")
+    if spiel and spiel != _NEED["karten"] and re.fullmatch(r"[a-z0-9-]{1,40}", spiel):
+        _NEED["karten"] = spiel
+        try:
+            store.save_json(NEED_FILE, {"karten": spiel})
+        except OSError as e:
+            fehler.melden(e, "Bedarf merken", "server")
+    return _NEED["karten"]
+
+
+def _warm_once():
+    """Die Karten des Spiels vorbereiten, für das zuletzt Karten geöffnet wurden. Gibt das Spiel zurück oder ""."""
+    spiel = map_need()
+    if not spiel:
+        return ""
+    try:
+        d = abruf.mg_maps(spiel)
+        if d:
+            _prewarm(d)
+            return spiel
+    except Exception as e:
+        fehler.melden(e, f"Karten vorbereiten: {spiel}", "karte")
+    return ""
 
 
 def _warm_loop():
-    """0.52: nach dem Start und nach jedem Abgleich (neuer Stand der Karten) die Karten von WARM_GAMES vorbereiten,
-    damit das erste Öffnen nicht auf das Zusammenführen wartet. Prüft alle 5 Minuten; ist alles bereit, kostet das nichts."""
+    """Nach dem Start und nach jedem Abgleich (neuer Stand der Karten) die Karten vorbereiten, damit das erste Öffnen
+    nicht auf das Zusammenführen wartet. Seit 0.58.1 nach Bedarf: nur für das Spiel, dessen Karten zuletzt geöffnet
+    wurden (map_need), statt immer für Legenden: Arceus; ohne Bedarf wird nichts vorbereitet. Prüft alle 5 Minuten;
+    ist alles bereit, kostet das nichts."""
     try:
         abfragen.data()
-    except Exception:
-        pass
+    except Exception as e:
+        fehler.melden(e, "Spieldaten laden", "server", immer=True)
     while True:
-        for spiel in WARM_GAMES:
-            try:
-                d = abruf.mg_maps(spiel)
-                if d:
-                    _prewarm(d)
-            except Exception as e:
-                print("Karten vorbereiten:", e, file=sys.stderr)
+        _warm_once()
         time.sleep(300)
 
 
@@ -583,6 +674,11 @@ def _no_constant(name):
     """0.56.1: Infinity und NaN sind kein JSON. Python läse sie trotzdem, speicherte sie (etwa als Gewicht eines Teams)
     und schriebe sie wieder aus; der Browser kann die Antwort dann nicht mehr lesen."""
     raise ValueError(f"Zahl erwartet, nicht {name}")
+
+
+# Kopfzeile einer Antwort, bei deren Berechnung etwas gescheitert ist: JSON [[Stelle, Art], …], höchstens fünf.
+# Die Antwort kommt trotzdem (mit dem, was lesbar war); die Oberfläche zeigt in der Ansicht einen Hinweis
+FEHLER_KOPF = "X-Pokedex-Fehler"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -593,11 +689,35 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
+    def _not_modified(self, etag):
+        """Hat der Browser genau diesen Stand schon (If-None-Match)?"""
+        got = self.headers.get("If-None-Match") or ""
+        return bool(etag) and etag in [x.strip().removeprefix("W/") for x in got.split(",")]
+
+    def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None, gz=None):
+        """Antwort senden. extra: weitere Kopfzeilen; mit „ETag“ und passender Anfrage geht 304 ohne Inhalt.
+        gz: der Inhalt schon gepackt (Dateien der Oberfläche)."""
+        extra = dict(extra or {})
+        got = fehler.ende()
+        if got:                           # Teile der Antwort fehlen: der Browser erfährt es und behält diese Fassung nicht
+            extra.pop("ETag", None)
+            extra["Cache-Control"] = "no-store"
+            extra[FEHLER_KOPF] = json.dumps([[g["wo"], g["art"]] for g in got])
+        if code == 200 and self._not_modified(extra.get("ETag")):
+            self.send_response(304)
+            self.send_header("ETag", extra["ETag"])
+            self.send_header("Cache-Control", extra.get("Cache-Control", "no-cache"))
+            self.send_header("Vary", "Accept-Encoding")
+            if self.close_connection:
+                self.send_header("Connection", "close")
+            self.end_headers()
+            return
         if not isinstance(body, bytes):
             body = json.dumps(body, ensure_ascii=False).encode("utf-8")
         packed = len(body) > 20_000 and ctype.startswith(("application/json", "text/")) and "gzip" in (self.headers.get("Accept-Encoding") or "")
-        if packed:
+        if packed and gz is not None:
+            body = gz
+        elif packed:
             hit = _GZ.get(id(body))
             if hit and hit[0] is body:
                 body = hit[1]
@@ -614,13 +734,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Encoding", "gzip")
             self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", (extra or {}).pop("Cache-Control", "no-store"))
+        self.send_header("Cache-Control", extra.pop("Cache-Control", "no-store"))
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         if self.close_connection:
             self.send_header("Connection", "close")
-        for k, v in (extra or {}).items():
+        for k, v in extra.items():
             self.send_header(k, v)
         self.end_headers()
         if self.command != "HEAD":
@@ -646,8 +766,23 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def _file(self, path, cache="no-cache"):
+        """Eine Datei aus dem Datenordner (Bild, Kachel, Ton). ETag aus Änderungszeit und Größe: Nach Ablauf der
+        Frist fragt der Browser nach und bekommt 304, ohne dass der Server die Datei liest."""
+        stt = os.stat(path)
+        extra = {"Cache-Control": cache, "ETag": f'"{stt.st_mtime_ns:x}-{stt.st_size:x}"'}
+        ctype = TYPES.get(os.path.splitext(path)[1], "application/octet-stream")
+        if self._not_modified(extra["ETag"]):
+            return self._send(200, b"", ctype, extra)
         with open(path, "rb") as f:
-            self._send(200, f.read(), TYPES.get(os.path.splitext(path)[1], "application/octet-stream"), {"Cache-Control": cache})
+            self._send(200, f.read(), ctype, extra)
+
+    def _static(self, rel, q):
+        """Datei der Oberfläche: einmal gelesen und gepackt. Trägt die Adresse die Kennung des jetzigen Inhalts
+        (?v=…, von index.html gesetzt), darf der Browser sie unbegrenzt behalten; sonst fragt er mit ETag nach."""
+        body, gz, etag = static_file(rel)
+        fresh = q.get("v") == static_tag(rel)
+        self._send(200, body, TYPES.get(os.path.splitext(rel)[1], "application/octet-stream"),
+                   {"Cache-Control": IMMUTABLE if fresh else "no-cache", "ETag": etag}, gz=gz)
 
     def do_HEAD(self):
         self.do_GET()
@@ -658,15 +793,15 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in urllib.parse.parse_qs(split.query).items()}
         if self._foreign():
             return
+        fehler.beginne()
         try:
             if path in ("/", "/index.html"):
-                # 0.48.6: CSS und JS mit der Version in der Adresse, damit der Browser nach einem Update nie alte Dateien nimmt
-                with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
-                    page = f.read().replace('href="style.css"', f'href="style.css?v={sources.VERSION}"').replace(
-                        'src="js/app.js"', f'src="js/app.js?v={sources.VERSION}"')
-                self._send(200, page.encode("utf-8"), "text/html; charset=utf-8", {"Cache-Control": "no-cache"})
+                # 0.48.6: CSS und JS mit der Version in der Adresse, damit der Browser nach einem Update nie alte Dateien nimmt;
+                # 0.58.0: dazu die Prüfsumme des Inhalts, die Seite selbst mit ETag (304, wenn sich nichts geändert hat)
+                page, gz, etag = index_page()
+                self._send(200, page, "text/html; charset=utf-8", {"Cache-Control": "no-cache", "ETag": etag}, gz=gz)
             elif re.fullmatch(r"/(style\.css|icon\.svg|js/[a-z-]+\.js)", path) and os.path.isfile(os.path.join(STATIC, path[1:])):
-                self._file(os.path.join(STATIC, path[1:]))
+                self._static(path[1:], q)
             elif m := re.fullmatch(r"/(sprites|artwork)/(\d{1,6})\.png", path):
                 # Artwork fehlt (noch nicht geladen): das kleine Sprite statt dessen
                 for kind in ((m.group(1), "sprites") if m.group(1) == "artwork" else ("sprites",)):
@@ -727,13 +862,19 @@ class Handler(BaseHTTPRequestHandler):
                 if d and q.get("karte"):
                     m = next((m for m in d["karten"] if m["slug"] == q["karte"]), None)
                     if m:
-                        self._send(200, _map_body(m, d["spiel"], d["am"]))
+                        # dieselbe Karte im selben Stand: 304 statt mehrerer hundert KB (Schlüssel wie der Kartencache)
+                        tag = _etag("karte", d["spiel"], m.get("slug"), m.get("id"), d["am"], abfragen._stamp(), sources.VERSION)
+                        if self._not_modified(tag):
+                            self._send(200, b"", extra={"Cache-Control": "no-cache", "ETag": tag})
+                        else:
+                            self._send(200, _map_body(m, d["spiel"], d["am"]), extra={"Cache-Control": "no-cache", "ETag": tag})
                     else:
                         self._send(404, {"error": "keine Karte"})
                 else:
                     self._send(200, {"karten": [{"slug": m["slug"], "titel": m["titel"], "orte": len(m["orte"])} for m in (d or {}).get("karten", [])],
                                      "kacheln": abruf.mg_status()})
                     if d:
+                        map_need(q.get("spiel"))        # der Bedarf: nach dem nächsten Start bereitet der Server diese Karten vor
                         _prewarm(d)
             elif path == "/api/fehlt":
                 d = abfragen.missing(q)
@@ -748,6 +889,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, "version": sources.VERSION})
             elif path == "/api/meta":
                 self._send(200, meta())
+            elif path == "/api/stand":
+                self._send(200, stand())
+            elif path == "/api/neuigkeiten":
+                # ändert sich nur mit der Version: der Browser fragt mit ETag nach und bekommt 304
+                self._send(200, neuigkeiten(q.get("version")), extra={"Cache-Control": "no-cache", "ETag": _etag("neu", sources.VERSION, q.get("version"))})
             elif path == "/api/pokemon":
                 self._send(200, abfragen.search(q))
             elif m := re.fullmatch(r"/api/pokemon/(\d{1,6})/attacken", path):
@@ -810,6 +956,8 @@ class Handler(BaseHTTPRequestHandler):
                 with _diag_lock:
                     body = {"app": "pokedex", "version": sources.VERSION, "proben": dict(DIAG["proben"])}
                 self._send(200, body, extra={"Content-Disposition": f'attachment; filename="pokedex-proben-{_now()[:10]}.json"'})
+            elif path == "/api/fehler":
+                self._send(200, {"fehler": fehler.liste(), "max": fehler.MAX})
             elif path == "/api/pruefung":
                 self._send(200, abfragen.pruefung())
             else:
@@ -847,6 +995,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/einstellungen": abruf.save_settings,
         "/api/abgleich": lambda b: {"started": abruf.start(force=bool(b.get("neu")))},
         "/api/diag": lambda b: {"started": start_diag()},
+        "/api/fehler/leeren": lambda b: fehler.leeren(),
         "/api/kacheln/umwandeln": abruf.tile_upload,
     }
     # größere Rümpfe: Datensicherung, Kacheln aus dem Browser (je Anfrage einige, als Base64)
@@ -856,6 +1005,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.urlsplit(self.path).path
         if self._foreign():
             return
+        fehler.beginne()
         try:
             fn = self.POST.get(path)
             if not fn:
@@ -870,8 +1020,8 @@ class Handler(BaseHTTPRequestHandler):
             self._fail(path, e)
 
     def _fail(self, path, e):
-        print(f"Fehler bei {path}:", file=sys.stderr)
-        traceback.print_exception(e, file=sys.stderr)
+        """Eine Anfrage ist gescheitert: ins Fehlerregister (Traceback einmal je Stelle und Start im Protokoll), Antwort 500."""
+        fehler.melden(e, re.sub(r"\d+", "N", path)[:80], "server", immer=True)
         if self.command == "POST":
             self.close_connection = True
         self._send(500, {"error": f"Interner Fehler ({type(e).__name__}), Einzelheiten im Protokoll des Containers"})

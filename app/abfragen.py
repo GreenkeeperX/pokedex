@@ -10,7 +10,7 @@ import re
 import sqlite3
 import threading
 
-from . import altissimo, attacken, db, importer, mapgenie, showdown, store, team, typen
+from . import altissimo, attacken, db, fehler, importer, mapgenie, showdown, store, team, typen
 
 LA = "legends-arceus"          # Legenden: Arceus kennt keine Fähigkeiten und eigene Attackenwerte
 NO_ABILITIES = {LA, "lets-go-pikachu-lets-go-eevee"}
@@ -31,7 +31,8 @@ def _names(con, table, key, col="name", lang_col="local_language_id"):
     out = {}
     try:
         rows = con.execute(f'SELECT "{key}", {lang_col}, "{col}" FROM "{table}" WHERE {lang_col} IN (6, 9)').fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return out
     for k, lang, n in rows:
         if n and (lang == 6 or k not in out):
@@ -49,7 +50,8 @@ class Data:
         self.eff = [tuple(r) for r in con.execute("SELECT damage_type_id, target_type_id, damage_factor FROM type_efficacy")]
         try:
             self.past = [tuple(r) for r in con.execute("SELECT damage_type_id, target_type_id, damage_factor, generation_id FROM type_efficacy_past")]
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             self.past = []
         self.games = [dict(r) for r in con.execute("SELECT id, kennung, name, gen, reihenfolge FROM spiel ORDER BY reihenfolge")]
         self.game_by = {g["kennung"]: g for g in self.games}
@@ -64,8 +66,8 @@ class Data:
         try:
             for fid, g, *vals in con.execute("SELECT form, gen, kp, ang, vert, spang, spvert, init FROM werte_alt"):
                 self.stats_past.setdefault(fid, {})[g] = vals
-        except Exception:
-            pass
+        except Exception as err:
+            fehler.melden(err)
         self.abilities = {r[0]: (r[1], r[2]) for r in con.execute(
             "SELECT a.id, a.identifier, COALESCE(n.name, a.identifier) FROM abilities a "
             "LEFT JOIN ability_names n ON n.ability_id = a.id AND n.local_language_id = 6")}
@@ -85,12 +87,13 @@ class Data:
         try:
             for pid, gen, tid, slot in con.execute("SELECT pokemon_id, generation_id, type_id, slot FROM pokemon_types_past ORDER BY slot"):
                 self.types_past.setdefault(pid, {}).setdefault(gen, []).append(tid)
-        except Exception:
-            pass
+        except Exception as err:
+            fehler.melden(err)
         self.in_game, self.in_dex = {}, {}
         try:
             sf = con.execute("SELECT spiel, form, nr, dex, dexk FROM spiel_form").fetchall()
-        except Exception:                      # Datenbank vor 0.43: ohne Dex je Nummer
+        except Exception as err:                      # Datenbank vor 0.43: ohne Dex je Nummer
+            fehler.melden(err)
             sf = [(*r, 0, "") for r in con.execute("SELECT spiel, form, nr FROM spiel_form")]
         for sp, fid, nr, di, dk in sf:
             self.in_game.setdefault(sp, {})[fid] = nr
@@ -102,8 +105,8 @@ class Data:
             for sp, gebiet, nr, fid in con.execute("SELECT spiel, gebiet, MIN(gebiet_nr), form FROM fundort WHERE art IN (0, 1, 2) "
                                                    "GROUP BY spiel, gebiet, form ORDER BY 3"):
                 self.areas.setdefault(sp, {}).setdefault(gebiet, set()).add(fid)
-        except Exception:
-            pass
+        except Exception as err:
+            fehler.melden(err)
         self.methods = _names(con, "pokemon_move_method_prose", "pokemon_move_method_id")
         self.method_key = dict(con.execute("SELECT id, identifier FROM pokemon_move_methods"))
         # TM-Nummern je Spiel und Attacke: tm012 → TM012, hm03 → VM03, tr05 → TP05
@@ -113,22 +116,22 @@ class Data:
             wide = {vg for vg, _, ident in rows if re.fullmatch(r"tm\d{3,}", ident or "")}
             for vg, mid, ident in rows:
                 self.machines[(vg, mid)] = machine_label(ident, 3 if vg in wide else 2)
-        except Exception:
-            pass
+        except Exception as err:
+            fehler.melden(err)
         # Attackenwerte je Spiel aus dem PokéWiki (Legenden: Arceus mit Kraft- und Tempostil)
         self.game_moves = {}
         try:
             for r in con.execute("SELECT * FROM attacke_spiel"):
                 self.game_moves[(r["spiel"], r["attacke"])] = dict(r)
-        except Exception:
-            pass
+        except Exception as err:
+            fehler.melden(err)
         # Deutsche Attackentexte je Spiel (PokéAPI, ergänzt aus dem PokéWiki): {Attacke: {Spiel: [(Edition, Text, Quelle)]}}
         self.move_texts = {}
         try:
             for mid, sp, ed, txt, src in con.execute("SELECT id, spiel, edition, text, quelle FROM spieltext WHERE art = 'attacken'"):
                 self.move_texts.setdefault(mid, {}).setdefault(sp, []).append((ed, txt, src))
-        except Exception:
-            pass
+        except Exception as err:
+            fehler.melden(err)
         self.charts = {}
         self.max_gen = max((g["gen"] for g in self.games), default=9)
 
@@ -277,7 +280,8 @@ def own_marks(table, spiel):
     con = db.user()
     try:
         return {r[0] for r in con.execute(f"SELECT form FROM {table} WHERE spiel = ?", (str(spiel or ""),))}
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return set()
     finally:
         con.close()
@@ -422,8 +426,8 @@ def text_rows(con, art, oid):
         for sp, ed, txt, src in con.execute("SELECT spiel, edition, text, quelle FROM spieltext WHERE art = ? AND id = ? "
                                             "ORDER BY rowid", (art, oid)):
             per.setdefault(sp, []).append((ed, txt, src))
-    except Exception:
-        pass
+    except Exception as err:
+        fehler.melden(err)
     return per
 
 
@@ -545,7 +549,8 @@ def proven_sets(con, D, f, g, gen, rows):
                                 (name, gen)).fetchall()
             if found:
                 break
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return [], None
     if not found:
         return [], None
@@ -572,12 +577,14 @@ def owned_tms(spiel):
     """0.53: Maschinen (Item-Ids), die der User im Spiel als vorhanden abgehakt hat (user.db gefunden, Karte „tm“)."""
     try:
         u = db.user()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return set()
     try:
         return {int(o) for (o,) in u.execute("SELECT objekt FROM gefunden WHERE spiel = ? AND karte = 'tm'", (str(spiel or ""),))
                 if str(o).isdigit()}
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return set()
     finally:
         u.close()
@@ -595,7 +602,8 @@ def _tm_missing(con, vg, owned):
                 have.add(mid)
             else:
                 out.setdefault(mid, machine_label(name, 3 if vg >= 20 else 2) or name)
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return {}
     return {mid: label for mid, label in out.items() if mid not in have}
 
@@ -643,7 +651,8 @@ def collectibles(maps, load, got):
     for m in (maps or {}).get("karten", []):
         try:
             d = load(m)
-        except Exception:
+        except Exception as err:
+            fehler.melden(err, f"Karte {m.get('slug')}", "karte")
             continue
         cats = {}
         for G in d.get("gruppen", []):
@@ -682,7 +691,8 @@ def tm_places(maps, load=None):
     for m in maps["karten"]:
         try:
             r = load(m) if load else mg_map(m, maps["spiel"], maps["am"])
-        except Exception:
+        except Exception as err:
+            fehler.melden(err, f"Karte {m.get('slug')}", "karte")
             continue
         for p in r.get("punkte") or []:
             k = tm_key(p.get("name")) or tm_key(p.get("en")) or tm_key(p.get("text"))
@@ -943,15 +953,16 @@ def shiny_locks(spiel):
     out = {"tausch": [], "nie": [], "gen1": False}
     try:
         con = db.game()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return out
     try:
         g = con.execute("SELECT gen FROM spiel WHERE kennung = ?", (str(spiel or ""),)).fetchone()
         out["gen1"] = bool(g and g[0] == 1)
         for form, stufe in con.execute("SELECT form, stufe FROM shinysperre WHERE spiel = ?", (str(spiel or ""),)):
             out.setdefault(stufe, []).append(form)
-    except Exception:
-        pass
+    except Exception as err:
+        fehler.melden(err)
     finally:
         con.close()
     return out
@@ -969,15 +980,16 @@ def alpha_possible(spiel):
     ids = set()
     try:
         con = db.game()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return []
     try:
         for sql in ("SELECT DISTINCT form FROM fundort WHERE spiel = ? AND alpha > 0",
                     "SELECT DISTINCT form FROM spawn WHERE spiel = ? AND alpha = 1"):
             try:
                 ids |= {r[0] for r in con.execute(sql, (spiel,))}
-            except Exception:
-                pass
+            except Exception as err:
+                fehler.melden(err)
     finally:
         con.close()
     _ALPHA.clear()
@@ -990,7 +1002,8 @@ def spawn_summary(con, spiel, pid):
     als Text, dazu Höchstwert und Zahl der Punkte."""
     try:
         rows = con.execute("SELECT gebiet, karte, name, alpha, anteile FROM spawn WHERE spiel = ? AND form = ?", (spiel, pid)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return {}
     has_normal = {r["gebiet"] for r in rows if not r["alpha"]}
     out = {}
@@ -1024,14 +1037,16 @@ def map_data(karte, p):
             rows = con.execute("SELECT name, form, alpha, anteile FROM spawn WHERE spiel = ? AND karte = ?", (spiel, karte)).fetchall()
             maps = [dict(r) for r in con.execute("SELECT karte, gebiet, COUNT(*) n FROM spawnpunkt WHERE spiel = ? GROUP BY karte "
                                                   "ORDER BY MIN(rowid)", (spiel,))]
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             return None
         try:
             objs = con.execute("SELECT art, nr, x, z, menge, items, gebiet FROM kartenobjekt WHERE spiel = ? AND karte = ?",
                                (spiel, karte)).fetchall()
             if con.execute("SELECT 1 FROM kartenobjekt WHERE spiel = ? AND karte = ? LIMIT 1", (spiel, altissimo.VILLAGE)).fetchone():
                 maps.insert(0, {"karte": altissimo.VILLAGE, "gebiet": altissimo.VILLAGE_NAME, "n": 0})
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             objs = []
     finally:
         con.close()
@@ -1081,7 +1096,8 @@ def mg_overlay(m, stamp=None):
         try:
             karten = [r[0] for r in con.execute("SELECT DISTINCT karte FROM kartenobjekt WHERE spiel = ? AND art IN ('irrlicht', 'icognito')",
                                                 ("legends-arceus",))]
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             karten = []
     finally:
         con.close()
@@ -1128,8 +1144,8 @@ def mg_names():
                   "a.pokemon_species_id AND b.local_language_id = 6 WHERE a.local_language_id = 9"):
             try:
                 out.update({e: g for e, g in con.execute(q) if e and g})
-            except Exception:
-                pass
+            except Exception as err:
+                fehler.melden(err)
     finally:
         con.close()
     _MERGED["names"] = (key, out)
@@ -1154,12 +1170,12 @@ def _pic_names():
     try:
         try:
             mons = {n: i for i, n in con.execute("SELECT pokemon_species_id, name FROM pokemon_species_names WHERE local_language_id = 6") if n}
-        except Exception:
-            pass
+        except Exception as err:
+            fehler.melden(err)
         try:
             items = {n: i for i, n in con.execute("SELECT id, name FROM item WHERE name IS NOT NULL") if n and len(n) >= 4}
-        except Exception:
-            pass
+        except Exception as err:
+            fehler.melden(err)
     finally:
         con.close()
     out = (mons, names_rx(mons, True), items, names_rx(items))
@@ -1280,7 +1296,8 @@ def _pokearth_mons(r, spiel):
         en, de = {}, {}
         for k, lang, n in con.execute("SELECT location_id, local_language_id, name FROM location_names WHERE local_language_id IN (6, 9)"):
             (de if lang == 6 else en).setdefault(k, n)
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return
     finally:
         con.close()
@@ -1357,7 +1374,8 @@ def _enc_pkhex(con, g, pid):
                            (g["kennung"], pid)).fetchall()
         if not rows and not con.execute("SELECT 1 FROM fundort WHERE spiel = ? LIMIT 1", (g["kennung"],)).fetchone():
             return None
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return None
     groups = {}
     for r in rows:
@@ -1400,7 +1418,8 @@ def _enc(con, g, pid):
                LEFT JOIN encounter_condition_value_map m ON m.encounter_id = e.id
                WHERE e.pokemon_id = ? AND v.version_group_id = ?
                GROUP BY e.location_area_id, es.encounter_method_id ORDER BY l.id""", (pid, g["id"])).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return []
     if not rows:
         return []
@@ -1422,7 +1441,8 @@ def _enc(con, g, pid):
     return out
 
 
-_AREAS = {}
+_AREAS = {}                 # {(Spiel, Stand der Datenbank): Gebiete}, je Spiel getrennt (seit 0.58.0; vorher nur das letzte Spiel)
+AREAS_MAX = 6               # so viele Spiele bleiben bereit; das am längsten nicht gefragte fällt zuerst weg
 
 
 # 0.54: Begegnungsarten der PokéAPI, die es nur englisch gibt (ab Nr. 18), auf Deutsch
@@ -1471,8 +1491,10 @@ def areas(p):
         key = (g["kennung"], os.path.getmtime(db.pokeapi_path()))
     except OSError:
         return None
-    if key in _AREAS:
-        return _AREAS[key]
+    hit = _AREAS.pop(key, None)
+    if hit is not None:
+        _AREAS[key] = hit                       # zuletzt gefragt: ans Ende
+        return hit
     con = db.game()
     try:
         out = _areas_pkhex(con, D, g)
@@ -1483,7 +1505,10 @@ def areas(p):
         con.close()
     res = {"spiel": g["kennung"], "quelle": quelle,
            "gebiete": [{"ort": k, "mons": sorted(v, key=lambda m: (m["methode"], -(m["anteil"] or 0), m["name"]))} for k, v in out.items()]}
-    _AREAS.clear()
+    for k in [k for k in _AREAS if k[1] != key[1]]:      # neue Datenbank: alles Alte weg
+        _AREAS.pop(k, None)
+    while len(_AREAS) >= AREAS_MAX:
+        _AREAS.pop(next(iter(_AREAS)), None)
     _AREAS[key] = res
     return res
 
@@ -1492,7 +1517,8 @@ def _areas_pkhex(con, D, g):
     try:
         rows = con.execute("SELECT form, gebiet, gebiet_nr, art, MIN(min) lo, MAX(max) hi, MAX(alpha) al FROM fundort WHERE spiel = ? "
                            "GROUP BY gebiet, form, art ORDER BY MIN(gebiet_nr), gebiet", (g["kennung"],)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return None
     if not rows:
         return None
@@ -1519,7 +1545,8 @@ def _areas_pokeapi(con, D, g):
                LEFT JOIN encounter_condition_value_map m ON m.encounter_id = e.id
                WHERE v.version_group_id = ?
                GROUP BY e.pokemon_id, e.location_area_id, es.encounter_method_id ORDER BY l.id, la.id""", (g["id"],)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return {}
     locs = _names(con, "location_names", "location_id")
     area_n = _names(con, "location_area_prose", "location_area_id")
@@ -1693,7 +1720,8 @@ def _more(con, f, g, gen):
     try:
         sp = con.execute("SELECT capture_rate, gender_rate, hatch_counter, base_happiness, growth_rate_id FROM pokemon_species "
                          "WHERE id = ?", (f["art"],)).fetchone()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return out
     if not sp:
         return out
@@ -1703,7 +1731,8 @@ def _more(con, f, g, gen):
         if kennung == "legends-arceus":       # 0.50: eigene Fangrate und eigene Formel (Rechnung in app.js, catchHtmlLA)
             try:
                 r = con.execute("SELECT rate FROM fangrate WHERE spiel = ? AND art = ?", (kennung, f["art"])).fetchone()
-            except Exception:
+            except Exception as err:
+                fehler.melden(err)
                 r = None
             out["fangrate_la"] = r[0] if r else None
             out["fang_hisui"] = [b[:4] for b in HISUI_BALLS if b[0] not in HISUI_NO_TABLE]
@@ -1714,7 +1743,8 @@ def _more(con, f, g, gen):
                         if g["id"] in json.loads(r["spiele"] or "[]")}
                 w = con.execute("SELECT weight FROM pokemon WHERE id = ?", (f["id"],)).fetchone()
                 extra = ball_rows(gen, have, f, w[0] / 10 if w and w[0] is not None else None)
-            except Exception:
+            except Exception as err:
+                fehler.melden(err)
                 extra = ()
         if kennung == "legends-arceus":       # dieselbe Tabelle und Formel wie die Oberfläche (Sternrang 10, Level bis 10)
             rate_la = out.get("fangrate_la") or sp["capture_rate"]
@@ -1733,14 +1763,15 @@ def _more(con, f, g, gen):
         gk = con.execute("SELECT identifier FROM growth_rates WHERE id = ?", (sp["growth_rate_id"],)).fetchone()
         if gk:
             out["wachstum"] = GROWTH_DE.get(gk[0], gk[0])
-    except Exception:
-        pass
+    except Exception as err:
+        fehler.melden(err)
     if kennung != "legends-arceus":
         try:
             eg = [r[0] for r in con.execute(
                 "SELECT COALESCE(p.name, pe.egg_group_id) FROM pokemon_egg_groups pe LEFT JOIN egg_group_prose p "
                 "ON p.egg_group_id = pe.egg_group_id AND p.local_language_id = 6 WHERE pe.species_id = ?", (f["art"],))]
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             eg = []
         if eg and gen >= 2:
             out["eigruppen"] = eg
@@ -1751,8 +1782,8 @@ def _more(con, f, g, gen):
                 ev = [(r[0], r[1]) for r in con.execute("SELECT stat_id, effort FROM pokemon_stats WHERE pokemon_id = ? AND effort > 0",
                                                          (f["id"],))]
                 out["ev"] = [{"wert": STAT_KEYS[s - 1], "punkte": e} for s, e in ev if 1 <= s <= 6]
-            except Exception:
-                pass
+            except Exception as err:
+                fehler.melden(err)
     return out
 
 
@@ -1848,7 +1879,8 @@ def _optik(con, f):
         rows = con.execute("SELECT f.id, f.is_default, f.form_identifier, n.form_name FROM pokemon_forms f "
                            "LEFT JOIN pokemon_form_names n ON n.pokemon_form_id = f.id AND n.local_language_id = 6 "
                            "WHERE f.pokemon_id = ? ORDER BY f.form_order, f.id", (f["id"],)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return []
     if len(rows) < 2:
         return []
@@ -1868,7 +1900,8 @@ def _held(con, g, f):
         return []
     try:
         rows = con.execute("SELECT item, item_id, prozent, elite FROM getragen WHERE spiel = ? AND art = ?", (g["kennung"], f["art"])).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         rows = []
     if rows:
         return [{"item": r[0], "id": r[1], "prozent": r[2], "elite": bool(r[3]), "quelle": "PokéWiki"} for r in rows]
@@ -1899,7 +1932,8 @@ def _pokopia(con, g, f):
     from . import serebii
     try:
         rows = con.execute("SELECT dex, nr, name, spezial FROM pokopia WHERE art = ? ORDER BY dex = 'haupt' DESC, nr", (f["art"],)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return []
     return [{"dex": serebii.POKOPIA_DEX.get(r[0], r[0]), "nr": r[1], "name": r[2],
              "spezial": [serebii.spezial_de(k) for k in json.loads(r[3] or "[]")]} for r in rows]
@@ -1911,7 +1945,8 @@ def research_done(spiel=LA):
     con = db.user()
     try:
         rows = con.execute("SELECT objekt FROM gefunden WHERE spiel = ? AND karte = 'forschung'", (spiel,)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         rows = []
     finally:
         con.close()
@@ -1929,7 +1964,8 @@ def _research(con, art, done=None):
     """Forschungsaufgaben in Legenden: Arceus (PokéWiki): [{nr, aufgabe, stufen, doppelt, erreicht}]."""
     try:
         rows = con.execute("SELECT nr, aufgabe, stufen, doppelt FROM forschung WHERE art = ? ORDER BY nr", (art,)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return []
     done = research_done() if done is None else done
     out = []
@@ -1946,7 +1982,8 @@ def research_open(con):
     got, open_ = {}, {}
     try:
         rows = con.execute("SELECT art, nr, stufen, doppelt FROM forschung").fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return {}
     for art, nr, st, d in rows:
         n = len([x for x in json.loads(st or "[]") if x not in ("0", "")])
@@ -1962,7 +1999,8 @@ def _requests(con, D, art=None, spiel=LA):
     try:
         rows = con.execute("SELECT nr, name, beschreibung, aufgabe, ort, loesung, belohnung, arten FROM auftrag "
                            "WHERE spiel = ? ORDER BY nr", (spiel,)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return []
     std = {}
     for f in D.forms.values():
@@ -1982,7 +2020,8 @@ def _missions(con, spiel=LA):
     try:
         return [{"nr": nr, "name": n, "kapitel": k, "text": t, "label": f"D{nr - 100}" if spiel == ZA and k == 2 else str(nr)}
                 for nr, n, k, t in con.execute("SELECT nr, name, kapitel, text FROM mission WHERE spiel = ? ORDER BY nr", (spiel,))]
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return []
 
 
@@ -1994,7 +2033,8 @@ BBQ_GAMES = ("scarlet-violet", "the-teal-mask", "the-indigo-disk")   # Blaubeer-
 def _blaubeer(con):
     try:
         return [dict(r) for r in con.execute("SELECT nr, bereich, art, text, bp FROM blaubeer ORDER BY nr")]
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return []
 QUEST_INFO = {
     LA: {"kapitel": ["Erste Schritte in einer fremden Welt", "Wächter und Könige in Hisui", "Abenteuer im Sumpfland",
@@ -2101,7 +2141,8 @@ def item_list(p):
     try:
         try:
             rows = con.execute("SELECT * FROM item").fetchall()
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             rows = []
         recs, mats = {}, {}
         if g:
@@ -2113,7 +2154,8 @@ def item_list(p):
                 for r in con.execute("SELECT item_id, fundorte FROM zutat WHERE spiel = ?", (g["kennung"],)):
                     if r["item_id"]:
                         mats[r["item_id"]] = json.loads(r["fundorte"] or "[]")
-            except Exception:
+            except Exception as err:
+                fehler.melden(err)
                 recs, mats = {}, {}
         tms = {}
         if vg:
@@ -2121,7 +2163,8 @@ def item_list(p):
                 for r in con.execute("SELECT m.item_id, a.name, a.typ, a.klasse, a.staerke, a.genauigkeit, a.ap, a.kurz FROM machines m "
                                      "JOIN attacke a ON a.id = m.move_id WHERE m.version_group_id = ?", (vg,)):
                     tms[r[0]] = {"name": r[1], "typ": r[2], "klasse": r[3], "staerke": r[4], "genauigkeit": r[5], "ap": r[6], "kurz": r[7] or ""}
-            except Exception:
+            except Exception as err:
+                fehler.melden(err)
                 tms = {}
     finally:
         con.close()
@@ -2464,7 +2507,8 @@ def missing(p):
         von = dict(con.execute("SELECT id, evolves_from_species_id FROM pokemon_species WHERE evolves_from_species_id IS NOT NULL"))
         try:
             no_eggs = {r[0] for r in con.execute("SELECT species_id FROM pokemon_egg_groups WHERE egg_group_id = ?", (NO_EGGS,))}
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             no_eggs = set()
         items = _names(con, "item_names", "item_id")
         trig = _names(con, "evolution_trigger_prose", "evolution_trigger_id")
@@ -2483,8 +2527,8 @@ def missing(p):
                 for fid, st in con.execute("SELECT form, sterne FROM raid WHERE spiel = 'scarlet-violet'"):
                     if fid in D.forms:
                         raids.setdefault(D.forms[fid]["art"], set()).add(st)
-            except Exception:
-                pass
+            except Exception as err:
+                fehler.melden(err)
     finally:
         con.close()
     edition = p.get("edition") if p.get("edition") in eds else ""
@@ -2576,11 +2620,13 @@ def _evolves_from():
     """{Art: Vorstufe} aus pokemon_species."""
     try:
         con = db.game()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return {}
     try:
         return dict(con.execute("SELECT id, evolves_from_species_id FROM pokemon_species WHERE evolves_from_species_id IS NOT NULL"))
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return {}
     finally:
         con.close()
@@ -2599,11 +2645,13 @@ def _stage(D, arten):
     """Entwicklungsstufe je Art (0 = Basis), aus pokemon_species.evolves_from_species_id."""
     try:
         con = db.game()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return {}
     try:
         von = dict(con.execute("SELECT id, evolves_from_species_id FROM pokemon_species"))
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         return {}
     finally:
         con.close()
@@ -2653,7 +2701,8 @@ def trainer_list(p):
     try:
         rows = con.execute("SELECT id, name, seite, rolle, titel, hinweis, rueckkampf, level, team FROM trainer WHERE spiel = ? "
                            "ORDER BY level, id", (spiel,)).fetchall()
-    except Exception:
+    except Exception as err:
+        fehler.melden(err)
         rows = []
     finally:
         con.close()
@@ -2792,7 +2841,8 @@ def _paste_names(D):
                     P["form_en"].setdefault(std[art], n)
         try:
             sd = list(con.execute("SELECT id, num, name FROM sd_pokemon"))
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             sd = []
         for sid, num, name in sd:
             fid = by_kennung.get(sid)
@@ -2806,7 +2856,8 @@ def _paste_names(D):
             P["form"].setdefault(k, fid)
         try:
             sd_moves = {r[0]: r[1] for r in con.execute("SELECT id, name FROM sd_attacke")}
-        except Exception:
+        except Exception as err:
+            fehler.melden(err)
             sd_moves = {}
         for mid, m in D.moves.items():
             k = key(m["kennung"])
@@ -2821,8 +2872,8 @@ def _paste_names(D):
                         P[p + "_en"][i] = n
                     else:
                         P[p + "_de"][i] = n
-            except Exception:
-                pass
+            except Exception as err:
+                fehler.melden(err)
         for i, ident in con.execute("SELECT id, identifier FROM items"):
             P["item"].setdefault(key(ident), i)
         for i, dec, inc in con.execute("SELECT id, decreased_stat_id, increased_stat_id FROM natures"):

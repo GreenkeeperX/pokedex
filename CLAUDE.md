@@ -24,13 +24,17 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
   Vergleichswerte als Test,
 - jede Version mit Tests (`python3 -m unittest tests.test_all`), neuer Nummer und Eintrag in `NEUIGKEITEN` in `app/sources.py`,
   aktueller README und ROADMAP.md,
+- kein stiller Ersatzwert: `except Exception` meldet mit `fehler.melden(e)` und macht dann weiter; in der Oberfläche
+  `.catch(teil("Was", Ersatz))` beim Laden und `.catch(ungespeichert(zurück))` beim Speichern. Ausnahmen stehen mit
+  Grund in `test_keine_stillen_ersatzwerte`,
 - user.db lädt nach jedem Update weiter: nur neue Tabellen und Spalten, nie löschen (`app/db.py`),
 - ändern sich die aufbereiteten Tabellen in `app/importer.py`, `importer.VERSION` erhöhen; dann baut der nächste Abgleich neu.
 
 ## Aufbau
 
 - `app/sources.py`: Netzabruf (`request`, `fetch`, nur öffentliche Ziele), `VERSION`
-- `app/store.py`: kleine JSON-Dateien im Datenordner (`settings.json`, `sync.json`)
+- `app/store.py`: kleine JSON-Dateien im Datenordner (`settings.json`, `sync.json`, `ruhe.json`, `fehler.json`, `bedarf.json`)
+- `app/fehler.py`: Fehlerregister (`melden` für Ausnahmen, `notiere` für Ereignisse; eine fehlende Tabelle ist kein Fehler)
 - `app/db.py`: pokeapi.db (Spieldaten, nur lesend) und user.db (Teams, Entscheidungen), tägliche Sicherung
 - `app/importer.py`: baut pokeapi.db aus den CSV-Texten der PokéAPI, Showdown und `extra/` (ohne Netz), Selbstprüfung
 - `app/showdown.py`: liest `pokedex.ts` und `moves.ts` von Pokémon Showdown (ohne Netz)

@@ -55,10 +55,34 @@ async function api(path, body) {
   for (let n = 0; ; n++) {          // Netzfehler (Server kurz beschäftigt, Verbindung neu): zweimal nachfassen
     try { r = await fetch(path, opt); break; } catch (e) { if (n >= 2) throw e; await new Promise((ok) => setTimeout(ok, 400 * (n + 1))); }
   }
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  const d = await r.json().catch(() => null);
+  // status am Fehler: 404 heißt „gibt es hier nicht“; eine Antwort 200, die sich nicht lesen lässt, ist ein Fehler und kein leeres Ergebnis
+  if (!r.ok || d === null) throw Object.assign(new Error(d?.error || (r.ok ? "Antwort nicht lesbar" : `HTTP ${r.status}`)), {status: r.status});
+  const f = r.headers.get("X-Pokedex-Fehler");
+  if (f) {                   // der Server hat geantwortet, konnte aber einen Teil nicht lesen (app/fehler.py): [[Stelle, Art], …]
+    let xs = [];
+    try { xs = JSON.parse(f); } catch (e) { /* dann ohne Einzelheiten */ }
+    (xs.length ? xs : [["Fehler", ""]]).forEach(([wo, art]) => TEILE.add(art ? `${wo}: ${art}` : wo));
+    drawNotes();
+  }
   return d;
 }
+/* Hinweise über der Ansicht (seit 0.58.1): Was nicht geladen oder nicht gespeichert werden konnte, steht dort einmal, statt
+   still zu fehlen. Gleiche Hinweise zählen hoch, eine neue Ansicht räumt ab. */
+const NOTES = new Map(), TEILE = new Set();     // TEILE: was der Server nicht lesen konnte (eine Zeile für alle)
+function drawNotes() {
+  const el = $("#hinweise");
+  if (!el) return;
+  const rows = [...NOTES].map(([t, n]) => `<p>${esc(t)}${n > 1 ? ` <span class="hint">(${n}-mal)</span>` : ""}</p>`);
+  if (TEILE.size) rows.unshift(`<p>Ein Teil dieser Ansicht fehlt: Der Server konnte ihn nicht lesen (${esc([...TEILE].join("; "))}). Einzelheiten unter <a href="#einstellungen">Einstellungen</a>, Fehler.</p>`);
+  el.innerHTML = rows.length ? `<div class="note warn hw"><div>${rows.join("")}</div><button data-act="hwzu" title="Hinweis ausblenden">×</button></div>` : "";
+}
+const clearNotes = () => { NOTES.clear(); TEILE.clear(); drawNotes(); };
+function hinweis(text) { NOTES.set(text, (NOTES.get(text) || 0) + 1); drawNotes(); }
+// für .catch beim Laden: den Teil nennen, der fehlt, und mit dem Ersatzwert weiterzeichnen (404: gibt es hier nicht, kein Fehler)
+const teil = (was, ersatz) => (e) => { if (e.status !== 404) hinweis(`${was}: nicht geladen (${e.message}).`); return ersatz; };
+// für .catch beim Speichern: sagen, dass es nicht gespeichert ist, und die Anzeige zurücknehmen
+const ungespeichert = (zurueck) => (e) => { hinweis(`Nicht gespeichert (${e.message}). Die Änderung ist zurückgenommen.`); if (zurueck) zurueck(); };
 const qs = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== "" && v !== null && v !== undefined && v !== false)).toString();
 const weights = () => S.weights || PRESETS[S.preset] || PRESETS.ausgewogen;
 const gameName = (k = S.game) => (S.meta?.spiele || []).find((g) => g.kennung === k)?.name || "alle Spiele";
@@ -458,7 +482,7 @@ function showCard(el) {
   if (!r || !r.werte) {               // noch nicht geladen (etwa gemerkt, aus dem Kampftagebuch): einmal nachladen
     if (hid && !isNaN(+hid) && !HCLOAD.has(hid)) {
       HCLOAD.add(hid);
-      api(`/api/pokemon/${hid}?` + qs({spiel: S.game})).then((x) => { ROWS[hid] = Object.assign(ROWS[hid] || {}, x); showCard(el); }).catch(() => {});
+      api(`/api/pokemon/${hid}?` + qs({spiel: S.game})).then((x) => { ROWS[hid] = Object.assign(ROWS[hid] || {}, x); showCard(el); }).catch(teil("Einzelheiten zur Vorschau"));
     }
     return;
   }
@@ -617,17 +641,28 @@ function header() {
   if (a.running && !syncT) syncT = setTimeout(syncPoll, 5000);
 }
 let syncT = 0;
+/* 0.58.0: fragt den schlanken Stand ab (/api/stand, wenige hundert Byte) statt der ganzen Grunddaten. Solange der Lauf
+   läuft, nur die Kopfzeile; meldet der Server das Ende, gilt das sofort (die Meldung „Abgleich läuft“ verschwindet auch
+   dann, wenn das Nachladen der Grunddaten scheitert), danach einmal /api/meta für Zahlen, Spiele und neue Daten */
 async function syncPoll() {
   syncT = 0;
-  let m;
-  try { m = await api("/api/meta"); } catch (x) { m = null; }
-  if (!m) { if (!syncT) syncT = setTimeout(syncPoll, 15000); return; }
-  if (LOADED_VER && m.version && m.version !== LOADED_VER) { location.reload(); return; }
-  const fresh = !S.meta?.has_data && m.has_data;
-  S.meta = m;
-  S.types = Object.fromEntries((m.typen || []).map((t) => [t.id, t.name]));
+  let s;
+  try { s = await api("/api/stand"); } catch (x) { s = null; }
+  if (!s) { if (!syncT) syncT = setTimeout(syncPoll, 15000); return; }
+  if (LOADED_VER && s.version && s.version !== LOADED_VER) { location.reload(); return; }
+  if (!S.meta) return;
+  const fresh = !S.meta.has_data && s.has_data;
+  S.meta.abgleich = s.abgleich;
+  if (s.abgleich.running && !fresh) { header(); return; }
+  S.meta.has_data = s.has_data;
   header();
-  if (fresh) route();
+  try {
+    const m = await api("/api/meta");
+    S.meta = m;
+    S.types = Object.fromEntries((m.typen || []).map((t) => [t.id, t.name]));
+    header();
+  } catch (x) { hinweis(`Grunddaten nach dem Abgleich nicht geladen (${x.message}). Die Seite neu laden holt sie.`); }
+  if (fresh || !S.meta.has_data) route();
 }
 /* Hell, dunkel oder wie das Gerät: runder Knopf mit Menü, wie im VR-Navigator */
 const THEMES = [
@@ -685,11 +720,20 @@ function version() {
   b.hidden = false; b.textContent = "v" + v; b.classList.toggle("frisch", neu);
   const box = $("#neu");
   if (!neu) { box.innerHTML = ""; return; }
-  const cur = (S.meta.neu || []).find((n) => n[0] === v);
+  // 0.58.0: die Punkte dieser Version kommen bei Bedarf (/api/neuigkeiten?version=…), nicht mehr mit jeder Abfrage der Grunddaten
+  const cur = S.neuCur && S.neuCur[0] === v ? S.neuCur : null;
   box.innerHTML = `<div class="note neu"><b>Neu in Version ${esc(v)}</b>${cur ? `<ul>${cur[2].map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${S.neuErr ? `<div class="hint">Die Punkte dieser Version ließen sich nicht laden (${esc(S.neuErr)}).</div>` : ""}
     <button data-act="neu">Alle Versionen</button> <button class="primary" data-act="neuok">Verstanden</button></div>`;
+  if (!cur && !S.neuErr && !S.neuLoad) {
+    S.neuLoad = true;
+    api("/api/neuigkeiten?version=" + encodeURIComponent(v)).then((d) => { S.neuCur = d[0] || [v, "", []]; }, (x) => { S.neuErr = x.message; })
+      .finally(() => { S.neuLoad = false; version(); });
+  }
 }
-function versionsDialog() {
+async function versionsDialog() {
+  let all, err = "";
+  try { all = S.neuAll || (S.neuAll = await api("/api/neuigkeiten")); } catch (x) { all = []; err = x.message; }
   let d = $("#vdlg");
   if (!d) {
     d = document.createElement("dialog"); d.id = "vdlg"; document.body.append(d);
@@ -697,7 +741,8 @@ function versionsDialog() {
     d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
   }
   d.innerHTML = `<div class="dh"><h2>Was ist neu?</h2><form method="dialog"><button class="x" aria-label="Schließen" title="Schließen">✕</button></form></div><div class="db">`
-    + (S.meta?.neu || []).map(([v, datum, punkte]) =>
+    + (err ? `<div class="note stop">Die Versionsgeschichte ließ sich nicht laden: ${esc(err)}</div>` : "")
+    + all.map(([v, datum, punkte]) =>
       `<h3>Version ${esc(v)} <span class="hint">${esc(datum)}</span></h3><ul>${punkte.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("") + `</div>`;
   d.showModal();
 }
@@ -736,6 +781,7 @@ let busyT = 0;
 let ONMAP = false, MAPFOLD = false;   // Karte offen; Team-Leiste dort eingeklappt (bis man sie aufklappt)
 async function route() {
   RID++;
+  clearNotes();
   clearTimeout(cardTimer); clearTimeout(tipTimer);
   tip.hidden = card.hidden = true;
   if (location.hash !== HERE) { FROM = HERE; HERE = location.hash; }
@@ -809,8 +855,8 @@ function undoToast(text, undo) {
 async function loadCaught(force = false) {
   if (!force && S.caughtGame === S.game) return;
   const [c, sh, al, lk] = await Promise.all([api("/api/gefangen?" + qs({spiel: S.game})), api("/api/schillernd?" + qs({spiel: S.game})),
-    api("/api/alpha?" + qs({spiel: S.game})).catch(() => ({ids: [], moeglich: []})),
-    api("/api/shinysperre?" + qs({spiel: S.game})).catch(() => ({tausch: [], nie: [], gen1: false}))]);
+    api("/api/alpha?" + qs({spiel: S.game})).catch(teil("Alpha-Pokémon", {ids: [], moeglich: []})),
+    api("/api/shinysperre?" + qs({spiel: S.game})).catch(teil("Shiny-Sperren", {tausch: [], nie: [], gen1: false}))]);
   S.caught = new Set(c); S.shiny = new Set(sh); S.alpha = new Set(al.ids); S.alphaOk = new Set(al.moeglich);
   S.shinyLock = new Map([...(lk.tausch || []).map((i) => [i, "tausch"]), ...(lk.nie || []).map((i) => [i, "nie"])]); S.shinyGen1 = !!lk.gen1;
   S.caughtGame = S.game;
@@ -859,7 +905,7 @@ function noData() {
       : "Der Abgleich holt die Daten von der PokéAPI und von Pokémon Showdown."}</p>
     <button class="primary" data-act="sync"${a.running ? " disabled" : ""}>Abgleich starten</button>
     <a class="btn" href="#einstellungen">Protokoll ansehen</a></div>`;
-  if (a.running) setTimeout(refreshMeta, 5000);
+  // 0.58.0: kein eigener Zeitgeber mehr; die Kopfzeile fragt den schlanken Stand ab (syncPoll) und lädt neu, sobald Daten da sind
 }
 let LOADED_VER = null;     // Version, mit der diese Seite geladen wurde
 async function refreshMeta() {
@@ -870,7 +916,7 @@ async function refreshMeta() {
   LOADED_VER = LOADED_VER || S.meta.version;
   S.types = Object.fromEntries((S.meta.typen || []).map((t) => [t.id, t.name]));
   header();
-  if (S.meta.has_data || !S.meta.abgleich?.running) route(); else setTimeout(refreshMeta, 5000);
+  route();
 }
 
 /* Farben der Gebiete in Legenden: Arceus (wie auf den Karten), damit gleiche Gebiete in langen Listen auffallen */
@@ -1116,7 +1162,7 @@ async function fillStandard(slot) {
     if (t.ids[slot] !== id || (t.details[slot]?.attacken || []).length || !A.standard?.length) return;
     t.details[slot] = Object.assign({}, t.details[slot], {attacken: A.standard});
     teamChanged();
-  } catch (e) { console.warn(e); }
+  } catch (e) { teil("Standard-Attacken")(e); }
 }
 // at: Platz, auf den das Pokémon soll; ein belegter Platz wird ersetzt, sonst kommt es ans Ende
 function addToTeam(id, at = null) {
@@ -1177,7 +1223,7 @@ function teamCheck() {
     teamCheck.busy = false;
     dock();
     if (location.hash.startsWith("#team") && $("#tnote")) teamNote();
-  }).catch(() => { teamCheck.busy = false; });
+  }).catch((e) => { teamCheck.busy = false; teil("Prüfung des Teams")(e); });
 }
 function mismatch() {
   const t = S.team, out = [];
@@ -1396,7 +1442,7 @@ async function elBox(d, slot) {
   const det = slot !== null ? S.team.details[slot] || {} : (elBox.tmp ||= {});
   if (slot === null && elBox.tmpId !== d.id) { elBox.tmpId = d.id; Object.keys(det).forEach((k) => delete det[k]); }
   const lv = det.level || 50;
-  const r = await api("/api/effort", {spiel: S.game, id: d.id, level: lv, wesen: det.wesen || null, el: det.el || [0, 0, 0, 0, 0, 0], ziel: det.el_ziel || det.el || [0, 0, 0, 0, 0, 0]}).catch(() => null);
+  const r = await api("/api/effort", {spiel: S.game, id: d.id, level: lv, wesen: det.wesen || null, el: det.el || [0, 0, 0, 0, 0, 0], ziel: det.el_ziel || det.el || [0, 0, 0, 0, 0, 0]}).catch(teil("Effort Levels", null));
   if (!r || !$("#elbox")) return;
   const opt = (v, from = 0) => Array.from({length: 11 - from}, (_, k) => k + from).map((k) => `<option value="${k}"${k === v ? " selected" : ""}>${k}</option>`).join("");
   const nat = (x) => x.wesen > 1 ? ` <span class="f fd" data-tip="Wesen +10 %">+</span>` : x.wesen < 1 ? ` <span class="f fa05" data-tip="Wesen −10 %">−</span>` : "";
@@ -1435,7 +1481,7 @@ async function statBox(d, slot) {
   const det = slot !== null ? S.team.details[slot] || {} : (statBox.tmp ||= {});
   if (slot === null && statBox.tmpId !== d.id) { statBox.tmpId = d.id; Object.keys(det).forEach((k) => delete det[k]); }
   const lv = det.level || 50, K = GEN() <= 2 ? {iv: "dvs", ev: "exp", z: "exp_ziel"} : S.game === "lets-go-pikachu-lets-go-eevee" ? {iv: "ivs", ev: "avs", z: "av_ziel"} : {iv: "ivs", ev: "evs", z: "ev_ziel"};   // bis Gen. 2 eigene Felder (Showdown schreibt dort EVs)
-  const r = await api("/api/werte", {spiel: S.game, id: d.id, level: lv, wesen: det.wesen || null, ivs: det[K.iv] || null, evs: det[K.ev] || null, ziel: det[K.z] || null}).catch(() => null);
+  const r = await api("/api/werte", {spiel: S.game, id: d.id, level: lv, wesen: det.wesen || null, ivs: det[K.iv] || null, evs: det[K.ev] || null, ziel: det[K.z] || null}).catch(teil("Werte", null));
   if (!r || !$("#stbox") || !r.rows.length) return;
   const old = r.gen <= 2, lg = r.art === "lgpe", IV = old ? "DV" : "IV", EV = old ? "Stat Exp" : lg ? "AV" : "EV";
   const nat = (x) => x.wesen > 1 ? ` <span class="f fd" data-tip="Wesen +10 %">+</span>` : x.wesen < 1 ? ` <span class="f fa05" data-tip="Wesen −10 %">−</span>` : "";
@@ -1504,7 +1550,7 @@ function elChart(rows, lv) {
 }
 /* Effort Levels des Teams (Legenden: Arceus): Übersicht; ändern auf der Detailseite. Nicht eingetragen = Stufe 0 */
 async function elTeam() {
-  const rid = RID, r = await api("/api/effort/team", {spiel: S.game, ids: S.team.ids, details: S.team.details}).catch(() => null);
+  const rid = RID, r = await api("/api/effort/team", {spiel: S.game, ids: S.team.ids, details: S.team.details}).catch(teil("Effort Levels des Teams", null));
   const el = $("#eltbody");
   if (!r || !el || rid !== RID) return;
   const miss = r.mitglieder.filter((m) => !m.eingetragen).length, need = r.bonbons.some((n) => n);
@@ -1607,7 +1653,7 @@ const REQ_GAME = () => REQ_GAMES[S.game] || "";
 async function loadReqDone(force = false) {      // einmal je Seitenaufruf und Spiel; die Haken ändert die Oberfläche selbst
   if (REQ_OK === REQ_GAME() && !force) return;
   const g = REQ_GAME();
-  const r = g ? await api("/api/gefunden?" + qs({spiel: g})).catch(() => null) : null;
+  const r = g ? await api("/api/gefunden?" + qs({spiel: g})).catch(teil("Erledigte Aufträge", null)) : null;
   if (!r) return;
   // Nebenaufträge unter ihrer Nummer, Hauptmissionen als „m“ + Nummer (gespeichert unter auftrag und mission)
   REQ_DONE = new Set([...(r.auftrag || []).map(String), ...(r.mission || []).map((x) => "m" + x)]);
@@ -1707,7 +1753,7 @@ async function toggleResearch(b) {
       const a = DETAIL.forschung.find((x) => x.nr === nr), box = cell.closest(".box");
       if (a) { a.erreicht = to; if (box) { box.outerHTML = researchHtml(DETAIL); applyFolds(); } }
     }
-  } catch (e) { paint(have); }
+  } catch (e) { ungespeichert(() => paint(have))(e); }
 }
 async function toggleReq(nr) {
   const k = String(nr), on = !REQ_DONE.has(k), mis = k.startsWith("m");
@@ -1715,10 +1761,10 @@ async function toggleReq(nr) {
   if (on) REQ_DONE.add(k); else REQ_DONE.delete(k);
   paint();
   if (location.hash.startsWith("#auftraege") && REQ_REDRAW) REQ_REDRAW();
-  await api("/api/gefunden", {spiel: REQ_GAME(), karte: mis ? "mission" : "auftrag", objekt: mis ? k.slice(1) : k, an: on}).catch(() => {
+  await api("/api/gefunden", {spiel: REQ_GAME(), karte: mis ? "mission" : "auftrag", objekt: mis ? k.slice(1) : k, an: on}).catch(ungespeichert(() => {
     if (on) REQ_DONE.delete(k); else REQ_DONE.add(k);
     paint();
-  });
+  }));
 }
 /* Detailseite: Aufträge, in denen das Pokémon vorkommt */
 function requestsHtml(d) {
@@ -2319,7 +2365,7 @@ const trTip = (t) => [t.name + (t.titel ? " · " + t.titel : ""), t.hinweis, ...
 async function trainerPick(keepOpen) {
   const el = $("#trpick"), g = S.game;
   if (!el) return;
-  const d = TRAINERS[g] || (TRAINERS[g] = await api("/api/trainer?" + qs({spiel: g})).catch(() => ({trainer: [], rollen: []})));
+  const d = TRAINERS[g] || (TRAINERS[g] = await api("/api/trainer?" + qs({spiel: g})).catch(teil("Trainer", {trainer: [], rollen: []})));
   if (!$("#trpick") || S.game !== g) return;
   if (!d.trainer.length) { el.innerHTML = ""; return; }
   const o = Object.assign({rolle: d.rollen[0], rk: false}, store.get("trOpt", {}));
@@ -2604,7 +2650,7 @@ const mgProj = (lat, lng, z) => {
 const blobB64 = (b) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(b); });
 let MGCONV = null, MGCONV_MSG = "";
 async function mgConvert(d, slug, rid) {
-  const st = await api("/api/kacheln/umwandeln?" + qs({spiel: d.spiel, karte: slug})).catch(() => null);
+  const st = await api("/api/kacheln/umwandeln?" + qs({spiel: d.spiel, karte: slug})).catch(teil("Stand der Kacheln dieser Karte", null));
   // die Meldung steht auf der Karte, solange sie offen ist (auch nach einem Wechsel hin und zurück)
   const here = () => $("#mgwarn")?.dataset.slug === slug;
   const say = (t, warn) => { MGCONV_MSG = `<div class="note${warn ? " warn" : ""}">${t}</div>`; if (here()) $("#mgwarn").innerHTML = MGCONV_MSG; };
@@ -2703,7 +2749,7 @@ function mgStartHide(groups, keep) {
 }
 async function mgView(slug, want) {
   const rid = RID;
-  const lst = await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({karten: []}));
+  const lst = await api("/api/mapgenie?" + qs({spiel: S.game})).catch(teil("Karten des Spiels", {karten: []}));
   if (rid !== RID) return;
   if (!lst.karten.length) return S.game === "legends-arceus" ? mapView() : areasView();
   // 0.48.6: Karten einer Schwester-Edition nicht anbieten (Rot/Blau zeigt nicht Gelb und umgekehrt), sonst blieb beim
@@ -2719,7 +2765,7 @@ async function mgView(slug, want) {
   const ck = S.game + "/" + slug;
   const d = MGDATA[ck] || (MGDATA[ck] = await api("/api/mapgenie?" + qs({spiel: S.game, karte: slug})));
   const gk = "mg-" + slug;
-  const gotRes = await api("/api/gefunden?" + qs({spiel: d.spiel})).catch(() => ({}));
+  const gotRes = await api("/api/gefunden?" + qs({spiel: d.spiel})).catch(teil("Abgehakte Punkte", {}));
   if (rid !== RID) return;
   window.scrollTo(0, 0);
   const got = new Set((gotRes[gk] || []).map((o) => gk + "|" + o));
@@ -2918,7 +2964,7 @@ async function mgView(slug, want) {
     el.textContent = IMGS ? `keine; ${IMGS.length} Ortsbilder liegen auf dem Server, die Karte braucht kein Netz` : !v ? (r.kacheln?.laedt ? "läuft gerade" : "startet nach dem nächsten Abgleich")
       : v.fertig && v.ganz ? `alle ${v.da} Kacheln liegen auf dem Server, die Karte braucht kein Netz mehr`
       : `${v.da} von ${v.alle} Kacheln bis Stufe ${v.bis} liegen auf dem Server; der Rest kommt im Hintergrund`;
-  }).catch(() => {});
+  }).catch(teil("Vorrat an Kacheln"));
   $("#mgwarn").dataset.slug = slug;
   if (d.quelle === "ironmon") mgConvert(d, slug, rid);
   // fehlen Kacheln, sagt die Karte warum (Map Genie ruht nach 403/429 einen Tag; ein Neustart des Dienstes hebt das auf)
@@ -2926,7 +2972,7 @@ async function mgView(slug, want) {
   const tileTrouble = () => {
     if (troubleT || d.quelle === "ironmon") return;      // dort fehlen Kacheln nur bis zur Umwandlung (mgConvert)
     troubleT = setTimeout(async () => {
-      const st = (await api("/api/mapgenie?" + qs({spiel: S.game})).catch(() => ({}))).kacheln || {};
+      const st = (await api("/api/mapgenie?" + qs({spiel: S.game})).catch(teil("Stand der Kacheln", {}))).kacheln || {};
       if (rid !== RID || !$("#mgwarn")) return;
       $("#mgwarn").innerHTML = st.ruht && !d.quelle ? `<div class="note warn">Map Genie liefert gerade keine Kacheln (${esc(st.fehler)}); der Abruf ruht bis ${esc(st.ruht.slice(11, 16))} Uhr (UTC) am ${esc(st.ruht.slice(0, 10).split("-").reverse().join("."))}. Ein Neustart des Dienstes setzt das zurück.</div>`
         : st.fehler ? `<div class="note warn">Einige Kacheln fehlen (zuletzt ${esc(st.fehler)}).</div>` : "";
@@ -3027,14 +3073,14 @@ async function mgView(slug, want) {
     const on = !isGot(p);
     if (on) got.add(k); else got.delete(k);
     // früher getrennt als eigenes Symbol markiert: das fällt mit weg
-    if (!on && p.t === "mg" && p.o && got.has(okeyOf(p))) { const ok = okeyOf(p); got.delete(ok); const [ka, ob] = ok.split("|"); api("/api/gefunden", {spiel: d.spiel, karte: ka, objekt: ob, an: false}).catch(() => {}); }
+    if (!on && p.t === "mg" && p.o && got.has(okeyOf(p))) { const ok = okeyOf(p); got.delete(ok); const [ka, ob] = ok.split("|"); api("/api/gefunden", {spiel: d.spiel, karte: ka, objekt: ob, an: false}).catch(ungespeichert(() => { got.add(ok); pins(); })); }
     const c = $(`[data-cnt="${CSS.escape(String(p.c))}"]`);
     if (c) c.innerHTML = cnt(cats[p.c]);
     pins();
     if (sel === i) side(i);
     const [karte, objekt] = k.split("|");
     if (p.aq) REQ_OK = false;          // der Reiter Aufträge liest die Haken neu
-    api("/api/gefunden", {spiel: d.spiel, karte, objekt, an: on}).catch(() => { if (on) got.delete(k); else got.add(k); pins(); });
+    api("/api/gefunden", {spiel: d.spiel, karte, objekt, an: on}).catch(ungespeichert(() => { if (on) got.delete(k); else got.add(k); pins(); }));
   };
   pl.addEventListener("click", (e) => {
     if (moved) return;
@@ -3077,7 +3123,7 @@ async function mgView(slug, want) {
    Haken sind dieselben wie auf der Karte (Rechtsklick oder „als gefunden markieren“) */
 async function collectView() {
   const rid = RID;
-  const d = await api("/api/sammeln?" + qs({spiel: S.game})).catch(() => ({sachen: []}));
+  const d = await api("/api/sammeln?" + qs({spiel: S.game})).catch(teil("Sammelobjekte", {sachen: []}));
   if (rid !== RID) return;
   const xs = d.sachen || [];
   const bar = (f, n) => `<span class="cbar" data-tip="${f} von ${n}"><span style="width:${n ? Math.round(100 * f / n) : 0}%"></span></span>`;
@@ -3150,7 +3196,7 @@ async function missingView() {
 }
 async function areasView(want) {
   const rid = RID;
-  const d = await api("/api/gebiete?" + qs({spiel: S.game})).catch(() => null);
+  const d = await api("/api/gebiete?" + qs({spiel: S.game})).catch(teil("Gebiete", null));
   if (rid !== RID) return;
   if (!d || !d.gebiete.length) {
     main.innerHTML = `<div class="box"><h2>Gebiete</h2><p class="hint">Für ${esc(gameName())} gibt es keine Fundorte in den Daten.</p>
@@ -3198,7 +3244,7 @@ async function mapView(karte, fid) {
   const key = karte || "obsidianfieldlands";
   const d = MAPCACHE[key] || (MAPCACHE[key] = await api("/api/karte/" + encodeURIComponent(key)));
   /* gefundene Symbole (Geisterlichter, Icognito, Kisten …): je Karte; Schlüssel Art:x:z, damit er einen Neubau übersteht */
-  const gotRes = await api("/api/gefunden?" + qs({spiel: MAPSPIEL, karte: key})).catch(() => ({}));
+  const gotRes = await api("/api/gefunden?" + qs({spiel: MAPSPIEL, karte: key})).catch(teil("Abgehakte Symbole", {}));
   if (rid !== RID) return;
   if (!$("#map")) window.scrollTo(0, 0);
   const got = new Set(gotRes[key] || []);
@@ -3311,11 +3357,11 @@ async function mapView(karte, fid) {
     const gb = $("#gotbtn");
     if (gb && +gb.dataset.o === i) { gb.classList.toggle("on", on); gb.textContent = on ? "✓ erledigt" : "als erledigt markieren"; }
     showLayers();
-    api("/api/gefunden", {spiel: MAPSPIEL, karte: key, objekt: k, an: on}).catch(() => {
+    api("/api/gefunden", {spiel: MAPSPIEL, karte: key, objekt: k, an: on}).catch(ungespeichert(() => {
       if (on) got.delete(k); else got.add(k);        // nicht gespeichert: zurück
       $(`.mobj[data-o="${i}"]`, pins)?.classList.toggle("got", !on);
       showLayers();
-    });
+    }));
   };
   $("#gothide")?.addEventListener("change", (e) => { gotHide = e.target.checked; store.set("mapGotHide", gotHide); showLayers(); });
   pins.addEventListener("contextmenu", (e) => {
@@ -3524,11 +3570,11 @@ async function itemsView() {
   const nOdd = items.filter((x) => x.unfertig).length;
   let pocket = store.get("itemPocket", ""), q = "", art = "", odd = false;
   // 0.53: Maschinen abhaken (gefunden, Karte „tm“) und wo es sie gibt (Kartenpunkte); Filter alle / habe ich / fehlen
-  const tmGot = await api("/api/gefunden?" + qs({spiel: S.game, karte: "tm"})).catch(() => ({}));
+  const tmGot = await api("/api/gefunden?" + qs({spiel: S.game, karte: "tm"})).catch(teil("Abgehakte Maschinen", {}));
   if (rid !== RID) return;
   const tmHave = new Set((tmGot.tm || []).map(String));
   // 0.56.2: Rezepte abhaken (Legenden: Arceus), abgelegt wie die Maschinen unter der Karte „rezept“
-  const rzGot = d.rezepte ? await api("/api/gefunden?" + qs({spiel: S.game, karte: "rezept"})).catch(() => ({})) : {};
+  const rzGot = d.rezepte ? await api("/api/gefunden?" + qs({spiel: S.game, karte: "rezept"})).catch(teil("Abgehakte Rezepte", {})) : {};
   if (rid !== RID) return;
   const rzHave = new Set((rzGot.rezept || []).map(String));
   let tmShow = store.get("tmShow", ""), tmOrte = null;
@@ -3595,7 +3641,7 @@ async function itemsView() {
     if (isTm) { const all = inPocket.length, got = inPocket.filter((x) => tmHave.has(String(x.id))).length;
       $("#tmcnt").textContent = `${got} von ${all} abgehakt`; $$("#tmseg button").forEach((b) => b.classList.toggle("on", b.dataset.tms === tmShow));
       if (tmOrte === null && !draw.loading) { draw.loading = true;
-        api("/api/tmorte?" + qs({spiel: S.game})).then((o) => { tmOrte = o || {}; if (rid === RID) draw(); }).catch(() => { tmOrte = {}; }); } }
+        api("/api/tmorte?" + qs({spiel: S.game})).then((o) => { tmOrte = o || {}; if (rid === RID) draw(); }).catch((e) => { tmOrte = {}; teil("Fundorte der Maschinen")(e); }); } }
     const kind = pocket === HERSTELLEN ? HERSTELLEN : pocket === "Maschinen" ? "Maschinen" : pocket === "Bälle" ? "Bälle"
       : pocket === "Medizin" || pocket === "Beeren" ? "wirkung" : "";
     const cols = COLS[kind].filter((c, i) => !(pocket && !kind && i === 2));      // in einer Tasche braucht es die Spalte Tasche nicht
@@ -3779,7 +3825,7 @@ async function battleView() {
 /* Häufige Gegner aus der Nutzungsstatistik von Smogon (smogon.json, beim Abgleich geholt) */
 async function usageBox() {
   const rid = RID, el = () => $("#usage");
-  const u = await api("/api/smogon?" + qs({spiel: S.game})).catch(() => ({rows: []}));
+  const u = await api("/api/smogon?" + qs({spiel: S.game})).catch(teil("Nutzungsstatistik", {rows: []}));
   if (rid !== RID || !el()) return;
   if (!u.rows.length) {
     el().innerHTML = `<h2>Häufige Gegner</h2><p class="hint">Noch keine Nutzungsstatistik. Der nächste Abgleich holt sie von Smogon (monatlich, Doppel-Format für Champions oder die aktuelle VGC-Regel).</p>`;
@@ -3818,7 +3864,7 @@ async function logBox() {
   const L = await api("/api/kampftagebuch?" + qs({spiel: S.game}));
   if (rid !== RID || !el()) return;
   const need = [...new Set([...L.rows.flatMap((r) => [...r.gegner, ...r.team]), ...LOGPICK])].filter((id) => !ROWS[id]?.name);
-  if (need.length) (await Promise.all(need.slice(0, 40).map((id) => api(`/api/pokemon/${id}?` + qs({spiel: S.game})).catch(() => null))))
+  if (need.length) (await Promise.all(need.slice(0, 40).map((id) => api(`/api/pokemon/${id}?` + qs({spiel: S.game})).catch(teil("Namen im Kampftagebuch", null)))))
     .forEach((d) => { if (d) ROWS[d.id] = Object.assign(ROWS[d.id] || {}, {id: d.id, name: d.name, typen: d.typen}); });
   if (rid !== RID || !el()) return;
   const nm = (id) => esc(ROWS[id]?.name || "#" + id);
@@ -4005,7 +4051,7 @@ async function compareView(a, b) {
   const ids = [a, b].map((x) => (x && !isNaN(+x) ? +x : null));
   // Merken und Schnellwahl zeichnen sofort neu: schon geladene Pokémon kommen aus dem Zwischenspeicher
   const ck = (id) => id + "|" + S.game;
-  const ds = await Promise.all(ids.map((id) => id == null ? null : CMPC.get(ck(id)) || api(`/api/pokemon/${id}?` + qs({spiel: S.game})).then((d) => { CMPC.set(ck(id), d); return d; }).catch(() => null)));
+  const ds = await Promise.all(ids.map((id) => id == null ? null : CMPC.get(ck(id)) || api(`/api/pokemon/${id}?` + qs({spiel: S.game})).then((d) => { CMPC.set(ck(id), d); return d; }).catch(teil("Pokémon im Vergleich", null))));
   if (rid !== RID) return;
   ds.forEach((d) => { if (d) { ROWS[d.id] = Object.assign(ROWS[d.id] || {}, d); } });
   const [A, B] = ds;
@@ -4171,10 +4217,17 @@ async function diskBox(neu) {
     ${d.teile.filter((t) => t.bytes > 0).map((t) => row(t, 0)).join("")}`;
   $("#diskneu").addEventListener("click", () => { el.innerHTML = `<p class="hint">Zählt …</p>`; diskBox(true); });
 }
+/* Uhrzeit des Abgleichs: Der Server führt sie als Weltzeit (UTC, „HH:MM“), das Feld zeigt die Ortszeit des Browsers */
+const uhrShift = (hm, sign) => { const m = /^(\d\d):(\d\d)$/.exec(hm || ""); if (!m) return "";
+  const t = ((+m[1] * 60 + +m[2] + sign * new Date().getTimezoneOffset()) % 1440 + 1440) % 1440;
+  return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); };
+const uhrLocal = (utc) => uhrShift(utc || "02:30", -1), uhrUtc = (local) => uhrShift(local, 1);
 async function settingsView() {
   const rid = RID;
-  const [st, pr] = await Promise.all([api("/api/status"), S.meta?.has_data ? api("/api/pruefung") : []]);
+  const [st, pr, fe] = await Promise.all([api("/api/status"), S.meta?.has_data ? api("/api/pruefung") : [],
+    api("/api/fehler").catch(teil("Fehlerliste", {fehler: [], max: 0}))]);
   if (rid !== RID) return;
+  const fehler = fe.fehler || [];
   const s = S.meta?.einstellungen || {};
   const src = st.sources || {};
   const open = pr.filter((r) => !r.entscheidung);
@@ -4184,13 +4237,16 @@ async function settingsView() {
   main.innerHTML = `<div class="cols">
     <div class="box"><h2>Abgleich</h2>
       ${st.running ? `<div class="note info">Läuft: ${esc(st.step || "")}${st.total ? ` (${st.done}/${st.total})` : ""}</div>` : ""}
-      <p>Letzter Lauf: ${st.started ? esc(deTime(st.started)) + (st.ok === false ? " <b>mit Fehlern</b>" : "") : "noch keiner"}
+      ${st.unterbrochen ? `<div class="note info">Der letzte Lauf wurde von einem Neustart unterbrochen. Er wird in wenigen Minuten fortgesetzt; was schon geholt war, bleibt.</div>` : ""}
+      <p>Letzter Lauf: ${st.started ? esc(deTime(st.started)) + (st.unterbrochen ? " <b>unterbrochen</b>" : st.ok === false ? " <b>mit Fehlern</b>" : "") : "noch keiner"}
+      ${st.naechster && !st.running ? `<br>Nächster Lauf nach Zeitplan: ${esc(deTime(st.naechster))}` : ""}
       ${st.built ? `<br>Datenbank gebaut: ${esc(deTime(st.built))}` : ""}
       ${bad.length ? `<br><b class="errc">${bad.length} ${bad.length === 1 ? "Quelle" : "Quellen"} mit Problem</b> (${esc(bad.join(", "))})` : ""}</p>
       ${st.stats?.species ? `<p class="hint">${st.stats.species} Arten, ${st.stats.forms} Formen, ${st.stats.moves} Attacken, ${st.stats.games} Spiele, ${st.stats.tables} Tabellen</p>` : ""}
       <div class="plan"><h3>Zeitplan</h3>
       <div class="bar"><label><input type="checkbox" id="auto"${s.auto ? " checked" : ""}> automatisch alle</label>
-        <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage</div>
+        <input type="number" id="tage" min="1" max="30" value="${s.tage || 7}" style="width:64px"> Tage
+        <label data-tip="Feste Uhrzeit in deiner Ortszeit. Der Server merkt sie sich als Weltzeit (UTC); mit der Zeitumstellung verschiebt sie sich um eine Stunde.">um <input type="time" id="uhr" value="${esc(uhrLocal(s.uhr))}" style="width:96px"> Uhr</label></div>
       <div class="bar"><label><input type="checkbox" id="sprites"${s.sprites ? " checked" : ""}> Bilder laden (Sprites 96 × 96 und offizielle Artworks 475 × 475, zusammen gut 180 MB; dazu schillernde und animierte Sprites, Rufe und Item-Bilder, gut 45 MB)</label></div>
       <p class="hint">Ändert sich bei keiner Quelle etwas, bleibt die Datenbank. Eine neue gilt erst nach bestandener Selbstprüfung; deine Teams liegen getrennt (user.db) und werden täglich gesichert.</p></div>
       ${srcKeys.length ? `<details class="sub"${bad.length ? " open" : ""}><summary><b>Quellen</b> ${okN ? `<span class="badge ok">${okN} ok</span>` : ""}${bad.length ? `<span class="badge bad">${bad.length} mit Problem</span>` : ""}</summary>
@@ -4203,6 +4259,13 @@ async function settingsView() {
       <details class="sub"${st.ok === false || st.running ? " open" : ""}><summary><b>Protokoll</b> <span class="hint">${st.started ? esc(deTime(st.started)) + (st.ok === false ? ", mit Fehlern" : "") : "noch keins"}</span>
         ${(st.log || []).length ? `<span class="slinks"><button class="link" data-act="copy" data-src="#plog">kopieren</button> · <button class="link" data-act="dl" data-src="#plog" data-name="pokedex-protokoll">herunterladen</button></span>` : ""}</summary>
         <div class="log" id="plog">${esc((st.log || []).map(logLocal).join("\n") || "Noch kein Lauf.")}</div></details>
+      <details class="sub" id="fehlersub"><summary><b>Fehler</b> ${fehler.length ? `<span class="badge bad">${fehler.length}</span> <span class="hint">zuletzt ${esc(deTime(fehler[0].zuletzt))}</span>` : `<span class="hint">keine</span>`}
+        ${fehler.length ? `<span class="slinks"><button class="link" data-act="fehlerleeren" data-tip="Liste leeren. Was wieder auftritt, steht danach wieder hier.">leeren</button></span>` : ""}</summary>
+        ${fehler.length ? `<p class="hint">Was beim Abgleich oder beim Anzeigen gescheitert ist, je Fehler eine Zeile mit Anzahl (höchstens ${fe.max}, die ältesten fallen weg). Die technischen Einzelheiten stehen im Protokoll des Containers.</p>
+        <div class="scroll"><table class="rows"><tr><th>Zuletzt</th><th>Quelle</th><th>Stelle</th><th>Art</th><th>Anzahl</th><th>Seit</th></tr>
+        ${fehler.map((f) => `<tr><td class="nw">${esc(deTime(f.zuletzt))}</td><td>${esc(f.quelle)}</td><td>${esc(f.wo)}</td><td data-tip="${esc(f.text || "")}">${esc(f.art)}</td><td class="num">${f.anzahl}</td><td class="nw">${esc(deTime(f.erst))}</td></tr>
+          ${f.text ? `<tr class="ftext"><td></td><td colspan="5" class="hint">${esc(f.text)}</td></tr>` : ""}`).join("")}</table></div>`
+        : `<p class="hint">Seit dem letzten Leeren ist nichts gescheitert. Fehlt nur eine Tabelle, weil die Datenbank älter ist als die Version, zählt das nicht als Fehler; der nächste Abgleich baut sie.</p>`}</details>
       <details class="sub"><summary><b>Quellen und Lizenzen</b> <span class="hint">Pokédex ${esc(S.meta?.version || "")}</span></summary>
       <p><a href="https://pokeapi.co" target="_blank" rel="noopener noreferrer">PokéAPI</a> (Grunddaten, alle Spiele, BSD-Lizenz) ·
         <a href="https://github.com/smogon/pokemon-showdown" target="_blank" rel="noopener noreferrer">Pokémon Showdown</a> (Gegenprüfung, MIT) ·
@@ -4253,9 +4316,10 @@ async function settingsView() {
   foldBoxes(main);
   diag(false);                                          // laufenden Test oder letztes Ergebnis zeigen
   const saveSet = async () => {
-    S.meta.einstellungen = await api("/api/einstellungen", {auto: $("#auto").checked, tage: +$("#tage").value, sprites: $("#sprites").checked});
+    const uhr = uhrUtc($("#uhr").value);
+    S.meta.einstellungen = await api("/api/einstellungen", {auto: $("#auto").checked, tage: +$("#tage").value, sprites: $("#sprites").checked, ...(uhr ? {uhr} : {})});
   };
-  ["auto", "tage", "sprites"].forEach((k) => $("#" + k).addEventListener("change", saveSet));
+  ["auto", "tage", "sprites", "uhr"].forEach((k) => $("#" + k).addEventListener("change", saveSet));
   { const dk = $("#diskd"); if (dk.open) diskBox(); dk.addEventListener("toggle", () => { store.set("diskOpen", dk.open); if (dk.open) diskBox(); }); }   // zählt nur aufgeklappt
   $("#sichinfo").addEventListener("toggle", (e) => store.set("sichInfo", e.target.open));
   $("#restore").addEventListener("change", async (e) => {
@@ -4406,6 +4470,7 @@ document.addEventListener("click", async (e) => {
     if (act === "thm") themeMenu($("#thmMenu").hidden);
     else if (act === "thmset") setTheme(b.dataset.v);
     else if (act === "neu") versionsDialog();
+    else if (act === "hwzu") clearNotes();
     else if (act === "neuok") { try { localStorage.setItem("px.version", S.meta.version); } catch (x) { /* egal */ } version(); }
     else if (act === "dock" && MAPFOLD && S.dock) { MAPFOLD = false; $("#dock")?.classList.remove("fold"); }   // auf der Karte: nur für diesen Besuch aufklappen
     else if (act === "dock") { MAPFOLD = false; S.dock = !S.dock; store.set("dock", S.dock); $("#dock")?.classList.remove("fold"); dock(); }
@@ -4492,6 +4557,7 @@ document.addEventListener("click", async (e) => {
       setOwnSet(DETAIL.id, DETAIL.attacken.standard || []);
       renderMoves(DETAIL.attacken, $("#lvl")?.value);
     } else if (act === "mreset") { store.set("mfilter2", {}); movesView(); }
+    else if (act === "fehlerleeren") { await api("/api/fehler/leeren", {}); route(); }
     else if (act === "sync" || act === "rebuild") {
       await api("/api/abgleich", {neu: act === "rebuild"});
       setTimeout(refreshMeta, 800);
@@ -4537,4 +4603,6 @@ $("#home").addEventListener("click", (e) => {
   refreshMeta();
 });
 window.addEventListener("hashchange", route);
+// Netz zum Auffangen: Was nirgends abgefangen wird, steht als Hinweis über der Ansicht statt nur in der Konsole
+window.addEventListener("unhandledrejection", (e) => { hinweis(`Fehler: ${e.reason?.message || e.reason || "unbekannt"}`); });
 refreshMeta().catch((e) => { main.innerHTML = `<div class="note stop">Server nicht erreichbar: ${esc(e.message)}</div>`; });

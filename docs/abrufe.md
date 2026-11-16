@@ -7,6 +7,20 @@ zusammen (`_HOST_LAST`, eine Sperre je Server): Quellen ohne Abhängigkeit laufe
 selben Server aber nie. Antwortet eine Quelle mit 403, 429
 oder einer Prüfseite, hört sie für diesen Lauf auf und ruht 24 Stunden.
 
+Die Ruhezeiten stehen in `ruhe.json` im Datenordner (`abruf.rest_set`, `rest_until`), geschrieben im Augenblick der
+Sperre: Sie gelten auch nach einem Neustart des Containers. Schlüssel ist die Quelle (`pokeapi`, `smogon` …), für
+Kacheln `kacheln` (Map Genie) und `kacheln:<Quelle>`, dazu `server:<Name>` für den Server, der gesperrt hat. Den
+Server-Schlüssel beachtet nur der Verbindungstest; der Abgleich lässt weiterhin Quellen ruhen, nicht Server.
+
+## Neustart mitten im Lauf
+
+Der Stand (`sync.json`) geht auf die Platte, bevor die erste Quelle gefragt wird, nach dem Bauen der Datenbank und nach
+jeder abgeschlossenen Quelle (`abruf._Merker`: jede Änderung an `sources` und `rest`). Solange der Lauf nicht zu Ende
+ist, trägt der Stand `laeuft`. Das Ende (`finished`, Protokoll) schreibt ein `try/finally`, auch nach einem Fehler
+außerhalb der Quellen. Findet der Dienst nach dem Start einen Stand mit `laeuft`, setzt er den Lauf fort (fünf Minuten
+nach dem Start, mit dem bisherigen Protokoll; höchstens `RESUME_MAX`-mal nacheinander, danach wie nach einem
+Fehlschlag). Was schon geholt war, bleibt: CSV-Texte im Zwischenspeicher, Bilder und Kacheln auf der Platte.
+
 ## Ablauf eines Laufs
 
 1. Sicherung von user.db (einmal am Tag, 14 bleiben).
@@ -162,12 +176,20 @@ gespeichert als `formen/<Nummer aus pokemon_forms>.png`.
 ## Zeitplan
 
 Prüfung jede Minute, erster Blick fünf Minuten nach dem Start (ohne Datenbank sofort). Passt `importer.VERSION`
-nicht mehr zum gebauten Stand (nach einem Update mit neuen Tabellen), ist der Abgleich sofort fällig. Fällig nach dem
-eingestellten Abstand (1 bis 30 Tage, Standard 7); nach einem Fehlschlag frühestens nach einer Stunde.
+nicht mehr zum gebauten Stand (nach einem Update mit neuen Tabellen), ist der Abgleich sofort fällig. Sonst zur festen
+Uhrzeit (`uhr` in `settings.json`, Voreinstellung 02:30 UTC), wenn der letzte Lauf mindestens den eingestellten Abstand
+in Kalendertagen zurückliegt (1 bis 30, Standard 7); `abruf.due`, `next_run`. Ein verpasster Termin (Server aus) wird
+am selben Tag nachgeholt. Nach einem Fehlschlag frühestens nach einer Stunde. Der Zeitplan hängt nicht am Neustart
+durch ein Update: Ein Neustart löst keinen Lauf aus, außer es war einer unterbrochen.
+
+Die Uhrzeit steht als Weltzeit (UTC) in der Einstellung, weil der Container keine Zeitzone kennt. Die Oberfläche zeigt
+und nimmt die Ortszeit des Browsers; mit der Zeitumstellung verschiebt sich der Lauf um eine Stunde.
 
 ## Verbindungstest
 
-Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen. Verschiedene Server fragt er gleichzeitig an, jeden
+Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen. Ein Server, der nach einer Sperre ruht
+(`server:<Name>` in `ruhe.json`), wird nicht gefragt; die Zeile sagt, bis wann. Sperre und Pause je Server teilt der
+Test mit dem Abgleich (`_host_lock`, `_HOST_LAST`). Verschiedene Server fragt er gleichzeitig an, jeden
 Server für sich nacheinander mit Pause (`abruf.DIAG_PAUSE`, sonst `PAUSE`); die Zeilen bleiben in der Reihenfolge der
 Abfragen. Der Test läuft im Dienst und geht weiter, wenn die Oberfläche den Reiter wechselt; `GET /api/diag` liefert
 den Fortschritt (`gesamt`, `fertig`, `laeuft`) und am Ende Start, Dauer und Zeilen. Ergebnis und Probe-Seiten liegen nur
@@ -200,6 +222,31 @@ gibt es in den Einstellungen das Lesezeichen „Seite untersuchen“ (`probeHelp
 es läuft auf der fremden Seite, holt die nachgeladenen Daten-Dateien (`performance`-Einträge vom Typ fetch/xhr und
 `.json`, höchstens 40 und 6 MB) samt Inhalt, Daten in globalen Variablen, Kartenmarker, Skripte und das HTML und
 speichert alles als `pokedex-probe-<Seite>.json`. Benutzername und Schlüssel der Seite werden entfernt.
+
+## Fehlerregister
+
+`app/fehler.py` zählt, was scheitert, ohne den Lauf oder die Ansicht abzubrechen: je Fehler (Quelle, Stelle, Art) ein
+Eintrag mit Text, erstem und letztem Zeitpunkt und Anzahl. Höchstens 100 Einträge (`MAX`), die am längsten nicht
+aufgetretenen fallen weg. Das Register steht in `fehler.json`, wird gesammelt geschrieben (`SAVE_S`) und übersteht den
+Neustart. Den Traceback schreibt es einmal je Eintrag und Start ins Protokoll des Containers.
+
+- Quellen des Abgleichs (`_Source`): Quelle, Server, Art („HTTP 404“, „keine Verbindung“, „gesperrt (HTTP 429)“), als
+  Text die zuletzt betroffene Adresse. Ein Statuscode, den der Aufrufer als „gibt es nicht“ erwartet (`absent`), zählt
+  nicht.
+- Abgleich selbst (`abgleich`): Abbruch des Laufs, verworfene Datenbank, Fehler in einem der parallelen Teile, Zeitplan.
+- Abfragen für die Oberfläche (`abfrage`), Karten (`karte`), abgebrochene Anfragen (`server`, Adresse ohne Nummern).
+- Kein Fehler (`fehler.fehlt`): „no such table“ und „no such column“ (die Datenbank ist älter als die Version, der
+  nächste Abgleich baut sie) und Abfragen, solange es noch keine Datenbank gibt.
+
+Der Server sammelt je Anfrage, was dabei gemeldet wurde (`beginne`, `ende`), und gibt es in der Kopfzeile
+`X-Pokedex-Fehler` mit; eine solche Antwort ist nicht zwischenspeicherbar und trägt keinen `ETag`. Anzeige: siehe
+`docs/oberflaeche.md`, „Fehler und Hinweise“.
+
+## Karten vorbereiten
+
+Nach dem Start und nach jedem Abgleich bereitet der Server die Karten eines Spiels vor (`server._warm_loop`,
+`_prewarm`): das Spiel, dessen Kartenliste die Oberfläche zuletzt geholt hat (`map_need`, `bedarf.json`). Ohne
+gemerkten Bedarf bereitet er nichts vor; das erste Öffnen der Karten stößt das Vorbereiten an und merkt den Bedarf.
 
 ## Gegenprüfung
 

@@ -77,7 +77,8 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Eigentyp-Faktor, physisch/speziell, Schwächen), Verteidigung je Angriffstyp, Fähigkeiten, Attacken (nur A, beide, nur B).
 - Typtabelle: Typfilter je Tabelle (`typeFilter`; `chartPick` Zeilen der Typtabelle, `combosPick` Kombinationen mit allen
   gewählten Typen, `ttPickd`/`ttPicka` Spalten der Team-Tabellen); Zählspalten farbig (`cntTd`, `DEFC`, `ATTC`).
-- Einstellungen: im Kasten Abgleich oben der Zeitplan, dann `details.sub` (Quellen mit farbigen Zählern `.badge`,
+- Einstellungen: im Kasten Abgleich oben der Zeitplan (Abstand in Tagen und feste Uhrzeit, `uhrLocal`/`uhrUtc` rechnen
+  zwischen Ortszeit und der Weltzeit des Servers um; darüber der nächste Lauf), dann `details.sub` (Quellen mit farbigen Zählern `.badge`,
   Verbindungstest mit Fortschrittsbalken, Protokoll); „kopieren“ und „herunterladen“ stehen im Kopf (`.slinks`), Knöpfe
   dort klappen nicht. Sicherung mit Spieldaten in einem Kasten.
 - Map Genie: Kachelebene `.mgtiles`, beim Zoomen bleibt das alte Bild in `.mgold` (skaliert), bis alle neuen Kacheln da sind;
@@ -177,9 +178,33 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   zugeklappte merkt sich `setShut`. Zeiten mit `deTime` (deutsch, Zeit des Browsers), Protokollzeilen mit `logLocal`.
 - „Zu erledigen“: „Auftrag kopieren“ (`/api/aufgabe`), „Antwort einlesen“ mit Vorschau (`/api/antwort`, erst mit `dry`),
   „herunterladen“ als CSV. Spieldaten als ZIP unter `/api/spieldaten`.
-- Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`).
+- Stand des Abgleichs: Die Kopfzeile fragt während eines Laufs alle 5 Sekunden `/api/stand` ab (`syncPoll`; Version,
+  `has_data`, der Lauf in wenigen Feldern). Meldet der Server das Ende, verschwindet „Abgleich läuft“ sofort; danach
+  lädt die Seite einmal `/api/meta`. Andere Zeitgeber für den Stand gibt es nicht, außer dem Protokoll in den Einstellungen.
+- Dateien der Oberfläche: `index.html` hängt an CSS und JS eine Kennung aus Version und Prüfsumme des Inhalts
+  (`server.static_tag`); mit dieser Adresse bleiben sie unbegrenzt im Browser. Der Server liest und packt jede Datei einmal.
+- Version: steht rechts neben dem Ansicht-Knopf, ein Klick zeigt alle Versionen (`NEUIGKEITEN` in `app/sources.py`,
+  geholt bei Bedarf über `/api/neuigkeiten`, für den Hinweis nach einem Update nur der Eintrag der Version).
   Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
   (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.
+
+## Fehler und Hinweise
+
+Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine Daten“.
+
+- `api()` wirft bei jeder Antwort, die nicht 2xx ist, und bei einer Antwort 200, die sich nicht als JSON lesen lässt.
+  Der Fehler trägt `status`; 404 heißt „gibt es hier nicht“ und ist kein Fehler.
+- Über der Ansicht steht `#hinweise` (`hinweis`, `drawNotes`): eine Zeile je Ursache, gleiche zählen hoch, ein Wechsel
+  der Ansicht räumt ab (`route`), das Kreuz blendet aus.
+- Beim Laden eines Teils: `.catch(teil("Was fehlt", Ersatzwert))`. Die Ansicht zeichnet mit dem Ersatzwert weiter und
+  nennt den Teil. Beim Speichern: `.catch(ungespeichert(zurück))` nimmt die Anzeige zurück und sagt es.
+- Antwortet der Server, konnte aber einen Teil nicht lesen, trägt die Antwort die Kopfzeile `X-Pokedex-Fehler`
+  (`[[Stelle, Art], …]`, höchstens fünf). `api()` sammelt sie in einer Zeile mit Verweis auf Einstellungen, Fehler.
+- Was nirgends abgefangen wird (`unhandledrejection`), erscheint ebenfalls als Hinweis.
+- Einstellungen, Fehler: die Liste des Servers (`/api/fehler`), eingeklappt, mit Anzahl; „leeren“ ruft
+  `/api/fehler/leeren`.
+- Stellen, die ihren Fehler schon selbst anzeigen (Speicherplatz, Verbindungstest, Sicherung einlesen, `alert` beim
+  Ziehen), bleiben, wie sie sind: kein zweiter Hinweis.
 
 ## Farben
 

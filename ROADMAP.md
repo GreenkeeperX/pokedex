@@ -1,5 +1,65 @@
 # Roadmap
 
+## 0.58.1 (16.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 2, zweiter Teil: Fehler sichtbar machen, Vorbereiten nach Bedarf.
+
+- **Fehlerregister** (`app/fehler.py`, `fehler.json`): je Fehler (Quelle, Stelle, Art) ein Eintrag mit Text, erstem und
+  letztem Zeitpunkt und Anzahl, höchstens 100, übersteht den Neustart. Der Traceback steht einmal je Fehler und Start
+  im Protokoll des Containers. Eine fehlende Tabelle oder Spalte (ältere Datenbank) und „noch keine Datenbank“ sind
+  kein Fehler (`fehler.fehlt`).
+- **Alle `except Exception` durchgesehen** (84 Stellen): 76 melden an das Register und machen mit dem Ersatzwert
+  weiter (61 in `abfragen.py`, vorher still), 8 bleiben mit Grund (Ergebnis des Verbindungstests, Rückgabe an den
+  Aufrufer, `_fail` meldet selbst). `test_keine_stillen_ersatzwerte` lässt eine neue stille Stelle scheitern.
+- **Quellen des Abgleichs** (`abruf._Source`): HTTP-Fehler, fehlende Verbindung und Sperren je Quelle und Server im
+  Register, zusätzlich zum Protokoll des Laufs. Dazu 13 engere Stellen (`except ValueError` und ähnliche in `abruf.py` und
+  `importer.py`), an denen eine nicht lesbare Antwort einer Quelle bisher still zu „leer“ wurde.
+- **Antwort mit Lücke** (`server.FEHLER_KOPF`, Kopfzeile `X-Pokedex-Fehler`): Scheitert beim Rechnen einer Antwort ein
+  Teil, kommt sie trotzdem, nennt aber Stelle und Art, ist nicht zwischenspeicherbar und trägt keinen `ETag`.
+- **Hinweise über der Ansicht** (`app.js`: `hinweis`, `teil`, `ungespeichert`, `#hinweise`): eine Zeile je Ursache,
+  gleiche zählen hoch, eine neue Ansicht räumt ab. 27 Stellen mit `.catch(() => Ersatzwert)` und drei stille `catch`
+  nennen jetzt den Teil, der fehlt; 404 („gibt es hier nicht“) bleibt still. Eine Antwort 200, die sich nicht lesen
+  lässt, ist ein Fehler und kein leeres Ergebnis. Nicht abgefangene Fehler (`unhandledrejection`) erscheinen ebenfalls.
+- **Einstellungen, Fehler** (`/api/fehler`, `/api/fehler/leeren`): die Liste, eingeklappt, mit Anzahl.
+- **Vorbereiten nach Bedarf** (`server.map_need`, `_warm_once`, `bedarf.json`): Der Server merkt sich das Spiel, dessen
+  Karten zuletzt geöffnet wurden, und bereitet nach Start und Abgleich nur dessen Karten vor. Entfernt:
+  `server.WARM_GAMES` (fest Legenden: Arceus). Ohne gemerkten Bedarf wird nichts vorbereitet; das erste Öffnen der
+  Karten bereitet sie wie bisher vor (`_prewarm`). Keine Auswirkung auf gespeicherte Daten.
+
+Offen:
+
+- Nicht durchgesehen: die übrigen engen `except` (`OSError`, `TypeError`, `ValueError` bei Eingaben und Dateien, rund
+  75 Stellen). Die meisten prüfen Eingaben oder „Datei gibt es noch nicht“; eine Durchsicht steht aus.
+- Die Stelle im Hinweis ist der Name der Funktion (`shiny_locks`), kein deutscher Begriff. Reicht zum Finden in der
+  Fehlerliste; sprechende Namen je Stelle wären Handarbeit an 61 Stellen.
+- Ein Fehler beim Aufbau eines Zwischenspeichers (Spieldaten beim Start, zusammengeführte Karten) steht im Register und
+  im Protokoll, aber nur die erste Anfrage trägt den Hinweis. Die Statuskarte (Abschnitt 5) soll das Register in den
+  Gesamtstatus aufnehmen.
+- Speicher der Karten: erst auf dem Server messen (Leistungstest in der Statuskarte), dann entscheiden.
+- Zu entscheiden: Ruhe je Server statt je Quelle auch im Abgleich (heute fragt eine zweite Quelle am selben Server
+  weiter, wenn die erste gesperrt wurde).
+
+## 0.58.0 (14.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 2, erster Teil: Betrieb (Review P8 bis P12).
+
+- **Neustart mitten im Abgleich** (`abruf._run`, `_Merker`, `due`): Stand nach jeder Quelle auf der Platte,
+  `try/finally` um den ganzen Lauf, unterbrochene Läufe werden fortgesetzt. Einzelheiten in `docs/abrufe.md`.
+- **Ruhezeiten dauerhaft** (`ruhe.json`, `rest_set`, `rest_until`): geschrieben im Augenblick der Sperre. Neu gefunden:
+  Die Ruhe der Kartenkacheln stand nur im Speicher (`_mg["rest"]`), nach einem Neustart fragte der Kachelvorrat eine
+  gesperrte Quelle sofort wieder.
+- **Zeitplan mit fester Uhrzeit** (`uhr`, `next_run`): unabhängig vom Zeitpunkt des letzten Laufs und vom Neustart
+  durch ein Update.
+- **Schlanker Stand** (`/api/stand`, `abruf.brief`) und **Neuigkeiten auf Abruf** (`/api/neuigkeiten`); `/api/meta`
+  ohne Versionsgeschichte.
+- **Dateien der Oberfläche**: einmal gelesen und gepackt (`server.static_file`), Adresse mit Prüfsumme, unbegrenzt
+  haltbar; `ETag` und 304 für Seite, Dateien, Bilder, Kacheln, Karten und Neuigkeiten.
+- **Gebiete je Spiel** (`abfragen._AREAS`, höchstens `AREAS_MAX` Spiele).
+- **Verbindungstest**: fragt ruhende Server nicht, teilt Sperre und Pause je Server mit dem Abgleich.
+- **Tests über HTTP** (`tests.test_all.Http`): der Server auf einem freien Port, ohne Spieldaten.
+
+Der zweite Teil von Abschnitt 2 (Fehler sichtbar machen, Vorbereiten nach Bedarf) steht unter 0.58.1.
+
 ## 0.57.0 (13.11.2026)
 
 Arbeitsauftrag vom 13.11.2026, Abschnitt 1: richtige Zahlen (Review P1 bis P5). Formeln, Quellen und offene Punkte
@@ -35,6 +95,33 @@ stehen in `docs/formeln.md`.
 
 Was beim Arbeiten am Pokédex auffällt und für eShopKompass oder VR-Navigator taugen könnte. Nur Empfehlungen; die
 anderen Repositories ändert niemand von hier aus.
+
+- **16.11.2026, Fehlerregister statt stiller Ersatzwerte.** Eine kleine Datei je Dienst: je Fehler (Quelle, Stelle, Art)
+  ein Eintrag mit Anzahl, erstem und letztem Zeitpunkt, begrenzt; der Traceback einmal je Fehler und Start im Protokoll.
+  `except Exception` meldet dorthin und macht mit dem Ersatzwert weiter; „Tabelle fehlt in älterer Datenbank“ ist
+  ausdrücklich kein Fehler. Ein Test sucht stille Stellen im Quelltext. Das Review nennt stille `except` und `.catch`
+  für beide Geschwister. Empfehlung: übernehmen, je mit eigener Liste begründeter Ausnahmen.
+- **16.11.2026, Antwort mit Lücke kennzeichnen.** Eine Kopfzeile an der Antwort, wenn beim Rechnen ein Teil gescheitert
+  ist; die Oberfläche zeigt einen Hinweis über der Ansicht, und die Antwort ist nicht zwischenspeicherbar. In der
+  Oberfläche zwei Helfer für `.catch` (Teil nicht geladen, Änderung nicht gespeichert und zurückgenommen), 404 bleibt
+  still. Empfehlung: für beide Geschwister übernehmbar.
+- **14.11.2026, Stand des Abgleichs nach jeder Quelle speichern.** Teile des Zustands, die sich im Lauf ändern (Quellen,
+  Ruhezeiten), als Wörterbuch, das bei jeder Änderung speichert; ein Kennzeichen „läuft“ im Stand, an dem der Dienst
+  nach dem Start einen unterbrochenen Lauf erkennt und fortsetzt (begrenzt oft). Das Review nennt denselben Befund für
+  den VR-Navigator (Fehler außerhalb der Stränge überspringt das Speichern). Empfehlung: dort übernehmen; im
+  eShopKompass prüfen, ob der Stand mitten im Lauf geschrieben wird.
+- **14.11.2026, Ruhezeiten in eigener kleiner Datei, geschrieben im Augenblick der Sperre.** Im Pokédex lag eine
+  Ruhezeit nur im Speicher (Kartenkacheln). Das Review nennt für den eShopKompass, dass die Ruhe nur für zwei Quellen
+  dauerhaft gemerkt wird. Empfehlung: in beiden Geschwistern jede Stelle suchen, die nach 403 oder 429 eine Ruhe nur im
+  Speicher setzt.
+- **14.11.2026, Verbindungstest und Ruhezeit.** Der Test fragt keinen Server, der nach einer Sperre ruht, und teilt
+  Sperre und Pause je Server mit dem Abgleich. Das Review nennt den Befund für beide Geschwister. Empfehlung: übernehmen.
+- **14.11.2026, schlanker Stand und Adressen mit Prüfsumme.** Ein Endpunkt nur für den Stand des Abgleichs; Dateien der
+  Oberfläche mit der Prüfsumme des Inhalts in der Adresse und unbegrenzter Haltbarkeit, einmal gepackt. Die Prüfsumme
+  statt der Versionsnummer schützt davor, dass eine geänderte Datei bei gleicher Nummer ein Jahr im Browser bleibt.
+  Empfehlung: für beide Geschwister übernehmbar.
+- **14.11.2026, feste Uhrzeit als Weltzeit.** Der Container kennt keine Zeitzone; die Oberfläche rechnet in die
+  Ortszeit des Browsers um. Nur übernehmen, wo ein Zeitplan nach dem letzten Lauf stört; kein Handlungsbedarf erkannt.
 
 - **13.11.2026, Test gegen Privates im Repository.** Der Test liest `git ls-files` und scheitert bei Dateien, die nicht
   in eine erlaubte Liste passen (Wurzelverzeichnis, `*.log`, `*.db`, Bilder außerhalb von `app/static`), und bei Mustern

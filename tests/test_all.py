@@ -10,8 +10,10 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from app import abruf, attacken, aufgaben, db, importer, server, showdown, sources, store, team, typen
+from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, store, team, typen
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
+
+fehler.STUMM = True          # das Fehlerregister schreibt in den Tests nichts ins Protokoll
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
 EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
@@ -1677,7 +1679,14 @@ class Server(TempData):
             for x in range(4, 4 + abruf.MG_403_MAX):
                 abruf.mg_tile("scarlet-violet", "erfunden", 10, x, 3, pause=0)
             self.assertNotEqual(abruf.mg_status()["ruht"], "")
-        abruf._mg.update(rest="", n403=0, miss=set())
+            # 0.58.0: die Ruhe steht in ruhe.json und gilt nach einem Neustart weiter (vorher nur im Speicher)
+            abruf._REST.clear()
+            self.assertNotEqual(abruf.mg_status()["ruht"], "")
+            n = len(calls)
+            self.assertIsNone(abruf.mg_tile("scarlet-violet", "erfunden", 10, 900, 3, pause=0))
+            self.assertEqual(len(calls), n)                       # ruhende Quelle wird nicht gefragt
+        abruf.rest_clear()
+        abruf._mg.update(n403=0, miss=set())
         # kommt eine bekannte Kachel noch, fehlen nur Kacheln am Rand: keine Pause
         def edge(url, **kw):
             if url.endswith("/ok.png"):
@@ -1688,7 +1697,8 @@ class Server(TempData):
             for x in range(20, 20 + 2 * abruf.MG_403_MAX):
                 abruf.mg_tile("scarlet-violet", "erfunden", 10, x % 1024, 5, pause=0)
             self.assertEqual(abruf.mg_status()["ruht"], "")
-        abruf._mg.update(rest="", n403=0, miss=set(), ok="")
+        abruf.rest_clear()
+        abruf._mg.update(n403=0, miss=set(), ok="")
         # der Vorrat holt alle Stufen: erst bis eine unter der größten, dann die größte
         abruf.store.save_json("mapgenie/scarlet-violet.json", {"spiel": "scarlet-violet", "am": "2026-11-11", "karten": [
             {"slug": "erfunden", "titel": "Erfunden", "kacheln": "spiel/erfunden/{z}/{x}/{y}.png", "min_zoom": 9, "max_zoom": 10,
@@ -1707,7 +1717,8 @@ class Server(TempData):
             self.assertEqual(calls, [])
         abruf._mg["vorrat"].clear()
         # fehlende Kacheln (einzelnes 403) stehen mit Datum in fehlt.json; bei einer Sperre werden sie wieder vergessen
-        abruf._mg.update(rest="", n403=0, miss=set(), miss_am={}, r403=[])
+        abruf.rest_clear()
+        abruf._mg.update(n403=0, miss=set(), miss_am={}, r403=[])
         with mock.patch.object(abruf.sources, "fetch", deny):
             abruf.mg_tile("scarlet-violet", "erfunden", 10, 508, 508, pause=0)
             self.assertIn("spiel/erfunden/10/508/508.png", abruf._mg["miss_am"])
@@ -1715,7 +1726,8 @@ class Server(TempData):
                 abruf.mg_tile("scarlet-violet", "erfunden", 10, 508 + x % 4, 509 + x // 4, pause=0)
         self.assertNotEqual(abruf.mg_status()["ruht"], "")
         self.assertEqual(abruf._mg["miss_am"], {})
-        abruf._mg.update(rest="", n403=0, miss=set(), miss_am={}, r403=[])
+        abruf.rest_clear()
+        abruf._mg.update(n403=0, miss=set(), miss_am={}, r403=[])
 
     def test_0_39_0_schwester_karten(self):
         # Gold/Silber: eigene Karte von DittoBase vorn, von Kristall nur die Karten anderer Quellen
@@ -2350,6 +2362,559 @@ rect 0 0 9 9 [[Außerhalb]]"""
         self.assertEqual(len(os.listdir(os.path.join(self.dir, "sicherung"))), db.BACKUP_KEEP)
 
 
+class Betrieb(TempData):
+    """0.58.0: Der Abgleich übersteht einen Neustart, der Zeitplan hat eine feste Uhrzeit, der Stand ist schlank."""
+
+    def setUp(self):
+        super().setUp()
+        abruf._REST.clear()
+
+    def tearDown(self):
+        abruf._REST.clear()
+        super().tearDown()
+
+    def test_zeitplan_feste_uhrzeit(self):
+        open(db.pokeapi_path(), "w").close()
+        utc = lambda *a: datetime(*a, tzinfo=timezone.utc)
+        self.assertEqual(abruf.load_settings()["uhr"], "02:30")
+        # von Hand am Nachmittag gestartet: Der nächste Lauf hängt nicht an dieser Uhrzeit, sondern am festen Termin
+        store.save_json("sync.json", {"started": utc(2026, 11, 1, 15, 0).isoformat(), "finished": utc(2026, 11, 1, 15, 9).isoformat(), "ok": True})
+        self.assertFalse(abruf.due(at=utc(2026, 11, 7, 23, 0)))
+        self.assertFalse(abruf.due(at=utc(2026, 11, 8, 2, 29)))
+        self.assertTrue(abruf.due(at=utc(2026, 11, 8, 2, 30)))
+        self.assertTrue(abruf.due(at=utc(2026, 11, 8, 15, 0)))          # verpasst (Server war aus): am selben Tag nachholen
+        self.assertEqual(abruf.next_run(at=utc(2026, 11, 2, 0, 0)), "2026-11-08T02:30:00+00:00")
+        self.assertEqual(abruf.next_run(at=utc(2026, 11, 20, 12, 0)), "2026-11-21T02:30:00+00:00")
+        # andere Uhrzeit, jeden Tag
+        self.assertEqual(abruf.save_settings({"uhr": "23:15", "tage": 1})["uhr"], "23:15")
+        store.save_json("sync.json", {"started": utc(2026, 11, 5, 23, 15).isoformat(), "finished": "x", "ok": True})
+        self.assertFalse(abruf.due(at=utc(2026, 11, 6, 23, 14)))
+        self.assertTrue(abruf.due(at=utc(2026, 11, 6, 23, 15)))
+        # ein Lauf kurz vor dem Termin desselben Tages zählt für diesen Tag
+        store.save_json("sync.json", {"started": utc(2026, 11, 6, 22, 0).isoformat(), "finished": "x", "ok": True})
+        self.assertFalse(abruf.due(at=utc(2026, 11, 6, 23, 30)))
+        self.assertTrue(abruf.due(at=utc(2026, 11, 7, 23, 30)))
+        for bad in ("24:00", "7:5", "", None, "02:30:00"):
+            with self.assertRaises(ValueError):
+                abruf.save_settings({"uhr": bad})
+        # kaputte Einstellung von Hand: Vorgabe statt Absturz des Zeitplans
+        store.save_json("settings.json", {"auto": True, "tage": 7, "sprites": True, "uhr": "abends"})
+        self.assertEqual(abruf.load_settings()["uhr"], "02:30")
+        abruf.save_settings({"auto": False})
+        self.assertEqual(abruf.next_run(), "")
+        self.assertFalse(abruf.due(at=utc(2027, 1, 1, 3, 0)))
+
+    def test_sperre_uebersteht_neustart(self):
+        def fake(url, timeout=40, headers=None, raw=False):
+            raise sources.FetchError(url, 429)
+        log = []
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            src = abruf._Source("smogon", log.append, pause=0)
+            self.assertIsNone(src.get("https://beispiel.invalid/a"))
+            self.assertIsNone(src.get("https://beispiel.invalid/b"))
+        self.assertEqual((src.n, src.blocked), (1, True))                # nach der Sperre keine zweite Anfrage
+        at = abruf.now()
+        until = abruf.rest_until("smogon")
+        self.assertTrue(abruf._iso(at + timedelta(hours=23)) < until <= abruf._iso(at + timedelta(hours=24, minutes=1)))
+        # die Quelle ruht und, für den Verbindungstest, der Server, der gesperrt hat
+        self.assertEqual(store.load_json(abruf.REST_FILE, {}), {"smogon": until, "server:beispiel.invalid": until})
+        abruf._REST.clear()                                              # Neustart: nichts mehr im Speicher
+        self.assertEqual(abruf._resting({}, "smogon", at), until)
+        self.assertEqual(abruf._resting({}, "pokeapi", at), "")
+        self.assertEqual(abruf.status()["rest"]["smogon"], until)
+        # eine kürzere Ruhe verkürzt eine längere nicht; abgelaufene fallen weg
+        self.assertEqual(abruf.rest_set("smogon", hours=1), until)
+        abruf.rest_set("alt", hours=1, at=at - timedelta(hours=3))
+        abruf.rest_set("neu", hours=1)
+        self.assertEqual(sorted(store.load_json(abruf.REST_FILE, {})), ["neu", "server:beispiel.invalid", "smogon"])
+        # große Item-Bilder (Serebii) lassen die Extras von GitHub nicht mitruhen
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            abruf._Source("extras", log.append, pause=0, ruhe="itemhq").get("https://beispiel.invalid/c")
+        self.assertTrue(abruf.rest_until("itemhq"))
+        self.assertEqual(abruf.rest_until("extras"), "")
+
+    def test_verbindungstest_fragt_ruhende_server_nicht(self):
+        host = "raw.githubusercontent.com"
+        until = abruf.rest_set("server:" + host)
+        seen = []
+        def fake(url, timeout=40, encoding="", headers=None, raw=False, limit=None, data=None):
+            seen.append(url)
+            return {"error": "", "status": 404, "server": "x", "text": "nicht da", "body": b""}
+        abruf._HOST_LAST.pop("www.serebii.net", None)
+        with mock.patch.object(sources, "request", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+            lines = abruf.diagnose({}, {})
+        self.assertTrue(seen and not any(host in u for u in seen))
+        ruht = [x for x in lines if "nicht gefragt" in x]
+        self.assertTrue(ruht and all(f"{host} ruht nach einer Sperre bis {until[:16].replace('T', ' ')} UTC" in x for x in ruht))
+        self.assertTrue(any(x.startswith("PokéAPI, types.csv: nicht gefragt") for x in ruht))
+        self.assertFalse(any(x.endswith(": keine Antwort") for x in lines))
+        # der Test führt dieselbe Uhr je Server wie der Abgleich (gemeinsame Pause)
+        self.assertIn("www.serebii.net", abruf._HOST_LAST)
+
+    def _lauf(self, *patches):
+        def fake(url, timeout=40, headers=None, raw=False):
+            raise sources.FetchError(url, 404)
+        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None), \
+                mock.patch.object(abruf, "start_stock", lambda: None):
+            ps = [mock.patch.object(*x) for x in patches]
+            for x in ps:
+                x.start()
+            try:
+                return abruf.run()
+            finally:
+                for x in ps:
+                    x.stop()
+
+    def test_stand_nach_jeder_quelle(self):
+        snaps = []
+        def smogon(st, log, at):
+            snaps.append(store.load_json("sync.json", {}))               # was stünde nach einem Neustart genau jetzt da?
+            st["sources"]["smogon"] = {"ok": True, "requests": 0}
+            snaps.append(store.load_json("sync.json", {}))
+            st["rest"]["smogon"] = "2099-01-01T00:00:00+00:00"
+            snaps.append(store.load_json("sync.json", {}))
+        self.assertTrue(self._lauf((abruf, "_smogon", smogon)))
+        a, b, c = snaps
+        self.assertTrue(a["laeuft"] and "finished" not in a)
+        self.assertTrue(any("Abgleich gestartet" in x for x in a["log"]))
+        self.assertIn("pokeapi", a["sources"])                           # die fertige Quelle steht schon auf der Platte
+        self.assertNotIn("smogon", a["sources"])
+        self.assertEqual(b["sources"]["smogon"], {"ok": True, "requests": 0})
+        self.assertEqual(c["rest"]["smogon"], "2099-01-01T00:00:00+00:00")
+        end = store.load_json("sync.json", {})
+        self.assertTrue(end["finished"] and "laeuft" not in end and end["versuch"] == 1)
+        self.assertFalse(abruf.status()["unterbrochen"])
+        self.assertFalse(abruf._running.locked())
+
+    def test_unterbrochener_lauf_wird_fortgesetzt(self):
+        open(db.pokeapi_path(), "w").close()
+        abruf.save_settings({"auto": False})
+        at = abruf.now()
+        halb = {"started": abruf._iso(at - timedelta(minutes=3)), "ok": False, "laeuft": True, "versuch": 1,
+                "log": ["02:30:00 Abgleich gestartet (Zeitplan)", "02:31:10 PokéAPI: 204 Dateien"],
+                "sources": {"pokeapi": {"ok": True}}, "rest": {"showdown": "2099-01-01T00:00:00+00:00"}}
+        store.save_json("sync.json", halb)
+        self.assertTrue(abruf.status()["unterbrochen"])
+        self.assertTrue(abruf.brief()["unterbrochen"])
+        self.assertTrue(abruf.due(at=at))                                # auch ohne Zeitplan: ein begonnener Lauf wird beendet
+        os.remove(db.pokeapi_path())
+        self.assertTrue(self._lauf())
+        end = store.load_json("sync.json", {})
+        self.assertEqual(end["log"][:2], halb["log"])                    # das Protokoll des unterbrochenen Laufs bleibt
+        self.assertTrue(any("unterbrochen" in x and "Versuch 2" in x for x in end["log"]))
+        self.assertEqual((end["versuch"], "laeuft" in end), (2, False))
+        self.assertEqual(end["rest"]["showdown"], "2099-01-01T00:00:00+00:00")     # Ruhezeiten übernommen
+        # stürzt der Lauf jedes Mal mit ab, wird er nicht endlos sofort wiederholt
+        open(db.pokeapi_path(), "w").close()
+        store.save_json("sync.json", dict(halb, versuch=abruf.RESUME_MAX + 1))
+        self.assertFalse(abruf.due(at=at))
+        self.assertTrue(abruf.due(at=at + timedelta(hours=1)) is False)  # Zeitplan aus: dann gar nicht von selbst
+        abruf.save_settings({"auto": True})
+        self.assertTrue(abruf.due(at=at + timedelta(hours=1)))           # mit Zeitplan wie nach einem Fehlschlag: nach einer Stunde
+
+    def test_prozess_mitten_im_lauf_beendet(self):
+        """Wie ein Neustart des Containers: ein eigener Prozess beginnt den Abgleich und wird hart beendet (SIGKILL),
+        während die erste Quelle noch antwortet. Der Stand auf der Platte reicht, um den Lauf fortzusetzen."""
+        import subprocess
+        import sys
+        code = ("import time\nfrom app import abruf, sources\n"
+                "sources.fetch = lambda url, **kw: time.sleep(60)\nabruf.start_stock = lambda: None\nabruf.run()\n")
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        child = subprocess.Popen([sys.executable, "-c", code], cwd=root, env=dict(os.environ, DATA_DIR=self.dir),
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                if store.load_json("sync.json", {}).get("laeuft"):
+                    break
+                time.sleep(0.1)
+        finally:
+            child.kill()
+            child.wait(10)
+        halb = store.load_json("sync.json", {})
+        self.assertTrue(halb.get("laeuft") and "finished" not in halb)
+        self.assertTrue(any("Abgleich gestartet" in x for x in halb["log"]))
+        self.assertTrue(abruf.status()["unterbrochen"])
+        self.assertTrue(abruf.due())
+        self.assertTrue(self._lauf())
+        end = store.load_json("sync.json", {})
+        self.assertEqual(end["log"][0], halb["log"][0])
+        self.assertTrue(any("unterbrochen" in x for x in end["log"]))
+        self.assertTrue(end["finished"] and "laeuft" not in end)
+
+    def test_fehler_ausserhalb_der_quellen(self):
+        def kaputt():
+            raise RuntimeError("Platte weg")
+        self.assertTrue(self._lauf((db, "backup", kaputt)))
+        end = store.load_json("sync.json", {})
+        self.assertTrue(end["finished"] and "laeuft" not in end)
+        self.assertIs(end["ok"], False)
+        self.assertTrue(any("Abgebrochen: RuntimeError: Platte weg" in x for x in end["log"]))
+        self.assertIn(("abgleich", "Lauf", "RuntimeError"), {(x["quelle"], x["wo"], x["art"]) for x in fehler.liste()})    # 0.58.1
+        self.assertFalse(abruf._running.locked())
+        # lässt sich der Stand nicht schreiben, läuft der Abgleich trotzdem zu Ende
+        def voll(name, obj):
+            raise OSError("kein Platz")
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertTrue(self._lauf((store, "save_json", voll)))
+        self.assertIn("Stand des Abgleichs speichern: kein Platz", err.getvalue())
+        self.assertFalse(abruf._running.locked())
+
+
+class Fehler(TempData):
+    """0.58.1: Fehler werden gezählt statt verschluckt; eine fehlende Tabelle (ältere Datenbank) ist kein Fehler."""
+
+    def setUp(self):
+        super().setUp()
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())
+
+    def tearDown(self):
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())
+        super().tearDown()
+
+    def test_register_zaehlt_und_begrenzt(self):
+        for _ in range(3):
+            fehler.notiere("serebii", "www.beispiel.invalid", "HTTP 404", "www.beispiel.invalid/a   b\n" + "x" * 400)
+        (e,) = fehler.liste()
+        self.assertEqual((e["quelle"], e["wo"], e["art"], e["anzahl"]), ("serebii", "www.beispiel.invalid", "HTTP 404", 3))
+        self.assertLessEqual(e["erst"], e["zuletzt"])
+        self.assertEqual(len(e["text"]), fehler.TEXT)
+        self.assertTrue(e["text"].startswith("www.beispiel.invalid/a b x"))        # Leerraum zusammengezogen
+        # andere Art, andere Stelle: eigene Einträge; höchstens MAX, die am längsten nicht aufgetretenen fallen weg
+        for i in range(fehler.MAX + 4):
+            fehler.notiere("abfrage", f"stelle{i}", "ValueError")
+        alle = fehler.liste()
+        self.assertEqual(len(alle), fehler.MAX)
+        self.assertEqual(alle[0]["wo"], f"stelle{fehler.MAX + 3}")
+        self.assertNotIn("serebii", {x["quelle"] for x in alle})
+        self.assertNotIn("stelle0", {x["wo"] for x in alle})
+        # wer wieder auftritt, bleibt
+        fehler.notiere("abfrage", "stelle10", "ValueError")
+        for i in range(5):
+            fehler.notiere("abfrage", f"neu{i}", "ValueError")
+        self.assertEqual([x["anzahl"] for x in fehler.liste() if x["wo"] == "stelle10"], [2])
+        self.assertEqual(fehler.leeren(), {"ok": True})
+        self.assertEqual(fehler.liste(), [])
+
+    def test_fehlende_tabelle_ist_kein_fehler(self):
+        import sqlite3
+        self.assertFalse(fehler.melden(sqlite3.OperationalError("no such table: forschung")))
+        self.assertFalse(fehler.melden(sqlite3.OperationalError("no such column: dex")))
+        # noch keine Datenbank: db.game() gibt None, die Abfrage scheitert an der fehlenden Verbindung
+        try:
+            db.game().execute("SELECT 1")
+        except AttributeError as e:
+            self.assertFalse(fehler.melden(e))
+        self.assertEqual(fehler.liste(), [])
+        # mit Datenbank ist derselbe Fehler einer, eine kaputte Datei auch
+        open(db.pokeapi_path(), "w").close()
+        try:
+            None.execute("SELECT 1")
+        except AttributeError as e:
+            self.assertTrue(fehler.melden(e))
+        self.assertTrue(fehler.melden(sqlite3.DatabaseError("database disk image is malformed")))
+        self.assertTrue(fehler.melden(sqlite3.OperationalError("disk I/O error")))
+        self.assertEqual(sorted((x["wo"], x["art"]) for x in fehler.liste()),
+                         [("Fehler.test_fehlende_tabelle_ist_kein_fehler", "AttributeError"),
+                          ("Fehler.test_fehlende_tabelle_ist_kein_fehler", "DatabaseError"),
+                          ("Fehler.test_fehlende_tabelle_ist_kein_fehler", "OperationalError")])
+
+    def test_register_uebersteht_neustart(self):
+        fehler.notiere("pokewiki", "www.beispiel.invalid", "HTTP 500", "www.beispiel.invalid/api.php")
+        fehler.notiere("pokewiki", "www.beispiel.invalid", "HTTP 500", "www.beispiel.invalid/api.php")
+        fehler.sichern()
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, fehler.FILE)))
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())          # neuer Start
+        (e,) = fehler.liste()
+        self.assertEqual((e["quelle"], e["art"], e["anzahl"]), ("pokewiki", "HTTP 500", 2))
+        fehler.notiere("pokewiki", "www.beispiel.invalid", "HTTP 500")
+        self.assertEqual(fehler.liste()[0]["anzahl"], 3)
+        # das Protokoll des Containers bekommt die Einzelheiten einmal je Fehler und Start
+        import contextlib
+        import io
+        err = io.StringIO()
+        fehler.STUMM = False
+        try:
+            with contextlib.redirect_stderr(err):
+                for _ in range(3):
+                    try:
+                        raise KeyError("sterne")
+                    except KeyError as e:
+                        fehler.melden(e, "probe")
+        finally:
+            fehler.STUMM = True
+        self.assertEqual(err.getvalue().count("Fehler (abfrage, probe): KeyError"), 1)
+        self.assertEqual(err.getvalue().count("Traceback"), 1)
+
+    def test_abfrage_meldet_statt_zu_schweigen(self):
+        import sqlite3
+
+        class Kaputt:
+            def __init__(self, e):
+                self.e = e
+
+            def execute(self, *a):
+                raise self.e
+        open(db.pokeapi_path(), "w").close()
+        # ältere Datenbank ohne die Tabelle: leer, kein Eintrag
+        self.assertEqual(abfragen._blaubeer(Kaputt(sqlite3.OperationalError("no such table: blaubeer"))), [])
+        self.assertEqual(fehler.liste(), [])
+        # die Tabelle gibt es, sie lässt sich nicht lesen: weiter mit leerer Liste, aber gezählt
+        fehler.beginne()
+        self.assertEqual(abfragen._blaubeer(Kaputt(sqlite3.DatabaseError("database disk image is malformed"))), [])
+        self.assertEqual(abfragen._missions(Kaputt(sqlite3.DatabaseError("database disk image is malformed"))), [])
+        self.assertEqual(abfragen._blaubeer(Kaputt(sqlite3.DatabaseError("database disk image is malformed"))), [])
+        got = fehler.ende()
+        self.assertEqual([(g["quelle"], g["wo"], g["art"]) for g in got],
+                         [("abfrage", "_blaubeer", "DatabaseError"), ("abfrage", "_missions", "DatabaseError"), ("abfrage", "_blaubeer", "DatabaseError")])
+        self.assertEqual({(x["wo"], x["anzahl"]) for x in fehler.liste()}, {("_blaubeer", 2), ("_missions", 1)})
+        self.assertEqual(fehler.ende(), [])                 # außerhalb einer Anfrage wird nichts gesammelt
+        fehler.notiere("abfrage", "x", "y")
+        self.assertEqual(fehler.ende(), [])
+
+    def test_quelle_des_abgleichs(self):
+        zeilen = []
+
+        def fetch(url, **kw):
+            raise sources.FetchError(url, 404 if url.endswith("/fehlt") else 429)
+        with mock.patch.object(sources, "fetch", fetch), mock.patch.object(abruf, "sleep", lambda s: None):
+            src = abruf._Source("serebii", zeilen.append, pause=0)
+            self.assertIsNone(src.get("https://www.beispiel.invalid/fehlt"))
+            self.assertIsNone(src.get("https://www.beispiel.invalid/fehlt"))
+            self.assertEqual(src.get("https://www.beispiel.invalid/fehlt", absent=(404,)), "")      # „gibt es nicht“ ist kein Fehler
+            self.assertIsNone(src.get("https://www.beispiel.invalid/voll"))
+        abruf._REST.clear()
+        self.assertEqual(sorted((x["quelle"], x["wo"], x["art"], x["anzahl"], x["text"]) for x in fehler.liste()),
+                         [("serebii", "www.beispiel.invalid", "HTTP 404", 2, "www.beispiel.invalid/fehlt"),
+                          ("serebii", "www.beispiel.invalid", "gesperrt (HTTP 429)", 1, "www.beispiel.invalid/voll")])
+
+    def test_keine_stillen_ersatzwerte(self):
+        """Jedes „except Exception“ meldet an das Fehlerregister oder steht hier mit Grund; ebenso „.catch(() => …)“ in
+        der Oberfläche. Eine neue stille Stelle lässt den Test scheitern."""
+        erlaubt = {
+            ("abruf.py", "out[k] = e"): "der Aufrufer (_run) meldet",
+            ("abruf.py", 'lines[slot] = f"{head}, nicht auswertbar ({type(e).__name__}: {e})"'): "steht im Ergebnis des Verbindungstests",
+            ("abruf.py", 'lines[slot] = f"{name}: Fehler im Test ({type(e).__name__}: {e})"'): "steht im Ergebnis des Verbindungstests",
+            ("abruf.py", 'lines.append(f"{label}: nicht in der Datenbank ({e})")'): "steht im Ergebnis des Verbindungstests",
+            ("server.py", "self._fail(path, e)"): "_fail meldet",
+            ("sources.py", "if whole:"): "unvollständige Antwort (Zeit abgelaufen): der Anfang wird ausgepackt",
+            ("sources.py", 'out["error"] = str(e)[:160]'): "der Fehler geht an den Aufrufer zurück",
+        }
+        app = os.path.join(os.path.dirname(__file__), "..", "app")
+        still, benutzt = [], set()
+        for name in sorted(os.listdir(app)):
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(app, name), encoding="utf-8") as f:
+                zeilen = f.read().split("\n")
+            for i, z in enumerate(zeilen):
+                if not re.match(r"\s*except Exception\b", z):
+                    continue
+                tief = len(z) - len(z.lstrip())
+                block = []
+                for w in zeilen[i + 1:]:
+                    if w.strip() and len(w) - len(w.lstrip()) <= tief:
+                        break
+                    block.append(w.strip())
+                if any(b.startswith(("fehler.melden(", "fehler.notiere(")) for b in block):
+                    continue
+                key = (name, next(b for b in block if b))
+                benutzt.add(key)
+                if key not in erlaubt:
+                    still.append(f"{name}:{i + 1}: {key[1]}")
+        self.assertEqual(still, [])
+        self.assertEqual(set(erlaubt) - benutzt, set())            # die Liste der Ausnahmen bleibt aktuell
+        with open(os.path.join(app, "static", "js", "app.js"), encoding="utf-8") as f:
+            js = f.read()
+        ok = ('r.json().catch(() => null)',                                 # api(): eine nicht lesbare Antwort wird zum Fehler
+              'play().catch(() => { rb.textContent = "Ruf fehlt"; })',       # steht auf dem Knopf
+              'api("/api/diag").catch(() => null)')                          # Verbindungstest fragt weiter nach
+        rest = [z.strip()[:120] for z in js.split("\n") if ".catch(() =>" in z and not any(o in z for o in ok)]
+        self.assertEqual(rest, [])
+        self.assertNotIn("console.warn(\"", js)
+        self.assertIn('id="hinweise"', open(os.path.join(app, "static", "index.html"), encoding="utf-8").read())
+
+
+class Http(TempData):
+    """0.58.0: der Server über HTTP auf einem freien Port, ohne Spieldaten und ohne Netz."""
+
+    def setUp(self):
+        super().setUp()
+        from http.server import ThreadingHTTPServer
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+        super().tearDown()
+
+    def get(self, path, **headers):
+        import http.client
+        c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=10)
+        try:
+            c.request("GET", path, headers=headers)
+            r = c.getresponse()
+            return r.status, dict(r.getheaders()), r.read()
+        finally:
+            c.close()
+
+    def test_stand_ist_schlank(self):
+        code, h, body = self.get("/api/stand")
+        self.assertEqual(code, 200)
+        d = json.loads(body)
+        self.assertEqual(sorted(d), ["abgleich", "has_data", "version"])
+        self.assertEqual(d["version"], sources.VERSION)
+        self.assertEqual(sorted(d["abgleich"]), ["built", "done", "finished", "ok", "running", "started", "step", "total", "unterbrochen"])
+        self.assertLess(len(body), 400)
+        self.assertEqual(h["Cache-Control"], "no-store")
+        # der Stand folgt dem Lauf: läuft, dann zuverlässig zu Ende
+        self.assertFalse(d["abgleich"]["running"])
+        with abruf._running:
+            abruf.STATE.update(started="2026-11-14T02:30:00+00:00", step="PokéAPI: types.csv", done=3, total=9)
+            a = json.loads(self.get("/api/stand")[2])["abgleich"]
+            self.assertEqual((a["running"], a["step"], a["done"], a["total"]), (True, "PokéAPI: types.csv", 3, 9))
+        abruf.STATE.update(started="", step="", done=0, total=0)
+        self.assertFalse(json.loads(self.get("/api/stand")[2])["abgleich"]["running"])
+
+    def test_neuigkeiten_nur_auf_abruf(self):
+        self.assertNotIn("neu", server.meta.__code__.co_names)
+        code, h, body = self.get("/api/neuigkeiten")
+        alle = json.loads(body)
+        self.assertEqual((code, len(alle), alle[0][0]), (200, len(sources.NEUIGKEITEN), sources.VERSION))
+        eine = json.loads(self.get("/api/neuigkeiten?version=" + sources.VERSION)[2])
+        self.assertEqual((len(eine), eine[0][0]), (1, sources.VERSION))
+        self.assertEqual(json.loads(self.get("/api/neuigkeiten?version=0.0.0")[2]), [])
+        # unverändert: 304 ohne Inhalt
+        code, h2, body = self.get("/api/neuigkeiten", **{"If-None-Match": h["ETag"]})
+        self.assertEqual((code, body, h2["ETag"]), (304, b"", h["ETag"]))
+        self.assertNotEqual(self.get("/api/neuigkeiten?version=" + sources.VERSION)[1]["ETag"], h["ETag"])
+
+    def test_dateien_der_oberflaeche(self):
+        code, h, page = self.get("/")
+        self.assertEqual((code, h["Cache-Control"]), (200, "no-cache"))
+        m = re.search(r'src="(js/app\.js\?v=[^"]+)"', page.decode("utf-8"))
+        self.assertTrue(m and m.group(1).split("=")[1].startswith(sources.VERSION + "-"))
+        self.assertIn('href="style.css?v=' + sources.VERSION + "-", page.decode("utf-8"))
+        self.assertEqual(self.get("/", **{"If-None-Match": h["ETag"]})[0], 304)
+        # mit der Kennung des Inhalts in der Adresse: unbegrenzt haltbar, gepackt, ETag
+        code, h, body = self.get("/" + m.group(1), **{"Accept-Encoding": "gzip"})
+        self.assertEqual((code, h["Cache-Control"], h["Content-Encoding"]), (200, server.IMMUTABLE, "gzip"))
+        import gzip as _gzip
+        with open(os.path.join(server.STATIC, "js", "app.js"), "rb") as f:
+            self.assertEqual(_gzip.decompress(body), f.read())
+        self.assertEqual(self.get("/" + m.group(1), **{"If-None-Match": h["ETag"]})[:1], (304,))
+        # ohne oder mit alter Kennung: der Browser fragt jedes Mal nach
+        for path in ("/js/app.js", "/js/app.js?v=0.1.0-0000000000", "/style.css", "/icon.svg"):
+            code, h, body = self.get(path)
+            self.assertEqual((code, h["Cache-Control"], bool(h["ETag"])), (200, "no-cache", True), path)
+        self.assertEqual(self.get("/js/app.js", **{"If-None-Match": '"anders"'})[0], 200)
+        # einmal gelesen und gepackt, nicht bei jedem Abruf
+        hit = server._STATIC["js/app.js"]
+        self.get("/js/app.js")
+        self.assertIs(server._STATIC["js/app.js"], hit)
+
+    def test_bilder_mit_etag(self):
+        os.makedirs(os.path.join(self.dir, "sprites"))
+        with open(os.path.join(self.dir, "sprites", "25.png"), "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\n" + b"0" * 50)
+        code, h, body = self.get("/sprites/25.png")
+        self.assertEqual((code, len(body), h["Cache-Control"]), (200, 58, "max-age=604800"))
+        code, h2, body = self.get("/sprites/25.png", **{"If-None-Match": h["ETag"]})
+        self.assertEqual((code, body), (304, b""))
+        with open(os.path.join(self.dir, "sprites", "25.png"), "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\n" + b"1" * 70)
+        self.assertEqual(self.get("/sprites/25.png", **{"If-None-Match": h["ETag"]})[0], 200)
+        self.assertEqual(self.get("/sprites/26.png")[0], 404)
+
+    def test_antwort_nennt_fehler(self):
+        """0.58.1: Scheitert beim Rechnen einer Antwort ein Teil, kommt sie trotzdem, sagt es aber in der Kopfzeile."""
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())
+
+        def halb():
+            fehler.notiere("abfrage", "Fundorte für Größe", "DatabaseError", "kaputt")
+            return {"version": sources.VERSION}
+        with mock.patch.object(server, "stand", halb):
+            code, h, body = self.get("/api/stand")
+        self.assertEqual((code, json.loads(body)), (200, {"version": sources.VERSION}))
+        self.assertEqual(json.loads(h[server.FEHLER_KOPF]), [["Fundorte für Größe", "DatabaseError"]])
+        self.assertTrue(h[server.FEHLER_KOPF].isascii())
+        self.assertEqual(h["Cache-Control"], "no-store")
+        # die nächste Antwort ohne Fehler trägt die Kopfzeile nicht (auch auf derselben Verbindung)
+        self.assertNotIn(server.FEHLER_KOPF, self.get("/api/stand")[1])
+        # eine Antwort mit Fehlern bekommt keine Kennung, die der Browser später bestätigen ließe
+        def neu(version=None):
+            fehler.notiere("abfrage", "probe", "KeyError")
+            return []
+        with mock.patch.object(server, "neuigkeiten", neu):
+            self.assertNotIn("ETag", self.get("/api/neuigkeiten")[1])
+        self.assertIn("ETag", self.get("/api/neuigkeiten")[1])
+        # ein Fehler, der die Anfrage abbricht: 500 mit Art, gezählt unter der Adresse ohne Nummern
+        def kaputt(nr, q):
+            raise KeyError("sterne")
+        with mock.patch.object(abfragen, "detail", kaputt):
+            code, h, body = self.get("/api/pokemon/25")
+            self.get("/api/pokemon/133")
+        self.assertEqual(code, 500)
+        # bricht eine fehlende Tabelle die ganze Anfrage ab (kein Ersatzwert), zählt auch sie
+        def alt(q):
+            import sqlite3
+            raise sqlite3.OperationalError("no such table: attacke")
+        with mock.patch.object(abfragen, "move_list", alt):
+            self.assertEqual(self.get("/api/attacken")[0], 500)
+        self.assertIn("KeyError", json.loads(body)["error"])
+        code, h, body = self.get("/api/fehler")
+        d = json.loads(body)
+        self.assertEqual((code, d["max"]), (200, fehler.MAX))
+        self.assertEqual([(x["quelle"], x["wo"], x["art"], x["anzahl"]) for x in d["fehler"] if x["quelle"] == "server"],
+                         [("server", "/api/attacken", "OperationalError", 1), ("server", "/api/pokemon/N", "KeyError", 2)])
+        self.assertEqual(len(d["fehler"]), 4)
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())
+
+    def test_karten_nach_bedarf(self):
+        """0.58.1: Vorbereitet werden die Karten des Spiels, das zuletzt Karten geöffnet hat, nicht mehr fest ein Spiel."""
+        server._NEED.clear()
+        self.assertNotIn("WARM_GAMES", dir(server))
+        rufe = []
+
+        def karten(spiel):
+            rufe.append(spiel)
+            return {"spiel": spiel, "am": "2026-11-16", "karten": []} if spiel in ("emerald", "platinum") else None
+        with mock.patch.object(abruf, "mg_maps", karten), mock.patch.object(server, "_prewarm", lambda d: rufe.append(("bereit", d["spiel"]))):
+            self.assertEqual(server._warm_once(), "")              # ohne Bedarf wird nichts vorbereitet
+            self.assertEqual(rufe, [])
+            def warte(n):                                          # der Server merkt den Bedarf nach dem Senden der Antwort
+                for _ in range(200):
+                    if len(rufe) >= n:
+                        return
+                    time.sleep(0.01)
+            self.assertEqual(self.get("/api/mapgenie?spiel=emerald")[0], 200)
+            warte(2)
+            self.assertEqual(rufe, ["emerald", ("bereit", "emerald")])
+            self.assertEqual(store.load_json(server.NEED_FILE, {}), {"karten": "emerald"})
+            self.get("/api/mapgenie?spiel=gibt-es-nicht")          # ein Spiel ohne Karten ändert den Bedarf nicht
+            warte(3)
+            self.assertEqual(server.map_need(), "emerald")
+            server._NEED.clear()                                   # Neustart: der Bedarf steht auf der Platte
+            del rufe[:]
+            self.assertEqual(server._warm_once(), "emerald")
+            self.assertEqual(rufe, ["emerald", ("bereit", "emerald")])
+            del rufe[:]
+            self.get("/api/mapgenie?spiel=platinum")
+            warte(2)
+            self.assertEqual(server._warm_once(), "platinum")
+        # eine Datei mit anderem Inhalt gilt als „kein Bedarf“
+        store.save_json(server.NEED_FILE, {"karten": "../etc"})
+        server._NEED.clear()
+        self.assertEqual(server.map_need(), "")
+        server._NEED.clear()
+
+    def test_fremde_adresse(self):
+        self.assertEqual(self.get("/api/stand", Host="pokedex.beispiel.invalid")[0], 421)
+
+
 @unittest.skipUnless(os.environ.get("POKEAPI_DB"), "POKEAPI_DB: Pfad zu einer gebauten pokeapi.db")
 class MitDatenbank(TempData):
     """Gegen eine echte Datenbank (lokal, nicht in CI): POKEAPI_DB=/pfad/pokeapi.db python -m unittest tests.test_all"""
@@ -2358,6 +2923,21 @@ class MitDatenbank(TempData):
         super().setUp()
         os.symlink(os.environ["POKEAPI_DB"], db.pokeapi_path())
         db.migrate()
+
+    def test_gebiete_je_spiel(self):
+        """0.58.0: Die Gebiete zweier Spiele bleiben nebeneinander bereit (vorher verdrängte jedes Spiel das vorige)."""
+        from app import abfragen
+        abfragen._AREAS.clear()
+        a = abfragen.areas({"spiel": "emerald"})
+        b = abfragen.areas({"spiel": "platinum"})
+        self.assertTrue(a["gebiete"] and b["gebiete"])
+        self.assertIs(abfragen.areas({"spiel": "emerald"}), a)
+        self.assertIs(abfragen.areas({"spiel": "platinum"}), b)
+        self.assertEqual(len(abfragen._AREAS), 2)
+        for g in ("ruby-sapphire", "firered-leafgreen", "diamond-pearl", "heartgold-soulsilver", "black-white", "x-y"):
+            abfragen.areas({"spiel": g})
+        self.assertEqual(len(abfragen._AREAS), abfragen.AREAS_MAX)
+        abfragen._AREAS.clear()
 
     def test_showdown_import_export(self):
         from app import abfragen
