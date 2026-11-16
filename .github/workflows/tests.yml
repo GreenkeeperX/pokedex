@@ -12,4 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Tests
+        # Der Selbsttest der Oberfläche braucht einen Browser (auf dem Runner vorhanden). Mit „muss“ scheitert der Lauf,
+        # wenn keiner gefunden wird, statt den Test zu überspringen. Was hier läuft und was nur lokal: docs/tests.md
+        env:
+          POKEDEX_SELBSTTEST: muss
         run: python3 -m unittest tests.test_all

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Pokédex: Selbsttest der Oberfläche</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 8px; }
+  iframe { border: 1px solid #888; }
+  pre { white-space: pre-wrap; }
+  .ok { color: #0a6b2d; } .bad { color: #b00020; }
+</style>
+</head>
+<body>
+<!-- Selbsttest der Oberfläche (seit 0.59.0, nach dem Muster der Geschwister). Die Seite lädt die Oberfläche in einen Rahmen,
+     geht den Plan des Tests durch (Spiel wählen, Ansicht öffnen, warten bis nichts mehr lädt) und prüft je Schritt: keine
+     Ausnahme, kein Hinweis über der Ansicht, keine Fehlermeldung in der Ansicht, kein 5xx vom Server, der erwartete Text
+     steht da, nichts ragt seitlich aus dem Fenster. Nebenbei misst sie, wie lange der Inhalt einer Antwort nach ihren
+     Kopfzeilen braucht. Das Ergebnis geht an den Test zurück (tests/mit_daten.py, Klasse
+     Selbsttest). Die Seite liegt nicht im Image; nur der Test liefert sie aus. -->
+<p id="stand">Selbsttest läuft …</p>
+<iframe id="app" title="Oberfläche"></iframe>
+<pre id="ergebnis"></pre>
+<script>
+"use strict";
+(async () => {
+  const warte = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  const out = {schritte: [], probleme: [], rumpf: [], agent: navigator.userAgent};
+  const melde = (text) => { out.probleme.push(text); };
+  let plan;
+  try {
+    plan = await (await fetch("/selbsttest/plan")).json();
+    const rahmen = document.getElementById("app");
+    rahmen.style.width = plan.breite + "px";
+    rahmen.style.height = plan.hoehe + "px";
+    // Spiel und gesehene Version vorab: so beginnt jeder Lauf gleich, ohne die Leiste „Was ist neu“
+    localStorage.clear();
+    localStorage.setItem("px.game", JSON.stringify(plan.schritte[0].spiel));
+    localStorage.setItem("px.version", plan.version);
+    await new Promise((ok) => { rahmen.addEventListener("load", ok, {once: true}); rahmen.src = "/#pokemon"; });
+    const win = rahmen.contentWindow, doc = win.document;
+    // mitschreiben: laufende Anfragen, Antworten mit Fehler, Ausnahmen, console.error
+    let offen = 0, jetzt = "Start";
+    const holen = win.fetch.bind(win);
+    win.fetch = async (...a) => {
+      offen++;
+      try {
+        const r = await holen(...a);
+        // eine Anfrage ist erst fertig, wenn ihr Inhalt da ist; nebenbei gemessen: wie lange er nach den Kopfzeilen braucht
+        const t = performance.now();
+        offen++;
+        r.clone().arrayBuffer().catch(() => null).then(() => { offen--; out.rumpf.push(Math.round((performance.now() - t) * 10) / 10); });
+        if (r.status >= 500) melde(`${jetzt}: ${r.status} bei ${a[0]}`);
+        if (r.headers.get("X-Pokedex-Fehler")) melde(`${jetzt}: Teile fehlen bei ${a[0]}: ${r.headers.get("X-Pokedex-Fehler")}`);
+        return r;
+      } catch (e) { melde(`${jetzt}: Anfrage ${a[0]} gescheitert: ${e.message}`); throw e; } finally { offen--; }
+    };
+    win.addEventListener("error", (e) => melde(`${jetzt}: Ausnahme: ${e.message} (${(e.filename || "").split("/").pop()}:${e.lineno})`));
+    win.addEventListener("unhandledrejection", (e) => melde(`${jetzt}: unbehandelt: ${e.reason && e.reason.message || e.reason}`));
+    const fehler = win.console.error.bind(win.console);
+    win.console.error = (...a) => { melde(`${jetzt}: console.error: ${a.map(String).join(" ").slice(0, 200)}`); fehler(...a); };
+    // ruhig: keine Anfrage unterwegs, kein „Lädt …“, kein Balken; eine kurze Weile lang
+    const ruhig = () => offen === 0 && !doc.body.classList.contains("busy") && !doc.querySelector("#main .loading");
+    const beruhigt = async (grenze) => {
+      const ende = Date.now() + grenze;
+      let seit = 0;
+      while (Date.now() < ende) {
+        if (ruhig()) { if (!seit) seit = Date.now(); else if (Date.now() - seit >= plan.ruhe) return true; } else seit = 0;
+        await warte(10);
+      }
+      return false;
+    };
+    await beruhigt(plan.grenze);
+    let spiel = plan.schritte[0].spiel;
+    for (const s of plan.schritte) {
+      jetzt = `${s.spiel} ${s.ansicht}`;
+      const t0 = Date.now(), vorher = out.probleme.length;
+      if (s.spiel !== spiel) { spiel = s.spiel; win.location.hash = s.ansicht; await warte(0); win.setGame(spiel); }
+      else if (win.location.hash !== s.ansicht) win.location.hash = s.ansicht;
+      await warte(20);
+      if (!await beruhigt(plan.grenze)) melde(`${jetzt}: nach ${plan.grenze} ms noch nicht fertig`);
+      const main = doc.getElementById("main"), text = main.textContent;
+      const hinweis = doc.getElementById("hinweise").textContent.trim();
+      if (hinweis) melde(`${jetzt}: Hinweis über der Ansicht: ${hinweis.slice(0, 200)}`);
+      const stop = main.querySelector(".note.stop");
+      if (stop) melde(`${jetzt}: Fehler in der Ansicht: ${stop.textContent.trim().slice(0, 200)}`);
+      if (win.location.hash !== s.ansicht && !s.wechselt) melde(`${jetzt}: Ansicht wurde zu ${win.location.hash}`);
+      const fehlt = (s.sieht || []).filter((x) => !text.includes(x));
+      if (fehlt.length) melde(`${jetzt}: es fehlt ${fehlt.map((x) => `„${x}“`).join(", ")}; da steht: ${text.replace(/\s+/g, " ").trim().slice(0, 160)}`);
+      for (const x of s.sieht_nicht || []) if (text.includes(x)) melde(`${jetzt}: „${x}“ steht da, sollte aber nicht`);
+      if (text.trim().length < 20) melde(`${jetzt}: Ansicht ist leer`);
+      const breit = doc.documentElement.scrollWidth - doc.documentElement.clientWidth;
+      if (breit > 1) melde(`${jetzt}: Seite ist ${breit} px breiter als das Fenster`);
+      out.schritte.push({spiel: s.spiel, ansicht: s.ansicht, ms: Date.now() - t0, zeichen: text.length, ok: out.probleme.length === vorher});
+    }
+  } catch (e) {
+    melde(`Selbsttest abgebrochen: ${e && e.message || e}`);
+  }
+  out.geplant = plan ? plan.schritte.length : 0;
+  const ok = !out.probleme.length && out.schritte.length === out.geplant;
+  document.getElementById("stand").textContent = ok ? `Selbsttest in Ordnung: ${out.schritte.length} Schritte` : `Selbsttest: ${out.probleme.length} Probleme`;
+  document.getElementById("stand").className = ok ? "ok" : "bad";
+  document.getElementById("ergebnis").textContent = out.probleme.join("\n");
+  await fetch("/selbsttest/ergebnis", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(out)});
+})();
+</script>
+</body>
+</html>

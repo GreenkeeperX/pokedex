@@ -38,6 +38,8 @@ NEEDED = (
     # Mehr Details, TM-Nummern und Items
     "egg_group_prose", "growth_rates", "item_categories", "item_flavor_text", "item_game_indices", "item_prose", "machines",
     "pokemon_egg_groups",
+    # getragene Items wilder Pokémon (fehlte bis 0.58.1 in dieser Liste: ohne die Dateiliste von GitHub blieben sie leer)
+    "pokemon_items",
     # noch ungenutzt, für Wesen und Beeren
     "berries", "nature_names", "natures",
 )

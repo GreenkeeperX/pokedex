@@ -166,7 +166,10 @@ Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HO
     python3 -m unittest tests.test_all
     DATA_DIR=./data python3 -m app.server      # http://localhost:8789, holt beim Start die Daten
 
-Mit einer gebauten Datenbank laufen zusätzliche Tests: `POKEAPI_DB=./data/pokeapi.db python3 -m unittest tests.test_all`.
+Die Tests laufen ohne Netz gegen eine erfundene Mini-Datenbank, die der echte Importer baut, und prüfen die Oberfläche
+im Browser ohne Fenster (Chromium oder Chrome; fehlt er lokal, wird nur dieser Test übersprungen). Bei jedem Pull Request
+laufen sie in der CI. Nur lokal: `POKEAPI_DB=./data/pokeapi.db python3 -m unittest tests.test_all` prüft zusätzlich gegen
+eine gebaute Datenbank. Welche Tests wo laufen und was kein Test abdeckt: `docs/tests.md`.
 Formeln für Schaden, Statuswerte, Typwirkung und Fangchance mit Quellen: `docs/formeln.md`. Die Vergleichswerte der
 Schadensrechnung (`tests/schaden_referenz.json`) erzeugt `tools/schaden_referenz.js` aus `@smogon/calc`; das Werkzeug
 braucht Node, der Pokédex und seine Tests nicht.

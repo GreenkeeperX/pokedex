@@ -1,5 +1,68 @@
 # Roadmap
 
+## 0.59.0 (16.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 3: Testinfrastruktur (Review P-6), vor den Strukturänderungen. Welche Tests wo
+laufen, steht in `docs/tests.md`.
+
+- **Mini-Datenbank** (`tests/minidb.py`, `tests/minidb_geruest.json`, `tools/minidb_geruest.py`): eine erfundene Welt
+  (14 Arten mit Formen, 25 Attacken, Items, Orte, Begegnungen, getragene Items) auf einem Gerüst echter Bezeichner aus
+  der PokéAPI (Spiele, Editionen, Dexe, Typen; BSD-3-Clause, `tests/minidb_LIZENZ.txt`). Der echte Importer baut sie
+  mit gesenkten Mindestmengen in rund 0,2 Sekunden. Die Tests erwarten, was in der Welt steht.
+- **Tests mit Spieldaten in der CI** (`tests/mit_daten.py`: `MiniBau`, `Welt`, `ServerMitDaten`): Liste, Filter,
+  Detailseite je Generation, Lernlisten, Attacken, Fundorte, Items, Fangtabelle, Team, Schaden, Import und Export, „Was
+  fehlt mir noch“, alle Wege des Servers über HTTP. Bisher liefen Tests mit Daten nur lokal (`MitDatenbank`, bleibt für
+  echte Daten). Zwei Tests aus `MitDatenbank`, die keine Datenbank brauchen, laufen jetzt immer (Speicherplatz,
+  Raid-Nester).
+- **Vertrag Server/Oberfläche** (`tests/vertrag.py`, `tests/vertrag.json`, Klasse `Vertrag`): Form von 33 Antworten mit
+  274 Feldern; die Oberfläche kennt jedes Feld; jeder Weg des Servers hat einen Aufrufer. Ausnahmen mit Namen in der
+  Klasse.
+- **Selbsttest der Oberfläche** (`tests/ui_selbsttest.html`, Klasse `Selbsttest`): Chromium ohne Fenster, 1366 × 768,
+  72 Schritte über 5 Spiele. In der CI Pflicht (`POKEDEX_SELBSTTEST=muss`), lokal ohne Browser übersprungen.
+- **`blocked_target`** (Klasse `Heimnetz`): private, lokale und reservierte Adressen, Namen, die dorthin auflösen,
+  Weiterleitungen dorthin, Adressen mit Zugangsdaten, andere Protokolle. Neu `sources.public_ip`.
+- **CI**: läuft wie bisher bei jedem Pull Request, jetzt mit den Tests oben (186 statt 150, davon 8 nur lokal).
+
+Die neuen Tests haben Fehler gefunden. Behoben:
+
+- **Häufigkeit in den Gebieten** (`abfragen._areas_pokeapi`): Die Summe zählte jede Zeile der PokéAPI, also doppelt in
+  Spielen mit zwei Editionen und mehrfach, wenn ein Platz je Bedingung (Tageszeit, Schwarm, Radio) eine eigene Zeile
+  hat. Jetzt zählt jeder Platz einmal je Edition, bei zwei Editionen gilt der größere Wert. Mit echten Daten: Route 1 in
+  Rot und Blau 50 % und 50 % (vorher 100 % und 100 %); Route 201 in Platin Summe 190 statt 242; Route 29 in
+  HeartGold/SoulSilver Summe 280 statt 500. Über 100 liegt die Summe weiter, wo Bedingungen sich ausschließen (Tag und
+  Nacht): Je Pokémon steht der höchste Wert, den es erreicht.
+- **Antworten rund 40 ms zu spät** (`server.Handler.disable_nagle_algorithm`): Kopfzeilen und Inhalt gehen als zwei
+  Pakete hinaus; ohne `TCP_NODELAY` hielt der Kern das zweite zurück, bis der Browser das erste bestätigt hatte.
+  Gemessen im Selbsttest (lokal, ohne Netz dazwischen): vorher bei 66 von 154 Antworten über 30 ms, nachher bei keiner;
+  eine Ansicht im Mittel nach 85 statt 122 ms. Im Heimnetz nicht gemessen.
+- **`blocked_target` ließ Multicast und NAT64 durch** (`sources.public_ip`): `is_global` allein reicht nicht; IPv6 mit
+  eingebetteter IPv4-Adresse (`::ffff:`, `64:ff9b::/96`) wird nach der eingebetteten Adresse beurteilt.
+- **Getragene Items ohne Dateiliste** (`importer.NEEDED`): `pokemon_items` fehlte in der Liste der Dateien, die der
+  Abgleich holt, wenn GitHub die Dateiliste nicht liefert; getragene Items blieben dann still leer. Ein Test prüft
+  jetzt, dass jede Tabelle, die eine Abfrage liest, geholt oder gebaut wird.
+- **Karte ohne Kartendaten** (`app.js`, `mapView`): Hinweis mit Verweis auf den Abgleich statt „Fehler: keine Karte“.
+
+Keine Änderung an `user.db`, keine Migration. `importer.VERSION` unverändert: Die aufbereiteten Tabellen sind gleich,
+die Häufigkeit wird beim Lesen gerechnet.
+
+Offen (gefunden, nicht behoben):
+
+- Die Entwicklungsreihe auf der Detailseite zeigt die heutigen Typen, die Kopfzeile die der gewählten Generation.
+- „Was fehlt mir noch“: Ist keine Stufe einer Reihe im Spiel zu bekommen, verweisen die Wege im Kreis („Ei von X“,
+  „aus Y entwickeln“).
+- Erweiterungen: TMs des Hauptspiels stehen in der Item-Liste ohne Attacke (Türkisgrüne Maske: 35 von 337), „Die Insel
+  der Rüstung“ zeigt keine TMs. Gehört zum Spielprofil (Abschnitt 4, `app/spiele.py`).
+- `/api/mapgenie/eigene` hat keinen Aufrufer in der Oberfläche; sechs Felder liest die Oberfläche nicht (`max_gen`,
+  `kampfform`, `formname`, `effekt`, `abgedeckt`, `ev_summe`). Nicht entfernt; Durchsicht in Abschnitt 4 (toter Code).
+- `importer.NEEDED` nennt `time_of_day_prose`; die Datei gibt es bei der PokéAPI nicht mehr (404). Wirkt nur ohne
+  Dateiliste und dann als ein gemeldeter Fehler.
+- `blocked_target` prüft die Adresse vor dem Verbinden; löst ein Name zwischen Prüfung und Verbindung anders auf (DNS
+  Rebinding), greift die Prüfung nicht. Abhilfe wäre, auf die geprüfte Adresse zu verbinden.
+- Die Mini-Datenbank enthält nur, was aus PokéAPI, Showdown und `extra/` kommt. Raids, Aufträge, Spawnpunkte und Karten
+  sind dort leer; ihre Antworten haben im Vertrag keine Form.
+- Die Tests melden noch `ResourceWarning` (nicht geschlossene Dateien in zwei Tests, nicht geschlossene Datenbanken in
+  den Kartentests).
+
 ## 0.58.1 (16.11.2026)
 
 Arbeitsauftrag vom 13.11.2026, Abschnitt 2, zweiter Teil: Fehler sichtbar machen, Vorbereiten nach Bedarf.
@@ -96,6 +159,19 @@ stehen in `docs/formeln.md`.
 Was beim Arbeiten am Pokédex auffällt und für eShopKompass oder VR-Navigator taugen könnte. Nur Empfehlungen; die
 anderen Repositories ändert niemand von hier aus.
 
+- **16.11.2026, `TCP_NODELAY` am Webserver.** Wer mit `http.server` Kopfzeilen und Inhalt getrennt schreibt und
+  Verbindungen offen hält (HTTP/1.1), verliert je Antwort rund 40 ms (Nagle trifft auf verzögerte Bestätigung). Eine
+  Zeile behebt es: `disable_nagle_algorithm = True` am Handler. Ob die Geschwister betroffen sind, ist von hier aus
+  nicht geprüft. Empfehlung: im Browser-Selbsttest messen (Zeit zwischen Kopfzeilen und Inhalt) und bei Befund übernehmen.
+- **16.11.2026, Selbsttest: eine Anfrage ist erst fertig, wenn ihr Inhalt da ist.** Zählt der Selbsttest laufende
+  Anfragen nur bis zu den Kopfzeilen, hält er eine Ansicht für fertig, während der Inhalt noch unterwegs ist (hier:
+  leere Liste in einem von drei Läufen). Empfehlung: in den Selbsttests der Geschwister prüfen, woran „fertig“ hängt.
+- **16.11.2026, Testdaten durch den echten Importer.** Eine kleine erfundene Welt als Eingabe des echten Imports statt
+  einer von Hand gebauten Testdatenbank: prüft den Import mit und hält die Tests ehrlich. Dazu die Form der Antworten
+  als Datei und der Abgleich „die Oberfläche kennt jedes Feld“. Empfehlung: für beide Geschwister prüfen, wo Tests mit
+  Daten heute nur lokal laufen.
+- **16.11.2026, Ziele im Heimnetz.** `ipaddress.is_global` lässt Multicast und NAT64 durch. Empfehlung: Wo die
+  Geschwister dieselbe Prüfung haben, `public_ip` übernehmen und die Fälle der Klasse `Heimnetz` als Test.
 - **16.11.2026, Fehlerregister statt stiller Ersatzwerte.** Eine kleine Datei je Dienst: je Fehler (Quelle, Stelle, Art)
   ein Eintrag mit Anzahl, erstem und letztem Zeitpunkt, begrenzt; der Traceback einmal je Fehler und Start im Protokoll.
   `except Exception` meldet dorthin und macht mit dem Ersatzwert weiter; „Tabelle fehlt in älterer Datenbank“ ist

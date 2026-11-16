@@ -185,6 +185,15 @@ durch ein Update: Ein Neustart löst keinen Lauf aus, außer es war einer unterb
 Die Uhrzeit steht als Weltzeit (UTC) in der Einstellung, weil der Container keine Zeitzone kennt. Die Oberfläche zeigt
 und nimmt die Ortszeit des Browsers; mit der Zeitumstellung verschiebt sich der Lauf um eine Stunde.
 
+## Nur öffentliche Ziele
+
+Jeder Abruf geht durch `sources.request`; davor steht `sources.blocked_target`. Abgerufen wird nur über http und https,
+ohne Zugangsdaten in der Adresse, und nur, wenn jede Adresse, zu der der Name auflöst, im öffentlichen Internet liegt
+(`sources.public_ip`): nicht privat, nicht lokal, nicht reserviert, kein Multicast; eine IPv6-Adresse mit eingebetteter
+IPv4-Adresse (`::ffff:`, NAT64) zählt nach der eingebetteten. Dasselbe gilt für jedes Ziel einer Weiterleitung. So
+spricht der Dienst nie ein Gerät im Heimnetz an, auch wenn eine Quelle dorthin verweist. Tests: Klasse `Heimnetz`.
+Grenze: Geprüft wird vor dem Verbinden; ein Name, der zwischen Prüfung und Verbindung anders auflöst, wird nicht erkannt.
+
 ## Verbindungstest
 
 Fragt jede Quelle einmal an und beschreibt die Antwort, in Gruppen. Ein Server, der nach einer Sperre ruht

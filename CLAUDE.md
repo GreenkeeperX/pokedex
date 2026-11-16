@@ -28,7 +28,9 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
   `.catch(teil("Was", Ersatz))` beim Laden und `.catch(ungespeichert(zurück))` beim Speichern. Ausnahmen stehen mit
   Grund in `test_keine_stillen_ersatzwerte`,
 - user.db lädt nach jedem Update weiter: nur neue Tabellen und Spalten, nie löschen (`app/db.py`),
-- ändern sich die aufbereiteten Tabellen in `app/importer.py`, `importer.VERSION` erhöhen; dann baut der nächste Abgleich neu.
+- ändern sich die aufbereiteten Tabellen in `app/importer.py`, `importer.VERSION` erhöhen; dann baut der nächste Abgleich neu,
+- ändert sich eine Antwort des Servers mit Absicht, `python3 -m tests.vertrag` ausführen; liest eine Abfrage eine neue
+  Tabelle der PokéAPI, gehört sie in `importer.NEEDED` (Test).
 
 ## Aufbau
 
@@ -60,4 +62,12 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/bisafans.py`: Seiten von BisaFans lesen (Aufträge und Hauptmissionen in Legenden: Arceus, Nebenmissionen in Z-A), ohne Netz
 - `app/shiny.py`: Shiny-Sperren aus Bulbapedia lesen (je Spiel „nur per Tausch“ oder „nie“), ohne Netz
 - `app/serebii.py`: Seiten von Serebii lesen (Abklingzeiten in Legenden: Z-A, Pokédexe von Pokopia), ohne Netz
-- `tests/test_all.py`: Tests ohne Netz; mit `POKEAPI_DB=/pfad/pokeapi.db` auch gegen eine gebaute Datenbank
+- `tests/test_all.py`: Tests ohne Netz (ein Aufruf für alles); mit `POKEAPI_DB=/pfad/pokeapi.db` auch gegen eine gebaute
+  Datenbank. Was in der CI läuft und was nur lokal: `docs/tests.md`
+- `tests/minidb.py`, `tests/minidb_geruest.json`: Mini-Datenbank der Tests (erfundene Welt, vom Importer gebaut; Gerüst aus
+  der PokéAPI, erzeugt mit `tools/minidb_geruest.py`); neue Fälle kommen in die Welt, nicht als Zahl in den Test
+- `tests/mit_daten.py`: Tests mit der Mini-Datenbank (Abfragen, Server über HTTP, Vertrag, Selbsttest im Browser);
+  `tests/basis.py`: gemeinsame Grundklassen
+- `tests/vertrag.py`, `tests/vertrag.json`: Form der Antworten für die Oberfläche; nach gewollter Änderung
+  `python3 -m tests.vertrag`
+- `tests/ui_selbsttest.html`: Selbsttest der Oberfläche (nur der Test liefert die Seite aus)
