@@ -188,6 +188,24 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Nach einem Update erscheint einmal ein Hinweis, was neu ist; der Browser merkt sich die gesehene Version
   (`px.version`). Beim ersten Besuch gibt es keinen Hinweis.
 
+## Fehler und Hinweise
+
+Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine Daten“.
+
+- `api()` wirft bei jeder Antwort, die nicht 2xx ist, und bei einer Antwort 200, die sich nicht als JSON lesen lässt.
+  Der Fehler trägt `status`; 404 heißt „gibt es hier nicht“ und ist kein Fehler.
+- Über der Ansicht steht `#hinweise` (`hinweis`, `drawNotes`): eine Zeile je Ursache, gleiche zählen hoch, ein Wechsel
+  der Ansicht räumt ab (`route`), das Kreuz blendet aus.
+- Beim Laden eines Teils: `.catch(teil("Was fehlt", Ersatzwert))`. Die Ansicht zeichnet mit dem Ersatzwert weiter und
+  nennt den Teil. Beim Speichern: `.catch(ungespeichert(zurück))` nimmt die Anzeige zurück und sagt es.
+- Antwortet der Server, konnte aber einen Teil nicht lesen, trägt die Antwort die Kopfzeile `X-Pokedex-Fehler`
+  (`[[Stelle, Art], …]`, höchstens fünf). `api()` sammelt sie in einer Zeile mit Verweis auf Einstellungen, Fehler.
+- Was nirgends abgefangen wird (`unhandledrejection`), erscheint ebenfalls als Hinweis.
+- Einstellungen, Fehler: die Liste des Servers (`/api/fehler`), eingeklappt, mit Anzahl; „leeren“ ruft
+  `/api/fehler/leeren`.
+- Stellen, die ihren Fehler schon selbst anzeigen (Speicherplatz, Verbindungstest, Sicherung einlesen, `alert` beim
+  Ziehen), bleiben, wie sie sind: kein zweiter Hinweis.
+
 ## Farben
 
 Wie im VR-Navigator: Farbtokens in `:root`, dunkle Ansicht über `prefers-color-scheme` oder den Knopf oben rechts.

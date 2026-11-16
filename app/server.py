@@ -10,12 +10,11 @@ import re
 import sys
 import threading
 import time
-import traceback
 import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, mapgenie, sources, store
+from . import abfragen, abruf, altissimo, aufgaben, db, fehler, mapgenie, sources, store
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -67,7 +66,7 @@ def start_diag():
         try:
             lines, error = abruf.diagnose(proben, DIAG["stand"]), ""
         except Exception as e:
-            traceback.print_exc()
+            fehler.melden(e, "Verbindungstest", "server", immer=True)
             lines, error = None, type(e).__name__
         with _diag_lock:
             DIAG.update(running=False, lines=lines, error=error, proben=proben, dauer=round(time.monotonic() - t0))
@@ -570,7 +569,7 @@ def _prewarm(d):
                 print(f"Karte bereit: {d['spiel']}/{m.get('slug')} in {time.time() - t0:.1f} s, "
                       f"{len(body) // 1024} KB", file=sys.stderr, flush=True)
             except Exception as e:
-                print("Karte vorbereiten:", e, file=sys.stderr)
+                fehler.melden(e, f"Karte vorbereiten: {m.get('slug')}", "karte")
     threading.Thread(target=run, daemon=True, name="karten-vorbereiten").start()
 
 
@@ -623,24 +622,51 @@ def _map_body(m, spiel, am):
         return body
 
 
-WARM_GAMES = ("legends-arceus",)    # 0.52: diese Karten führt der Server schon beim Start zusammen (Arceus ist das Startspiel)
+NEED_FILE = "bedarf.json"           # {"karten": Spiel}: für welches Spiel zuletzt Karten geöffnet wurden
+_NEED = {}
+
+
+def map_need(spiel=None):
+    """0.58.1: Vorbereiten nach Bedarf. Mit spiel: merken, dass für dieses Spiel Karten geöffnet wurden (geschrieben wird
+    nur, wenn es ein anderes ist als zuletzt). Ohne: das zuletzt gemerkte Spiel oder "", auch nach einem Neustart."""
+    if _NEED.get("dir") != store.DATA_DIR:
+        got = store.load_json(NEED_FILE, {}).get("karten")
+        _NEED.update(dir=store.DATA_DIR, karten=got if isinstance(got, str) and re.fullmatch(r"[a-z0-9-]{1,40}", got) else "")
+    if spiel and spiel != _NEED["karten"] and re.fullmatch(r"[a-z0-9-]{1,40}", spiel):
+        _NEED["karten"] = spiel
+        try:
+            store.save_json(NEED_FILE, {"karten": spiel})
+        except OSError as e:
+            fehler.melden(e, "Bedarf merken", "server")
+    return _NEED["karten"]
+
+
+def _warm_once():
+    """Die Karten des Spiels vorbereiten, für das zuletzt Karten geöffnet wurden. Gibt das Spiel zurück oder ""."""
+    spiel = map_need()
+    if not spiel:
+        return ""
+    try:
+        d = abruf.mg_maps(spiel)
+        if d:
+            _prewarm(d)
+            return spiel
+    except Exception as e:
+        fehler.melden(e, f"Karten vorbereiten: {spiel}", "karte")
+    return ""
 
 
 def _warm_loop():
-    """0.52: nach dem Start und nach jedem Abgleich (neuer Stand der Karten) die Karten von WARM_GAMES vorbereiten,
-    damit das erste Öffnen nicht auf das Zusammenführen wartet. Prüft alle 5 Minuten; ist alles bereit, kostet das nichts."""
+    """Nach dem Start und nach jedem Abgleich (neuer Stand der Karten) die Karten vorbereiten, damit das erste Öffnen
+    nicht auf das Zusammenführen wartet. Seit 0.58.1 nach Bedarf: nur für das Spiel, dessen Karten zuletzt geöffnet
+    wurden (map_need), statt immer für Legenden: Arceus; ohne Bedarf wird nichts vorbereitet. Prüft alle 5 Minuten;
+    ist alles bereit, kostet das nichts."""
     try:
         abfragen.data()
-    except Exception:
-        pass
+    except Exception as e:
+        fehler.melden(e, "Spieldaten laden", "server", immer=True)
     while True:
-        for spiel in WARM_GAMES:
-            try:
-                d = abruf.mg_maps(spiel)
-                if d:
-                    _prewarm(d)
-            except Exception as e:
-                print("Karten vorbereiten:", e, file=sys.stderr)
+        _warm_once()
         time.sleep(300)
 
 
@@ -648,6 +674,11 @@ def _no_constant(name):
     """0.56.1: Infinity und NaN sind kein JSON. Python läse sie trotzdem, speicherte sie (etwa als Gewicht eines Teams)
     und schriebe sie wieder aus; der Browser kann die Antwort dann nicht mehr lesen."""
     raise ValueError(f"Zahl erwartet, nicht {name}")
+
+
+# Kopfzeile einer Antwort, bei deren Berechnung etwas gescheitert ist: JSON [[Stelle, Art], …], höchstens fünf.
+# Die Antwort kommt trotzdem (mit dem, was lesbar war); die Oberfläche zeigt in der Ansicht einen Hinweis
+FEHLER_KOPF = "X-Pokedex-Fehler"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -667,6 +698,11 @@ class Handler(BaseHTTPRequestHandler):
         """Antwort senden. extra: weitere Kopfzeilen; mit „ETag“ und passender Anfrage geht 304 ohne Inhalt.
         gz: der Inhalt schon gepackt (Dateien der Oberfläche)."""
         extra = dict(extra or {})
+        got = fehler.ende()
+        if got:                           # Teile der Antwort fehlen: der Browser erfährt es und behält diese Fassung nicht
+            extra.pop("ETag", None)
+            extra["Cache-Control"] = "no-store"
+            extra[FEHLER_KOPF] = json.dumps([[g["wo"], g["art"]] for g in got])
         if code == 200 and self._not_modified(extra.get("ETag")):
             self.send_response(304)
             self.send_header("ETag", extra["ETag"])
@@ -757,6 +793,7 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in urllib.parse.parse_qs(split.query).items()}
         if self._foreign():
             return
+        fehler.beginne()
         try:
             if path in ("/", "/index.html"):
                 # 0.48.6: CSS und JS mit der Version in der Adresse, damit der Browser nach einem Update nie alte Dateien nimmt;
@@ -837,6 +874,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, {"karten": [{"slug": m["slug"], "titel": m["titel"], "orte": len(m["orte"])} for m in (d or {}).get("karten", [])],
                                      "kacheln": abruf.mg_status()})
                     if d:
+                        map_need(q.get("spiel"))        # der Bedarf: nach dem nächsten Start bereitet der Server diese Karten vor
                         _prewarm(d)
             elif path == "/api/fehlt":
                 d = abfragen.missing(q)
@@ -918,6 +956,8 @@ class Handler(BaseHTTPRequestHandler):
                 with _diag_lock:
                     body = {"app": "pokedex", "version": sources.VERSION, "proben": dict(DIAG["proben"])}
                 self._send(200, body, extra={"Content-Disposition": f'attachment; filename="pokedex-proben-{_now()[:10]}.json"'})
+            elif path == "/api/fehler":
+                self._send(200, {"fehler": fehler.liste(), "max": fehler.MAX})
             elif path == "/api/pruefung":
                 self._send(200, abfragen.pruefung())
             else:
@@ -955,6 +995,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/einstellungen": abruf.save_settings,
         "/api/abgleich": lambda b: {"started": abruf.start(force=bool(b.get("neu")))},
         "/api/diag": lambda b: {"started": start_diag()},
+        "/api/fehler/leeren": lambda b: fehler.leeren(),
         "/api/kacheln/umwandeln": abruf.tile_upload,
     }
     # größere Rümpfe: Datensicherung, Kacheln aus dem Browser (je Anfrage einige, als Base64)
@@ -964,6 +1005,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.urlsplit(self.path).path
         if self._foreign():
             return
+        fehler.beginne()
         try:
             fn = self.POST.get(path)
             if not fn:
@@ -978,8 +1020,8 @@ class Handler(BaseHTTPRequestHandler):
             self._fail(path, e)
 
     def _fail(self, path, e):
-        print(f"Fehler bei {path}:", file=sys.stderr)
-        traceback.print_exception(e, file=sys.stderr)
+        """Eine Anfrage ist gescheitert: ins Fehlerregister (Traceback einmal je Stelle und Start im Protokoll), Antwort 500."""
+        fehler.melden(e, re.sub(r"\d+", "N", path)[:80], "server", immer=True)
         if self.command == "POST":
             self.close_connection = True
         self._send(500, {"error": f"Interner Fehler ({type(e).__name__}), Einzelheiten im Protokoll des Containers"})

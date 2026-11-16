@@ -26,7 +26,7 @@ import time
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
-from . import altissimo, bisafans, companion, db, dittobase, ign, importer, ironmon, mapgenie, pkcompletion, pokearth, pokewiki, raidnester, rankedboost, serebii, shiny, smogon, sources, store
+from . import altissimo, bisafans, companion, db, dittobase, fehler, ign, importer, ironmon, mapgenie, pkcompletion, pokearth, pokewiki, raidnester, rankedboost, serebii, shiny, smogon, sources, store
 
 PAUSE = 0.5                 # Sekunden zwischen zwei Abrufen am selben Server
 REST_H = 24
@@ -300,6 +300,7 @@ class _Source:
 
     def _stop(self, why, url):
         self.stopped, self.blocked = why, True
+        fehler.notiere(self.key, urllib.parse.urlsplit(url).hostname or "", why, _short(url))
         rest_set(self.ruhe)              # sofort auf die Platte: gilt auch, wenn der Container gleich neu startet
         rest_set(server_rest(url))       # und je Server, für den Verbindungstest
         self.log(f"{self.name}: {why} bei {_short(url)}, Quelle ruht {REST_H} Stunden")
@@ -337,7 +338,9 @@ class _Source:
                     self._stop(f"gesperrt (HTTP {e.status})", url)
                 else:
                     self.errors += 1
-                    self.log(f"{self.name}: {'HTTP ' + str(e.status) if e.status else 'keine Verbindung'} bei {_short(url)}")
+                    art = "HTTP " + str(e.status) if e.status else "keine Verbindung"
+                    self.log(f"{self.name}: {art} bei {_short(url)}")
+                    fehler.notiere(self.key, host, art, _short(url))
                     if self.errors >= MAX_ERRORS:
                         self.stopped = f"{self.errors} Fehler"
                         self.log(f"{self.name}: zu viele Fehler, für diesen Lauf beendet")
@@ -378,13 +381,15 @@ def csv_list(src, log):
     if text:
         try:
             names = sorted(x["name"][:-4] for x in json.loads(text) if str(x.get("name", "")).endswith(".csv"))
-        except (ValueError, TypeError, KeyError):
+        except (ValueError, TypeError, KeyError) as ex:
+            fehler.melden(ex, "Liste der CSV-Dateien", "pokeapi")
             names = []
     text = src.get(f"{GH_API}/commits?path=data/v2/csv&per_page=1", absent=(403, 404)) if names else ""
     if text:
         try:
             sha = json.loads(text)[0]["sha"]
-        except (ValueError, TypeError, KeyError, IndexError):
+        except (ValueError, TypeError, KeyError, IndexError) as ex:
+            fehler.melden(ex, "Stand der CSV-Dateien", "pokeapi")
             sha = ""
     if not names:
         log(f"PokéAPI: Dateiliste von GitHub nicht lesbar, hole die {len(importer.NEEDED)} benötigten Dateien")
@@ -434,7 +439,8 @@ def media_ids(kind):
             try:
                 return {r[0]: r[1] for r in con.execute("SELECT id, kennung FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 "
                                                         "AND kennung NOT LIKE 'pkhex-%' ORDER BY id")}
-            except Exception:           # Datenbank noch ohne die Spalten von 0.8.0
+            except Exception as e:      # Datenbank noch ohne die Spalten von 0.8.0
+                fehler.melden(e)
                 return {}
         if kind == "formen":
             try:
@@ -442,14 +448,16 @@ def media_ids(kind):
                     "SELECT f.id, p.species_id, f.form_identifier FROM pokemon_forms f JOIN pokemon p ON p.id = f.pokemon_id "
                     "WHERE f.is_default = 0 AND f.form_identifier != '' AND f.pokemon_id IN "
                     "(SELECT pokemon_id FROM pokemon_forms GROUP BY pokemon_id HAVING COUNT(*) > 1) ORDER BY f.id")}
-            except Exception:
+            except Exception as e:
+                fehler.melden(e)
                 return {}
         if kind == "itemhq":            # Ordner bei Serebii nach dem neuesten Spiel mit dem Item
             try:
                 vgs = {k: i for i, k in con.execute("SELECT id, kennung FROM spiel")}
                 rows = con.execute("SELECT id, en, spiele, kennung FROM item WHERE tasche != 'Maschinen' AND unfertig = 0 AND en != '' "
                                    "ORDER BY id").fetchall()
-            except Exception:           # Datenbank vor 0.12.0 (ohne englische Namen)
+            except Exception as e:      # Datenbank vor 0.12.0 (ohne englische Namen)
+                fehler.melden(e)
                 return {}
             out = {}
             big = {vgs.get(k) for ks in ITEM_HQ.values() for k in ks}
@@ -755,9 +763,11 @@ def _run(by_hand, force):
         for k, v in res.items():
             if isinstance(v, Exception):
                 log(f"{k}: abgebrochen: {type(v).__name__}: {v}")
+                fehler.melden(v, k, "abgleich", immer=True)
         st["ok"] = ok
     except Exception as e:          # ein Fehler im Code soll den Dienst nicht beenden
         log(f"Abgebrochen: {type(e).__name__}: {e}")
+        fehler.melden(e, "Lauf", "abgleich", immer=True)
         st["ok"] = False
     finally:
         # auch nach einem Fehler außerhalb der Quellen: Ende, Protokoll und Ruhezeiten stehen im Stand
@@ -953,6 +963,7 @@ def _build(st, log, force, at):
         stats = importer.build(tmp, csvs, sd_texts, extra, pkhex=pkhex, spawns=spawns, sets=sets, wiki=wiki, alt=alt)
     except Exception as e:
         log(f"Neue Datenbank verworfen: {e}; die bisherige bleibt")
+        fehler.melden(e, "Datenbank bauen", "abgleich", immer=True)
         if os.path.exists(tmp):
             os.remove(tmp)
         return False
@@ -1034,7 +1045,8 @@ def _sets(sd):
         t = sd.get(sets_url(gen))
         try:
             data = json.loads(t) if t else None
-        except ValueError:
+        except ValueError as ex:
+            fehler.melden(ex, f"Sets Generation {gen}", "showdown")
             data = None
         if isinstance(data, dict) and data:
             out[gen] = data
@@ -1179,8 +1191,8 @@ def _companion(st, log, at):
         try:
             for e in companion.entries(t):
                 kinds[e["t"]] = kinds.get(e["t"], 0) + 1
-        except ValueError:
-            pass
+        except ValueError as ex:
+            fehler.melden(ex, "Einträge zählen", "companion")
     if kinds:          # welche Arten es gibt, damit sich weitere Ebenen planen lassen
         log("PLA Companion: " + ", ".join(f"{k} {v}" for k, v in sorted(kinds.items())))
     st["sources"]["companion"] = src.result(dateien=len(out))
@@ -1459,8 +1471,8 @@ def _raidnester(log):
             names = {i: n for i, n in con.execute("SELECT pokemon_species_id, name FROM pokemon_species_names WHERE local_language_id = 6") if n}
         finally:
             con.close()
-    except Exception:
-        pass
+    except Exception as e:
+        fehler.melden(e, "Namen für Raid-Nester", "raidnester")
     found = 0
     for area, (spiel, bild, _, _) in raidnester.AREAS.items():
         STATE["step"] = f"PKHeX Raid Plugin: {area}"
@@ -1580,7 +1592,8 @@ def _pw_islands(src, reg):
     """0.56: Orte je Insel aus der PokéWiki-Vorlage (pokearth.pw_islands)."""
     try:
         wt = next(iter(pokewiki.pages(src.get(pokearth.pw_template_url(reg)) or "{}").values()), "")
-    except ValueError:
+    except ValueError as ex:
+        fehler.melden(ex, f"Orte je Insel: {reg}", "pokewiki")
         wt = ""
     return pokearth.pw_islands(wt, reg)
 
@@ -1602,7 +1615,8 @@ def _pw_region(src, reg):
     cfg = pokearth.PW_MAPS[reg]
     try:
         wt = next(iter(pokewiki.pages(src.get(pokearth.pw_template_url(reg)) or "{}").values()), "")
-    except ValueError:
+    except ValueError as ex:
+        fehler.melden(ex, f"Regionskarte: {reg}", "pokewiki")
         wt = ""
     orte = pokearth.pw_areas(wt)
     small = pokearth.imageinfo(src.get(pokearth.imageinfo_url(pokearth.PW_API, cfg["bild"])))
@@ -1753,7 +1767,7 @@ def mg_stock():
                                           "ganz": not top}
             _miss_save()
     except Exception as e:          # der Vorrat darf den Dienst nicht stören
-        print("Kachelvorrat:", e, file=sys.stderr)
+        fehler.melden(e, "Kachelvorrat", "kacheln", immer=True)
     finally:
         _mg["laeuft"] = False
 
@@ -1917,6 +1931,7 @@ def _pokewiki(st, log, at):
         titles = {sp: wiki_titles(con, sp) for sp in WIKI_GAMES}
     except Exception as e:
         log(f"PokéWiki: Namen nicht lesbar ({e})")
+        fehler.melden(e, "Namen", "pokewiki")
         return old
     finally:
         con.close()
@@ -1998,6 +2013,7 @@ def _wiki_texts(src, log, at):
         titles = wiki_text_titles(con)
     except Exception as e:
         log(f"PokéWiki: Namen für Texte nicht lesbar ({e})")
+        fehler.melden(e, "Namen für Texte", "pokewiki")
         return old
     finally:
         con.close()
@@ -2124,7 +2140,8 @@ def _bisafans(st, log, at):
             ps = pokewiki.pages(t) if t else {}
             za = pokewiki.za_missions(ps.get(pokewiki.ZA_MISSIONS, ""))
             bbq = pokewiki.bbq_missions(ps.get(pokewiki.BBQ_PAGE, ""))
-        except ValueError:
+        except ValueError as ex:
+            fehler.melden(ex, "Missionen", "pokewiki")
             za = {}
     have = {r["nr"] for r in za_rows}
     for x in (za or {}).get("neben") or []:
@@ -2169,7 +2186,8 @@ def _shiny(st, log, at):
     try:
         w = (json.loads(t) if t else {}).get("parse", {}).get("wikitext")
         text = w.get("*", "") if isinstance(w, dict) else (w or "")
-    except ValueError:
+    except ValueError as ex:
+        fehler.melden(ex, "Shiny-Sperren", "bulbapedia")
         text = ""
     st["sources"]["bulbapedia"] = src.result(shiny=len(shiny.parse(text)) if text else 0)
     if src.blocked:
@@ -2204,7 +2222,8 @@ def _trainer(st, log, at):
             t = src.get(pokewiki.category_url(cat, cont), absent=(404,))
             try:
                 titles, cont = pokewiki.category_members(t) if t else ([], None)
-            except ValueError:
+            except ValueError as ex:
+                fehler.melden(ex, f"Trainer ({cat})", "pokewiki")
                 titles, cont = [], None
             for x in titles:
                 roles.setdefault(x, rolle)
@@ -2219,7 +2238,8 @@ def _trainer(st, log, at):
         t = src.get(pokewiki.batch_url(names[i:i + pokewiki.BATCH]))
         try:
             got = pokewiki.pages(t) if t else {}
-        except ValueError:
+        except ValueError as ex:
+            fehler.melden(ex, "Teams der Trainer", "pokewiki")
             got = {}
         for title, wt in got.items():
             teams += pokewiki.trainer_teams(wt, title, roles.get(title, ""))
@@ -2254,7 +2274,7 @@ def scheduler():
                 run()
             db.backup()
         except Exception as e:
-            print("Zeitplan:", e, file=sys.stderr)
+            fehler.melden(e, "Zeitplan", "abgleich", immer=True)
         boot = False
         time.sleep(60)
 

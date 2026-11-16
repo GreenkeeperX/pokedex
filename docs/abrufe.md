@@ -223,6 +223,31 @@ es läuft auf der fremden Seite, holt die nachgeladenen Daten-Dateien (`performa
 `.json`, höchstens 40 und 6 MB) samt Inhalt, Daten in globalen Variablen, Kartenmarker, Skripte und das HTML und
 speichert alles als `pokedex-probe-<Seite>.json`. Benutzername und Schlüssel der Seite werden entfernt.
 
+## Fehlerregister
+
+`app/fehler.py` zählt, was scheitert, ohne den Lauf oder die Ansicht abzubrechen: je Fehler (Quelle, Stelle, Art) ein
+Eintrag mit Text, erstem und letztem Zeitpunkt und Anzahl. Höchstens 100 Einträge (`MAX`), die am längsten nicht
+aufgetretenen fallen weg. Das Register steht in `fehler.json`, wird gesammelt geschrieben (`SAVE_S`) und übersteht den
+Neustart. Den Traceback schreibt es einmal je Eintrag und Start ins Protokoll des Containers.
+
+- Quellen des Abgleichs (`_Source`): Quelle, Server, Art („HTTP 404“, „keine Verbindung“, „gesperrt (HTTP 429)“), als
+  Text die zuletzt betroffene Adresse. Ein Statuscode, den der Aufrufer als „gibt es nicht“ erwartet (`absent`), zählt
+  nicht.
+- Abgleich selbst (`abgleich`): Abbruch des Laufs, verworfene Datenbank, Fehler in einem der parallelen Teile, Zeitplan.
+- Abfragen für die Oberfläche (`abfrage`), Karten (`karte`), abgebrochene Anfragen (`server`, Adresse ohne Nummern).
+- Kein Fehler (`fehler.fehlt`): „no such table“ und „no such column“ (die Datenbank ist älter als die Version, der
+  nächste Abgleich baut sie) und Abfragen, solange es noch keine Datenbank gibt.
+
+Der Server sammelt je Anfrage, was dabei gemeldet wurde (`beginne`, `ende`), und gibt es in der Kopfzeile
+`X-Pokedex-Fehler` mit; eine solche Antwort ist nicht zwischenspeicherbar und trägt keinen `ETag`. Anzeige: siehe
+`docs/oberflaeche.md`, „Fehler und Hinweise“.
+
+## Karten vorbereiten
+
+Nach dem Start und nach jedem Abgleich bereitet der Server die Karten eines Spiels vor (`server._warm_loop`,
+`_prewarm`): das Spiel, dessen Kartenliste die Oberfläche zuletzt geholt hat (`map_need`, `bedarf.json`). Ohne
+gemerkten Bedarf bereitet er nichts vor; das erste Öffnen der Karten stößt das Vorbereiten an und merkt den Bedarf.
+
 ## Gegenprüfung
 
 Beim Bau vergleicht der Importer Basiswerte, Typen und Attackenwerte mit Showdown (Tabelle `pruefung`). Jede

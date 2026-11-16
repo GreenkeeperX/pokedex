@@ -12,11 +12,22 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.58.0"
+VERSION = "0.58.1"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.58.1", "16.11.2026", [
+        "Fehler werden gezählt statt verschluckt: Kann der Server einen Teil einer Ansicht nicht lesen, zeigt die Ansicht "
+        "einen Hinweis, statt still weniger anzuzeigen",
+        "Lässt sich etwas nicht laden oder nicht speichern (Haken auf der Karte, Aufträge, Forschungsaufgaben), steht das "
+        "über der Ansicht; ein nicht gespeicherter Haken wird sichtbar zurückgenommen",
+        "Einstellungen, Fehler: was beim Abgleich oder beim Anzeigen gescheitert ist, je Fehler eine Zeile mit Quelle, "
+        "Art, Anzahl, erstem und letztem Zeitpunkt (höchstens 100, lässt sich leeren)",
+        "Fehlt nur eine Tabelle, weil die Datenbank älter ist als die Version, zählt das weiterhin nicht als Fehler",
+        "Karten werden nach dem Start für das Spiel vorbereitet, dessen Karten du zuletzt geöffnet hast, nicht mehr immer "
+        "für Legenden: Arceus",
+    ]),
     ("0.58.0", "14.11.2026", [
         "Der Abgleich übersteht einen Neustart: Der Stand wird nach jeder fertigen Quelle gespeichert, das Protokoll bleibt, "
         "und ein unterbrochener Lauf wird wenige Minuten nach dem Start fortgesetzt",

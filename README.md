@@ -144,6 +144,10 @@ Pokémon und alle Namen sind Marken von Nintendo, Creatures und GAME FREAK. Dies
    nach Zeitplan ab (Standard: alle 7 Tage zu einer festen Uhrzeit nachts, einstellbar). Ein Neustart mitten im
    Abgleich schadet nicht: Der Stand ist gespeichert, der Lauf wird fünf Minuten nach dem Start fortgesetzt.
 
+Scheitert etwas (eine Quelle antwortet nicht, eine Tabelle lässt sich nicht lesen, ein Haken wird nicht gespeichert),
+steht es über der betroffenen Ansicht und unter Einstellungen, Fehler; die technischen Einzelheiten stehen im Protokoll
+des Containers.
+
 Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HOSTS` setzen (siehe Compose-Datei).
 
 ### Datenordner (`/data`)
@@ -153,6 +157,9 @@ Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HO
 - `sprites/`, `artwork/`: Bilder (Sprites 96 × 96, offizielle Artworks 475 × 475, zusammen gut 180 MB)
 - `settings.json`, `sync.json`: Einstellungen und Stand des Abgleichs (nach jeder Quelle gespeichert)
 - `ruhe.json`: Quellen und Server, die nach einer Sperre (403, 429) ruhen, mit dem Ende der Ruhe
+- `fehler.json`: was beim Abgleich oder beim Anzeigen gescheitert ist (höchstens 100 Einträge mit Anzahl und Zeitpunkt);
+  zu sehen unter Einstellungen, Fehler
+- `bedarf.json`: das Spiel, dessen Karten zuletzt geöffnet wurden; dessen Karten bereitet der Server nach dem Start vor
 
 ## Entwicklung
 

@@ -102,6 +102,12 @@ nav a.on{border-bottom-color:var(--brand);font-weight:600;color:var(--ink-hi)}
 .note.info{background:var(--info-bg);color:var(--info)}
 .note.stop{background:var(--stop-bg);color:var(--stop)}
 .note.go{background:var(--go-bg);color:var(--go)}
+/* Hinweise über der Ansicht (0.58.1): was nicht geladen oder gespeichert werden konnte */
+.note.hw{display:flex;gap:10px;align-items:flex-start;margin:8px 0}
+.note.hw>div{flex:1;min-width:0}
+.note.hw p{margin:1px 0}
+.note.hw button{border:0;background:none;color:inherit;font-size:18px;line-height:1;padding:0 4px;cursor:pointer}
+tr.ftext td{border-top:0;padding-top:0}
 .muted{color:var(--muted)}
 .num{font-variant-numeric:tabular-nums;text-align:right}
 

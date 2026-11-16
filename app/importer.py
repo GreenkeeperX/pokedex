@@ -18,7 +18,7 @@ import os
 import re
 import sqlite3
 
-from . import altissimo, companion, pokewiki, serebii, shiny, showdown
+from . import altissimo, companion, fehler, pokewiki, serebii, shiny, showdown
 
 VERSION = "27"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
@@ -1057,7 +1057,8 @@ def _derive_karte(con, alt, en_de):
                     continue
                 try:
                     objs = parse(text, fit)
-                except ValueError:
+                except ValueError as ex:
+                    fehler.melden(ex, "Kartenobjekte lesen", "abgleich")
                     continue
                 gebiet = altissimo.GEBIETE.get(karte, karte)
                 con.executemany("INSERT INTO kartenobjekt VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1127,7 +1128,8 @@ def _derive_wiki_karte(con, wiki):
             try:
                 mons = pokewiki.map_pokemon(src.get("pokemon"))
                 items = pokewiki.map_items(src.get("items"))
-            except (ValueError, TypeError, AttributeError):
+            except (ValueError, TypeError, AttributeError) as ex:
+                fehler.melden(ex, f"Karte aus dem PokéWiki: {area}", "abgleich")
                 continue
             own = {(round(m["x"], 1), round(m["z"], 1)) for m in mons if m["typ"] == "default"}
             karte, hit = max(((k, len(own & v)) for k, v in pts.items()), key=lambda kv: kv[1], default=(None, 0))
@@ -1184,7 +1186,8 @@ def _derive_companion(con, alt):
                 anchors.setdefault(a, []).append((x, z))
             try:
                 ps = companion.places(text, anchors)
-            except (ValueError, TypeError, AttributeError):
+            except (ValueError, TypeError, AttributeError) as ex:
+                fehler.melden(ex, "Orte des Companion lesen", "abgleich")
                 continue
             con.executemany("INSERT INTO kartenobjekt VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             [(spiel, karte, altissimo.GEBIETE.get(karte, karte), p["art"], None, p["x"], p["z"], "",
@@ -1206,7 +1209,8 @@ def _derive_rezept(con, alt, en_de):
     for spiel, src in (alt or {}).items():
         try:
             recs, mats = altissimo.recipes(src.get("rezepte") or "")
-        except Exception:
+        except Exception as e:
+            fehler.melden(e, f"Rezepte {spiel}", "abgleich")
             continue
         g = con.execute("SELECT id FROM spiel WHERE kennung = ?", (spiel,)).fetchone()
         ids = {}
