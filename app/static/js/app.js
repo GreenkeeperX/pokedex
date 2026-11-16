@@ -3242,7 +3242,16 @@ async function areasView(want) {
 async function mapView(karte, fid) {
   const rid = RID;
   const key = karte || "obsidianfieldlands";
-  const d = MAPCACHE[key] || (MAPCACHE[key] = await api("/api/karte/" + encodeURIComponent(key)));
+  let d = MAPCACHE[key];
+  if (!d) {
+    try { d = MAPCACHE[key] = await api("/api/karte/" + encodeURIComponent(key)); } catch (e) {
+      if (e.status !== 404) throw e;
+      // 0.59.0: Die Spawnpunkte fehlen (Quelle beim Abgleich nicht erreicht): sagen, woran es liegt, statt „Fehler: keine Karte“
+      main.innerHTML = `<div class="box"><h2>Karte</h2><p>Für diese Karte sind noch keine Kartendaten da. Der Abgleich holt sie; ob eine Quelle gefehlt hat, steht im Protokoll.</p>
+        <a class="btn" href="#einstellungen">Einstellungen, Abgleich</a> <a class="btn" href="#karte/gebiete">Gebiete</a></div>`;
+      return;
+    }
+  }
   /* gefundene Symbole (Geisterlichter, Icognito, Kisten …): je Karte; Schlüssel Art:x:z, damit er einen Neubau übersteht */
   const gotRes = await api("/api/gefunden?" + qs({spiel: MAPSPIEL, karte: key})).catch(teil("Abgehakte Symbole", {}));
   if (rid !== RID) return;

@@ -1411,8 +1411,7 @@ def _enc(con, g, pid):
     try:
         rows = con.execute(
             """SELECT e.location_area_id la, l.id loc, es.encounter_method_id meth, MIN(e.min_level) lo, MAX(e.max_level) hi,
-                      GROUP_CONCAT(DISTINCT v.id) vers, GROUP_CONCAT(DISTINCT m.encounter_condition_value_id) cond,
-                      SUM(es.rarity) rar
+                      GROUP_CONCAT(DISTINCT v.id) vers, GROUP_CONCAT(DISTINCT m.encounter_condition_value_id) cond
                FROM encounters e JOIN versions v ON v.id = e.version_id JOIN location_areas la ON la.id = e.location_area_id
                JOIN locations l ON l.id = la.location_id JOIN encounter_slots es ON es.id = e.encounter_slot_id
                LEFT JOIN encounter_condition_value_map m ON m.encounter_id = e.id
@@ -1535,16 +1534,23 @@ def _areas_pkhex(con, D, g):
 
 
 def _areas_pokeapi(con, D, g):
+    """Gebiete aus den Begegnungen der PokéAPI. Die Häufigkeit (anteil) ist die Summe der Plätze (encounter_slots), die das
+    Pokémon in einer Edition belegt: jeder Platz einmal, auch wenn er je Edition und je Bedingung (Tageszeit, Schwarm …)
+    eine eigene Zeile hat; bei zwei Editionen der größere Wert. Bis 0.58.1 zählte jede Zeile, also doppelt in Spielen mit
+    zwei Editionen und mehrfach bei Bedingungen. Mit Bedingungen ist der Wert der höchste, den das Pokémon erreicht."""
     try:
         rows = con.execute(
-            """SELECT e.pokemon_id pid, l.id loc, e.location_area_id la, es.encounter_method_id meth, MIN(e.min_level) lo,
-                      MAX(e.max_level) hi, GROUP_CONCAT(DISTINCT v.id) vers, GROUP_CONCAT(DISTINCT m.encounter_condition_value_id) cond,
-                      SUM(es.rarity) rar
+            """SELECT e.id eid, e.pokemon_id pid, l.id loc, e.location_area_id la, es.encounter_method_id meth, e.min_level lo,
+                      e.max_level hi, v.id ver, es.id slot, es.rarity rar
                FROM encounters e JOIN versions v ON v.id = e.version_id JOIN location_areas la ON la.id = e.location_area_id
                JOIN locations l ON l.id = la.location_id JOIN encounter_slots es ON es.id = e.encounter_slot_id
-               LEFT JOIN encounter_condition_value_map m ON m.encounter_id = e.id
-               WHERE v.version_group_id = ?
-               GROUP BY e.pokemon_id, e.location_area_id, es.encounter_method_id ORDER BY l.id, la.id""", (g["id"],)).fetchall()
+               WHERE v.version_group_id = ? ORDER BY l.id, la.id, e.id""", (g["id"],)).fetchall()
+        bed = {}
+        for eid, c in con.execute(
+                """SELECT m.encounter_id, m.encounter_condition_value_id FROM encounter_condition_value_map m
+                   JOIN encounters e ON e.id = m.encounter_id JOIN versions v ON v.id = e.version_id
+                   WHERE v.version_group_id = ? ORDER BY m.encounter_id, m.encounter_condition_value_id""", (g["id"],)):
+            bed.setdefault(eid, []).append(c)
     except Exception as err:
         fehler.melden(err)
         return {}
@@ -1554,20 +1560,27 @@ def _areas_pokeapi(con, D, g):
     conds = _names(con, "encounter_condition_value_prose", "encounter_condition_value_id")
     vn = _names(con, "version_names", "version_id")
     nv = con.execute("SELECT COUNT(*) FROM versions WHERE version_group_id = ?", (g["id"],)).fetchone()[0]
-    out = {}
+    groups = {}
     for r in rows:
-        f = D.forms.get(r["pid"])
+        x = groups.setdefault((r["pid"], r["la"], r["meth"]), {"loc": r["loc"], "lo": r["lo"], "hi": r["hi"], "slots": {}, "cond": []})
+        x["lo"], x["hi"] = min(x["lo"], r["lo"]), max(x["hi"], r["hi"])
+        x["slots"].setdefault(r["ver"], {})[r["slot"]] = r["rar"] or 0
+        x["cond"] += [c for c in bed.get(r["eid"], ()) if c not in x["cond"]]
+    out = {}
+    for (pid, la, meth), x in groups.items():
+        f = D.forms.get(pid)
         if not f:
             continue
-        place, area = locs.get(r["loc"]) or f"Ort {r['loc']}", area_n.get(r["la"]) or ""
+        place, area = locs.get(x["loc"]) or f"Ort {x['loc']}", area_n.get(la) or ""
         ort = _place(place, area)
-        vs = [int(v) for v in str(r["vers"] or "").split(",") if v]
+        vs = sorted(x["slots"])
+        rar = max(sum(s.values()) for s in x["slots"].values())
         out.setdefault(ort, []).append({
-            "id": f["id"], "name": f["name"], "methode": meths.get(r["meth"], ""),
-            "level": f"{r['lo']}" if r["lo"] == r["hi"] else f"{r['lo']}–{r['hi']}",
-            "anteil": min(100, r["rar"]) if r["rar"] else None,
+            "id": f["id"], "name": f["name"], "methode": meths.get(meth, ""),
+            "level": f"{x['lo']}" if x["lo"] == x["hi"] else f"{x['lo']}–{x['hi']}",
+            "anteil": min(100, rar) if rar else None,
             "editionen": [vn.get(v, "") for v in vs] if len(vs) < nv else [],
-            "bedingungen": [conds[int(c)] for c in str(r["cond"] or "").split(",") if c and int(c) in conds]})
+            "bedingungen": [conds[c] for c in sorted(x["cond"]) if c in conds]})
     return out
 
 
@@ -2128,6 +2141,9 @@ def type_chart(p):
             "tabelle": {str(a): {str(d): f for d, f in ch[a].items()} for a in ch}}
 
 
+ITEMS_GENAU = 50            # ab so vielen Items mit Beschreibung im Spiel gilt dessen Liste als vollständig (item_list)
+
+
 def item_list(p):
     """Items im Spiel, sortiert nach Tasche und Name. Hat die PokéAPI Beschreibungen für das Spiel, sind das genau seine
     Items; sonst die Items der Generation laut Spielindex, mit Hinweis (zu viele, aber keins fehlt). Maschinen tragen die
@@ -2172,7 +2188,7 @@ def item_list(p):
     for kind in ("itembild", "itemhq"):
         folder = os.path.join(db.data_dir(), kind)
         have |= {os.path.splitext(x)[0] for x in os.listdir(folder)} if os.path.isdir(folder) else set()
-    exact = bool(vg) and sum(1 for r in rows if vg in json.loads(r["spiele"] or "[]")) >= 50
+    exact = bool(vg) and sum(1 for r in rows if vg in json.loads(r["spiele"] or "[]")) >= ITEMS_GENAU
     out = []
     for r in rows:
         if exact and vg not in json.loads(r["spiele"] or "[]"):

@@ -12,11 +12,25 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.58.1"
+VERSION = "0.59.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.59.0", "16.11.2026", [
+        "Gebiete: Die Häufigkeit eines Pokémon stimmt jetzt in Spielen mit zwei Editionen (vorher doppelt gezählt: Route 1 "
+        "in Rot und Blau zeigte zweimal 100 % statt zweimal 50 %) und bei Tageszeit, Schwarm oder Radio (vorher mehrfach "
+        "gezählt). Hängt sie von einer Bedingung ab, steht der höchste Wert da, den das Pokémon erreicht",
+        "Antworten kommen schneller an: Bei fast jeder zweiten Antwort blieb der Inhalt rund 40 ms hinter den Kopfzeilen "
+        "zurück; im Selbsttest steht eine Ansicht jetzt im Mittel nach 85 statt 122 ms",
+        "Karte von Legenden: Arceus: Fehlen die Kartendaten, sagt die Ansicht das und verweist auf den Abgleich, statt "
+        "„Fehler: keine Karte“ zu zeigen",
+        "Getragene Items wilder Pokémon fehlen nicht mehr, wenn der Abgleich die Dateiliste der PokéAPI nicht bekommt",
+        "Abrufe gehen nur ins öffentliche Internet: Zusätzlich gesperrt sind Multicast-Adressen und IPv6-Adressen, in "
+        "denen eine private IPv4-Adresse steckt",
+        "Unter der Haube: Die Tests laufen gegen eine erfundene Mini-Datenbank, die der echte Importer baut, sichern die "
+        "Form der Antworten für die Oberfläche und gehen die Oberfläche im Browser durch, bei jedem Pull Request",
+    ]),
     ("0.58.1", "16.11.2026", [
         "Fehler werden gezählt statt verschluckt: Kann der Server einen Teil einer Ansicht nicht lesen, zeigt die Ansicht "
         "einen Hinweis, statt still weniger anzuzeigen",
@@ -706,6 +720,21 @@ BLOCKED = (403, 429)
 MAX_BODY = 40 << 20      # größte Antwort: pokemon_moves.csv hat gut 10 MB
 
 
+NAT64 = ipaddress.ip_network("64:ff9b::/96")         # IPv4-Adresse in den letzten 32 Bit (RFC 6052)
+
+
+def public_ip(ip):
+    """Ob eine Adresse im öffentlichen Internet liegt. Nicht öffentlich: privat, lokal, reserviert, Multicast; bei IPv6
+    auch, wenn eine nicht öffentliche IPv4-Adresse darin steckt (::ffff:a.b.c.d und NAT64). Seit 0.59.0 eigene Funktion:
+    `is_global` allein lässt Multicast und NAT64 durch und behandelt ::ffff: je nach Python-Version anders."""
+    if ip.version == 6:
+        if ip.ipv4_mapped is not None:
+            return public_ip(ip.ipv4_mapped)
+        if ip in NAT64:
+            return public_ip(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF))
+    return ip.is_global and not ip.is_multicast
+
+
 def blocked_target(url):
     """Grund, warum das Tool eine Adresse nicht abruft, sonst "". Abgerufen wird nur das
     öffentliche Internet, damit nie Geräte im Heimnetz angesprochen werden."""
@@ -724,7 +753,7 @@ def blocked_target(url):
             ip = ipaddress.ip_address(str(info[4][0]).split("%")[0])
         except ValueError:
             continue
-        if not ip.is_global:
+        if not public_ip(ip):
             return "Adresse nicht öffentlich"
     return ""
 

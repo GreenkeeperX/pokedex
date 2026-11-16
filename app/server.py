@@ -685,6 +685,9 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "pokedex"
     protocol_version = "HTTP/1.1"    # Verbindungen bleiben offen: die vielen Kacheln der Karte kommen ohne neuen Aufbau
     timeout = 60                     # ungenutzte Verbindungen schließen
+    # 0.59.0: Kopfzeilen und Inhalt gehen als zwei Pakete hinaus. Ohne TCP_NODELAY hielt der Kern das zweite zurück, bis der
+    # Browser das erste bestätigt hatte (Nagle trifft auf verzögerte Bestätigung): jede Antwort kam rund 40 ms später an.
+    disable_nagle_algorithm = True
 
     def log_message(self, fmt, *args):
         pass

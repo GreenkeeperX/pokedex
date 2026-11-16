@@ -1,4 +1,7 @@
-"""Tests ohne Netz: Rechenlogik, Leser, Abgleich mit Attrappe, Server-Hilfen. Start: python -m unittest discover -s tests"""
+"""Tests ohne Netz: Rechenlogik, Leser, Abgleich mit Attrappe, Server über HTTP, und mit Spieldaten aus der Mini-Datenbank
+(tests/mit_daten.py, am Ende dieser Datei geladen). Start: python3 -m unittest tests.test_all
+
+Wo was läuft, steht in docs/tests.md: in der CI alles außer der Klasse MitDatenbank (sie braucht eine echte Datenbank)."""
 import json
 import os
 import re
@@ -12,8 +15,7 @@ from unittest import mock
 
 from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, store, team, typen
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
-
-fehler.STUMM = True          # das Fehlerregister schreibt in den Tests nichts ins Protokoll
+from tests.basis import HttpTest, TempData
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
 EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
@@ -1331,16 +1333,46 @@ rect 50 60 70 80 [[Konikoni City]]
         rows = con.execute("SELECT id, identifier, damage_class_id FROM types ORDER BY id").fetchall()
         self.assertEqual(rows, [(1, "normal", 2), (10002, "shadow", None)])
 
-
-class TempData(unittest.TestCase):
-    def setUp(self):
-        self.dir = tempfile.mkdtemp()
-        self._old = store.DATA_DIR
-        store.DATA_DIR = self.dir
-
-    def tearDown(self):
-        store.DATA_DIR = self._old
-        shutil.rmtree(self.dir, ignore_errors=True)
+    def test_0_47_0_inhalt_der_raid_nester(self):
+        """Raid-Nester: Pokémon je Nest aus RaidTables.cs (erfundene Tabelle), als Bilder im Kartenpunkt."""
+        from app import abfragen, raidnester
+        cs = """        public readonly RaidTemplateTable[] SwordNests = {
+new RaidTemplateTable(0x1, 1, new []{
+new RaidTemplate(25, new[]{35u, 20u, 0u, 0u, 0u}, 1, 0, 3, 0, false, 0),
+new RaidTemplate(77, new[]{0u, 0u, 0u, 0u, 10u}, 4, 1, 4, 0, 25, true, 0),
+}),
+new RaidTemplateTable(0x2, 1, new []{
+new RaidTemplate(26, new[]{0u, 0u, 5u, 0u, 0u}, 3, 0, 3, 0, false, 0),
+}),
+ };
+        public readonly RaidTemplateTable[] ShieldNests = {
+new RaidTemplateTable(0x1, 2, new []{
+new RaidTemplate(25, new[]{35u, 20u, 0u, 0u, 0u}, 1, 0, 3, 0, false, 0),
+new RaidTemplate(77, new[]{0u, 0u, 0u, 0u, 10u}, 4, 1, 4, 0, 25, true, 0),
+}),
+new RaidTemplateTable(0x2, 2, new []{
+new RaidTemplate(25, new[]{0u, 0u, 5u, 0u, 0u}, 3, 0, 3, 0, false, 0),
+}),
+ };
+        public readonly RaidTemplateTable[] SwordNestsEvent =
+        {
+new RaidTemplateTable(0x1, 1, new []{
+new RaidTemplate(150, new[]{0u, 0u, 0u, 0u, 1u}, 5, 0, 3, 0, false, 0),
+}),
+ };"""
+        t = raidnester.tables(cs)
+        self.assertEqual(t["sw"][1], [(25, 0, 1, 2, False), (77, 1, 5, 5, True)])
+        self.assertNotIn(150, [r[0] for v in t["sw"].values() for r in v])          # Event-Tabellen zählen nicht
+        names = {25: "Pikachu", 26: "Raichu", 77: "Ponita"}
+        txt = raidnester.den_text(t, 1, 2, names)
+        self.assertEqual(txt.split("\n"), ["**Schwert und Schild:**", "Pikachu (1–2★), Ponita (Galar-Form, 5★, Gigadynamax)",
+                                           "**Schwert, seltener Strahl:**", "Raichu (3★)", "**Schild, seltener Strahl:**", "Pikachu (3★)"])
+        r = raidnester.parse([("wa", 10, 20, "Erfundenes Feld", 1, 2)], "wa", 458, 1064, tabs=t, names=names)
+        self.assertIn("Ponita (Galar-Form", r["orte"][0][5])
+        mons = {v: k for k, v in names.items()}
+        pk, _, rest = abfragen.point_pics(r["orte"][0][5], "", mons, abfragen.names_rx(mons, True), {}, None)
+        self.assertEqual(pk[1], [77, "Ponita", "Schwert und Schild", "Galar-Form, 5★, Gigadynamax"])
+        self.assertEqual(rest, "**Ort:** Erfundenes Feld")
 
 
 class Abgleich(TempData):
@@ -1450,6 +1482,34 @@ class Abgleich(TempData):
         abruf.save_csv_cache("abc", {"types": "id\n1\n"})
         self.assertEqual(abruf.cached_csvs("abc"), {"types": "id\n1\n"})
         self.assertEqual(abruf.cached_csvs("neu"), {})
+
+    def test_0_45_0_speicherplatz(self):
+        """Speicherplatz des Datenordners: Teile nach Größe, Karten nach Quelle und Karte, Kleines als Sonstiges (erfundene Dateien)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(abruf.db, "data_dir", lambda: d):
+            def put(rel, n):
+                p = os.path.join(d, *rel.split("/"))
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "wb") as f:
+                    f.write(bytes(n))
+            put("pokeapi.db", 2_000_000)
+            put("user.db", 5000)
+            put("sync.json", 100)
+            put("mapgenie/test.im.json", 300)
+            put("mapgenie/kacheln/im/johto/3/0-0.png", 1_500_000)
+            put("mapgenie/kacheln/im/johto/3/1-0.png", 500)
+            put("mapgenie/kacheln/erfundenes-spiel/a/1-1.jpg", 40)
+            r = abruf.disk_usage(force=True)
+            self.assertEqual(r["gesamt"], 2_000_000 + 5000 + 100 + 300 + 1_500_500 + 40)
+            self.assertEqual([t["name"] for t in r["teile"]], ["pokeapi.db", "mapgenie", "user.db", "sonst"])
+            mg = r["teile"][1]
+            self.assertEqual((mg["bytes"], mg["dateien"]), (1_500_840, 4))
+            self.assertEqual([(t["titel"], t["bytes"]) for t in mg["teile"]],
+                             [("HeartGold/SoulSilver: Weltkarten (im Browser umgewandelt)", 1_500_500),
+                              ("Kartendaten (Punkte, Orte)", 300), ("Map Genie: erfundenes-spiel", 40)])
+            self.assertEqual(mg["teile"][0]["teile"][0]["name"], "johto")
+            self.assertIs(abruf.disk_usage(), r)            # zwischengespeichert
+        abruf._disk.update(at=0.0, data=None)
 
 
 class Server(TempData):
@@ -2737,29 +2797,117 @@ class Fehler(TempData):
         self.assertIn('id="hinweise"', open(os.path.join(app, "static", "index.html"), encoding="utf-8").read())
 
 
-class Http(TempData):
-    """0.58.0: der Server über HTTP auf einem freien Port, ohne Spieldaten und ohne Netz."""
+class Heimnetz(unittest.TestCase):
+    """0.59.0: `sources.blocked_target` lässt nur das öffentliche Internet zu. Der Dienst steht im Heimnetz; kein Abruf, auch
+    keine Weiterleitung einer Quelle, darf ein Gerät dort ansprechen. Adressen stehen hier in Teilen, damit der Test
+    `Oeffentlich` (keine privaten Adressen im Repository) diese Datei nicht meldet."""
+    IP = staticmethod(lambda *teile: ".".join(str(t) for t in teile))
 
-    def setUp(self):
-        super().setUp()
-        from http.server import ThreadingHTTPServer
-        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
-        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+    def privat(self):
+        ip = self.IP
+        return [ip(192, 168, 1, 1), ip(192, 168, 178, 20), ip(10, 0, 0, 5), ip(10, 255, 255, 254), ip(172, 16, 0, 1), ip(172, 31, 9, 9),
+                ip(127, 0, 0, 1), ip(127, 9, 9, 9), ip(0, 0, 0, 0), ip(169, 254, 169, 254), ip(100, 64, 0, 1), ip(224, 0, 0, 1),
+                ip(239, 255, 255, 250), ip(255, 255, 255, 255), ip(240, 0, 0, 1),
+                "[::1]", "[::]", "[fe80::1]", "[fd00::1]", "[fc00::abcd]", "[ff02::1]", f"[::ffff:{ip(192, 168, 1, 1)}]",
+                f"[::ffff:{ip(127, 0, 0, 1)}]", "[64:ff9b::c0a8:101]", "[64:ff9b::7f00:1]"]
 
-    def tearDown(self):
-        self.srv.shutdown()
-        self.srv.server_close()
-        super().tearDown()
+    def test_adressen_im_heimnetz(self):
+        for host in self.privat():
+            for url in (f"http://{host}/", f"https://{host}:8443/pfad?x=1", f"http://{host}:8789/api/export"):
+                self.assertEqual(sources.blocked_target(url), "Adresse nicht öffentlich", url)
+        # andere Schreibweisen derselben Adressen, die der Resolver annimmt: dezimal, hexadezimal, verkürzt
+        for host in ("2130706433", "0x7f000001", "127.1", "0177.0.0.1", "3232235777"):
+            self.assertEqual(sources.blocked_target(f"http://{host}/"), "Adresse nicht öffentlich", host)
 
-    def get(self, path, **headers):
-        import http.client
-        c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=10)
+    def test_oeffentliche_adressen(self):
+        """Öffentliche Adressen gehen durch, auch als IPv6 und in IPv6 verpackt. `public_ip` entscheidet ohne `is_global`
+        für verpackte Adressen, damit das Ergebnis nicht von der Python-Version abhängt (CI und Image unterscheiden sich)."""
+        import ipaddress
+        oeffentlich = self.IP(93, 184, 215, 14)
+        for host in (oeffentlich, "[2606:2800:21f:cb07:6820:80da:af6b:8b2c]", f"[::ffff:{oeffentlich}]", "[64:ff9b::5db8:d70e]"):
+            self.assertEqual(sources.blocked_target(f"https://{host}/"), "", host)
+        self.assertTrue(sources.public_ip(ipaddress.ip_address(oeffentlich)))
+        for a in (self.IP(224, 0, 0, 251), "ff05::2", "64:ff9b::a00:1", f"::ffff:{self.IP(10, 0, 0, 1)}", self.IP(100, 64, 0, 1)):
+            self.assertFalse(sources.public_ip(ipaddress.ip_address(a)), a)
+
+    def test_nur_http_ohne_zugangsdaten(self):
+        for url in ("file:///etc/passwd", "ftp://example.org/x", "gopher://example.org/", "javascript:alert(1)", "", None, "example.org/x"):
+            self.assertEqual(sources.blocked_target(url), "nur http und https", url)
+        with mock.patch.object(sources.socket, "getaddrinfo") as dns:
+            self.assertEqual(sources.blocked_target("https://benutzer:geheim@example.org/"), "Adresse mit Zugangsdaten")
+            self.assertEqual(sources.blocked_target("https://benutzer@example.org/"), "Adresse mit Zugangsdaten")
+            dns.assert_not_called()
+
+    def test_namen(self):
+        """Namen zählen nach den Adressen, auf die sie zeigen: eine einzige nicht öffentliche genügt."""
+        oeffentlich, privat = self.IP(93, 184, 215, 14), self.IP(192, 168, 1, 1)
+        antwort = lambda *ips: [(2, 1, 6, "", (ip, 443)) if ":" not in ip else (10, 1, 6, "", (ip, 443, 0, 0)) for ip in ips]
+        with mock.patch.object(sources.socket, "getaddrinfo", return_value=antwort(oeffentlich)) as dns:
+            self.assertEqual(sources.blocked_target("https://quelle.example.org/daten.csv"), "")
+            self.assertEqual(dns.call_args[0][:2], ("quelle.example.org", 443))
+            self.assertEqual(sources.blocked_target("http://quelle.example.org:8080/"), "")
+            self.assertEqual(dns.call_args[0][:2], ("quelle.example.org", 8080))
+        for ips in ((privat,), (oeffentlich, privat), (oeffentlich, "fe80::1%eth0"), ("::1",), (self.IP(127, 0, 0, 1),)):
+            with mock.patch.object(sources.socket, "getaddrinfo", return_value=antwort(*ips)):
+                for name in ("router.example.org", "fritz.box", "nas", "localhost"):
+                    self.assertEqual(sources.blocked_target(f"https://{name}/"), "Adresse nicht öffentlich", (name, ips))
+        # lässt sich der Name nicht auflösen, gibt es kein Ziel: Der Abruf scheitert danach von selbst
+        with mock.patch.object(sources.socket, "getaddrinfo", side_effect=OSError("kein DNS")):
+            self.assertEqual(sources.blocked_target("https://gibt-es-nicht.example.org/"), "")
+
+    def test_abruf_fragt_nicht_an(self):
+        """`request` und `fetch` öffnen bei einem Ziel im Heimnetz keine Verbindung."""
+        url = f"http://{self.IP(192, 168, 1, 1)}/geheim"
+        with mock.patch.object(sources._opener, "open") as offen:
+            r = sources.request(url)
+            self.assertEqual((r["status"], r["error"], r["text"]), (0, "Adresse nicht öffentlich", ""))
+            with self.assertRaises(sources.FetchError) as e:
+                sources.fetch(url)
+            self.assertEqual(e.exception.status, 0)
+            self.assertEqual(sources.request("file:///etc/hostname")["error"], "nur http und https")
+            offen.assert_not_called()
+
+    def test_weiterleitung_ins_heimnetz(self):
+        """Eine öffentliche Quelle, die ins Heimnetz weiterleitet, wird nicht verfolgt (echter Server auf 127.0.0.1 als Ziel)."""
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        gesehen = []
+
+        class Ziel(BaseHTTPRequestHandler):
+            def do_GET(self):
+                gesehen.append(self.path)
+                if self.path == "/weiter":
+                    self.send_response(302)
+                    self.send_header("Location", f"http://127.0.0.1:{self.server.server_address[1]}/intern")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                else:
+                    self.send_response(200)
+                    self.send_header("Content-Length", "6")
+                    self.end_headers()
+                    self.wfile.write(b"intern")
+
+            def log_message(self, *a):
+                pass
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Ziel)
+        threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
         try:
-            c.request("GET", path, headers=headers)
-            r = c.getresponse()
-            return r.status, dict(r.getheaders()), r.read()
+            url = f"http://127.0.0.1:{srv.server_address[1]}/weiter"
+            self.assertEqual(sources.request(url)["error"], "Adresse nicht öffentlich")       # schon der erste Schritt
+            self.assertEqual(gesehen, [])
+            # die erste Adresse gilt als öffentlich (als wäre sie eine Quelle im Internet): Die Weiterleitung wird trotzdem geprüft
+            echt = sources.blocked_target
+            with mock.patch.object(sources, "blocked_target", lambda u: "" if u == url else echt(u)):
+                r = sources.request(url, timeout=5)
+            self.assertIn("Weiterleitung abgelehnt: Adresse nicht öffentlich", r["error"])
+            self.assertEqual((r["status"], r["text"], gesehen), (0, "", ["/weiter"]))
         finally:
-            c.close()
+            srv.shutdown()
+            srv.server_close()
+
+
+class Http(HttpTest):
+    """0.58.0: der Server über HTTP auf einem freien Port, ohne Spieldaten und ohne Netz."""
 
     def test_stand_ist_schlank(self):
         code, h, body = self.get("/api/stand")
@@ -2913,6 +3061,20 @@ class Http(TempData):
 
     def test_fremde_adresse(self):
         self.assertEqual(self.get("/api/stand", Host="pokedex.beispiel.invalid")[0], 421)
+
+    def test_antwort_ohne_wartezeit(self):
+        """0.59.0: Kopfzeilen und Inhalt einer Antwort sind zwei Pakete. Ohne TCP_NODELAY hält der Kern das zweite zurück, bis
+        der Browser das erste bestätigt hat (rund 40 ms je Antwort, gemessen im Selbsttest)."""
+        import socket
+        gesehen = []
+        echt = server.Handler.handle_one_request
+
+        def schauen(h):
+            gesehen.append(h.connection.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
+            return echt(h)
+        with mock.patch.object(server.Handler, "handle_one_request", schauen):
+            self.assertEqual(self.get("/api/stand")[0], 200)
+        self.assertTrue(gesehen and all(gesehen))
 
 
 @unittest.skipUnless(os.environ.get("POKEAPI_DB"), "POKEAPI_DB: Pfad zu einer gebauten pokeapi.db")
@@ -3091,34 +3253,6 @@ class MitDatenbank(TempData):
         ei = next(h for h in held if h["item"] == "Glücks-Ei")
         self.assertEqual((ei["prozent"], ei["quelle"]), ("5 %", "PokéAPI"))
 
-    def test_0_45_0_speicherplatz(self):
-        """Speicherplatz des Datenordners: Teile nach Größe, Karten nach Quelle und Karte, Kleines als Sonstiges (erfundene Dateien)."""
-        import tempfile
-        with tempfile.TemporaryDirectory() as d, mock.patch.object(abruf.db, "data_dir", lambda: d):
-            def put(rel, n):
-                p = os.path.join(d, *rel.split("/"))
-                os.makedirs(os.path.dirname(p), exist_ok=True)
-                with open(p, "wb") as f:
-                    f.write(bytes(n))
-            put("pokeapi.db", 2_000_000)
-            put("user.db", 5000)
-            put("sync.json", 100)
-            put("mapgenie/test.im.json", 300)
-            put("mapgenie/kacheln/im/johto/3/0-0.png", 1_500_000)
-            put("mapgenie/kacheln/im/johto/3/1-0.png", 500)
-            put("mapgenie/kacheln/erfundenes-spiel/a/1-1.jpg", 40)
-            r = abruf.disk_usage(force=True)
-            self.assertEqual(r["gesamt"], 2_000_000 + 5000 + 100 + 300 + 1_500_500 + 40)
-            self.assertEqual([t["name"] for t in r["teile"]], ["pokeapi.db", "mapgenie", "user.db", "sonst"])
-            mg = r["teile"][1]
-            self.assertEqual((mg["bytes"], mg["dateien"]), (1_500_840, 4))
-            self.assertEqual([(t["titel"], t["bytes"]) for t in mg["teile"]],
-                             [("HeartGold/SoulSilver: Weltkarten (im Browser umgewandelt)", 1_500_500),
-                              ("Kartendaten (Punkte, Orte)", 300), ("Map Genie: erfundenes-spiel", 40)])
-            self.assertEqual(mg["teile"][0]["teile"][0]["name"], "johto")
-            self.assertIs(abruf.disk_usage(), r)            # zwischengespeichert
-        abruf._disk.update(at=0.0, data=None)
-
     def test_0_54_was_fehlt(self):
         """Was fehlt mir noch: Gold/Silber mit gefangenem Taubsi; Tauboga geht jetzt (entwickeln), Pichu per Ei,
         Ledyba gibt es wild nur in Silber."""
@@ -3140,46 +3274,6 @@ class MitDatenbank(TempData):
         la = abfragen.missing({"spiel": "legends-arceus"})
         self.assertNotIn("zucht", {w["art"] for x in la["fehlt"] for w in x["wege"]})   # keine Zucht in Legenden: Arceus
 
-    def test_0_47_0_inhalt_der_raid_nester(self):
-        """Raid-Nester: Pokémon je Nest aus RaidTables.cs (erfundene Tabelle), als Bilder im Kartenpunkt."""
-        from app import abfragen, raidnester
-        cs = """        public readonly RaidTemplateTable[] SwordNests = {
-new RaidTemplateTable(0x1, 1, new []{
-new RaidTemplate(25, new[]{35u, 20u, 0u, 0u, 0u}, 1, 0, 3, 0, false, 0),
-new RaidTemplate(77, new[]{0u, 0u, 0u, 0u, 10u}, 4, 1, 4, 0, 25, true, 0),
-}),
-new RaidTemplateTable(0x2, 1, new []{
-new RaidTemplate(26, new[]{0u, 0u, 5u, 0u, 0u}, 3, 0, 3, 0, false, 0),
-}),
- };
-        public readonly RaidTemplateTable[] ShieldNests = {
-new RaidTemplateTable(0x1, 2, new []{
-new RaidTemplate(25, new[]{35u, 20u, 0u, 0u, 0u}, 1, 0, 3, 0, false, 0),
-new RaidTemplate(77, new[]{0u, 0u, 0u, 0u, 10u}, 4, 1, 4, 0, 25, true, 0),
-}),
-new RaidTemplateTable(0x2, 2, new []{
-new RaidTemplate(25, new[]{0u, 0u, 5u, 0u, 0u}, 3, 0, 3, 0, false, 0),
-}),
- };
-        public readonly RaidTemplateTable[] SwordNestsEvent =
-        {
-new RaidTemplateTable(0x1, 1, new []{
-new RaidTemplate(150, new[]{0u, 0u, 0u, 0u, 1u}, 5, 0, 3, 0, false, 0),
-}),
- };"""
-        t = raidnester.tables(cs)
-        self.assertEqual(t["sw"][1], [(25, 0, 1, 2, False), (77, 1, 5, 5, True)])
-        self.assertNotIn(150, [r[0] for v in t["sw"].values() for r in v])          # Event-Tabellen zählen nicht
-        names = {25: "Pikachu", 26: "Raichu", 77: "Ponita"}
-        txt = raidnester.den_text(t, 1, 2, names)
-        self.assertEqual(txt.split("\n"), ["**Schwert und Schild:**", "Pikachu (1–2★), Ponita (Galar-Form, 5★, Gigadynamax)",
-                                           "**Schwert, seltener Strahl:**", "Raichu (3★)", "**Schild, seltener Strahl:**", "Pikachu (3★)"])
-        r = raidnester.parse([("wa", 10, 20, "Erfundenes Feld", 1, 2)], "wa", 458, 1064, tabs=t, names=names)
-        self.assertIn("Ponita (Galar-Form", r["orte"][0][5])
-        mons = {v: k for k, v in names.items()}
-        pk, _, rest = abfragen.point_pics(r["orte"][0][5], "", mons, abfragen.names_rx(mons, True), {}, None)
-        self.assertEqual(pk[1], [77, "Ponita", "Schwert und Schild", "Galar-Form, 5★, Gigadynamax"])
-        self.assertEqual(rest, "**Ort:** Erfundenes Feld")
 
 
 class Rechnen(unittest.TestCase):
@@ -3473,6 +3567,11 @@ class Oeffentlich(unittest.TestCase):
             self.assertTrue(self.BAD_NAME.search(f) or ("/" not in f and f not in self.ROOT_FILES), f)
         for f in ("app/server.py", "tests/schaden_referenz.json", "extra/spielwissen.json", "docs/formeln.md"):
             self.assertFalse(self.BAD_NAME.search(f), f)
+
+
+# Tests mit Spieldaten (Mini-Datenbank), Vertrag zwischen Server und Oberfläche, Selbsttest im Browser: eigene Datei, hier
+# geladen, damit ein Aufruf alles ausführt
+from tests.mit_daten import MiniBau, Selbsttest, ServerMitDaten, Vertrag, Welt  # noqa: E402,F401
 
 
 if __name__ == "__main__":
