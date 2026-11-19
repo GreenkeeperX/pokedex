@@ -102,6 +102,8 @@ AUFRUFE = {
     "items": ("/api/items?spiel=emerald", None),
     "typen": ("/api/typen?spiel=x-y", None),
     "fehlt": ("/api/fehlt?spiel=emerald", None),
+    "fortschritt": ("/api/fortschritt?spiel=emerald", None),
+    "fehlt in HOME": ("/api/fehlt?spiel=pokemon-home", None),
     "gebiete": ("/api/gebiete?spiel=x-y", None),
     "pruefung": ("/api/pruefung", None),
     "teams": ("/api/teams", None),

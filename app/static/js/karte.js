@@ -605,16 +605,45 @@ const WEG = {jetzt: ["Geht jetzt", "Du hast eine Vorstufe (entwickeln) oder eine
   wild: ["Wild fangen", "Kommt in deiner Edition wild vor"], fest: ["Geschenk oder einmalig", "Geschenk, Tausch im Spiel oder eine feste Begegnung"],
   entwicklung: ["Entwickeln", "Entsteht aus einer Vorstufe, die du noch fangen musst"], raid: ["Tera-Raid", "Gibt es in Tera-Raids"],
   zucht: ["Züchten", "Schlüpft aus dem Ei einer Weiterentwicklung"], tausch: ["Tausch-Entwicklung", "Entwickelt sich nur beim Tausch"],
-  edition: ["Andere Edition", "Nur in der anderen Edition: tauschen"], unklar: ["Sonst", "Kein Weg in den Daten: Geschenk, Event, Tausch oder ein anderes Spiel"]};
-async function missingView() {
+  edition: ["Andere Edition", "Nur in der anderen Edition: tauschen"], unklar: ["Sonst", "Kein Weg in den Daten: Geschenk, Event, Tausch oder ein anderes Spiel"],
+  home: ["Übertragen", "In einem Spiel fangen und nach HOME übertragen"]};
+/* 0.69.0: Fortschritt auf einen Blick (/api/fortschritt): alle Spiele und HOME mit gefangenen Arten, für das gewählte
+   Spiel nach Generation und Typ; jede Zeile springt zu den fehlenden Pokémon (#fehlt/gen/3, #fehlt/typ/10) */
+const pbar = (n, a) => `<span class="pbar" data-tip="${n} von ${a}"><i style="width:${a ? Math.round(100 * n / a) : 0}%"></i></span>`;
+const anteil = (n, a) => a ? `${Math.floor(100 * n / a)} %` : "–";
+async function progressView() {
+  const rid = RID;
+  const d = await api("/api/fortschritt?" + qs({spiel: S.game}));
+  if (rid !== RID) return;
+  const zeile = (x, href, attr = "") => `<tr${href ? ` class="click" data-href="${href}"` : attr}><td>${x.label}</td><td class="num">${x.gefangen}</td><td class="num">${x.arten}</td><td>${pbar(x.gefangen, x.arten)}</td><td class="num">${anteil(x.gefangen, x.arten)}</td>
+    <td>${href && x.gefangen < x.arten ? `<a href="${href}" data-tip="Die fehlenden Pokémon dieser Zeile in „Was fehlt mir noch“">${x.arten - x.gefangen} fehlen</a>` : x.arten && x.gefangen === x.arten ? "✓" : ""}</td></tr>`;
+  const kopf = (was) => `<tr><th>${was}</th><th>gefangen</th><th>Arten</th><th></th><th></th><th></th></tr>`;
+  const fett = (x) => x.kennung === S.game ? `<b>${esc(x.name)}</b>` : esc(x.name);
+  main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Fortschritt</h2><span class="hint">Spiel</span><select class="gamesel"></select>
+      <span class="hint grow">${d.gefangen} von ${d.arten} Arten in ${esc(d.name)} gefangen (${anteil(d.gefangen, d.arten)})</span>
+      <a class="btn small" href="#fehlt">Was fehlt mir noch?</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
+    <div class="cols"><div><h3>Nach Generation</h3><table class="rows prog">${kopf("Generation")}${d.generationen.map((x) => zeile({...x, label: `Generation ${x.gen}`}, `#fehlt/gen/${x.gen}`)).join("")}</table></div>
+      <div><h3>Nach Typ</h3><table class="rows prog">${kopf("Typ")}${d.typen.map((x) => zeile({...x, label: esc(x.name)}, `#fehlt/typ/${x.id}`)).join("")}</table></div></div>
+    <h3>Alle Spiele</h3><div class="scroll"><table class="rows prog">${kopf("Spiel")}${d.spiele.map((x) => zeile({...x, label: fett(x)}, null,
+      ` class="click" data-spiel="${esc(x.kennung)}" data-tip="${esc(x.name)} wählen"`)).join("")}</table></div>
+    <p class="hint">Gezählt wird je Art wie in „Was fehlt mir noch“: eine gefangene Form (Pokéball) reicht. Die Arten eines Spiels sind die seines Spiel-Dex,
+      in HOME alle Arten. Eine Art mit zwei Typen zählt bei beiden.</p></div>`;
+  header();
+  $$("tr[data-href]", main).forEach((tr) => tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = tr.dataset.href; }));
+  $$("tr[data-spiel]", main).forEach((tr) => tr.addEventListener("click", () => setGame(tr.dataset.spiel)));
+}
+async function missingView(nach, wert) {
   const rid = RID, ek = "edition:" + S.game;
+  // 0.69.0: aus dem Fortschritt nur eine Generation oder einen Typ (#fehlt/gen/3, #fehlt/typ/10)
+  const nur = nach === "gen" ? {gen: +wert, text: `Generation ${+wert}`} : nach === "typ" ? {typ: +wert, text: S.types[+wert] || "Typ"} : null;
   let ed = store.get(ek, ""), q = "", weg = store.get("fehltWeg", "");
   const load = () => api("/api/fehlt?" + qs({spiel: S.game, edition: ed}));
   let d = await load();
   if (rid !== RID) return;
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Was fehlt mir noch?</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <span id="fed"></span><input id="fq" type="search" placeholder="Pokémon oder Ort" style="width:200px"><span class="hint grow" id="fcnt"></span>
-      <a class="btn small" href="#sammeln">Sammelobjekte</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
+      ${nur ? `<a class="btn small on" href="#fehlt" data-tip="Wieder alle fehlenden zeigen">nur ${esc(nur.text)} ×</a>` : ""}
+      <a class="btn small" href="#fortschritt" data-tip="Wie viel du je Spiel, Generation und Typ schon hast">Fortschritt</a><a class="btn small" href="#sammeln">Sammelobjekte</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
     <div class="bar"><span class="seg" id="fseg"></span></div><div id="fbody"></div>
     <p class="hint">Gezählt wird je Art: eine gefangene Form (Pokéball) reicht. Wege aus den Fundorten des Spiels (Spieldaten oder PokéAPI), den Entwicklungen und,
       wo es Zucht gibt, den Eiern einer Weiterentwicklung. Den Pokéball auf einer Karte kannst du gleich hier setzen.</p></div>`;
@@ -624,7 +653,8 @@ async function missingView() {
       `<option${e === ed ? " selected" : ""}>${esc(e)}</option>`).join("")}</select>` : "";
     $("#fedsel")?.addEventListener("change", async (e) => { ed = e.target.value; store.set(ek, ed); d = await load(); if (rid === RID) draw(); });
     const ql = q.toLowerCase();
-    const xs = d.fehlt.filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.wege.some((w) => (w.text || "").toLowerCase().includes(ql)));
+    const xs = d.fehlt.filter((x) => (!nur || (nur.gen ? x.gen === nur.gen : x.typen.includes(nur.typ)))
+      && (!ql || x.name.toLowerCase().includes(ql) || x.wege.some((w) => (w.text || "").toLowerCase().includes(ql))));
     const by = {};
     xs.forEach((x) => (by[x.weg] ||= []).push(x));
     const ks = Object.keys(WEG).filter((k) => by[k]);

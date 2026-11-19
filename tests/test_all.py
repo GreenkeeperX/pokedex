@@ -4098,6 +4098,44 @@ class LeistungOhneDaten(HttpTest):
         self.assertIn("Noch keine Spieldaten", self.json("/api/leistung", {}, status=400)["error"])
 
 
+class Fortschritt(HttpMitDaten):
+    """0.69.0: Fortschritt je Spiel und in HOME, nach Generation und Typ; dieselben Zahlen wie „Was fehlt mir noch“."""
+
+    def _fangen(self, spiel, *formen):
+        con = db.user()
+        con.executemany("INSERT OR IGNORE INTO gefangen (spiel, form, seit) VALUES (?,?,?)", [(spiel, f, "x") for f in formen])
+        con.commit()
+        con.close()
+
+    def test_zahlen_wie_was_fehlt(self):
+        D = abfragen.data()
+        g = D.game_by["emerald"]
+        formen = sorted(abfragen.vertreter(D, g).values(), key=lambda x: x[0])
+        self._fangen("emerald", formen[0][1]["id"], formen[1][1]["id"])
+        self._fangen(abfragen.HOME, formen[0][1]["id"])
+        d = self.json("/api/fortschritt?spiel=emerald")
+        self.assertEqual((d["spiel"], d["gefangen"]), ("emerald", 2))
+        self.assertEqual(d["spiele"][0]["kennung"], abfragen.HOME)
+        self.assertEqual(sum(x["arten"] for x in d["generationen"]), d["arten"])
+        self.assertEqual(sum(x["gefangen"] for x in d["generationen"]), 2)
+        self.assertGreaterEqual(sum(x["arten"] for x in d["typen"]), d["arten"])        # zwei Typen zählen doppelt
+        for x in d["spiele"]:                                                           # je Spiel wie „Was fehlt mir noch“
+            f = self.json(f"/api/fehlt?spiel={x['kennung']}")
+            self.assertEqual((x["arten"], x["gefangen"]), (f["arten"], f["gefangen"]), x["kennung"])
+            self.assertEqual(len(f["fehlt"]), f["arten"] - f["gefangen"], x["kennung"])
+        home = self.json(f"/api/fehlt?spiel={abfragen.HOME}")
+        self.assertEqual({w["art"] for x in home["fehlt"] for w in x["wege"]}, {"home"})
+        self.assertNotIn(formen[0][1]["art"], {x["art"] for x in home["fehlt"]})
+        # jede fehlende Art trägt ihre Generation (Sprung aus dem Fortschritt: #fehlt/gen/N)
+        fe = self.json("/api/fehlt?spiel=emerald")["fehlt"]
+        je_gen = {x["gen"]: x["arten"] - x["gefangen"] for x in d["generationen"]}
+        self.assertEqual({k: v for k, v in je_gen.items() if v}, {k: sum(1 for x in fe if x["gen"] == k) for k in {x["gen"] for x in fe}})
+        # HOME gewählt; unbekanntes Spiel: das neueste
+        self.assertEqual(self.json(f"/api/fortschritt?spiel={abfragen.HOME}")["gefangen"], 1)
+        self.assertEqual(self.json("/api/fortschritt?spiel=gibtsnicht")["spiel"], D.games[-1]["kennung"])
+        self.ohne_fehler()
+
+
 # Tests mit Spieldaten (Mini-Datenbank), Vertrag zwischen Server und Oberfläche, Selbsttest im Browser: eigene Datei, hier
 # geladen, damit ein Aufruf alles ausführt
 from tests.mit_daten import MiniBau, Selbsttest, ServerMitDaten, Vertrag, Welt  # noqa: E402,F401

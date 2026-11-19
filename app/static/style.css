@@ -513,6 +513,8 @@ details.sub>summary .slinks{margin-left:auto;font-size:12.5px;white-space:nowrap
 #s-status .rows th{text-align:left;font-weight:600;white-space:nowrap}#s-status .kv th{width:1%;padding-right:28px}
 .bar.acts{margin-top:16px}
 .plan{margin:6px 0 4px}.plan h3{margin-top:4px}
+.pbar{display:inline-block;width:120px;height:8px;border-radius:4px;background:var(--line);overflow:hidden;vertical-align:middle}.pbar i{display:block;height:100%;background:var(--go)}
+table.prog tr.click{cursor:pointer}table.prog td:first-child{white-space:nowrap}
 .dprog{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:6px 0}
 .dprog i{display:block;height:100%;background:var(--go);transition:width .4s}
 /* Zählspalten (Schw., ×4, Res., Imm. …): Hintergrund nach gut/schlecht und Menge, abgesetzt von den 18 Typspalten */

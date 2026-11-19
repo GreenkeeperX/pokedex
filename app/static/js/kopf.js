@@ -208,7 +208,8 @@ async function route() {
     else if (tab === "raids") await raidsView(arg);
     else if (tab === "auftraege") await requestsView();
     else if (tab === "items") await itemsView();
-    else if (tab === "fehlt") await missingView();
+    else if (tab === "fehlt") await missingView(arg, arg2);
+    else if (tab === "fortschritt") await progressView();
     else if (tab === "sammeln") await collectView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
     else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);
@@ -379,7 +380,7 @@ function filterBar(f, id, opts = {}) {
       <label data-tip="Nur deine Favoriten (Stern) oder deine Sammlung (als gefangen markiert, Pokéball) im gewählten Spiel"><select data-f="nur"><option value="">alle Pokémon</option><option value="fav"${f.nur === "fav" ? " selected" : ""}>nur Favoriten</option><option value="gef"${f.nur === "gef" ? " selected" : ""}>nur aus deiner Sammlung</option></select></label>
       ${areaSelect(f)}
       <label>Basiswerte ab <input data-f="min" type="number" min="0" max="800" step="10" style="width:80px" value="${esc(f.min)}"></label>
-      <span class="hint grow" data-cnt="${id}"></span>${id === "lf" ? `<a class="btn small" href="#fehlt" data-tip="Welche Pokémon des Spiel-Dex dir noch fehlen und wie du sie bekommst">Was fehlt mir noch?</a>` : ""}</div></div>`;
+      <span class="hint grow" data-cnt="${id}"></span>${id === "lf" ? `<a class="btn small" href="#fortschritt" data-tip="Wie viel du je Spiel, Generation und Typ schon hast">Fortschritt</a><a class="btn small" href="#fehlt" data-tip="Welche Pokémon des Spiel-Dex dir noch fehlen und wie du sie bekommst">Was fehlt mir noch?</a>` : ""}</div></div>`;
 }
 function bindFilter(f, id, onChange, save) {
   const box = $("#" + id);

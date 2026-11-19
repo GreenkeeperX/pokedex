@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.68.0"
+VERSION = "0.69.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.69.0", "19.11.2026", [
+        "Fortschritt auf einen Blick (Knopf in der Liste): gefangene Arten je Spiel und in Pokémon HOME, für das gewählte "
+        "Spiel nach Generation und Typ; ein Klick auf eine Zeile zeigt genau die Pokémon, die dort noch fehlen",
+        "Was fehlt mir noch: jetzt auch für Pokémon HOME",
+    ]),
     ("0.68.0", "19.11.2026", [
         "Statuskarte: Leistungstest auf Klick („messen“). Er misst die Antwortzeiten der wichtigsten Wege (einmal und "
         "wiederholt), ihre Größe, Arbeitsspeicher, Rechenzeit und das Speichern mit erfundenen Teams in einer "
