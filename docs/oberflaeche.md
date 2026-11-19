@@ -2,7 +2,7 @@
 
 Reines JavaScript ohne Build (`app/static/js/`). Die Ansicht steht in der Adresse: `#pokemon`, `#pokemon/<id>`
 (`#pokemon/<id>/<platz>` für einen Team-Platz), `#team`, `#attacken`, `#typen`, `#items`, `#karte` (mit
-`#karte/mg/<Karte>`, `#karte/gebiete/<Ort>`), `#fehlt`, `#sammeln`, `#vergleich/<A>/<B>`, `#initiative`, `#kampf`,
+`#karte/mg/<Karte>`, `#karte/gebiete/<Ort>`), `#fehlt`, `#fortschritt`, `#jagd`, `#sammeln`, `#vergleich/<A>/<B>`, `#initiative`, `#kampf`,
 `#raids`, `#auftraege`, `#einstellungen`. Gewähltes Spiel, Filter, aufgeklappte Kästen und das aktuelle Team merkt sich
 der Browser (`store`, `localStorage`); gespeicherte Teams und alle eigenen Daten liegen auf dem Server (user.db).
 
@@ -20,7 +20,7 @@ je Reiter zum Nachschlagen.
 | `liste.js` | Pokémon-Liste, Team-Leiste (`dock`), Speichern des Teams, Showdown-Export |
 | `detail.js` | Detailseite (Werte, Effort Levels, Fangchance, Entwicklung, Attacken), Raids, Aufträge, Forschung |
 | `team.js` | Team, Gegner und Trainer, Attacken |
-| `karte.js` | Karten, Sammelobjekte, Fortschritt, Was fehlt mir noch, Gebiete |
+| `karte.js` | Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Was fehlt mir noch, Gebiete |
 | `items.js` | Items und Typtabelle |
 | `kampf.js` | Vergleich, Initiative-Liste, Kampf (Champions), Schadensrechner |
 | `einstellungen.js` | Einstellungen, Abgleich, Sicherung, Seite untersuchen, Verbindungstest |
@@ -283,7 +283,14 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
   (`gebiet:<Spiel>`), Filter `gebietFehlend`.
 - Auswahl mit Bildern (`.pick`): Knopf, darunter Suche und Liste aus echten Links; Enter nimmt den ersten Treffer.
 
-### Fortschritt, Was fehlt mir noch und Sammelobjekte
+### Fortschritt, Shiny-Jagd, Was fehlt mir noch und Sammelobjekte
+
+- `huntView` (`#jagd`, `/api/jagd?spiel=…`): Suche für eine neue Jagd (`autocomplete`), darunter je laufende Jagd eine
+  Karte (`huntCard`) mit Methode, Optionen und Schillerpin (nur, wo das Spiel einen hat), großer Taste (`.jplus`), Taste
+  −, Zählerstand, Notiz und „Gefunden“; darunter die gefundenen mit „Weiter“. Quote und „bis jetzt“ rechnet der Server;
+  die Oberfläche zeigt nach jedem Zählen die Antwort von `/api/jagd/zaehlen` (die Zahl selbst sofort, bei einem Fehler
+  zurück). Leertaste oder + zählt die oberste Jagd, − nimmt zurück (nicht in Eingabefeldern). `#jagd/neu/<Form>` (Knopf
+  auf der Detailseite, nicht im Kampfspiel) legt eine Jagd mit der ersten Methode an.
 
 - `progressView` (`#fortschritt`, `/api/fortschritt?spiel=…`): oben das gewählte Spiel (Auswahl `.gamesel` wie im Kopf),
   darunter zwei Tabellen nach Generation und nach Typ, dann alle Spiele mit HOME zuerst. Jede Zeile mit Balken

@@ -16,6 +16,7 @@ brauchen nur die Python-Standardbibliothek; der Selbsttest der Oberfläche zusä
 | `Abgleich`, `Betrieb`, `Fehler` | Abgleich mit Attrappe statt Netz, Neustart mitten im Lauf, Ruhezeiten, Fehlerregister | ja | ja |
 | `Wiederherstellung`, `WiederherstellungHttp` | Wiederherstellungstest: bestanden mit unberührtem Datenordner, alte Sicherung lädt, kaputte Sicherung und unlesbare Einträge, monatlich im Zeitplan, „jetzt prüfen“ | ja | ja |
 | `Leistung`, `LeistungOhneDaten` | Leistungstest über HTTP: alle Wege beantwortet, kein Netz, `user.db` unverändert, kein temporärer Ordner übrig, gespeichert (die letzten zehn); gesperrt während eines Abgleichs und doppelt; gescheiterter Weg | ja | ja |
+| `Jagd`, `JagdHttp` | Shiny-Quoten gegen die Werte der Quellen (Legenden: Arceus, Karmesin/Purpur, SOS-Kette, Fang-Kombo wie in `spielwissen.json`, Schwert/Schild), Brüche der Quelle, „bis jetzt“ über Stufen; Jagd anlegen, zählen, ändern, abschließen (setzt schillernd), Shiny-Sperre, Sicherung und Rückspielen | ja | ja |
 | `Fortschritt` | Fortschritt je Spiel und in HOME mit denselben Zahlen wie „Was fehlt mir noch“, Summen nach Generation, Was fehlt in HOME | ja | ja |
 | `Statuskarte`, `StatuskarteHttp` | Gesamtstatus und Gründe der Statuskarte (Stufen, Grenzen für Platz und Sicherung, nicht lesbarer Platz), `/api/statuskarte` ohne Spieldaten | ja | ja |
 | `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten; dazu die Skripte der Oberfläche (jede Datei genau einmal in `index.html`, Kennung je Datei) | ja | ja |

@@ -83,6 +83,7 @@ VORHER = (
     ("/api/teams", {"name": "Vertrag", "spiel": "scarlet-violet", "mitglieder": [3, 5, 7], "fest": [3],
                     "details": {"3": {"level": 50, "attacken": [23, 13]}}}),
     ("/api/kampftagebuch", {"spiel": "scarlet-violet", "ergebnis": "sieg", "team": [3, 5], "gegner": [7, 9], "notiz": "Probe"}),
+    ("/api/jagd", {"spiel": "scarlet-violet", "form": 3, "methode": "sv_ausbruch", "optionen": {"kraft": 2}, "pin": True, "notiz": "Probe"}),
 )
 _SV = {"spiel": "scarlet-violet"}
 # Name: (Weg, Rumpf oder None für GET). Die Namen sind die Abschnitte in vertrag.json.
@@ -110,6 +111,9 @@ AUFRUFE = {
     "favoriten": ("/api/favoriten?spiel=x-y", None),
     "gefangen": ("/api/gefangen?spiel=emerald", None),
     "kampftagebuch": ("/api/kampftagebuch?spiel=scarlet-violet", None),
+    "jagd": ("/api/jagd?spiel=scarlet-violet", None),
+    "jagd ohne Quoten": ("/api/jagd?spiel=red-blue", None),
+    "jagd zählen": ("/api/jagd/zaehlen", {"id": 1, "plus": 31}),
     "team bewerten": ("/api/team/bewerten", {**_SV, "ids": [3, 5, 7], "details": [{"attacken": [23, 13]}, {}, {"tera": 13}]}),
     "team optimieren": ("/api/team/optimieren", {**_SV, "filter": {"ohne_leg": 1}}),
     "team vorschlag": ("/api/team/vorschlag", {**_SV, "ids": [3]}),

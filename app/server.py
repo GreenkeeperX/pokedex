@@ -14,7 +14,7 @@ import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, fehler, leistung, sources, statuskarte, store, wiederherstellung
+from . import abfragen, abruf, altissimo, aufgaben, db, fehler, jagd, leistung, sources, statuskarte, store, wiederherstellung
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -280,7 +280,7 @@ def set_favorite(body):
 
 
 def export():
-    """Alles Eigene als JSON (die Sicherung): Teams, Favoriten, Gefangene, Entscheidungen."""
+    """Alles Eigene als JSON (die Sicherung): Teams, Favoriten, Gefangene, Entscheidungen, Kampftagebuch, Shiny-Jagden."""
     con = db.user()
     try:
         out = {t: [dict(r) for r in con.execute(f"SELECT spiel, form, seit FROM {t} ORDER BY spiel, seit, form")] for t in MARKS}
@@ -288,19 +288,22 @@ def export():
         got = [dict(r) for r in con.execute("SELECT spiel, karte, objekt, seit FROM gefunden ORDER BY spiel, karte, seit")]
         log = [dict(r, team=json.loads(r["team"] or "[]"), gegner=json.loads(r["gegner"] or "[]"))
                for r in con.execute("SELECT spiel, at, ergebnis, team, gegner, notiz FROM kampf ORDER BY at, id")]
+        hunts = [dict(r, optionen=json.loads(r["optionen"] or "{}")) for r in con.execute(
+            "SELECT spiel, form, methode, optionen, pin, zaehler, angeheftet, start, geaendert, gefunden, notiz FROM jagd ORDER BY start, id")]
     finally:
         con.close()
     return {"app": "pokedex", "version": sources.VERSION, "exportiert": _now(), "teams": teams(), "favoriten": out["favorit"],
             "gefangen": out["gefangen"], "schillernd": out["schillernd"], "alpha": out["alpha"], "gefunden": got, "entscheidungen": dec,
-            "kampftagebuch": log}
+            "kampftagebuch": log, "jagden": hunts}
 
 
 def restore(body):
-    """Sicherung einlesen: ersetzt Teams, Favoriten, Gefangene und Entscheidungen durch den Inhalt der Datei.
+    """Sicherung einlesen: ersetzt Teams, Favoriten, Gefangene und Entscheidungen durch den Inhalt der Datei, dazu
+    Gefundenes, Kampftagebuch und Shiny-Jagden, wenn die Datei sie enthält (ältere Sicherungen lassen sie stehen).
     Vorher legt db.backup() eine Kopie von user.db an."""
     if body.get("app") != "pokedex" or not isinstance(body.get("teams"), list):
         raise ValueError("Keine Sicherung des Pokédex (es fehlen app und teams)")
-    rows = {"team": [], "favorit": [], "gefangen": [], "schillernd": [], "alpha": [], "gefunden": [], "entscheidung": [], "kampf": []}
+    rows = {"team": [], "favorit": [], "gefangen": [], "schillernd": [], "alpha": [], "gefunden": [], "entscheidung": [], "kampf": [], "jagd": []}
     for t in body["teams"][:500]:
         name = " ".join(str(t.get("name") or "").split())[:80] or "Team"
         members = _ids(t.get("mitglieder"))
@@ -324,11 +327,21 @@ def restore(body):
         if isinstance(r, dict) and r.get("ergebnis") in ("sieg", "niederlage"):
             rows["kampf"].append((str(r.get("spiel") or "")[:60], str(r.get("at") or _now())[:40], r["ergebnis"],
                                   json.dumps(_ids(r.get("team"))[:6]), json.dumps(_ids(r.get("gegner"))[:6]), str(r.get("notiz") or "")[:500]))
+    for r in (body.get("jagden") or [])[:20000]:
+        try:
+            rows["jagd"].append((str(r.get("spiel") or "")[:60], int(r["form"]), str(r.get("methode") or "")[:40],
+                                 json.dumps({str(k)[:20]: int(v) for k, v in (r.get("optionen") or {}).items()}), 1 if r.get("pin") else 0,
+                                 min(max(int(r.get("zaehler") or 0), 0), jagd.ZAEHLER_MAX), 1 if r.get("angeheftet") else 0,
+                                 str(r.get("start") or _now())[:40], str(r.get("geaendert") or _now())[:40],
+                                 str(r["gefunden"])[:40] if r.get("gefunden") else None, str(r.get("notiz") or "")[:300]))
+        except (TypeError, ValueError, KeyError, AttributeError):
+            raise ValueError("jagden: Einträge mit spiel, form und zaehler erwartet")
     db.backup(force=True)
     con = db.user()
     try:
+        neu = {"kampf": "kampftagebuch", "gefunden": "gefunden", "jagd": "jagden"}     # später dazugekommen: ältere Sicherungen lassen sie stehen
         for table in rows:
-            if table not in ("gefunden", "kampf") or ("kampftagebuch" if table == "kampf" else table) in body:   # ältere Sicherungen lassen sie stehen
+            if table not in neu or neu[table] in body:
                 con.execute(f"DELETE FROM {table}")
         con.executemany("INSERT INTO team (name, spiel, mitglieder, fest, gewichte, details, geaendert) VALUES (?, ?, ?, ?, ?, ?, ?)", rows["team"])
         for table in MARKS:
@@ -336,11 +349,14 @@ def restore(body):
         con.executemany("INSERT OR REPLACE INTO entscheidung VALUES (?, ?, ?, ?)", rows["entscheidung"])
         con.executemany("INSERT OR IGNORE INTO gefunden (spiel, karte, objekt, seit) VALUES (?, ?, ?, ?)", rows["gefunden"])
         con.executemany("INSERT INTO kampf (spiel, at, ergebnis, team, gegner, notiz) VALUES (?, ?, ?, ?, ?, ?)", rows["kampf"])
+        con.executemany("INSERT INTO jagd (spiel, form, methode, optionen, pin, zaehler, angeheftet, start, geaendert, gefunden, notiz) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows["jagd"])
         con.commit()
     finally:
         con.close()
     return {"teams": len(rows["team"]), "favoriten": len(rows["favorit"]), "gefangen": len(rows["gefangen"]),
-            "gefunden": len(rows["gefunden"]), "entscheidungen": len(rows["entscheidung"]), "kampftagebuch": len(rows["kampf"])}
+            "gefunden": len(rows["gefunden"]), "entscheidungen": len(rows["entscheidung"]), "kampftagebuch": len(rows["kampf"]),
+            "jagden": len(rows["jagd"])}
 
 
 def battle_log(spiel=None):
@@ -868,6 +884,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/fortschritt":
                 d = abfragen.fortschritt(q)
                 self._send(200 if d else 404, d or {"error": "keine Spieldaten"})
+            elif path == "/api/jagd":
+                self._send(200, jagd.ansicht(q))
             elif path == "/api/fehlt":
                 d = abfragen.missing(q)
                 self._send(200 if d else 404, d or {"error": "kein Spiel"})
@@ -981,6 +999,9 @@ class Handler(BaseHTTPRequestHandler):
         "/api/effort/team": abfragen.effort_team,
         "/api/kampftagebuch": add_battle,
         "/api/kampftagebuch/loeschen": delete_battle,
+        "/api/jagd": jagd.speichern,
+        "/api/jagd/zaehlen": jagd.zaehlen,
+        "/api/jagd/loeschen": jagd.loeschen,
         "/api/team/export": abfragen.paste_export,
         "/api/uebertragen": transfer,
         "/api/restore": restore,

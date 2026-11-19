@@ -12,11 +12,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.69.0"
+VERSION = "0.70.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.70.0", "19.11.2026", [
+        "Shiny-Jagd (Knopf in der Liste oder auf der Detailseite): Zähler je Jagd mit der Methode des Spiels, Optionen wie "
+        "Lockparfüm oder Schillerkraft und Schillerpin; zeigt die Quote der nächsten Begegnung und den Anteil der Jäger, die "
+        "mit so vielen Begegnungen schon eins gefunden hätten. Leertaste oder + zählt, „Gefunden“ setzt schillernd gefangen",
+        "Quoten mit Quelle (Bulbapedia, Serebii); was die Quelle nicht belegt, sagt die Jagd dazu",
+        "Die Sicherung enthält jetzt auch die Shiny-Jagden",
+    ]),
     ("0.69.0", "19.11.2026", [
         "Fortschritt auf einen Blick (Knopf in der Liste): gefangene Arten je Spiel und in Pokémon HOME, für das gewählte "
         "Spiel nach Generation und Typ; ein Klick auf eine Zeile zeigt genau die Pokémon, die dort noch fehlen",

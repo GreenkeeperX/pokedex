@@ -514,7 +514,11 @@ details.sub>summary .slinks{margin-left:auto;font-size:12.5px;white-space:nowrap
 .bar.acts{margin-top:16px}
 .plan{margin:6px 0 4px}.plan h3{margin-top:4px}
 .pbar{display:inline-block;width:120px;height:8px;border-radius:4px;background:var(--line);overflow:hidden;vertical-align:middle}.pbar i{display:block;height:100%;background:var(--go)}
-table.prog tr.click{cursor:pointer}table.prog td:first-child{white-space:nowrap}
+table.prog tr.click{cursor:pointer}
+.jagd.pin{border-color:var(--accent)}.jzahl{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;margin-top:8px}
+.jplus{min-width:180px;min-height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:14px}
+.jplus b{font-size:40px;line-height:1.1}.jminus{min-width:56px;font-size:24px}.jinfo{flex:1;min-width:240px;display:flex;flex-direction:column;gap:3px}
+table.prog td:first-child{white-space:nowrap}
 .dprog{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:6px 0}
 .dprog i{display:block;height:100%;background:var(--go);transition:width .4s}
 /* Zählspalten (Schw., ×4, Res., Imm. …): Hintergrund nach gut/schlecht und Menge, abgesetzt von den 18 Typspalten */
