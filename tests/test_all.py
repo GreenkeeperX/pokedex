@@ -4288,6 +4288,89 @@ class JagdHttp(HttpMitDaten):
 
 
 
+class Nuzlocke(HttpMitDaten):
+    """0.73.0: Nuzlocke-Lauf in Smaragd der Mini-Welt: Gebiete aus den Fundorten, erste Begegnung je Gebiet, Dupes-Klausel
+    über die Entwicklungsreihe (Rankel sperrt Keimling), Levelgrenze aus den Bossen (Erfunda 14, Kieselmo 25; Rückkampf und
+    Rivale zählen nicht), Friedhof, Sicherung und Rückspielen."""
+
+    def setUp(self):
+        super().setUp()
+        self.form = {f["art"]: i for i, f in abfragen.data().forms.items() if f["standard"]}
+
+    def begegnung(self, lauf, code=200, **kw):
+        return self.json("/api/nuzlocke/begegnung", dict(kw, lauf=lauf), status=code)
+
+    def test_ablauf(self):
+        d = self.json("/api/nuzlocke?spiel=emerald")
+        self.assertEqual((d["lauf"], d["laeufe"]), (None, []))
+        self.assertEqual([r["id"] for r in d["regeln_liste"]], ["dupes", "shiny", "geschenke", "levelgrenze", "spitznamen", "niederlage"])
+        L = self.json("/api/nuzlocke", {"spiel": "emerald", "name": "  Testlauf  "})["lauf"]
+        orte = {g["ort"]: g for g in L["gebiete"]}
+        self.assertEqual(L["name"], "Testlauf")
+        self.assertEqual(sorted(m["id"] for m in orte["Nebelwiese"]["mons"]), [self.form[1], self.form[8]])
+        self.assertEqual([(b["name"], b["level"]) for b in L["bosse"]], [("Erfunda", 14), ("Kieselmo", 25), ("Gipfelchamp", 60)])
+        self.assertEqual((L["grenze"]["level"], L["grenze"]["boss"]["name"], L["hinweise"]), (14, "Erfunda", []))
+        lid = L["id"]
+        # erste Begegnung, eine zweite im selben Gebiet geht nicht
+        L = self.begegnung(lid, ort="Nebelwiese", form=self.form[8], status="team", level=15)["lauf"]
+        self.assertEqual([(b["name"], b["ort"]) for b in L["team"]], [("Zappel", "Nebelwiese")])
+        self.assertIn("Ohne Spitznamen: Zappel.", L["hinweise"])
+        self.assertIn("Über der Levelgrenze 14 (Erfunda): Zappel.", L["hinweise"])
+        self.assertIn("schon eine erste Begegnung", self.begegnung(lid, 400, ort="Nebelwiese", form=self.form[1])["error"])
+        n = L["team"][0]["n"]
+        L = self.begegnung(lid, n=n, spitzname="  Funki ")["lauf"]
+        self.assertEqual((L["team"][0]["spitzname"], L["team"][0]["level"]), ("Funki", 15))
+        # Dupes-Klausel: ein geschenktes Rankel sperrt Keimling (dieselbe Entwicklungsreihe), bei „art“ nicht mehr
+        L = self.begegnung(lid, form=self.form[2], extra="geschenk", status="box", spitzname="Ranko")["lauf"]
+        self.assertEqual([b["name"] for b in L["extras"]], ["Rankel"])
+        sperre = lambda L: {m["name"]: m["gesperrt"] for g in L["gebiete"] for m in g["mons"] if g["ort"] == "Kieselbucht" or m["name"] == "Keimling"}
+        self.assertEqual(sperre(L)["Keimling"], "schon gefangen: Rankel")
+        d = self.json("/api/nuzlocke", {"id": lid, "regeln": {"dupes": "art", "unbekannt": 1, "shiny": "vielleicht"}})
+        regel, L = {r["id"]: r["wert"] for r in d["regeln_liste"]}, d["lauf"]
+        self.assertEqual((sperre(L)["Keimling"], regel["dupes"], regel["shiny"]), ("", "art", "ja"))
+        # Levelgrenze: Erfunda besiegt, dann Kieselmo; Zappel liegt darunter
+        erfunda = L["bosse"][0]["id"]
+        L = self.json("/api/nuzlocke", {"id": lid, "besiegt": {"trainer": erfunda, "ja": True}})["lauf"]
+        self.assertEqual((L["grenze"]["level"], L["grenze"]["ueber"], L["bosse"][0]["besiegt"]), (25, [], True))
+        self.assertFalse(any("Levelgrenze" in h for h in L["hinweise"]))
+        # Friedhof: beide tot, dann lebt keiner mehr
+        L = self.begegnung(lid, n=n, status="tot")["lauf"]
+        L = self.begegnung(lid, n=L["box"][0]["n"], status="tot")["lauf"]
+        self.assertEqual(([b["name"] for b in L["friedhof"]], L["team"], L["box"]), (["Zappel", "Rankel"], [], []))
+        self.assertIn("Kein Pokémon lebt mehr: der Lauf ist vorbei.", L["hinweise"])
+        # falsche Angaben
+        self.begegnung(lid, 400, ort="Kieselbucht", form="x")
+        self.begegnung(lid, 400, ort="Kieselbucht", form=self.form[6], level=101)
+        self.begegnung(lid, 400, form=self.form[6])                                          # erste Begegnung ohne Gebiet
+        self.begegnung(lid, 400, ort="Kieselbucht", form=self.form[6], status="verschollen")
+        self.json("/api/nuzlocke?spiel=emerald&lauf=abc", status=400)
+        self.json("/api/nuzlocke", {"id": lid, "status": "vielleicht"}, status=400)
+        self.begegnung(9999, 400, ort="Kieselbucht", form=self.form[6])
+        # Sicherung: enthalten; zurückgespielt gleich; eine ältere Sicherung ohne Läufe lässt sie stehen
+        exp = self.json("/api/export")
+        self.assertEqual([(x["name"], len(x["begegnungen"]), x["besiegt"]) for x in exp["nuzlocke"]], [("Testlauf", 2, [erfunda])])
+        self.json("/api/nuzlocke/loeschen", {"id": lid})
+        self.assertEqual(self.json("/api/nuzlocke?spiel=emerald")["laeufe"], [])
+        self.assertEqual(self.json("/api/restore", exp)["nuzlocke"], 1)
+        d = self.json("/api/nuzlocke?spiel=emerald")
+        L = d["lauf"]
+        self.assertEqual(([b["spitzname"] for b in L["friedhof"]], d["regeln_liste"][0]["wert"], L["grenze"]["level"]), (["Funki", "Ranko"], "art", 25))
+        self.json("/api/restore", {k: v for k, v in exp.items() if k != "nuzlocke"})
+        self.assertEqual(len(self.json("/api/nuzlocke?spiel=emerald")["laeufe"]), 1)
+        kaputt = dict(exp, nuzlocke=[dict(exp["nuzlocke"][0], begegnungen=[{"ort": "X", "form": "nix"}])])
+        self.json("/api/restore", kaputt, status=400)
+        self.ohne_fehler()
+
+    def test_spiel_ohne_daten(self):
+        L = self.json("/api/nuzlocke", {"spiel": "red-blue"})["lauf"]
+        self.assertEqual((L["gebiete"], L["bosse"], L["grenze"]), ([], [], None))
+        self.assertEqual(len(L["hinweise"]), 2)                     # keine Fundorte, keine Bosse
+        L = self.begegnung(L["id"], ort="Route 1 (von Hand)", form=self.form[6])["lauf"]
+        self.assertEqual([g["ort"] for g in L["gebiete"]], ["Route 1 (von Hand)"])
+        self.json("/api/nuzlocke", {"name": "ohne Spiel"}, status=400)
+        self.ohne_fehler()
+
+
 class Tausch(HttpMitDaten):
     """0.71.0: Tauschliste aus „Was fehlt mir noch“: andere Edition (mit Kette), Tausch-Entwicklung, ohne Weg; Biete."""
 

@@ -210,10 +210,10 @@ async function settingsView() {
     let body;
     try { body = JSON.parse(await file.text()); } catch (x) { $("#restmsg").innerHTML = `<div class="note stop">Keine lesbare JSON-Datei.</div>`; return; }
     const n = (k) => (body[k] || []).length;
-    if (!await ask(`Sicherung vom ${String(body.exportiert || "?").slice(0, 10)} einlesen?`, `${n("teams")} Teams, ${n("favoriten")} Favoriten, ${n("gefangen")} in der Sammlung, ${n("entscheidungen")} Entscheidungen, ${n("jagden")} Shiny-Jagden. Das ersetzt alle eigenen Daten.`, "Einlesen", true)) return;
+    if (!await ask(`Sicherung vom ${String(body.exportiert || "?").slice(0, 10)} einlesen?`, `${n("teams")} Teams, ${n("favoriten")} Favoriten, ${n("gefangen")} in der Sammlung, ${n("entscheidungen")} Entscheidungen, ${n("jagden")} Shiny-Jagden, ${n("nuzlocke")} Nuzlocke-Läufe. Das ersetzt alle eigenen Daten.`, "Einlesen", true)) return;
     try {
       const r = await api("/api/restore", body);
-      $("#restmsg").innerHTML = `<div class="note go">Eingelesen: ${r.teams} Teams, ${r.favoriten} Favoriten, ${r.gefangen} in der Sammlung, ${r.entscheidungen} Entscheidungen, ${r.jagden} Shiny-Jagden.</div>`;
+      $("#restmsg").innerHTML = `<div class="note go">Eingelesen: ${r.teams} Teams, ${r.favoriten} Favoriten, ${r.gefangen} in der Sammlung, ${r.entscheidungen} Entscheidungen, ${r.jagden} Shiny-Jagden, ${r.nuzlocke} Nuzlocke-Läufe.</div>`;
       S.favGame = null; S.caughtGame = null;
       if (S.team.tid) { S.team.tid = null; S.team.dirty = false; store.set("team", S.team); }
       await Promise.all([loadFavs(true), loadCaught(true)]);

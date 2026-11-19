@@ -231,6 +231,33 @@ Offen (so umgesetzt, aber nicht belegt oder bewusst weggelassen):
 - **Mutter mit der Attacke ab Generation 6**: Die Kette nutzt sie nicht, weil die Mutter dieselbe Familie wie das Ei
   hat; die Kette wäre nicht kürzer.
 
+## Nuzlocke
+
+Quellen: Bulbapedia, „Nuzlocke Challenge“ (https://bulbapedia.bulbagarden.net/wiki/Nuzlocke), Smogon, „An Introduction
+to Pokémon Nuzlockes and Challenges“ (https://smogon.com/articles/introduction-nuzlockes); Stand 19.11.2026. Umgesetzt in
+`app/nuzlocke.py`.
+
+- **Grundregeln:** Je Gebiet zählt nur die erste wilde Begegnung; ein besiegtes Pokémon ist tot. Ein Gebiet ist, was
+  im Spiel als Fundort („Getroffen in“) erscheint (Smogon; Bulbapedia „'Met in' Confirmation“).
+- **Dupes-Klausel:** Eine Art (oder Entwicklungsreihe), die schon gefangen ist, zählt nicht als erste Begegnung
+  (beide Quellen; die Reihe ist eine Variante bei Smogon). Gefangen heißt hier: im Team, in der Box oder tot.
+- **Shiny-Klausel:** Ein schillerndes Pokémon darf zusätzlich gefangen werden (beide Quellen).
+- **Levelgrenze:** das Level des stärksten Pokémon im Team des nächsten Arenaleiters, der Top Vier oder des Champs
+  (Bulbapedia: „the next Gym Leader/Elite Four/Champion's highest-levelled Pokémon“).
+- **Niederlage:** Laut Bulbapedia endet der Lauf, wenn kein Pokémon mehr lebt; mit „Full Wipe“ schon bei einer
+  Niederlage im Kampf, auch wenn in der Box noch welche leben. Smogon überlässt es dem Spieler. Der Lauf wählt „Lauf
+  vorbei“ oder „weiter mit der Box“; eine Niederlage im Kampf sieht der Pokédex nicht, den Stand des Laufs setzt der
+  Spieler.
+
+Offen (so umgesetzt, aber nicht belegt):
+
+- **Gebiete** sind die Fundorte des Pokédex (PKHeX, sonst PokéAPI). Sie können feiner oder gröber sein als „Getroffen
+  in“ im Spiel; ein Gebiet, das fehlt, lässt sich von Hand eintragen.
+- **Reihenfolge der Bosse** nach ihrem höchsten Level, nicht nach dem Spiel; Rückkämpfe zählen nicht. Die Bosse kommen
+  aus den Trainerteams des PokéWiki. Ohne sie (oder in Spielen ohne Arenen) gibt es keine Levelgrenze, die Ansicht sagt
+  das.
+- **Level im Team** trägt der Spieler selbst ein; der Pokédex liest keinen Spielstand.
+
 ## Spiele ohne eigene Formel
 
 Welches Spiel welche Formel nimmt, steht im Spielprofil (`app/spiele.py`, `docs/spiele.md`: Felder `schaden`,

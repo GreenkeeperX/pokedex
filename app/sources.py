@@ -12,11 +12,18 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.72.0"
+VERSION = "0.73.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.73.0", "19.11.2026", [
+        "Nuzlocke (Knopf in der Liste): Läufe je Spiel mit erster Begegnung je Gebiet, Team, Box und Friedhof; Shiny und "
+        "Geschenke extra",
+        "Regeln je Lauf (Dupes-Klausel, Shiny-Klausel, Geschenke, Levelgrenze, Spitznamen, Niederlage); die Levelgrenze "
+        "kommt aus dem Team des nächsten Bosses, Verstöße stehen als Hinweis da",
+        "Die Sicherung enthält jetzt auch die Nuzlocke-Läufe",
+    ]),
     ("0.72.0", "19.11.2026", [
         "Ei-Attacken-Kette (Link „Ei ›“ bei den Attacken der Detailseite): die kürzeste Kette von Eltern, über die das "
         "Pokémon die Ei-Attacke bekommt, mit Ei-Gruppe je Schritt; gefangene Pokémon zuerst",
