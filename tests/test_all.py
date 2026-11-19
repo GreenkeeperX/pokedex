@@ -15,7 +15,7 @@ from unittest import mock
 
 from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, store, team, typen
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
-from tests.basis import HttpTest, TempData
+from tests.basis import HttpTest, TempData, oberflaeche_js
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
 EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
@@ -342,7 +342,7 @@ class Leser(unittest.TestCase):
         h = {b[0]: b for b in abfragen.HISUI_BALLS}
         self.assertEqual((h["Hyperball"][1], h["Tonnenball"][2], h["Düsenball"][2], h["Zentnerball"][1], h["Urball"][1]), (2.25, 2.75, 2.75, 1.75, 0))
         self.assertTrue(all(len(b) == 5 for b in abfragen.HISUI_BALLS))
-        js = open(os.path.join(os.path.dirname(__file__), "..", "app", "static", "js", "app.js"), encoding="utf-8").read()
+        js = oberflaeche_js()
         self.assertNotIn("BALL_HISUI", js)                                       # keine eigene Tabelle in der Oberfläche
         self.assertIn("hisui_baelle", js)
         for name in ("Zentnerball", "Tonnenball", "Flügelball", "Düsenball", "Federball"):
@@ -2786,8 +2786,7 @@ class Fehler(TempData):
                     still.append(f"{name}:{i + 1}: {key[1]}")
         self.assertEqual(still, [])
         self.assertEqual(set(erlaubt) - benutzt, set())            # die Liste der Ausnahmen bleibt aktuell
-        with open(os.path.join(app, "static", "js", "app.js"), encoding="utf-8") as f:
-            js = f.read()
+        js = oberflaeche_js()
         ok = ('r.json().catch(() => null)',                                 # api(): eine nicht lesbare Antwort wird zum Fehler
               'play().catch(() => { rb.textContent = "Ruf fehlt"; })',       # steht auf dem Knopf
               'api("/api/diag").catch(() => null)')                          # Verbindungstest fragt weiter nach
@@ -2943,26 +2942,52 @@ class Http(HttpTest):
     def test_dateien_der_oberflaeche(self):
         code, h, page = self.get("/")
         self.assertEqual((code, h["Cache-Control"]), (200, "no-cache"))
-        m = re.search(r'src="(js/app\.js\?v=[^"]+)"', page.decode("utf-8"))
-        self.assertTrue(m and m.group(1).split("=")[1].startswith(sources.VERSION + "-"))
+        adressen = re.findall(r'<script src="(js/[a-z-]+\.js\?v=[^"]+)"></script>', page.decode("utf-8"))
+        self.assertEqual([a.split("?")[0] for a in adressen], server.skripte())        # jedes Skript mit Kennung
+        self.assertGreater(len(adressen), 1)
+        for a in adressen:
+            self.assertTrue(a.split("=")[1].startswith(sources.VERSION + "-"), a)
+        self.assertEqual(len({a.split("=")[1] for a in adressen}), len(adressen))      # Kennung je Inhalt
         self.assertIn('href="style.css?v=' + sources.VERSION + "-", page.decode("utf-8"))
         self.assertEqual(self.get("/", **{"If-None-Match": h["ETag"]})[0], 304)
         # mit der Kennung des Inhalts in der Adresse: unbegrenzt haltbar, gepackt, ETag
-        code, h, body = self.get("/" + m.group(1), **{"Accept-Encoding": "gzip"})
-        self.assertEqual((code, h["Cache-Control"], h["Content-Encoding"]), (200, server.IMMUTABLE, "gzip"))
         import gzip as _gzip
-        with open(os.path.join(server.STATIC, "js", "app.js"), "rb") as f:
-            self.assertEqual(_gzip.decompress(body), f.read())
-        self.assertEqual(self.get("/" + m.group(1), **{"If-None-Match": h["ETag"]})[:1], (304,))
+        for a in adressen:
+            code, h, body = self.get("/" + a, **{"Accept-Encoding": "gzip"})
+            with open(os.path.join(server.STATIC, a.split("?")[0]), "rb") as f:
+                roh = f.read()
+            gepackt = len(roh) > 20_000                                                 # kleine Dateien ungepackt (_send)
+            self.assertEqual((code, h["Cache-Control"], h.get("Content-Encoding")), (200, server.IMMUTABLE, "gzip" if gepackt else None), a)
+            self.assertEqual(_gzip.decompress(body) if gepackt else body, roh)
+            self.assertEqual(self.get("/" + a, **{"If-None-Match": h["ETag"]})[:1], (304,))
+        erstes = server.skripte()[0]
         # ohne oder mit alter Kennung: der Browser fragt jedes Mal nach
-        for path in ("/js/app.js", "/js/app.js?v=0.1.0-0000000000", "/style.css", "/icon.svg"):
+        for path in ("/" + erstes, "/" + erstes + "?v=0.1.0-0000000000", "/style.css", "/icon.svg"):
             code, h, body = self.get(path)
             self.assertEqual((code, h["Cache-Control"], bool(h["ETag"])), (200, "no-cache", True), path)
-        self.assertEqual(self.get("/js/app.js", **{"If-None-Match": '"anders"'})[0], 200)
+        self.assertEqual(self.get("/" + erstes, **{"If-None-Match": '"anders"'})[0], 200)
+        self.assertEqual(self.get("/js/app.js")[0], 404)                                # 0.61.0 aufgeteilt
         # einmal gelesen und gepackt, nicht bei jedem Abruf
-        hit = server._STATIC["js/app.js"]
-        self.get("/js/app.js")
-        self.assertIs(server._STATIC["js/app.js"], hit)
+        hit = server._STATIC[erstes]
+        self.get("/" + erstes)
+        self.assertIs(server._STATIC[erstes], hit)
+
+    def test_skripte_der_oberflaeche(self):
+        """0.61.0: Die Oberfläche besteht aus mehreren Skripten, die sich die globalen Namen teilen. index.html lädt jedes
+        genau einmal, jedes beginnt mit "use strict", und gestartet (refreshMeta) wird nur im letzten. Dass beim Laden nichts
+        aus einem späteren Teil fehlt, zeigt der Selbsttest im Browser (docs/oberflaeche.md)."""
+        teile = server.skripte()
+        auf_platte = sorted("js/" + n for n in os.listdir(os.path.join(server.STATIC, "js")) if n.endswith(".js"))
+        self.assertEqual(sorted(teile), auf_platte)
+        self.assertEqual(len(teile), len(set(teile)))
+        self.assertEqual(teile[0], "js/basis.js")
+        self.assertEqual(teile[-1], "js/start.js")
+        for rel in teile:
+            with open(os.path.join(server.STATIC, rel), encoding="utf-8") as f:
+                text = f.read()
+            self.assertIn('"use strict";', text.split("\n")[:6], rel)                   # gilt je Datei
+            gestartet = [z for z in text.split("\n") if z.startswith("refreshMeta(")]
+            self.assertEqual(bool(gestartet), rel == teile[-1], rel)
 
     def test_bilder_mit_etag(self):
         os.makedirs(os.path.join(self.dir, "sprites"))
@@ -3608,8 +3633,8 @@ class Spiele(unittest.TestCase):
                 self.assertNotIn(name, src, datei)
 
     def test_oberflaeche_fragt_das_profil(self):
-        """app.js vergleicht das gewählte Spiel nicht mehr mit einer Kennung und liest genau die Felder, die der Server schickt."""
-        js = self.quelle("app", "static", "js", "app.js")
+        """Die Oberfläche vergleicht das gewählte Spiel nicht mehr mit einer Kennung und liest genau die Felder, die der Server schickt."""
+        js = oberflaeche_js()
         self.assertEqual(re.findall(r'S\.game *[!=]==? *"[^"]*"|"\]\.includes\(S\.game\)|S\.game(?: \|\| "")?\)?\.startsWith', js), [])
         self.assertEqual(set(re.findall(r"PROFIL\(\)\.([a-z_]+)", js)), set(spiele.OBERFLAECHE))
         self.assertNotIn("REQ_GAMES", js)

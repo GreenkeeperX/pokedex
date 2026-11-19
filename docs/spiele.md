@@ -12,8 +12,8 @@ Eigenschaften des Profils („gibt es Zucht?“), nicht mehr die Kennung des Spi
 - `profil(kennung, gen=None)`: das fertige Profil mit allen Feldern, nur lesbar. `gen` ist die Generation aus der
   Datenbank; sie geht der des Eintrags vor (wie überall sonst im Server).
 - `basis(kennung)`: das Spiel, dessen Texte und Trainer gelten (Hauptspiel einer Erweiterung, sonst das Spiel).
-- `OBERFLAECHE`, `fuer_oberflaeche(p)`: die Felder, die `/api/meta` je Spiel unter `profil` mitgibt; `app.js` liest sie
-  über `PROFIL()`.
+- `OBERFLAECHE`, `fuer_oberflaeche(p)`: die Felder, die `/api/meta` je Spiel unter `profil` mitgibt; die Oberfläche liest sie
+  über `PROFIL()` (`basis.js`).
 - `EIGENE`: Spiele, die die PokéAPI nicht führt (Feld `eigen` mit dem Namen); der Importer legt sie an
   (`importer.EIGENE_SPIELE` verweist darauf).
 - `pruefe()`: Fehler in `SPIELE` als Liste (unbekanntes Feld oder unbekannter Wert, Hauptspiel ohne Eintrag oder selbst
@@ -44,7 +44,7 @@ Generation und steht im Fehlerregister („Spiel ohne Profil“), ebenso eine ab
 | `forschung` | ja/nein | Forschungsaufgaben | `detail`, `candidates` (Sortierung), Filter der Liste |
 | `crypto` | ja/nein | Crypto-Pokémon | `detail` |
 | `kampf` | ja/nein | Kampfspiel: Kader statt Sammlung, Reiter Kampf statt Karte, Level 50 fest, Doppelkampf | `damage_view`, `BATTLE()` |
-| `spawnkarten` | ja/nein | Einzelkarten mit Spawnpunkten, eigene Punkte auf der Karte von Map Genie | `_mg_map`, `/api/mapgenie/eigene`, Karte in `app.js` |
+| `spawnkarten` | ja/nein | Einzelkarten mit Spawnpunkten, eigene Punkte auf der Karte von Map Genie | `_mg_map`, `/api/mapgenie/eigene`, Karte in `karte.js` |
 | `eigene_dexe` | ja/nein | eigene Pokédexe (Tabelle `pokopia`) | `_pokopia` |
 
 Die Spiele mit Abweichungen: Rot/Grün und Blau (Japan) mit Hauptspiel Rot/Blau; Colosseum und XD (Crypto, keine Zucht);
@@ -73,7 +73,7 @@ Fangtabelle, keine Werte); Pokopia (von der PokéAPI nicht geführt, eigene Dexe
   RankedBoost, IGN, PokéEarth, Raid-Nester): Das bleibt bei der Quelle, weil es zur Quelle gehört und sich mit ihr ändert.
 - Schlüssel von Tabellen, die genau einem Spiel gehören (`fangrate`, Forschung, Aufträge von Legenden: Arceus):
   `abfragen.LA` und `abfragen.ZA` nennen sie; die Oberfläche speichert Haken der Spawnkarten unter `MAPSPIEL`.
-- Einstiegswerte der Karten je Spiel (`MGSTART`, `MGFIRST`, `MG_EDITION` in `app.js`): Darstellung, keine Spielregel.
+- Einstiegswerte der Karten je Spiel (`MGSTART`, `MGFIRST`, `MG_EDITION` in `karte.js`): Darstellung, keine Spielregel.
 
 ## Offen
 

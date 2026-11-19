@@ -1,4 +1,4 @@
-"""Vertrag zwischen Server und Oberfläche: die Form der Antworten, die app/static/js/app.js liest.
+"""Vertrag zwischen Server und Oberfläche: die Form der Antworten, die die Skripte in app/static/js/ lesen.
 
 `tests/vertrag.json` hält je Aufruf fest, welche Felder die Antwort hat und von welcher Art sie sind (zahl, text, ja/nein,
 leer, Liste, Objekt), gemessen an der Mini-Datenbank (tests/minidb.py). Der Test `Vertrag` in tests/mit_daten.py vergleicht
