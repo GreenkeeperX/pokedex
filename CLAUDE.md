@@ -51,7 +51,10 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
   die Kennung des Spiels. Felder und „ein neues Spiel“: `docs/spiele.md`
 - `app/typen.py`, `app/attacken.py`, `app/team.py`: Rechenlogik ohne Datenbank (Typwirkung je Generation,
   Attacken-Wertung und Moveset, Team-Bewertung, Teamsuche, Gegner)
-- `app/abfragen.py`: Abfragen für die Oberfläche (Liste, Detailseite, Attacken, Typtabelle, Teams)
+- `app/abfragen/`: Abfragen für die Oberfläche, ein Paket mit Modulen nach Thema (`basis`: Daten im Speicher, Spiel und
+  Formen; `liste`, `lernen` (Attacken), `karten` (Fundorte, Karten, Gebiete), `fangen`, `detailseite`, `auftraege`,
+  `items` (mit Typtabelle), `teams` (mit Showdown-Text), `kampf`, `raids`). Alle Namen sind unter `app.abfragen`
+  erreichbar; Werte für Tests im Modul ersetzen, das sie liest (Übersicht in `app/abfragen/__init__.py`)
 - `app/server.py`: Webserver und JSON-Schnittstelle
 - `app/static/`: Oberfläche (`index.html`, `style.css`, `js/*.js` in Teilen nach Reitern, Reihenfolge in `index.html`);
   siehe `docs/oberflaeche.md`

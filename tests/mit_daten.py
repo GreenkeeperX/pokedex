@@ -19,7 +19,7 @@ from unittest import mock
 
 from app import abfragen, db, fehler, importer, server, sources, spiele
 from tests import minidb, vertrag
-from tests.basis import HttpMitDaten, MitMiniDatenbank, oberflaeche_js
+from tests.basis import HttpMitDaten, MitMiniDatenbank, app_quellen, oberflaeche_js
 
 SPIELE = ("red-blue", "gold-silver", "emerald", "platinum", "black-white", "x-y", "sword-shield", "legends-arceus",
           "scarlet-violet", "the-teal-mask")
@@ -313,12 +313,7 @@ class Welt(MitMiniDatenbank):
     def test_tabellen_der_abfragen_werden_geholt(self):
         """Jede Tabelle, die eine Abfrage liest, baut der Importer selbst oder steht in importer.NEEDED. Sonst fehlt sie,
         sobald der Abgleich die Liste der PokéAPI nicht bekommt, und die Abfrage antwortet still leer."""
-        app = os.path.join(os.path.dirname(minidb.HIER), "app")
-        quelltext = {}
-        for name in sorted(os.listdir(app)):
-            if name.endswith(".py"):
-                with open(os.path.join(app, name), encoding="utf-8") as f:
-                    quelltext[name] = f.read()
+        quelltext = app_quellen()                                   # auch in Paketen (app/abfragen/)
         alles = "".join(quelltext.values())
         gebaut = set(re.findall(r"CREATE (?:TEMP )?(?:TABLE|VIEW) (?:IF NOT EXISTS )?([a-z_0-9]+)", alles))
         gelesen = {}
@@ -334,7 +329,7 @@ class Welt(MitMiniDatenbank):
         grob = abfragen.item_list({"spiel": "emerald"})
         self.assertIn("keine eigene Item-Liste", grob["hinweis"])
         # ab ITEMS_GENAU Beschreibungen sind es genau die Items des Spiels
-        with mock.patch.object(abfragen, "ITEMS_GENAU", 3):
+        with mock.patch.object(abfragen.items, "ITEMS_GENAU", 3):            # item_list liest es dort (0.62.0)
             for spiel in SPIELE:
                 vg = minidb.SPIEL[spiel]
                 r = abfragen.item_list({"spiel": spiel})

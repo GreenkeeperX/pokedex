@@ -15,7 +15,7 @@ from unittest import mock
 
 from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, store, team, typen
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
-from tests.basis import HttpTest, TempData, oberflaeche_js
+from tests.basis import HttpTest, TempData, app_quellen, oberflaeche_js
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
 EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
@@ -2380,8 +2380,8 @@ rect 0 0 9 9 [[Außerhalb]]"""
         D = type("D", (), {})()
         D.forms = {1: {"art": 1}, 2: {"art": 2}, 3: {"art": 3}, 10: {"art": 10}, 11: {"art": 11}}
         stages = {1: 0, 2: 1, 3: 2, 10: 0, 11: 1}
-        old = abfragen._stage
-        abfragen._stage = lambda D, arten: {a: stages[a] for a in arten}
+        old = abfragen.teams._stage                                    # _furthest liest es in seinem Modul (0.62.0)
+        abfragen.teams._stage = lambda D, arten: {a: stages[a] for a in arten}
         try:
             pot = [{"id": 1, "plus": 9.0, "wird": {"id": 3}}, {"id": 2, "plus": 8.0, "wird": {"id": 3}}, {"id": 10, "plus": 5.0, "wird": {"id": 11}}]
             got = abfragen._furthest(pot, D, set())
@@ -2391,7 +2391,7 @@ rect 0 0 9 9 [[Außerhalb]]"""
             pot2 = [{"id": 2, "plus": 9.0, "wird": {"id": 3}}, {"id": 2, "plus": 4.0, "wird": {"id": 3}, "im_team": True}]
             self.assertTrue(abfragen._furthest(pot2, D, set())[0].get("im_team"))
         finally:
-            abfragen._stage = old
+            abfragen.teams._stage = old
 
     def test_uebertragen(self):
         db.migrate()
@@ -2762,13 +2762,9 @@ class Fehler(TempData):
             ("sources.py", "if whole:"): "unvollständige Antwort (Zeit abgelaufen): der Anfang wird ausgepackt",
             ("sources.py", 'out["error"] = str(e)[:160]'): "der Fehler geht an den Aufrufer zurück",
         }
-        app = os.path.join(os.path.dirname(__file__), "..", "app")
         still, benutzt = [], set()
-        for name in sorted(os.listdir(app)):
-            if not name.endswith(".py"):
-                continue
-            with open(os.path.join(app, name), encoding="utf-8") as f:
-                zeilen = f.read().split("\n")
+        for name, text in app_quellen().items():                   # auch in Paketen (app/abfragen/)
+            zeilen = text.split("\n")
             for i, z in enumerate(zeilen):
                 if not re.match(r"\s*except Exception\b", z):
                     continue
@@ -2793,7 +2789,7 @@ class Fehler(TempData):
         rest = [z.strip()[:120] for z in js.split("\n") if ".catch(() =>" in z and not any(o in z for o in ok)]
         self.assertEqual(rest, [])
         self.assertNotIn("console.warn(\"", js)
-        self.assertIn('id="hinweise"', open(os.path.join(app, "static", "index.html"), encoding="utf-8").read())
+        self.assertIn('id="hinweise"', open(os.path.join(server.STATIC, "index.html"), encoding="utf-8").read())
 
 
 class Heimnetz(unittest.TestCase):
@@ -3516,6 +3512,47 @@ class Rechnen(unittest.TestCase):
         self.assertEqual([r["wert"] for r in v["rows"]][:4], [320, 266, 253, 239])
 
 
+class AbfragenPaket(unittest.TestCase):
+    """0.62.0: abfragen.py ist ein Paket (app/abfragen/). Jeder Name eines Moduls ist weiter unter app.abfragen erreichbar,
+    und zwar dasselbe Objekt; Importe im Paket zeigen auf app, nicht auf das Paket selbst."""
+
+    def test_alle_namen_unter_abfragen(self):
+        import ast
+        import importlib
+        fehlt, anders = [], []
+        for pfad, text in app_quellen("abfragen").items():
+            modul = pfad[:-3].replace("/", ".")
+            if modul.endswith("__init__"):
+                continue
+            m = importlib.import_module("app." + modul)
+            for st in ast.parse(text).body:
+                if isinstance(st, (ast.FunctionDef, ast.ClassDef)):
+                    namen = [st.name]
+                elif isinstance(st, ast.Assign):
+                    namen = [n.id for t in st.targets for n in ast.walk(t) if isinstance(n, ast.Name)]
+                else:
+                    continue
+                for n in namen:
+                    if not hasattr(abfragen, n):
+                        fehlt.append(f"{modul}.{n}")
+                    elif getattr(abfragen, n) is not getattr(m, n):
+                        anders.append(f"{modul}.{n}")
+        self.assertEqual((fehlt, anders), ([], []))
+        self.assertGreater(len(dir(abfragen)), 190)
+        self.assertIs(abfragen.team, team)                                    # server.py: abfragen.team.CRITERIA
+
+    def test_importe_im_paket(self):
+        """„from . import x“ hieße im Paket app.abfragen.x; gemeint ist app.x. Nur Module des Pakets dürfen so heißen."""
+        eigene = {p.split("/")[-1][:-3] for p in app_quellen("abfragen")}
+        falsch = []
+        for pfad, text in app_quellen("abfragen").items():
+            for z in text.split("\n"):
+                m = re.match(r"\s*from \. import (.+)", z)
+                if m and not {x.strip() for x in m.group(1).split(",")} <= eigene:
+                    falsch.append(f"{pfad}: {z.strip()}")
+        self.assertEqual(falsch, [])
+
+
 class Spiele(unittest.TestCase):
     """0.60.0: Spielprofile (app/spiele.py): eine Beschreibung je Spiel statt verstreuter Listen in Server und Oberfläche."""
     ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -3623,8 +3660,8 @@ class Spiele(unittest.TestCase):
             'g["kennung"] in D.areas': "ob es Gebiete aus PKHeX gibt, sagt die Datenbank",
         }
         muster = re.compile(r'\w+\["kennung"\] *(?:==|!=|in\b|not in\b)')
-        for datei in ("abfragen.py", "server.py"):
-            src = self.quelle("app", datei)
+        for datei in ("abfragen", "server.py"):
+            src = "\n".join(app_quellen(datei).values()) if datei == "abfragen" else self.quelle("app", datei)
             zeilen = [z.strip() for z in src.splitlines() if muster.search(z)]
             self.assertEqual([z for z in zeilen if not any(e in z for e in erlaubt)], [], datei)
             self.assertEqual(re.findall(r'kennung\.startswith|kennung *[!=]= *"|spiel *[!=]= *"[a-z]', src), [], datei)

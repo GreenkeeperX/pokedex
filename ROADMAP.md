@@ -1,5 +1,29 @@
 # Roadmap
 
+## 0.62.0 (19.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 4b, zweite Etappe von P-9: `app/abfragen.py` (3478 Zeilen) ist ein Paket
+`app/abfragen/` mit elf Modulen nach Thema: `basis` (Daten im Speicher, Spiel und Formen, Profil, Spiele und Metadaten),
+`liste`, `lernen` (Attacken), `karten` (Fundorte, Karten, Gebiete), `fangen`, `detailseite`, `auftraege`, `items` (mit
+Typtabelle), `teams` (mit Showdown-Text), `kampf` (Doppelkampf, Werte, Schaden), `raids` (mit Crypto-Pokémon).
+
+- **Mechanisch**: Die Abschnitte der alten Datei stehen unverändert in den Modulen; erzeugt sind nur Kopf und Importe.
+  Geprüft über den Syntaxbaum: alle 174 Anweisungen der alten Datei stehen genau einmal im Paket, keine weitere. Zwei
+  Arten von Zeilen mussten sich ändern, weil das Paket eine Ebene tiefer liegt: `WISSEN` (Pfad zu
+  `extra/spielwissen.json` mit `"..", ".."`) und elf Importe in Funktionen (`from .. import paste` statt `from . import
+  paste`, sonst hieße es `app.abfragen.paste`). `machine_label` steht in `basis`, weil `Data` sie beim Laden braucht;
+  die Module hängen ohne Kreis voneinander ab.
+- **Schnittstelle**: Alle Namen von früher sind unter `app.abfragen` erreichbar und dasselbe Objekt (auch Tabellen und
+  Zwischenspeicher wie `_AREAS`), ebenso die eingebundenen Module (`abfragen.team.CRITERIA` im Server). Server, Abruf und
+  Oberfläche sind unverändert.
+- **Tests**: neu `AbfragenPaket` (Namen vollständig und gleich, Importe im Paket zeigen auf `app`). Zwei Tests ersetzen
+  einen Wert jetzt im Modul, das ihn liest (`abfragen.teams._stage`, `abfragen.items.ITEMS_GENAU`). Die Prüfungen auf
+  stille Ersatzwerte und auf Tabellen in `importer.NEEDED` lesen jetzt auch Dateien in Paketen (`tests.basis.app_quellen`);
+  vorher hätten sie das Paket übersehen.
+- **Vergleich alt gegen neu**: 3455 Antworten mit der lokal gebauten echten Datenbank Byte für Byte gleich.
+
+Keine Änderung an `user.db`, an Antworten des Servers (`tests/vertrag.json` unverändert) oder an `importer.VERSION`.
+
 ## 0.61.0 (19.11.2026)
 
 Arbeitsauftrag vom 13.11.2026, Abschnitt 4b, erste Etappe von P-9: `app/static/js/app.js` (4617 Zeilen) nach Reitern

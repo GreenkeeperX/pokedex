@@ -4,8 +4,8 @@ Was der Pokédex rechnet, woher die Formel stammt und wie sie abgesichert ist. R
 Jede steht hier mit Quelle; wo eine Quelle etwas offenlässt, steht das unter „Offen“.
 
 Die Rechnung liegt in `app/schaden.py` (Schaden), `app/effort.py` (Werte in Legenden: Arceus), `app/typen.py`
-(Typwirkung) und `app/abfragen.py` (`catch_chance`, `catch_chance_la`). Tests: Klasse `Rechnen` und `test_fangchance` in
-`tests/test_all.py`.
+(Typwirkung) und `app/abfragen/fangen.py` (`catch_chance`, `catch_chance_la`). Tests: Klasse `Rechnen` und
+`test_fangchance` in `tests/test_all.py`.
 
 ## Schaden je Generation
 
