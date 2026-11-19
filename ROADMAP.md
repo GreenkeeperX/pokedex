@@ -13,17 +13,15 @@ nachvollziehbar halten. Nutzen belegen. Nutzerdaten haben Vorrang vor jeder tech
 In dieser Reihenfolge, nach dem Arbeitsauftrag vom 13.11.2026. Abschnitte 1 bis 4 (Rechenlogik, Betrieb, Tests,
 Spielprofil, Aufteilen der großen Dateien, Aufräumen), die Statuskarte (0.66.0), der monatliche
 Wiederherstellungstest (0.67.0), der Leistungstest auf Klick (0.68.0), der Fortschritt auf einen Blick (0.69.0),
-der Shiny-Jagd-Zähler (0.70.0), die Tauschliste (0.71.0), die Ei-Attacken-Kette (0.72.0) und der Nuzlocke-Lauf allein
-(0.73.0) sind erledigt.
+der Shiny-Jagd-Zähler (0.70.0), die Tauschliste (0.71.0), die Ei-Attacken-Kette (0.72.0) und Nuzlocke mit
+Soul-Link (0.73.0, 0.74.0) sind erledigt.
 
 1. **Messung auf dem Heimserver auswerten.** Dort einmal die Karten des meistgenutzten Spiels öffnen, dann in der
    Statuskarte „messen“ (der Test öffnet selbst keine Karten, weil das Zusammenführen den Kartencache schreibt). Danach
    anhand von Arbeitsspeicher und Antwortzeiten entscheiden, ob der Speicher der Karten verkleinert werden soll
    (Python-Objekte, fertige und gepackte Antworten); ohne Messung keine Optimierung.
 2. **Funktionen**, in dieser Reihenfolge:
-   1. Nuzlocke, Soul-Link mit zwei Spielern: gekoppelte erste Begegnungen je Gebiet, Tod, Box und misslungener Fang
-      gelten für beide, wahlweise kein Typ in beiden Teams.
-   2. Export aus PKHeX übernehmen (Entscheidung 19.11.2026, statt eines eigenen Spielstandlesers): den „Box Data Report“
+   1. Export aus PKHeX übernehmen (Entscheidung 19.11.2026, statt eines eigenen Spielstandlesers): den „Box Data Report“
       als CSV einlesen und daraus Gefangenes markieren, mit Vorschau und Bestätigung. Wartet auf einen Beispielexport:
       Welche Spalten der Bericht hat und ob Arten als Name oder Nummer stehen, ist öffentlich nicht beschrieben.
 
@@ -40,7 +38,7 @@ Erwünscht, aber erst nach den Funktionen oben und dann neu zu ordnen.
   Beispielteams getrennt; nach dem Abgleich offline; Qualität und Aktualität prüfen.
 - **Ereignisse und Geheimgeschenke**: Verteilungen je Spiel mit Zeitraum, Belohnung, abgeholt, verpasst, laufend;
   Quellen und Lizenzen vorher prüfen.
-- **Nuzlocke, weitere Varianten** nach Soul-Link (oben): etwa Wonderlocke oder Monotype; nicht auf eine Variante
+- **Nuzlocke, weitere Varianten**: etwa Wonderlocke oder Monotype; nicht auf eine Variante
   festgelegt.
 
 ## Offene Befunde

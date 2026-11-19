@@ -294,6 +294,8 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
   (`table.nzg`): ohne Begegnung eine Auswahl der Pokémon des Gebiets (gesperrte mit Grund, nicht wählbar), sonst
   Spitzname, Level und Status. „Von Hand“: Gebiet frei, erste Begegnung, Shiny oder Geschenk, Pokémon über
   `autocomplete`. Jede Änderung schickt die ganze Ansicht zurück (`nuzRender`); bei einem Fehler zeichnet sie die alte.
+- Soul-Link („Neuer Soul-Link“): Namen der beiden Spieler im Kopf, in den Gebieten eine Spalte je Spieler, Team, Box und
+  Friedhof je Spieler eine Zeile (`.nzsp`), an jeder Karte der Partner (⛓). Die Regel „Typen“ steht nur hier.
 
 ### Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch und Sammelobjekte
 

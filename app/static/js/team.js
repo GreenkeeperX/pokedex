@@ -464,7 +464,8 @@ async function movesView() {
 
 /* ------------------------------------------------------------------ Nuzlocke */
 /* 0.73.0: Nuzlocke-Läufe (/api/nuzlocke, app/nuzlocke.py): erste Begegnung je Gebiet, Team, Box, Friedhof, Regeln und
-   Levelgrenze. Der Server prüft und schreibt die Hinweise; jede Änderung schickt die ganze Ansicht zurück. */
+   Levelgrenze; 0.74.0 Soul-Link mit zwei Spielern (je Gebiet eine Spalte je Spieler, der Server koppelt die Partner).
+   Der Server prüft und schreibt die Hinweise; jede Änderung schickt die ganze Ansicht zurück. */
 let NUZ = null;
 const NUZ_STATUS = [["team", "Team"], ["box", "Box"], ["tot", "Tot"], ["verpasst", "Verpasst"], ["ausgelassen", "Ausgelassen"]];
 const NUZ_LAUF = [["laeuft", "läuft"], ["geschafft", "geschafft"], ["gescheitert", "gescheitert"]];
@@ -476,30 +477,38 @@ async function nuzView(lauf) {
 }
 function nuzRender(d) {
   NUZ = d;
-  const L = d.lauf, opt = (xs, v) => xs.map(([k, t]) => `<option value="${esc(k)}"${k === v ? " selected" : ""}>${esc(t)}</option>`).join("");
+  const L = d.lauf, soul = L?.modus === "soullink", opt = (xs, v) => xs.map(([k, t]) => `<option value="${esc(k)}"${k === v ? " selected" : ""}>${esc(t)}</option>`).join("");
   const wer = (b) => `${img(b.form, "sm")}<span><a href="#pokemon/${b.form}">${esc(b.spitzname || b.name)}</a>${b.spitzname ? ` <span class="hint">${esc(b.name)}</span>` : ""}</span>`;
-  const status = (b) => `<select data-nzf="status" data-tip="Status">${opt(NUZ_STATUS, b.status)}</select>`;
+  const status = (b) => `<select data-nzf="status" data-tip="${soul && b.partner ? "Status; Tod, Team und Box gelten auch für den Partner" : "Status"}">${opt(NUZ_STATUS, b.status)}</select>`;
   const felder = (b) => `<input data-nzf="spitzname" value="${esc(b.spitzname)}" placeholder="Spitzname" maxlength="30" style="width:110px">
     <input data-nzf="level" type="number" min="1" max="100" value="${b.level ?? ""}" placeholder="Lv." style="width:58px"
       data-tip="Level, für die Levelgrenze">`;
+  const alle = L ? Object.fromEntries([...L.team, ...L.box, ...L.friedhof, ...L.verpasst].map((b) => [b.n, b])) : {};
   const ueber = new Set(L?.grenze?.ueber || []);
+  const pname = (b) => { const p = alle[b.partner]; return p ? (p.spitzname || p.name) : ""; };
   const karte = (b) => `<div class="nzk${b.status === "tot" ? " tot" : ""}${ueber.has(b.n) ? " ueber" : ""}" data-n="${b.n}">${wer(b)}
-    <span class="hint">${esc(b.ort || (b.extra === "shiny" ? "Shiny" : "Geschenk"))}${b.level ? ` · Lv. ${b.level}` : ""}</span>${tchips(b.typen)}
+    <span class="hint">${esc(b.ort || (b.extra === "shiny" ? "Shiny" : "Geschenk"))}${b.level ? ` · Lv. ${b.level}` : ""}${soul && b.partner ? ` · ⛓ ${esc(pname(b))}` : ""}</span>${tchips(b.typen)}
     <span class="nw">${b.status !== "team" ? `<button class="small" data-nzact="team">Ins Team</button>` : `<button class="small" data-nzact="box">In die Box</button>`}
-    ${b.status !== "tot" ? `<button class="small x" data-nzact="tot" data-tip="Besiegt: auf den Friedhof">✝</button>` : ""}</span></div>`;
-  const gebiet = (g) => {
-    const b = g.erste;
-    if (b) return `<tr data-n="${b.n}"><td>${esc(g.ort)}</td><td class="nzw">${wer(b)}</td><td class="nw">${felder(b)} ${status(b)}
-      <button class="small x" data-nzact="weg" data-tip="Eintrag löschen">✕</button></td></tr>`;
-    return `<tr data-ort="${esc(g.ort)}"><td>${esc(g.ort)}</td><td colspan="2"><select data-nzneu><option value="">Erste Begegnung …</option>${g.mons.map((m) =>
-      `<option value="${m.id}"${m.gesperrt ? ` disabled` : ""}>${esc(m.name)}${m.level ? ` (Lv. ${esc(m.level)})` : ""}${m.gesperrt ? ` · ${esc(m.gesperrt)}` : ""}</option>`).join("")}</select></td></tr>`;
+    ${b.status !== "tot" ? `<button class="small x" data-nzact="tot" data-tip="${soul && b.partner ? "Besiegt: auf den Friedhof, der Partner mit" : "Besiegt: auf den Friedhof"}">✝</button>` : ""}</span></div>`;
+  const zelle = (g, b, i) => b ? `<td class="nzw" data-n="${b.n}">${wer(b)} <span class="nw">${felder(b)} ${status(b)}
+      <button class="small x" data-nzact="weg" data-tip="Eintrag löschen">✕</button></span></td>`
+    : `<td><select data-nzneu data-sp="${i + 1}"><option value="">Erste Begegnung …</option>${g.mons.map((m) =>
+      `<option value="${m.id}"${m.gesperrt[i] ? ` disabled` : ""}>${esc(m.name)}${m.level ? ` (Lv. ${esc(m.level)})` : ""}${m.gesperrt[i] ? ` · ${esc(m.gesperrt[i])}` : ""}</option>`).join("")}</select></td>`;
+  const gebiet = (g) => `<tr data-ort="${esc(g.ort)}"><td>${esc(g.ort)}</td>${g.erste.map((b, i) => zelle(g, b, i)).join("")}</tr>`;
+  // Team, Box, Friedhof: im Soul-Link je Spieler eine Zeile
+  const gruppe = (titel, xs, leer) => {
+    const zeilen = soul ? L.spieler.map((n, i) => [n, xs.filter((b) => b.spieler === i + 1)]) : [["", xs]];
+    if (!xs.length && !leer) return "";
+    return `<h3>${titel}</h3>${zeilen.map(([n, ys]) => `<div class="nzks">${soul ? `<b class="nzsp">${esc(n)}</b>` : ""}${ys.map(karte).join("") || `<span class="hint">${esc(leer || "–")}</span>`}</div>`).join("")}`;
   };
   const kopf = `<div class="box" id="nuz"><div class="bar"><h2 style="margin:0">Nuzlocke</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       ${d.laeufe.length ? `<select data-nzlauf data-tip="Lauf">${d.laeufe.map((x) => `<option value="${x.id}"${L && x.id === L.id ? " selected" : ""}>${esc(x.name)} (${esc(NUZ_LAUF.find(([k]) => k === x.status)[1])})</option>`).join("")}</select>` : ""}
-      <button class="small" data-nzact="neu">Neuer Lauf</button><span class="grow"></span><a class="btn small" href="#pokemon">Zur Liste</a></div>`;
+      <button class="small" data-nzact="neu" data-modus="solo">Neuer Lauf</button>
+      <button class="small" data-nzact="neu" data-modus="soullink" data-tip="Zwei Spieler: die ersten Begegnungen eines Gebiets sind gekoppelt">Neuer Soul-Link</button>
+      <span class="grow"></span><a class="btn small" href="#pokemon">Zur Liste</a></div>`;
   if (!L) {
     main.innerHTML = `${kopf}<p class="hint">Noch kein Lauf in ${esc(gameName())}. Ein Lauf merkt sich die erste Begegnung je Gebiet, dein Team, die Box und den Friedhof
-      und prüft die Regeln, die du wählst.</p>${nuzQuellen(d)}</div>`;
+      und prüft die Regeln, die du wählst; im Soul-Link für zwei Spieler mit gekoppelten Begegnungen.</p>${nuzQuellen(d)}</div>`;
     header();
     return;
   }
@@ -507,29 +516,32 @@ function nuzRender(d) {
   main.innerHTML = `${kopf}
     <div class="bar"><input data-nzname value="${esc(L.name)}" maxlength="60" style="width:200px" data-tip="Name des Laufs">
       <select data-nzstatus data-tip="Stand des Laufs">${opt(NUZ_LAUF, L.status)}</select>
+      ${soul ? L.spieler.map((n, i) => `<input data-nzspieler="${i}" value="${esc(n)}" maxlength="30" style="width:120px" data-tip="Name von Spieler ${i + 1}">`).join("") : ""}
       <span class="hint grow">${L.team.length} im Team · ${L.box.length} in der Box · ${L.friedhof.length} tot</span>
       <button class="small x" data-nzact="loeschen" data-tip="Lauf löschen">Lauf löschen</button></div>
     ${L.hinweise.map((h) => `<div class="note warn">${esc(h)}</div>`).join("")}
     ${G ? `<div class="note info">Levelgrenze <b>${G.level}</b>: ${esc(G.boss.name)} <span class="hint">(${esc(G.boss.rolle)}${G.boss.titel ? `, ${esc(G.boss.titel)}` : ""})</span></div>` : ""}
     <details class="sub"${store.get("nuzRegeln", false) ? " open" : ""} data-nzauf="nuzRegeln"><summary>Regeln</summary>
-      <div class="nzr">${d.regeln_liste.map((r) => `<label>${esc(r.name)} <select data-nzregel="${esc(r.id)}">${opt(r.werte, r.wert)}</select></label>`).join("")}</div>
-      <p class="hint">Immer: je Gebiet nur die erste wilde Begegnung, besiegt heißt tot. Was der Pokédex nicht sehen kann (Items im Kampf, Kampfstil „Folge“),
-        gilt, wie du es abmachst. Verstöße sind Hinweise, keine Sperre.</p></details>
+      <div class="nzr">${d.regeln_liste.filter((r) => soul || r.id !== "typen").map((r) => `<label>${esc(r.name)} <select data-nzregel="${esc(r.id)}">${opt(r.werte, r.wert)}</select></label>`).join("")}</div>
+      <p class="hint">Immer: je Gebiet nur die erste wilde Begegnung, besiegt heißt tot.${soul ? " Soul-Link: die ersten Begegnungen eines Gebiets sind gekoppelt; Tod, Team und Box gelten für beide, ein verpasster Fang schickt den Partner in die Box." : ""}
+        Was der Pokédex nicht sehen kann (Items im Kampf, Kampfstil „Folge“), gilt, wie ihr es abmacht. Verstöße sind Hinweise, keine Sperre.</p></details>
     ${L.bosse.length ? `<details class="sub"${store.get("nuzBosse", false) ? " open" : ""} data-nzauf="nuzBosse"><summary>Bosse (${L.bosse.filter((b) => b.besiegt).length} von ${L.bosse.length} besiegt)</summary>
       <div class="nzr">${L.bosse.map((b) => `<label><input type="checkbox" data-nzboss="${b.id}"${b.besiegt ? " checked" : ""}> ${esc(b.name)} <span class="hint">${esc(b.titel || b.rolle)}, Lv. ${b.level}</span></label>`).join("")}</div></details>` : ""}
-    <h3>Team</h3><div class="nzks">${L.team.map(karte).join("") || `<p class="hint">Noch niemand im Team.</p>`}</div>
-    ${L.box.length ? `<h3>Box</h3><div class="nzks">${L.box.map(karte).join("")}</div>` : ""}
-    ${L.friedhof.length ? `<h3>Friedhof</h3><div class="nzks">${L.friedhof.map(karte).join("")}</div>` : ""}
-    <h3>Gebiete</h3><table class="rows nzg"><tbody>${L.gebiete.map(gebiet).join("")}</tbody></table>
-    <div class="bar"><span class="hint">Von Hand:</span><input data-nzort placeholder="Gebiet (bei Shiny und Geschenk frei)" maxlength="80" style="width:220px">
+    ${gruppe("Team", L.team, "Noch niemand im Team.")}${gruppe("Box", L.box)}${gruppe("Friedhof", L.friedhof)}
+    <h3>Gebiete</h3><table class="rows nzg">${soul ? `<thead><tr><th></th>${L.spieler.map((n) => `<th>${esc(n)}</th>`).join("")}</tr></thead>` : ""}<tbody>${L.gebiete.map(gebiet).join("")}</tbody></table>
+    <div class="bar"><span class="hint">Von Hand:</span>${soul ? `<select data-nzsp>${L.spieler.map((n, i) => `<option value="${i + 1}">${esc(n)}</option>`).join("")}</select>` : ""}
+      <input data-nzort placeholder="Gebiet (bei Shiny und Geschenk frei)" maxlength="80" style="width:220px">
       <select data-nzextra><option value="">erste Begegnung</option><option value="shiny">Shiny (extra)</option><option value="geschenk">Geschenk oder fest</option></select>
       <div class="ac"><input id="nzq" type="search" placeholder="Pokémon suchen" style="width:200px"></div></div>
-    ${L.extras.length ? `<h3>Shiny und Geschenke</h3><table class="rows nzg"><tbody>${L.extras.map((b) => `<tr data-n="${b.n}"><td>${esc(b.extra === "shiny" ? "Shiny" : "Geschenk")}${b.ort ? ` · ${esc(b.ort)}` : ""}</td>
-      <td class="nzw">${wer(b)}</td><td class="nw">${felder(b)} ${status(b)} <button class="small x" data-nzact="weg" data-tip="Eintrag löschen">✕</button></td></tr>`).join("")}</tbody></table>` : ""}
+    ${L.extras.length ? `<h3>Shiny und Geschenke</h3><table class="rows nzg"><tbody>${L.extras.map((b) => `<tr><td>${soul ? `${esc(L.spieler[b.spieler - 1])} · ` : ""}${esc(b.extra === "shiny" ? "Shiny" : "Geschenk")}${b.ort ? ` · ${esc(b.ort)}` : ""}</td>
+      ${zelle(null, b, 0)}</tr>`).join("")}</tbody></table>` : ""}
     ${nuzQuellen(d)}</div>`;
   header();
-  autocomplete($("#nzq"), (r) => nuzSend("/api/nuzlocke/begegnung", {lauf: L.id, form: r.id, ort: $("[data-nzort]").value, extra: $("[data-nzextra]").value,
-    status: L.team.length < 6 ? "team" : "box"}));
+  autocomplete($("#nzq"), (r) => {
+    const sp = soul ? +$("[data-nzsp]").value : 1;
+    nuzSend("/api/nuzlocke/begegnung", {lauf: L.id, spieler: sp, form: r.id, ort: $("[data-nzort]").value, extra: $("[data-nzextra]").value,
+      status: L.team.filter((b) => b.spieler === sp).length < 6 ? "team" : "box"});
+  });
 }
 const nuzQuellen = (d) => `<p class="hint">Regeln nach ${d.quellen.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(n)} ↗</a>`).join(" und ")}.</p>`;
 // Änderung schicken; die Antwort ist die ganze Ansicht. Bei einem Fehler die alte Ansicht wieder zeichnen
@@ -541,7 +553,7 @@ main.addEventListener("click", async (e) => {
   const b = e.target.closest("#nuz [data-nzact]");
   if (!b || !NUZ) return;
   const act = b.dataset.nzact, L = NUZ.lauf;
-  if (act === "neu") nuzSend("/api/nuzlocke", {spiel: S.game, name: `Nuzlocke ${NUZ.laeufe.length + 1}`}).then(() => { if (NUZ.lauf) location.replace(`#nuzlocke/${NUZ.lauf.id}`); });
+  if (act === "neu") nuzSend("/api/nuzlocke", {spiel: S.game, modus: b.dataset.modus, name: `${b.dataset.modus === "soullink" ? "Soul-Link" : "Nuzlocke"} ${NUZ.laeufe.length + 1}`}).then(() => { if (NUZ.lauf) location.replace(`#nuzlocke/${NUZ.lauf.id}`); });
   else if (act === "loeschen" && await ask(`Lauf „${L.name}“ löschen?`, `${L.begegnungen.length} Begegnungen gehen verloren.`, "Löschen", true))
     api("/api/nuzlocke/loeschen", {id: L.id}).then(() => { location.replace("#nuzlocke"); nuzView(); }).catch(ungespeichert());
   else if (act === "weg") nuzEintrag(b, {loeschen: true});
@@ -556,8 +568,12 @@ main.addEventListener("change", (e) => {
   else if (t.matches("[data-nzstatus]")) nuzSend("/api/nuzlocke", {id: L.id, status: t.value});
   else if (t.matches("[data-nzregel]")) nuzSend("/api/nuzlocke", {id: L.id, regeln: {[t.dataset.nzregel]: t.value}});
   else if (t.matches("[data-nzboss]")) nuzSend("/api/nuzlocke", {id: L.id, besiegt: {trainer: +t.dataset.nzboss, ja: t.checked}});
-  else if (t.matches("[data-nzneu]") && t.value) nuzSend("/api/nuzlocke/begegnung", {lauf: L.id, ort: t.closest("[data-ort]").dataset.ort, form: +t.value,
-    status: L.team.length < 6 ? "team" : "box"});
+  else if (t.matches("[data-nzspieler]")) nuzSend("/api/nuzlocke", {id: L.id, spieler: L.spieler.map((n, i) => i === +t.dataset.nzspieler ? t.value : n)});
+  else if (t.matches("[data-nzneu]") && t.value) {
+    const sp = +t.dataset.sp;
+    nuzSend("/api/nuzlocke/begegnung", {lauf: L.id, spieler: sp, ort: t.closest("[data-ort]").dataset.ort, form: +t.value,
+      status: L.team.filter((b) => b.spieler === sp).length < 6 ? "team" : "box"});
+  }
   else if (t.matches("[data-nzf]")) nuzEintrag(t, {[t.dataset.nzf]: t.dataset.nzf === "level" ? (t.value === "" ? null : +t.value) : t.value});
 });
 main.addEventListener("toggle", (e) => { const el = e.target; if (el.dataset?.nzauf) store.set(el.dataset.nzauf, el.open); }, true);

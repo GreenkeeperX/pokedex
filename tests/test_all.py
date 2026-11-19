@@ -4303,7 +4303,7 @@ class Nuzlocke(HttpMitDaten):
     def test_ablauf(self):
         d = self.json("/api/nuzlocke?spiel=emerald")
         self.assertEqual((d["lauf"], d["laeufe"]), (None, []))
-        self.assertEqual([r["id"] for r in d["regeln_liste"]], ["dupes", "shiny", "geschenke", "levelgrenze", "spitznamen", "niederlage"])
+        self.assertEqual([r["id"] for r in d["regeln_liste"]], ["dupes", "shiny", "geschenke", "levelgrenze", "spitznamen", "niederlage", "typen"])
         L = self.json("/api/nuzlocke", {"spiel": "emerald", "name": "  Testlauf  "})["lauf"]
         orte = {g["ort"]: g for g in L["gebiete"]}
         self.assertEqual(L["name"], "Testlauf")
@@ -4312,8 +4312,10 @@ class Nuzlocke(HttpMitDaten):
         self.assertEqual((L["grenze"]["level"], L["grenze"]["boss"]["name"], L["hinweise"]), (14, "Erfunda", []))
         lid = L["id"]
         # erste Begegnung, eine zweite im selben Gebiet geht nicht
-        L = self.begegnung(lid, ort="Nebelwiese", form=self.form[8], status="team", level=15)["lauf"]
-        self.assertEqual([(b["name"], b["ort"]) for b in L["team"]], [("Zappel", "Nebelwiese")])
+        L = self.begegnung(lid, ort="Nebelwiese", form=self.form[8], status="team", level=15, spieler=2)["lauf"]
+        self.assertEqual([(b["name"], b["ort"], b["spieler"], b["partner"]) for b in L["team"]], [("Zappel", "Nebelwiese", 1, None)])
+        self.assertEqual((orte["Nebelwiese"]["erste"], L["modus"]), ([None], "solo"))
+        self.assertEqual([len(g["erste"]) for g in L["gebiete"] if g["ort"] == "Nebelwiese"], [1])
         self.assertIn("Ohne Spitznamen: Zappel.", L["hinweise"])
         self.assertIn("Über der Levelgrenze 14 (Erfunda): Zappel.", L["hinweise"])
         self.assertIn("schon eine erste Begegnung", self.begegnung(lid, 400, ort="Nebelwiese", form=self.form[1])["error"])
@@ -4323,7 +4325,7 @@ class Nuzlocke(HttpMitDaten):
         # Dupes-Klausel: ein geschenktes Rankel sperrt Keimling (dieselbe Entwicklungsreihe), bei „art“ nicht mehr
         L = self.begegnung(lid, form=self.form[2], extra="geschenk", status="box", spitzname="Ranko")["lauf"]
         self.assertEqual([b["name"] for b in L["extras"]], ["Rankel"])
-        sperre = lambda L: {m["name"]: m["gesperrt"] for g in L["gebiete"] for m in g["mons"] if g["ort"] == "Kieselbucht" or m["name"] == "Keimling"}
+        sperre = lambda L: {m["name"]: m["gesperrt"][0] for g in L["gebiete"] for m in g["mons"] if g["ort"] == "Kieselbucht" or m["name"] == "Keimling"}
         self.assertEqual(sperre(L)["Keimling"], "schon gefangen: Rankel")
         d = self.json("/api/nuzlocke", {"id": lid, "regeln": {"dupes": "art", "unbekannt": 1, "shiny": "vielleicht"}})
         regel, L = {r["id"]: r["wert"] for r in d["regeln_liste"]}, d["lauf"]
@@ -4368,6 +4370,57 @@ class Nuzlocke(HttpMitDaten):
         L = self.begegnung(L["id"], ort="Route 1 (von Hand)", form=self.form[6])["lauf"]
         self.assertEqual([g["ort"] for g in L["gebiete"]], ["Route 1 (von Hand)"])
         self.json("/api/nuzlocke", {"name": "ohne Spiel"}, status=400)
+        self.json("/api/nuzlocke", {"spiel": "emerald", "modus": "trio"}, status=400)
+        self.ohne_fehler()
+
+    def test_soul_link(self):
+        """0.74.0: zwei Spieler, gekoppelte erste Begegnungen je Gebiet: Tod, Team und Box gelten für beide, ein verpasster Fang
+        schickt den Partner in die Box; Dupes je Spieler; Typen getrennt; Namen der Spieler in der Sicherung."""
+        f = self.form
+        d = self.json("/api/nuzlocke", {"spiel": "emerald", "name": "Duo", "modus": "soullink"})
+        L, lid = d["lauf"], d["lauf"]["id"]
+        self.assertEqual((L["modus"], L["spieler"]), ("soullink", ["Spieler 1", "Spieler 2"]))
+        L = self.json("/api/nuzlocke", {"id": lid, "spieler": ["  Rot ", ""]})["lauf"]
+        self.assertEqual(L["spieler"], ["Rot", "Spieler 2"])
+        L = self.begegnung(lid, spieler=1, ort="Nebelwiese", form=f[8], spitzname="Funki")["lauf"]
+        self.assertIn("Im Team ohne Partner im Team: Funki (Rot, Nebelwiese: Partner fehlt noch).", L["hinweise"])
+        L = self.begegnung(lid, spieler=2, ort="Nebelwiese", form=f[1], spitzname="Keimi")["lauf"]
+        a, b = sorted(L["team"], key=lambda x: x["spieler"])
+        self.assertEqual((a["partner"], b["partner"]), (b["n"], a["n"]))
+        self.assertFalse(any("ohne Partner" in h for h in L["hinweise"]))
+        neb = next(g for g in L["gebiete"] if g["ort"] == "Nebelwiese")
+        self.assertEqual([x["name"] for x in neb["erste"]], ["Zappel", "Keimling"])
+        self.begegnung(lid, 400, spieler=2, ort="Nebelwiese", form=f[8])
+        self.begegnung(lid, 400, spieler=3, ort="Kieselbucht", form=f[6])
+        # Dupes je Spieler: die Fänge des anderen zählen nicht, die eigene Begegnung sperrt sich nicht selbst
+        L = self.json("/api/nuzlocke", {"id": lid, "regeln": {"dupes": "art"}})["lauf"]
+        self.assertEqual({m["name"]: m["gesperrt"] for m in next(g for g in L["gebiete"] if g["ort"] == "Nebelwiese")["mons"]},
+                         {"Keimling": ["", ""], "Zappel": ["", ""]})
+        # Kopplung: Box, Team, Tod gelten für beide
+        L = self.begegnung(lid, n=a["n"], status="box")["lauf"]
+        self.assertEqual(([x["name"] for x in L["box"]], L["team"]), (["Zappel", "Keimling"], []))
+        L = self.begegnung(lid, n=b["n"], status="team")["lauf"]
+        self.assertEqual(len(L["team"]), 2)
+        L = self.begegnung(lid, n=a["n"], status="tot")["lauf"]
+        self.assertEqual(([x["spitzname"] for x in L["friedhof"]], L["team"]), (["Funki", "Keimi"], []))
+        self.assertIn("Rot: Kein Pokémon lebt mehr: der Lauf ist vorbei.", L["hinweise"])
+        # verpasster Fang: der Partner kommt in die Box
+        L = self.begegnung(lid, spieler=1, ort="Kieselbucht", form=f[6], spitzname="Tropf")["lauf"]
+        n2 = self.begegnung(lid, spieler=2, ort="Kieselbucht", form=f[6], status="team")["lauf"]["team"][-1]["n"]
+        L = self.begegnung(lid, n=n2, status="verpasst")["lauf"]
+        self.assertEqual(([x["spitzname"] for x in L["box"]], L["team"]), (["Tropf"], []))
+        # Typen getrennt: Geschenke ohne Partner, Wasser in beiden Teams
+        self.begegnung(lid, spieler=1, form=f[6], extra="geschenk", spitzname="A")
+        L = self.begegnung(lid, spieler=2, form=f[7], extra="geschenk", spitzname="B")["lauf"]
+        self.assertFalse(any("Typen in beiden" in h or "ohne Partner" in h for h in L["hinweise"]))
+        L = self.json("/api/nuzlocke", {"id": lid, "regeln": {"typen": "getrennt"}})["lauf"]
+        self.assertIn("Typen in beiden Teams: Wasser.", L["hinweise"])
+        # Sicherung: Modus, Spieler und Kopplung bleiben
+        exp = self.json("/api/export")
+        self.json("/api/nuzlocke/loeschen", {"id": lid})
+        self.json("/api/restore", exp)
+        L = self.json("/api/nuzlocke?spiel=emerald")["lauf"]
+        self.assertEqual((L["modus"], L["spieler"], sorted(x["spitzname"] for x in L["friedhof"])), ("soullink", ["Rot", "Spieler 2"], ["Funki", "Keimi"]))
         self.ohne_fehler()
 
 
