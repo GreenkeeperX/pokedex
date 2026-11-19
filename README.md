@@ -55,7 +55,8 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Ei-Attacken-Kette** (Link „Ei ›“ in den Attacken der Detailseite, `#kette/<Form>/<Attacke>`): die kürzeste Kette
   von Eltern, über die das Pokémon die Ei-Attacke bekommt, mit Ei-Gruppe je Schritt, Gefangene zuerst; in
   Karmesin/Purpur der Weg per Spiegelkraut im Picknick. Regeln nach Bulbapedia in `docs/formeln.md`.
-- **Nuzlocke** (Knopf in der Liste, `#nuzlocke`): Läufe je Spiel mit erster Begegnung je Gebiet (Auswahl aus den
+- **Nuzlocke** (Knopf in der Liste, `#nuzlocke`): Läufe je Spiel, allein oder als Soul-Link zu zweit (gekoppelte
+  erste Begegnungen: Tod, Team und Box gelten für beide; wahlweise kein Typ in beiden Teams), mit erster Begegnung je Gebiet (Auswahl aus den
   Fundorten, schon Gefangenes nach Dupes-Klausel gesperrt), Team, Box und Friedhof, Shiny und Geschenken extra, Regeln
   je Lauf und Levelgrenze bis zum nächsten Boss; Verstöße als Hinweise. Regeln nach Bulbapedia und Smogon in
   `docs/formeln.md`.

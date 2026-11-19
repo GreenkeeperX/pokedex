@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.73.0"
+VERSION = "0.74.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.74.0", "19.11.2026", [
+        "Nuzlocke als Soul-Link zu zweit („Neuer Soul-Link“): je Gebiet eine erste Begegnung je Spieler, die beiden sind "
+        "gekoppelt; Tod, Team und Box gelten für beide, ein verpasster Fang schickt den Partner in die Box",
+        "Regel „Typen“: kein Typ in beiden Teams; die Dupes-Klausel gilt je Spieler",
+    ]),
     ("0.73.0", "19.11.2026", [
         "Nuzlocke (Knopf in der Liste): Läufe je Spiel mit erster Begegnung je Gebiet, Team, Box und Friedhof; Shiny und "
         "Geschenke extra",

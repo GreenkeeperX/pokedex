@@ -244,6 +244,12 @@ to Pokémon Nuzlockes and Challenges“ (https://smogon.com/articles/introductio
 - **Shiny-Klausel:** Ein schillerndes Pokémon darf zusätzlich gefangen werden (beide Quellen).
 - **Levelgrenze:** das Level des stärksten Pokémon im Team des nächsten Arenaleiters, der Top Vier oder des Champs
   (Bulbapedia: „the next Gym Leader/Elite Four/Champion's highest-levelled Pokémon“).
+- **Soul-Link** (Bulbapedia, Smogon, Soul-Link-Regeln unter
+  https://emeraldvoid.github.io/pokemon-challenges/soul-link.html): zwei Spieler, die ersten Begegnungen eines Gebiets
+  sind gekoppelt. Stirbt eins, stirbt der Partner mit; kommt eins in die Box, kommt der Partner mit; misslingt ein Fang,
+  gibt der andere seins auf (freilassen oder für immer in die Box; der Pokédex legt es in die Box). Wahlweise darf kein
+  Typ in beiden Teams vorkommen (Bulbapedia: „If either player is using a Pokémon of a certain type, the other player
+  cannot use any Pokémon of that same type“).
 - **Niederlage:** Laut Bulbapedia endet der Lauf, wenn kein Pokémon mehr lebt; mit „Full Wipe“ schon bei einer
   Niederlage im Kampf, auch wenn in der Box noch welche leben. Smogon überlässt es dem Spieler. Der Lauf wählt „Lauf
   vorbei“ oder „weiter mit der Box“; eine Niederlage im Kampf sieht der Pokédex nicht, den Stand des Laufs setzt der
@@ -257,6 +263,8 @@ Offen (so umgesetzt, aber nicht belegt):
   aus den Trainerteams des PokéWiki. Ohne sie (oder in Spielen ohne Arenen) gibt es keine Levelgrenze, die Ansicht sagt
   das.
 - **Level im Team** trägt der Spieler selbst ein; der Pokédex liest keinen Spielstand.
+- **Soul-Link:** Shiny und Geschenke haben keinen Partner (die Quellen sagen dazu nichts). Die Dupes-Klausel gilt je
+  Spieler. Zurück ins Team holt der Pokédex den Partner nur, wenn er lebt.
 
 ## Spiele ohne eigene Formel
 

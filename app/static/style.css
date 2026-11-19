@@ -519,7 +519,7 @@ table.prog tr.click{cursor:pointer}
 .kglied:hover{background:var(--hov)}.kglied.hast{border-color:var(--go)}.kpfeil{display:flex;flex-direction:column;align-items:center;font-size:22px;line-height:1}.kpfeil .hint{font-size:12px}
 .nzks{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.nzk{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:3px 8px 3px 3px;border:1px solid var(--line);border-radius:8px;font-size:14px}
 .nzk .spr,.nzw .spr{width:40px;height:40px}.nzk.tot{opacity:.6}.nzk.ueber{border-color:var(--warn)}.nzw{display:flex;align-items:center;gap:6px}
-.nzr{display:flex;flex-wrap:wrap;gap:6px 16px;margin:6px 0}table.nzg td{vertical-align:middle}table.nzg select[data-nzneu]{max-width:420px}
+.nzsp{min-width:90px;font-size:13px}.nzr{display:flex;flex-wrap:wrap;gap:6px 16px;margin:6px 0}table.nzg td{vertical-align:middle}table.nzg select[data-nzneu]{max-width:420px}
 .tks{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.tk{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;border:1px solid var(--line);border-radius:8px;color:inherit;text-decoration:none;font-size:14px}
 .tk:hover{background:var(--hov)}.tk.hast{border-color:var(--go)}.tk .spr{width:40px;height:40px}table.jfund .spr{width:36px;height:36px;vertical-align:middle}
 .jagd.pin{border-color:var(--accent)}.jzahl{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;margin-top:8px}
