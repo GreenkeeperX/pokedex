@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.74.0"
+VERSION = "0.75.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.75.0", "19.11.2026", [
+        "Neuer Reiter HOME: die Sammlung in Pokémon HOME als Living Dex in Boxen zu 30, nach Arten oder mit Formen, auch "
+        "als Shiny-Living-Dex; Lücken je Box, Platz im Premium-Plan und für jedes fehlende Pokémon, in welchem Spiel du es hast",
+        "„Wo gehört … hin?“ sucht ein Pokémon und zeigt Box, Reihe und Spalte; ein Klick auf einen Platz setzt die Marke in HOME",
+    ]),
     ("0.74.0", "19.11.2026", [
         "Nuzlocke als Soul-Link zu zweit („Neuer Soul-Link“): je Gebiet eine erste Begegnung je Spieler, die beiden sind "
         "gekoppelt; Tod, Team und Box gelten für beide, ein verpasster Fang schickt den Partner in die Box",

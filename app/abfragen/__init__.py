@@ -23,6 +23,7 @@ Seit 0.62.0 ein Paket mit Modulen nach Thema (in der Reihenfolge der Abhängigke
   (Import und Export)
 - eikette: Ei-Attacken-Kette: kürzeste Elternkette für Pokémon und Attacke (0.72.0)
 - tausch: Tauschliste aus „Was fehlt mir noch“: Suche und Biete, als Text zum Kopieren (0.71.0)
+- home: HOME-Boxen: Living Dex in Boxen zu 30, Lücken, freie Plätze, woher ein fehlendes Pokémon kommt (0.75.0)
 - kampf: Doppelkampf (Smogon), Werte, Effort Levels und Schadensrechner
 
 Alle Namen von früher sind weiter unter app.abfragen erreichbar (Funktionen, Tabellen, Zwischenspeicher).
@@ -56,6 +57,7 @@ from .teams import (slot_details, _members, improvements, foreign_moves, team_vi
     team_optimize, team_caught, NO_EGGS, WAYS, missing, _missing_home, _evolves_from, _between, _stage, _furthest, TRAINER_ROLLEN,
     trainer_list, _move_types, team_matchup, _paste_names, slot_info, paste_import, paste_export)
 from .tausch import GRUPPEN, HIER, AUS, _eintrag, _fundorte, _erreichbar, tauschliste, _nr, _text
+from .home import MODI, _FRAGLICH, lagerbar, _marken, einteilen, home_boxen
 from .eikette import DITTO, TIEFE, ALTERNATIVEN, _arten, _saetze, eikette
 from .kampf import (smogon_view, team_doubles, effort_view, stats_view, effort_team, damage_matrix, damage_view,
     _calc_steps, _calc_names)

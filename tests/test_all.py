@@ -18,6 +18,7 @@ from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, serve
 from app import jagd, leistung
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
 from tests.basis import HttpMitDaten, HttpTest, TempData, app_quellen, im_paket, oberflaeche_js
+from tests import minidb
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
 EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
@@ -3694,6 +3695,7 @@ class Spiele(unittest.TestCase):
             'used["kennung"] == LA': "Hinweis zu den Attackenwerten aus dem PokéWiki (Daten von Legenden: Arceus)",
             'm["kennung"] in role_moves': "Attacken, kein Spiel",
             'g["kennung"] in D.areas': "ob es Gebiete aus PKHeX gibt, sagt die Datenbank",
+            'f["kennung"] in spiele.HOME_NICHT_LAGERBAR': "HOME-Boxen: Formen, kein Spiel; die Liste steht in spiele.py",
         }
         muster = re.compile(r'\w+\["kennung"\] *(?:==|!=|in\b|not in\b)')
         for datei in ("abfragen", "server.py"):
@@ -4520,6 +4522,69 @@ class Eikette(HttpMitDaten):
     def test_profil(self):
         self.assertEqual(spiele.profil("the-teal-mask")["eiattacken"], "spiegelkraut")      # Erweiterung wie das Hauptspiel
         self.assertEqual(spiele.profil("sword-shield")["eiattacken"], "zucht")
+
+
+class HomeBoxen(HttpMitDaten):
+    """0.75.0: HOME-Boxen: Living Dex nach Nationaldex in Boxen zu 30, Lücken, woher ein fehlendes Pokémon kommt."""
+    HOME = "pokemon-home"
+
+    def _marke(self, tabelle, spiel, *formen):
+        for f in formen:
+            self.json(f"/api/{tabelle}", {"spiel": spiel, "id": f})
+
+    def test_arten(self):
+        self._marke("gefangen", self.HOME, 10002)                  # Hisui-Flutor: belegt den Platz der Art Flutor
+        self._marke("gefangen", "emerald", 1)
+        d = self.json("/api/home")
+        self.assertEqual((d["modus"], d["shiny"], d["box"], d["spalten"]), ("arten", False, 30, 6))
+        self.assertEqual((d["eintraege"], d["belegt"], d["fehlt"], d["boxen_noetig"]), (len(minidb.ARTEN), 1, len(minidb.ARTEN) - 1, 1))
+        self.assertEqual(d["plaene"], {"basis": 30, "premium": 6000})
+        self.assertEqual(d["frei"], 6000 - len(minidb.ARTEN))
+        b = d["boxen"][0]
+        self.assertEqual((b["nr"], b["von"], b["bis"], b["belegt"]), (1, 1, 14, 1))
+        x = {p["art"]: p for p in b["plaetze"]}
+        self.assertEqual((x[7]["id"], x[7]["hat"], x[7]["platz"], x[7]["reihe"], x[7]["spalte"]), (7, True, 7, 2, 1))
+        smaragd = abfragen.data().game_by["emerald"]["name"]
+        self.assertEqual((x[1]["hat"], x[1]["in"]), (False, [smaragd]))      # aus Smaragd übertragbar
+        self.assertEqual(x[2]["in"], [])
+        self.assertEqual(self.json("/api/home?modus=gibtsnicht")["modus"], "arten")
+
+    def test_formen_und_shiny(self):
+        self._marke("schillernd", self.HOME, 10002)                # setzt auch gefangen
+        d = self.json("/api/home?modus=formen")
+        ids = [p["id"] for b in d["boxen"] for p in b["plaetze"]]
+        self.assertEqual(ids.index(10002), ids.index(7) + 1)            # die Form folgt ihrer Art
+        self.assertNotIn(10001, ids)                                    # Mega: lagert HOME nicht
+        self.assertNotIn(10003, ids)                                    # nur optisch anders: kennt der Pokédex nicht
+        self.assertEqual((d["eintraege"], d["ausgenommen"], d["belegt"]), (len(minidb.ARTEN) + 1, 1, 1))
+        s = self.json("/api/home?modus=formen&shiny=1")
+        self.assertEqual((s["shiny"], s["belegt"]), (True, 1))
+        self.json("/api/gefangen", {"spiel": self.HOME, "id": 3})
+        self.assertEqual(self.json("/api/home?shiny=1")["belegt"], 1)    # gefangen allein ist nicht schillernd
+        self.assertEqual(self.json("/api/home")["belegt"], 2)
+
+    def test_fraglich_und_boxen(self):
+        from app.abfragen import home
+        with mock.patch.object(home, "_FRAGLICH", re.compile(r"^flutor-hisui$")):
+            d = self.json("/api/home?modus=formen")
+        self.assertEqual([x["id"] for x in d["fraglich"]], [10002])
+        self.assertEqual(d["eintraege"], len(minidb.ARTEN))              # nicht gezählt
+        with mock.patch.object(spiele, "HOME_BOX", 4):
+            d = self.json("/api/home")
+        self.assertEqual([len(b["plaetze"]) for b in d["boxen"]], [4, 4, 4, 2])
+        self.assertEqual([(b["von"], b["bis"]) for b in d["boxen"]][:2], [(1, 4), (5, 8)])
+        self.assertEqual(abfragen.einteilen(list(range(65)), 30)[-1], {"nr": 3, "plaetze": list(range(60, 65))})
+
+    def test_lagerbar(self):
+        def f(kennung, kampfform=0, mega=0, relevant=1):
+            return abfragen.lagerbar({"kennung": kennung, "kampfform": kampfform, "mega": mega, "relevant": relevant})
+        self.assertIs(f("rotom-wash"), True)
+        self.assertIs(f("minior-red-meteor"), True)
+        self.assertIs(f("giratina-origin"), False)                     # braucht ein getragenes Item
+        self.assertIs(f("charizard-mega-x", 1, 1), False)
+        self.assertIs(f("pikachu-cosplay", relevant=0), False)
+        for k in ("raticate-totem-alola", "eternatus-eternamax", "pikachu-starter", "minior-red", "ogerpon-wellspring-mask"):
+            self.assertIsNone(f(k), k)
 
 
 # Tests mit Spieldaten (Mini-Datenbank), Vertrag zwischen Server und Oberfläche, Selbsttest im Browser: eigene Datei, hier

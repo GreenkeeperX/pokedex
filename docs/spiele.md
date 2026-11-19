@@ -65,6 +65,14 @@ Fangtabelle, keine Werte); Pokopia (von der PokéAPI nicht geführt, eigene Dexe
 4. Was das Spiel wirklich Neues kann (eigene Formel, eigene Tabelle), bleibt eine eigene Funktion; das Profil sagt nur,
    dass sie gilt.
 
+## Pokémon HOME
+
+HOME ist kein Spiel der PokéAPI (`HOME`); sein Profil ist das Übliche der neuesten Generation. Was nur für HOME gilt, steht
+als eigene Werte daneben (0.75.0, gelesen von `app/abfragen/home.py`): `HOME_BOX` (Plätze je Box), `HOME_PLAETZE`
+(Basis- und Premium-Plan), `HOME_NICHT_LAGERBAR` (Kennungen von Formen, die HOME nicht lagert, zusätzlich zu den
+Kampfformen) und `HOME_FRAGLICH` (Muster auf Kennungen, bei denen das offen ist). Quellen: `docs/formeln.md`,
+„HOME-Boxen“.
+
 ## Was nicht im Profil steht
 
 - Regeln, die nur an der Generation hängen: Schaden je Generation (`schaden.py`), Typtabelle (`typen.py`), physisch

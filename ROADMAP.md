@@ -29,8 +29,6 @@ Soul-Link (0.73.0, 0.74.0) sind erledigt.
 
 Erwünscht, aber erst nach den Funktionen oben und dann neu zu ordnen.
 
-- **Pokémon HOME, Boxenansicht** als eigener HOME-Reiter (keine Boxenverwaltung für alle Spiele): Boxen zu 30, Living
-  Dex, Formen und Shinys, fehlende Einträge und freie Plätze, Hilfe beim Verteilen.
 - **Erweiterter Schadensrechner**, einfache Bedienung bleibt Standard: Statusstufen, Wetter, Felder, Schilde und
   Schadensreduktionen, Doppelkämpfe mit mehreren Beteiligten; nur, was es im Spiel gibt, nichts doppelt. Dazu
   Fähigkeiten mit Bedingung.
@@ -74,6 +72,10 @@ Gefunden und nicht behoben; in Klammern die Version, in der der Befund aufgenomm
   Exklusive, weil ihre Fundorte in den Daten in beiden Editionen stehen (0.71.0).
 - Ei-Attacken-Kette: sucht nur in den Arten des Spiel-Dex; Arten aus HOME oder anderen Spielen und die Weitergabe im
   Pokémon-Hort stehen nicht in der Kette (`docs/formeln.md`, „Ei-Attacken“, 0.72.0).
+- HOME-Boxen: 30 Plätze je Box sind nicht mit einer Quelle belegt; ob HOME Herrscher-Formen, Partner-Pikachu und -Evoli,
+  die verschmolzenen Formen von Necrozma und Coronospa, Ogerpons Masken und die Kerne von Meteno als eigene Form lagert,
+  ist offen. Diese Formen stehen getrennt und zählen nicht. Formen, die nur anders aussehen (Vivillon, Alcremie), kennt
+  der Pokédex nicht (`docs/formeln.md`, „HOME-Boxen“, 0.75.0).
 
 ## Zu entscheiden
 

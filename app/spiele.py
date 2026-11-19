@@ -16,6 +16,17 @@ welchem Spiel gehört, bleibt bei der Quelle.
 from types import MappingProxyType
 
 HOME = "pokemon-home"       # kein Spiel der PokéAPI: alle Pokémon mit den neuesten Werten, eigene Sammlung
+# Boxen in Pokémon HOME (0.75.0; Quellen und Offenes: docs/formeln.md, „HOME-Boxen“): Plätze je Box, Plätze im Basis- und im
+# Premium-Plan. Gelagert wird keine Kampfform (Mega, Proto, Gigadynamax, Zen-Modus usw.: `kampfform` der Datenbank) und keine
+# der Formen in HOME_NICHT_LAGERBAR (sie brauchen ein getragenes Item oder sind verschmolzen; in HOME liegt die Grundform).
+# HOME_FRAGLICH (Muster auf die Kennung): Formen, bei denen nicht belegt ist, ob HOME sie als eigene Form lagert (Herrscher,
+# Partner aus Let's Go, verschmolzene Formen, Masken, Minior-Kerne, Varianten nur mit anderer Fähigkeit); die Boxen zeigen sie
+# getrennt und zählen sie nicht.
+HOME_BOX = 30
+HOME_PLAETZE = {"basis": 30, "premium": 6000}
+HOME_NICHT_LAGERBAR = ("giratina-origin", "dialga-origin", "palkia-origin", "kyurem-black", "kyurem-white")
+HOME_FRAGLICH = (r"-totem|-eternamax$|-starter$|^necrozma-(dusk|dawn)$|^calyrex-(ice|shadow)$|^ogerpon-.+-mask$"
+                 r"|^minior-(red|orange|yellow|green|blue|indigo|violet)$|-power-construct$|-battle-bond$|-own-tempo$")
 
 # Feld → erlaubte Werte (Menge), bool oder str (eine Kennung oder leer). Die Reihenfolge ist die der Beschreibung.
 FELDER = {

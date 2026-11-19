@@ -62,7 +62,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
   Attacken-Wertung und Moveset, Team-Bewertung, Teamsuche, Gegner)
 - `app/abfragen/`: Abfragen für die Oberfläche, ein Paket mit Modulen nach Thema (`basis`: Daten im Speicher, Spiel und
   Formen; `liste`, `lernen` (Attacken), `karten` (Fundorte, Karten, Gebiete), `fangen`, `detailseite`, `auftraege`,
-  `items` (mit Typtabelle), `fortschritt`, `teams` (mit Showdown-Text), `tausch`, `eikette`, `kampf`, `raids`). Alle Namen sind unter `app.abfragen`
+  `items` (mit Typtabelle), `fortschritt`, `home` (HOME-Boxen), `teams` (mit Showdown-Text), `tausch`, `eikette`, `kampf`, `raids`). Alle Namen sind unter `app.abfragen`
   erreichbar (Übersicht in `app/abfragen/__init__.py`)
 - `app/server.py`: Webserver und JSON-Schnittstelle
 - `app/static/`: Oberfläche (`index.html`, `style.css`, `js/*.js` in Teilen nach Reitern, Reihenfolge in `index.html`);

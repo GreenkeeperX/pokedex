@@ -1,4 +1,4 @@
-/* Pokédex-Oberfläche, Teil 6 von 10: Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch, Gebiete.
+/* Pokédex-Oberfläche, Teil 6 von 10: Karten, Sammelobjekte, Fortschritt, HOME-Boxen, Shiny-Jagd, Tauschliste, Was fehlt mir noch, Gebiete.
    Die Teile lädt index.html der Reihe nach; sie teilen sich die globalen Namen (docs/oberflaeche.md). */
 "use strict";
 /* ------------------------------------------------------------------ Karte (Legenden: Arceus)
@@ -737,6 +737,64 @@ document.addEventListener("keydown", (e) => {
   if (e.key === " " || e.key === "+") { e.preventDefault(); huntCount(top, 1); }
   else if (e.key === "-") { e.preventDefault(); huntCount(top, -1); }
 });
+/* 0.75.0: HOME-Boxen (/api/home): die Sammlung in Pokémon HOME als Living Dex in Boxen zu 30 (6 Spalten, 5 Reihen), nach
+   Nationaldex. Die Einteilung, Lücken und woher ein fehlendes Pokémon kommt (in) rechnet der Server (app/abfragen/home.py);
+   ein Klick auf einen Platz setzt oder nimmt die Marke in HOME (gefangen, mit Shiny schillernd). */
+const HOMEV = {modus: store.get("homeModus", "arten"), shiny: store.get("homeShiny", false), luecken: store.get("homeLuecken", false), such: ""};
+function homePlatz(x, d) {
+  const wo = `Box ${Math.ceil(x.platz / d.box)}, Reihe ${x.reihe}, Spalte ${x.spalte}`;
+  const tip = `${x.name} · Nr. ${x.art} · ${wo}` + (x.hat ? (d.shiny ? " · schillernd in HOME" : " · in HOME") : x.in.length
+    ? ` · fehlt; ${d.shiny ? "schillernd" : "gefangen"} in ${x.in.join(", ")}` : " · fehlt");
+  return `<button type="button" class="hp${x.hat ? " hat" : ""}${x.in.length ? " woanders" : ""}" data-hid="${x.id}" data-hat="${x.hat ? 1 : 0}"
+    data-name="${esc(x.name)}" data-wo="${esc(wo)}" data-tip="${esc(tip)}" aria-label="${esc(x.name)}">${img(x.id)}</button>`;
+}
+async function homeView() {
+  const rid = RID;
+  const d = await api("/api/home?" + qs({modus: HOMEV.modus, shiny: HOMEV.shiny ? 1 : ""}));
+  if (rid !== RID) return;
+  const boxen = d.boxen.filter((b) => !HOMEV.luecken || b.fehlt);
+  const box = (b) => `<div class="hbox${b.fehlt ? "" : " voll"}" data-box="${b.nr}"><div class="hbk"><b>Box ${b.nr}</b>
+      <span class="hint">Nr. ${b.von}–${b.bis}</span><span class="grow"></span><span class="hint" data-tip="${b.fehlt ? `${b.fehlt} fehlen` : "voll"}">${b.belegt}/${b.plaetze.length}</span></div>
+      <div class="hgrid" style="grid-template-columns:repeat(${d.spalten},1fr)">${b.plaetze.map((x) => homePlatz(x, d)).join("")}</div></div>`;
+  const namen = [...new Set(d.boxen.flatMap((b) => b.plaetze.map((x) => x.name)))];
+  main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">HOME-Boxen</h2>
+      <select data-hmodus data-tip="Arten: ein Platz je Art. Mit Formen: ein Platz je Form, die HOME lagert">${d.modi.map((m) => `<option value="${esc(m.id)}"${m.id === d.modus ? " selected" : ""}>${esc(m.name)}</option>`).join("")}</select>
+      <label class="hint" data-tip="Belegt ist ein Platz erst mit der Marke „schillernd“ in HOME"><input type="checkbox" data-hshiny${d.shiny ? " checked" : ""}> Shiny</label>
+      <label class="hint"><input type="checkbox" data-hluecken${HOMEV.luecken ? " checked" : ""}> nur Boxen mit Lücken</label>
+      <input id="hq" list="hql" placeholder="Wo gehört … hin?" value="${esc(HOMEV.such)}" autocomplete="off"><datalist id="hql">${namen.map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
+      <span class="hint grow" id="hwo"></span><a class="btn small" href="#fortschritt">Fortschritt</a></div>
+    <p class="hint">${d.belegt} von ${d.eintraege} Plätzen belegt (${anteil(d.belegt, d.eintraege)}) ${pbar(d.belegt, d.eintraege)} · ${d.fehlt} fehlen · ${d.boxen_noetig} Boxen zu ${d.box}.
+      Im Premium-Plan (${d.plaene.premium} Plätze) bleiben nach der ganzen Living Dex ${d.frei} frei, im Basis-Plan passen ${d.plaene.basis}.
+      ${d.modus === "formen" && d.ausgenommen ? `${d.ausgenommen} Formen lagert HOME nicht (Mega, Kampfformen, Formen mit getragenem Item, verschmolzene).` : ""}</p>
+    <div class="hboxen">${boxen.map(box).join("") || `<p class="hint">Keine Box mit Lücken: die Living Dex ist voll.</p>`}</div>
+    ${d.fraglich.length ? `<details class="fsec"><summary>Nicht belegt, ob HOME diese Formen als eigene lagert (${d.fraglich.length}, nicht gezählt)</summary>
+      <div class="hgrid frei">${d.fraglich.map((x) => `<a class="hp${x.hat ? " hat" : ""}" href="#pokemon/${x.id}" data-tip="${esc(x.name)} · Nr. ${x.art}">${img(x.id)}</a>`).join("")}</div></details>` : ""}
+    <p class="hint">Die Boxen folgen dem Nationaldex, so wie man eine Living Dex in HOME einsortiert; ein Platz ist belegt, sobald das Pokémon in HOME
+      als gefangen markiert ist (Arten: irgendeine Form der Art). Klick auf einen Platz: Marke in HOME setzen oder wegnehmen. Ein farbiger Rand heißt:
+      fehlt in HOME, steht aber in einem Spiel als ${d.shiny ? "schillernd" : "gefangen"} und lässt sich übertragen. Formen, die sich nur optisch
+      unterscheiden (etwa Vivillon-Muster), kennt der Pokédex nicht als eigene Formen.</p></div>`;
+  header();
+  const finde = () => {
+    HOMEV.such = $("#hq").value.trim();
+    $$(".hp.such", main).forEach((el) => el.classList.toggle("such", false));
+    const el = HOMEV.such && $$(".hp[data-name]", main).find((x) => x.dataset.name.toLowerCase() === HOMEV.such.toLowerCase());
+    $("#hwo").textContent = el ? `${el.dataset.name}: ${el.dataset.wo}` : HOMEV.such ? "nicht in diesen Boxen" : "";
+    if (el) { el.classList.add("such"); el.scrollIntoView({block: "center", behavior: "smooth"}); }
+  };
+  $("#hq").addEventListener("change", finde);
+  if (HOMEV.such) finde();
+  $("[data-hmodus]", main).addEventListener("change", (e) => { HOMEV.modus = e.target.value; store.set("homeModus", HOMEV.modus); homeView(); });
+  $("[data-hshiny]", main).addEventListener("change", (e) => { HOMEV.shiny = e.target.checked; store.set("homeShiny", HOMEV.shiny); homeView(); });
+  $("[data-hluecken]", main).addEventListener("change", (e) => { HOMEV.luecken = e.target.checked; store.set("homeLuecken", HOMEV.luecken); homeView(); });
+  $$("button.hp", main).forEach((el) => el.addEventListener("click", () => {
+    const an = el.dataset.hat !== "1";
+    el.classList.toggle("hat", an);
+    el.dataset.hat = an ? "1" : "0";
+    api(d.shiny ? "/api/schillernd" : "/api/gefangen", {spiel: d.spiel, id: +el.dataset.hid, an})
+      .then(() => { S.caughtGame = null; return homeView(); })
+      .catch(ungespeichert(() => { el.classList.toggle("hat", !an); el.dataset.hat = an ? "0" : "1"; }));
+  }));
+}
 /* 0.71.0: Tauschliste (/api/tausch): was nur ein Tauschpartner geben kann (andere Edition, Tausch-Entwicklung, ohne Weg in
    den Daten) und was du bieten kannst; die Liste zum Kopieren baut der Server (text). Edition wie in „Was fehlt mir noch“ */
 async function tradeView() {

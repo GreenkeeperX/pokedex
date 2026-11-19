@@ -266,6 +266,37 @@ Offen (so umgesetzt, aber nicht belegt):
 - **Soul-Link:** Shiny und Geschenke haben keinen Partner (die Quellen sagen dazu nichts). Die Dupes-Klausel gilt je
   Spieler. Zurück ins Team holt der Pokédex den Partner nur, wenn er lebt.
 
+## HOME-Boxen
+
+Umgesetzt in `app/abfragen/home.py`, Werte in `app/spiele.py` (`HOME_BOX`, `HOME_PLAETZE`, `HOME_NICHT_LAGERBAR`,
+`HOME_FRAGLICH`); Stand 19.11.2026.
+
+- **Plätze je Plan:** 30 im Basis-Plan, 6000 im Premium-Plan (Nintendo-Support, „What Is the Difference Between the
+  Pokemon HOME Basic and Premium Plans?“, https://en-americas-support.nintendo.com/app/answers/detail/a_id/48800:
+  „Number of Pokémon that can be deposited: 30 Pokémon / 6000 Pokémon“; Serebii, „Pokémon HOME Features“,
+  https://serebii.net/pokemonhome/features.shtml: „Storage comes at 30 Pokémon for Basic players and 6,000 Pokémon for
+  Premium Subscriptions“).
+- **Nicht lagerbar** (Serebii, „Undepositable Pokémon“, https://serebii.net/pokemonhome/nondepositablepokemon.shtml:
+  „there are some Pokémon forms that you can't actually deposit … either form changes that take place within battle,
+  require a hold item to change, or are combined Pokémon“): Mega-Entwicklungen, Proto-Kyogre und -Groudon, Formeo
+  (Sonnen-, Regen-, Schneeform), Zen-Modus, Klingenform, Kampfformen allgemein (Feld `kampfform` der Datenbank, aus
+  `is_battle_only` der PokéAPI); dazu nach der Liste Giratina, Dialga und Palkia (Urform) sowie Kyurem (Schwarz,
+  Weiß). Die Typen von Arceus und Genesects Module stehen ebenfalls dort; der Pokédex führt sie nicht als eigene Form.
+- **Einteilung:** nach der Nummer im Nationaldex; mit Formen folgen die Formen einer Art ihrer Standardform. Box, Reihe
+  und Spalte: Platz *n* (ab 0) liegt in Box ⌊*n*/30⌋ + 1, Reihe ⌊(*n* mod 30)/6⌋ + 1, Spalte (*n* mod 30) mod 6 + 1.
+
+Offen (so umgesetzt, aber nicht belegt):
+
+- **30 je Box, 6 Spalten:** aus dem Plan in der ROADMAP; die beiden Seiten oben nennen nur die Plätze. 6000 Plätze sind
+  dann 200 Boxen, der Basis-Plan eine.
+- **Liste nicht lagerbarer Formen:** Die Seite von Serebii war nur bis Nr. 740 lesbar. `HOME_FRAGLICH` führt Formen,
+  bei denen offen ist, ob HOME sie als eigene Form lagert: Herrscher-Formen, Partner-Pikachu und -Evoli, Unendynamax,
+  Necrozma (Abendmähne, Morgenschwingen), Coronospa (Reiter), die Masken von Ogerpon, die Kerne von Meteno und Formen,
+  die sich nur in der Fähigkeit unterscheiden (Zygarde mit Wandlungsfähigkeit, Ash-Quajutsu-Fähigkeit, Wuffels mit
+  Tempomacher). Die Boxen zeigen sie getrennt und zählen sie nicht.
+- **Formen, die nur anders aussehen** (Vivillon, Alcremie, Hüte von Pikachu und Ähnliches), führt der Pokédex nicht als
+  eigene Form; eine Living Dex mit allen Optikformen kann er deshalb nicht zeigen.
+
 ## Spiele ohne eigene Formel
 
 Welches Spiel welche Formel nimmt, steht im Spielprofil (`app/spiele.py`, `docs/spiele.md`: Felder `schaden`,

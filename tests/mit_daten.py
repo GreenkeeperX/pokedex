@@ -786,6 +786,8 @@ class Selbsttest(HttpMitDaten):
             # die Mini-Datenbank hat keine Spawnpunkte für Legenden: Arceus: die Ansicht sagt es, statt einen Fehler zu zeigen
             add("#karte", ["noch keine Kartendaten"] if spiel == "legends-arceus" else [])
             add("#sammeln", [])
+            if spiel == "emerald":
+                add("#home", ["HOME-Boxen", "Box 1", "Plätzen belegt"])
             if spiel == "legends-arceus":
                 add("#auftraege", [])
             if spiel == "scarlet-violet":

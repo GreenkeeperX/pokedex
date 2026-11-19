@@ -21,7 +21,7 @@ const S = {
   tfilter: filter0(Object.assign({endstufe: true}, store.get("tfilter", {}))),
   tleg: store.get("tleg", true), dock: store.get("dock", window.innerWidth > 700), foes: store.get("foes", []),
 };
-const TABS = [["pokemon", "Pokémon"], ["team", "Team"], ["attacken", "Attacken"], ["typen", "Typen"], ["items", "Items"], ["karte", "Karte"], ["einstellungen", "Einstellungen"]];
+const TABS = [["pokemon", "Pokémon"], ["team", "Team"], ["attacken", "Attacken"], ["typen", "Typen"], ["items", "Items"], ["karte", "Karte"], ["home", "HOME"], ["einstellungen", "Einstellungen"]];
 const STAT = ["KP", "Angriff", "Verteidigung", "Sp.-Angriff", "Sp.-Verteidigung", "Initiative"];
 const STAT_K = ["KP", "Ang", "Vert", "SpA", "SpV", "Init"];
 const CRIT = {defensive: "Defensive", abdeckung: "Abdeckung", tempo: "Tempo", staerke: "Stärke", balance: "Balance"};
