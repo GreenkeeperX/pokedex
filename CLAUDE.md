@@ -23,7 +23,8 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - keine Formel aus dem Gedächtnis: Quelle und Herleitung nach `docs/formeln.md`, Angenommenes dort unter „Offen“,
   Vergleichswerte als Test,
 - jede Version mit Tests (`python3 -m unittest tests.test_all`), neuer Nummer und Eintrag in `NEUIGKEITEN` in `app/sources.py`,
-  aktueller README und ROADMAP.md,
+  aktueller README und ROADMAP.md. Die ROADMAP führt nur Geplantes, Offenes und Entscheidungen, keine Abschnitte je Version;
+  was sich geändert hat und warum (auch bei Entferntem: was, wo, wer griff zu, Ersatz, Tests), steht in Commit und Pull Request,
 - kein stiller Ersatzwert: `except Exception` meldet mit `fehler.melden(e)` und macht dann weiter; in der Oberfläche
   `.catch(teil("Was", Ersatz))` beim Laden und `.catch(ungespeichert(zurück))` beim Speichern. Ausnahmen stehen mit
   Grund in `test_keine_stillen_ersatzwerte`,
@@ -73,6 +74,11 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/bisafans.py`: Seiten von BisaFans lesen (Aufträge und Hauptmissionen in Legenden: Arceus, Nebenmissionen in Z-A), ohne Netz
 - `app/shiny.py`: Shiny-Sperren aus Bulbapedia lesen (je Spiel „nur per Tausch“ oder „nie“), ohne Netz
 - `app/serebii.py`: Seiten von Serebii lesen (Abklingzeiten in Legenden: Z-A, Pokédexe von Pokopia), ohne Netz
+- `app/pokewiki.py`: Antworten der MediaWiki-API des PokéWiki zerlegen und Werte aus dem Wikitext holen, ohne Netz
+- `app/altissimo.py`, `app/companion.py`: Kartensymbole von Legenden: Arceus (Altissimo: Bäume, Erz, Kisten, Rezepte;
+  PLA Companion: Schnellreise und Lager), ohne Netz
+- `app/paste.py` (Showdown-Textformat lesen und schreiben), `app/doppel.py` (Doppelkampf-Bewertung), `app/aufgaben.py`
+  (Auftrag und Antwort zu „Zu erledigen“): ohne Datenbank
 - `tests/test_all.py`: Tests ohne Netz (ein Aufruf für alles); mit `POKEAPI_DB=/pfad/pokeapi.db` auch gegen eine gebaute
   Datenbank. Was in der CI läuft und was nur lokal: `docs/tests.md`
 - `tests/minidb.py`, `tests/minidb_geruest.json`: Mini-Datenbank der Tests (erfundene Welt, vom Importer gebaut; Gerüst aus

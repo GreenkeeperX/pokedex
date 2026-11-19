@@ -1,7 +1,7 @@
 # Spielprofile
 
-Was in welchem Spiel gilt, steht seit 0.60.0 an einer Stelle: `app/spiele.py`. Server und Oberfläche fragen
-Eigenschaften des Profils („gibt es Zucht?“), nicht mehr die Kennung des Spiels („ist es Legenden: Arceus?“). Ein Test
+Was in welchem Spiel gilt, steht an einer Stelle: `app/spiele.py`. Server und Oberfläche fragen
+Eigenschaften des Profils („gibt es Zucht?“), nicht die Kennung des Spiels („ist es Legenden: Arceus?“). Ein Test
 (`Spiele.test_server_fragt_das_profil`, `Spiele.test_oberflaeche_fragt_das_profil`) hält das fest.
 
 ## Aufbau

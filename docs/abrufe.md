@@ -47,7 +47,7 @@ Fehlschlag). Was schon geholt war, bleibt: CSV-Texte im Zwischenspeicher, Bilder
    Erzbrocken, die auch JS-Finder hat). **PKHeX** liefert außerdem die Itemnamen (deutsch, englisch) und die Itemlisten
    je Spiel (`ItemStorage<Kürzel>.cs`, `importer.ITEM_LISTS`) für Spiele ohne Liste in der PokéAPI, dazu die Lernlisten
    von Legenden: Z-A (`byte/levelup/lvlmove_za.pkl`, `byte/personal/personal_za`; `importer.PKHEX_LEARN`), solange die
-   PokéAPI dort keine hat. Seit 0.22.0 auch die Tera-Raids von Karmesin/Purpur (`legality/wild/Gen9/encounter_<Datei>.pkl`,
+   PokéAPI dort keine hat. Dazu die Tera-Raids von Karmesin/Purpur (`legality/wild/Gen9/encounter_<Datei>.pkl`,
    `importer.PKHEX_RAIDS`: Sätze zu 0x18 bzw. 0x3E Bytes mit Art, Form, Level, Sternen, Tera-Typ und Attacken; Tabelle `raid`)
    und die Crypto-Pokémon aus `Gen3/Encounters3Colo.cs` und `Encounters3XD.cs` (Liste `Shadow`, `importer.pkhex_shadow`;
    Trainer und Ort aus dem Kommentar, englisch; Tabelle `crypto`).
@@ -111,9 +111,9 @@ Fehlschlag). Was schon geholt war, bleibt: CSV-Texte im Zwischenspeicher, Bilder
 7. **Serebii PokéEarth** (`app/pokearth.py`, Quelle „pokearth“): je Region in `pokearth.GAMES` die Regionsseite
    (`/pokearth/<Region>/`, 2 Sekunden Pause) mit Bildkarte; das Bild einmal nach `mapgenie/kacheln/se/<Region>.png`, je
    Spiel die Karten seiner Regionen nach `mapgenie/<Spiel>.se.json`. Die Pokémon je Ort setzt `abfragen._pokearth_mons`
-   beim Anzeigen aus den Fundorten des Spiels ein. Hat Serebii keine Bildkarte (Kalos, seit 0.48), kommen die Orte aus der
+   beim Anzeigen aus den Fundorten des Spiels ein. Hat Serebii keine Bildkarte (Kalos), kommen die Orte aus der
    PokéWiki-Vorlage in `pokearth.PW_MAPS` (`<imagemap>`, deutsche Namen) und das Bild in groß von Bulbapedia, wenn es
-   dasselbe Seitenverhältnis hat wie das kleine PokéWiki-Bild (sonst das kleine); Adressen über `imageinfo`. Alola (seit 0.56)
+   dasselbe Seitenverhältnis hat wie das kleine PokéWiki-Bild (sonst das kleine); Adressen über `imageinfo`. Alola
    hat keine Gesamtkarte: die Vorlage „USUM-Map Alola“ enthält je Insel eine Bildkarte (`pokearth.pw_islands`), daraus
    wird je Insel eine Karte (`se-alola-<Insel>`, Bild `se/alola-<Insel>.png` in Originalgröße, 270 px). Der Punkt eines
    Orts liegt im Schwerpunkt seiner Fläche (`_centre`).
@@ -122,7 +122,7 @@ Fehlschlag). Was schon geholt war, bleibt: CSV-Texte im Zwischenspeicher, Bilder
    `mapgenie/heartgold-soulsilver.im.json`. Kacheln macht der Browser beim ersten Öffnen (`/api/kacheln/umwandeln`),
    abgelegt unter `mapgenie/kacheln/im/<Region>/<z>/<x>-<y>.png`.
 7. **Raid-Nester** (`app/raidnester.py`, Quelle „raidnester“, GitHub, PKHeX Raid Plugin): `Nests/NestLocations.cs`,
-   `Raid/RaidParameters.cs`, `Nests/RaidTables.cs` (Pokémon je Nest, seit 0.47) und einmal die drei Bilder nach `mapgenie/kacheln/rn/<Teil>.png`; je Spiel
+   `Raid/RaidParameters.cs`, `Nests/RaidTables.cs` (Pokémon je Nest) und einmal die drei Bilder nach `mapgenie/kacheln/rn/<Teil>.png`; je Spiel
    `mapgenie/<Spiel>.rn.json` (Schwert/Schild, Insel der Rüstung, Schneelande der Krone).
 7. **RankedBoost** (`app/rankedboost.py`, Quelle „rankedboost“): je Spiel in `rankedboost.GAMES` (Let’s Go, Feuerrot/Blattgrün)
    die Fundortseite, darin die Adresse der Kartendaten (`megamap-<Spiel>-<Prüfsumme>.json`; ohne Treffer die zuletzt
@@ -217,7 +217,7 @@ laufen gleichzeitig (`DIAG_PARALLEL`); mehr überlastete auf dem Heimserver die 
 - mögliche Quellen zum Testen: Item-Bilder (Serebii, PokéWiki), Kartenseiten von Serebii, GamerGuides (Lager,
   Schnellreise) und Pokébip (Stichwörter und Skripte, als Probe bis 400 000 Zeichen),
 - weitere Spieldaten: feste Begegnungen aus den Quelldateien von PKHeX (`importer.pkhex_static`), Werte je Form in
-  Legenden: Arceus (Raids in Karmesin/Purpur und Crypto-Pokémon sind seit 0.22.0 eingebaut),
+  Legenden: Arceus (Raids in Karmesin/Purpur und Crypto-Pokémon sind eingebaut),
 - Bilder und Rufe: schillernde und animierte Sprites, Rufe (PokéAPI-Repos),
 - schon geladen, noch ungenutzt: TM, Wesen, Ei-Gruppen, Fangraten, Beeren und EV-Ausbeute in pokeapi.db,
 - Kampfdaten: Smogon-Sets (data.pkmn.cc), Smogon-Nutzungsstatistik, `learnsets.ts`, `formats-data.ts`,

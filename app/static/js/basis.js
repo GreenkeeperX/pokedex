@@ -554,8 +554,8 @@ function crossTable(table, pin, onChange, marks = true) {
 }
 
 /* ------------------------------------------------------------------ Sortierbare Tabellen */
-// th[data-sort] sortiert nach den Werten data-s der Zellen (sonst dem Text): erster Klick absteigend, zweiter
-// aufsteigend, dritter wieder die ursprüngliche Reihenfolge
+// th[data-sort] sortiert nach den Werten data-s der Zellen (sonst dem Text): Text erst aufsteigend, Zahlen erst
+// absteigend, zweiter Klick umgekehrt, dritter wieder die ursprüngliche Reihenfolge
 document.addEventListener("click", (e) => {
   const th = e.target.closest("table.sort th[data-sort]");
   if (!th) return;
