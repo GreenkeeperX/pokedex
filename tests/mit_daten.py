@@ -19,7 +19,7 @@ from unittest import mock
 
 from app import abfragen, db, fehler, importer, server, sources, spiele
 from tests import minidb, vertrag
-from tests.basis import HttpMitDaten, MitMiniDatenbank, app_quellen, oberflaeche_js
+from tests.basis import HttpMitDaten, MitMiniDatenbank, app_quellen, im_paket, oberflaeche_js
 
 SPIELE = ("red-blue", "gold-silver", "emerald", "platinum", "black-white", "x-y", "sword-shield", "legends-arceus",
           "scarlet-violet", "the-teal-mask")
@@ -329,7 +329,7 @@ class Welt(MitMiniDatenbank):
         grob = abfragen.item_list({"spiel": "emerald"})
         self.assertIn("keine eigene Item-Liste", grob["hinweis"])
         # ab ITEMS_GENAU Beschreibungen sind es genau die Items des Spiels
-        with mock.patch.object(abfragen.items, "ITEMS_GENAU", 3):            # item_list liest es dort (0.62.0)
+        with im_paket(abfragen, "ITEMS_GENAU", 3):
             for spiel in SPIELE:
                 vg = minidb.SPIEL[spiel]
                 r = abfragen.item_list({"spiel": spiel})
@@ -652,7 +652,7 @@ class ServerMitDaten(HttpMitDaten):
         if kopf.get("Content-Encoding") == "gzip":
             import gzip
             self.assertEqual(json.loads(gzip.decompress(gepackt)), self.json("/api/pokemon/3/attacken?spiel=scarlet-violet"))
-        with mock.patch.object(abfragen, "detail", side_effect=RuntimeError("Probe")):
+        with im_paket(abfragen, "detail", side_effect=RuntimeError("Probe")):
             code, kopf, rumpf = self.get("/api/pokemon/3?spiel=x-y")
         self.assertEqual(code, 500)
         self.assertIn("RuntimeError", json.loads(rumpf)["error"])

@@ -6,15 +6,20 @@
   gebaute Datei, nur lesend) und einer frischen user.db,
 - `HttpMitDaten`: beides zusammen, der Weg der Oberfläche,
 - `oberflaeche_js()`: der Text aller Skripte der Oberfläche in der Reihenfolge von index.html (seit 0.61.0 mehrere Dateien),
-- `app_quellen()`: alle Python-Dateien unter app/, auch in Paketen (seit 0.62.0 `app/abfragen/`), als {Pfad: Text}.
+- `app_quellen()`: alle Python-Dateien unter app/, auch in Paketen (seit 0.62.0 `app/abfragen/`), als {Pfad: Text},
+- `im_paket(paket, name, neu)`: einen Namen eines Pakets für einen Test ersetzen, im Paket und in jedem seiner Module
+  (seit 0.63.0; ein Ersatz nur im Paket erreichte die Funktionen der Module nicht).
 """
+import contextlib
 import http.client
 import json
 import os
 import shutil
+import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from http.server import ThreadingHTTPServer
 
 from app import db, fehler, server, store
@@ -46,6 +51,22 @@ def app_quellen(paket=""):
                 with open(pfad, encoding="utf-8") as f:
                     out[os.path.relpath(pfad, wurzel).replace(os.sep, "/")] = f.read()
     return out
+
+
+@contextlib.contextmanager
+def im_paket(paket, name, neu=mock.DEFAULT, **art):
+    """Wie mock.patch.object(paket, name, neu), aber für ein Paket wie app.abruf: ersetzt den Namen im Paket und in jedem
+    Modul darunter, das dasselbe Objekt unter diesem Namen führt (es definiert oder importiert hat). So sieht jede Funktion
+    des Pakets den Ersatz, wie früher in der einen Datei. Ohne neu entsteht ein MagicMock(**art), derselbe für alle."""
+    alt = getattr(paket, name)
+    if neu is mock.DEFAULT:
+        neu = mock.MagicMock(**art)
+    module = [paket] + [m for n, m in sorted(sys.modules.items()) if n.startswith(paket.__name__ + ".") and m is not None]
+    with contextlib.ExitStack() as stapel:
+        for m in module:
+            if name in vars(m) and vars(m)[name] is alt:
+                stapel.enter_context(mock.patch.object(m, name, neu))
+        yield neu
 
 
 class TempData(unittest.TestCase):

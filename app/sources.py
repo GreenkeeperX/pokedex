@@ -12,11 +12,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.62.0"
+VERSION = "0.63.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.63.0", "19.11.2026", [
+        "Unter der Haube: Der Abgleich ist nach Thema in acht Module geteilt (Grundlage, Bilder, Quellen, Wiki, Seiten, "
+        "Karten, Lauf, Verbindungstest); Verhalten unverändert",
+    ]),
     ("0.62.0", "19.11.2026", [
         "Unter der Haube: Die Abfragen des Servers sind nach Thema in elf Module geteilt (Liste, Attacken, Karten, Fangen, "
         "Detailseite, Aufträge, Items, Teams, Kampf, Raids und eine gemeinsame Grundlage); Antworten unverändert",

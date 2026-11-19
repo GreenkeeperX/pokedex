@@ -17,7 +17,7 @@ brauchen nur die Python-Standardbibliothek; der Selbsttest der Oberfläche zusä
 | `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten; dazu die Skripte der Oberfläche (jede Datei genau einmal in `index.html`, Kennung je Datei) | ja | ja |
 | `Heimnetz` | `sources.blocked_target`: keine Abrufe an private, lokale, reservierte Adressen, auch nicht über Weiterleitung | ja | ja |
 | `Spiele` | Spielprofile: Einträge in Ordnung, dieselben Aussagen wie die Listen bis 0.59.0, Server und Oberfläche fragen das Profil statt der Kennung | ja | ja |
-| `AbfragenPaket` | jeder Name der Module in `app/abfragen/` ist unter `app.abfragen` dasselbe Objekt; Importe im Paket zeigen auf `app` | ja | ja |
+| `Pakete` | jeder Name der Module in `app/abfragen/` und `app/abruf/` ist unter dem Paket dasselbe Objekt; Importe im Paket zeigen auf `app`; Tests ersetzen Namen nur mit `im_paket` | ja | ja |
 | `Oeffentlich` | nichts Privates im Repository (Dateiliste, Muster für Adressen und Zugangsdaten) | ja | ja |
 | `MiniBau` (`tests/mit_daten.py`) | der Importer baut die Mini-Datenbank, Selbstprüfung greift | ja | ja |
 | `Welt` | Abfragen der Oberfläche gegen die Mini-Datenbank (Liste, Detail, Lernlisten, Fundorte, Items, Team, Schaden, Import und Export) | ja | ja |
@@ -49,6 +49,13 @@ der Browser, scheitert der Lauf, statt den Selbsttest still zu überspringen. Lo
   nicht. Ihre Leser haben eigene Tests mit erfundenen Ausschnitten; das Zusammenspiel prüft nur `MitDatenbank` und
   auch das nur, soweit die lokale Datenbank diese Quellen enthält.
 - Der Container (Härtung, Rechte am Datenordner) und die Geschwindigkeit auf dem Server.
+
+## Namen in Paketen ersetzen
+
+`app.abfragen` und `app.abruf` sind Pakete: Jede Funktion liest Namen aus ihrem eigenen Modul. Ein
+`mock.patch.object(abruf, "sleep", …)` ersetzte nur den Namen im Paket, die Funktionen sähen weiter das Original. Tests
+nehmen deshalb `tests.basis.im_paket(paket, name, neu)`; es ersetzt den Namen im Paket und in jedem Modul, das ihn
+definiert oder importiert hat. `Pakete.test_ersatz_im_paket` lässt einen Test scheitern, der es anders versucht.
 
 ## Mini-Datenbank
 

@@ -1,7 +1,7 @@
 """Karten von DittoBase (dittobase.com/<Spiel>/map), zuerst Kristall: die Seite bringt die ganze Welt als Spieldaten mit
 (Blöcke je Karte, Kachelsätze als Bilder, Lage jeder Karte in der Oberwelt) und alle Punkte (Items, versteckte Items,
 Trainer mit Team, feste und geschenkte Pokémon, Türen) und die wilden Pokémon je Karte. Ohne Netz; den Abruf macht
-abruf.py. Das Ergebnis hat dieselbe Form wie eine Karte von Map Genie (mapgenie.parse), damit es durch dieselbe Strecke
+app.abruf. Das Ergebnis hat dieselbe Form wie eine Karte von Map Genie (mapgenie.parse), damit es durch dieselbe Strecke
 läuft; die Kacheln zeichnet render_tiles selbst aus den Kachelsätzen (es gibt dort keine fertigen Kacheln).
 
 Die Daten stehen im React-Server-Datenstrom der Seite (self.__next_f.push). Lage: Pixel der Oberwelt, Blöcke zu 32 Pixeln,

@@ -23,8 +23,8 @@ Seit 0.62.0 ein Paket mit Modulen nach Thema (in der Reihenfolge der Abhängigke
 - kampf: Doppelkampf (Smogon), Werte, Effort Levels und Schadensrechner
 
 Alle Namen von früher sind weiter unter app.abfragen erreichbar (Funktionen, Tabellen, Zwischenspeicher).
-Wer für einen Test einen Wert ersetzt, den eine Funktion des Pakets liest, ersetzt ihn in deren Modul
-(zum Beispiel abfragen.teams._stage), nicht hier.
+Wer für einen Test einen Wert ersetzt, ersetzt ihn mit tests.basis.im_paket hier und in jedem Modul, das ihn
+liest; ein Ersatz nur hier wirkte nicht auf die Funktionen des Pakets.
 """
 # Die Module, die abfragen.py bisher einband, bleiben erreichbar (server.py liest abfragen.team.CRITERIA)
 from .. import altissimo, attacken, db, fehler, importer, mapgenie, showdown, spiele, store, team, typen

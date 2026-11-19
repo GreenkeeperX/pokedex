@@ -2,6 +2,7 @@
 (tests/mit_daten.py, am Ende dieser Datei geladen). Start: python3 -m unittest tests.test_all
 
 Wo was läuft, steht in docs/tests.md: in der CI alles außer der Klasse MitDatenbank (sie braucht eine echte Datenbank)."""
+import contextlib
 import json
 import os
 import re
@@ -15,7 +16,7 @@ from unittest import mock
 
 from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, store, team, typen
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
-from tests.basis import HttpTest, TempData, app_quellen, oberflaeche_js
+from tests.basis import HttpTest, TempData, app_quellen, im_paket, oberflaeche_js
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
 EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
@@ -433,7 +434,7 @@ rect 50 60 70 80 [[Konikoni City]]
         def fake(m, spiel, am):
             calls.append(m["slug"])
             return {"punkte": [{"name": "TM27 Rückkehr", "id": 5}, {"name": "Beere"}]}
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(abfragen, "mg_map", fake), \
+        with tempfile.TemporaryDirectory() as tmp, im_paket(abfragen, "mg_map", fake), \
                 mock.patch.object(server.db, "data_dir", lambda: tmp):
             m = {"slug": "welt", "id": 1, "titel": "Welt"}
             b1 = server._map_body(m, "x-y", "2026-11-12")
@@ -1392,7 +1393,7 @@ class Abgleich(TempData):
         def fake(url, timeout=40, headers=None, raw=False):
             raise sources.FetchError(url, 403)
         log = []
-        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+        with mock.patch.object(sources, "fetch", fake), im_paket(abruf, "sleep", lambda s: None):
             src = abruf._Source("pokeapi", log.append)
             names, sha = abruf.csv_list(src, log.append)
         self.assertEqual(names, list(importer.NEEDED))
@@ -1403,7 +1404,7 @@ class Abgleich(TempData):
         def fake(url, timeout=40, headers=None, raw=False):
             raise sources.FetchError(url, 429)
         log = []
-        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+        with mock.patch.object(sources, "fetch", fake), im_paket(abruf, "sleep", lambda s: None):
             src = abruf._Source("showdown", log.append)
             self.assertIsNone(src.get("https://example.org/a"))
             self.assertIsNone(src.get("https://example.org/b"))
@@ -1418,7 +1419,7 @@ class Abgleich(TempData):
             seen.append(url)
             return {"error": "", "status": 404, "server": "x", "text": "nicht da", "body": b""}
         stand, proben = {}, {}
-        with mock.patch.object(sources, "request", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+        with mock.patch.object(sources, "request", fake), im_paket(abruf, "sleep", lambda s: None):
             lines = abruf.diagnose(proben, stand)
         self.assertEqual(stand["fertig"], stand["gesamt"])
         self.assertEqual(stand["laeuft"], [])
@@ -1435,8 +1436,8 @@ class Abgleich(TempData):
                 stop.wait(30)                               # hängt, bis der Test fertig ist
             return {"error": "", "status": 404, "server": "x", "text": "", "body": b""}
         try:
-            with mock.patch.object(sources, "request", fake), mock.patch.object(abruf, "sleep", lambda s: None), \
-                 mock.patch.object(abruf, "DIAG_HANG", 0.3):
+            with mock.patch.object(sources, "request", fake), im_paket(abruf, "sleep", lambda s: None), \
+                 im_paket(abruf, "DIAG_HANG", 0.3):
                 lines = abruf.diagnose({}, {})
         finally:
             stop.set()
@@ -1469,7 +1470,7 @@ class Abgleich(TempData):
     def test_lauf_ohne_quellen_behaelt_alte_daten(self):
         def fake(url, timeout=40, headers=None, raw=False):
             raise sources.FetchError(url, 404)
-        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+        with mock.patch.object(sources, "fetch", fake), im_paket(abruf, "sleep", lambda s: None):
             self.assertTrue(abruf.run())
         st = store.load_json("sync.json", {})
         self.assertFalse(st["ok"])
@@ -1733,7 +1734,7 @@ class Server(TempData):
         def deny(url, **kw):
             calls.append(url)
             raise abruf.sources.FetchError("verboten", 403)
-        with mock.patch.object(abruf.sources, "fetch", deny), mock.patch.object(abruf, "MG_TILE_PAUSE", 0):
+        with mock.patch.object(abruf.sources, "fetch", deny), im_paket(abruf, "MG_TILE_PAUSE", 0):
             self.assertIsNone(abruf.mg_tile("scarlet-violet", "erfunden", 10, 3, 3, pause=0))
             self.assertEqual(abruf.mg_status()["ruht"], "")
             for x in range(4, 4 + abruf.MG_403_MAX):
@@ -1764,7 +1765,7 @@ class Server(TempData):
             {"slug": "erfunden", "titel": "Erfunden", "kacheln": "spiel/erfunden/{z}/{x}/{y}.png", "min_zoom": 9, "max_zoom": 10,
              "bounds": [-1.4, 0, 0, 1.4], "orte": []}]})
         asked = []
-        with mock.patch.object(abruf, "mg_tile", lambda s, k, z, x, y, **kw: asked.append(z)), mock.patch.object(abruf, "sleep", lambda t: None):
+        with im_paket(abruf, "mg_tile", lambda s, k, z, x, y, **kw: asked.append(z)), im_paket(abruf, "sleep", lambda t: None):
             abruf.mg_stock()
         self.assertEqual(max(asked), 10)
         self.assertTrue(abruf.mg_status()["vorrat"]["scarlet-violet/erfunden"]["ganz"])
@@ -2276,7 +2277,7 @@ rect 0 0 9 9 [[Außerhalb]]"""
         self.assertEqual((ironmon.tile_range(m, 3), ironmon.tile_range(m, 1), ironmon.tile_range(m, 4)), ((8, 4), (2, 1), None))
         self.assertEqual(ironmon.tile(m, 3, 7, 3), ("im/johto/3/7-3.png", None))
         self.assertIsNone(ironmon.tile(m, 3, 8, 0))
-        with mock.patch.object(abruf, "_mg_map", lambda s, k: m if k == "im-johto" else None):
+        with im_paket(abruf, "_mg_map", lambda s, k: m if k == "im-johto" else None):
             png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + bytes(20)).decode()
             self.assertEqual(abruf.tile_upload({"spiel": "x", "karte": "im-johto", "kacheln": [[3, 0, 0, png]]}), {"gespeichert": 1})
             f = abruf.mg_dir("kacheln", "im", "johto", "3", "0-0.png")
@@ -2380,9 +2381,7 @@ rect 0 0 9 9 [[Außerhalb]]"""
         D = type("D", (), {})()
         D.forms = {1: {"art": 1}, 2: {"art": 2}, 3: {"art": 3}, 10: {"art": 10}, 11: {"art": 11}}
         stages = {1: 0, 2: 1, 3: 2, 10: 0, 11: 1}
-        old = abfragen.teams._stage                                    # _furthest liest es in seinem Modul (0.62.0)
-        abfragen.teams._stage = lambda D, arten: {a: stages[a] for a in arten}
-        try:
+        with im_paket(abfragen, "_stage", lambda D, arten: {a: stages[a] for a in arten}):
             pot = [{"id": 1, "plus": 9.0, "wird": {"id": 3}}, {"id": 2, "plus": 8.0, "wird": {"id": 3}}, {"id": 10, "plus": 5.0, "wird": {"id": 11}}]
             got = abfragen._furthest(pot, D, set())
             self.assertEqual(sorted(r["id"] for r in got), [2, 10])       # je Endstufe nur die weiteste gefangene Stufe
@@ -2390,8 +2389,6 @@ rect 0 0 9 9 [[Außerhalb]]"""
             # gleiche Stufe: das Mitglied im Team geht dem gefangenen vor
             pot2 = [{"id": 2, "plus": 9.0, "wird": {"id": 3}}, {"id": 2, "plus": 4.0, "wird": {"id": 3}, "im_team": True}]
             self.assertTrue(abfragen._furthest(pot2, D, set())[0].get("im_team"))
-        finally:
-            abfragen.teams._stage = old
 
     def test_uebertragen(self):
         db.migrate()
@@ -2468,7 +2465,7 @@ class Betrieb(TempData):
         def fake(url, timeout=40, headers=None, raw=False):
             raise sources.FetchError(url, 429)
         log = []
-        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+        with mock.patch.object(sources, "fetch", fake), im_paket(abruf, "sleep", lambda s: None):
             src = abruf._Source("smogon", log.append, pause=0)
             self.assertIsNone(src.get("https://beispiel.invalid/a"))
             self.assertIsNone(src.get("https://beispiel.invalid/b"))
@@ -2488,7 +2485,7 @@ class Betrieb(TempData):
         abruf.rest_set("neu", hours=1)
         self.assertEqual(sorted(store.load_json(abruf.REST_FILE, {})), ["neu", "server:beispiel.invalid", "smogon"])
         # große Item-Bilder (Serebii) lassen die Extras von GitHub nicht mitruhen
-        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+        with mock.patch.object(sources, "fetch", fake), im_paket(abruf, "sleep", lambda s: None):
             abruf._Source("extras", log.append, pause=0, ruhe="itemhq").get("https://beispiel.invalid/c")
         self.assertTrue(abruf.rest_until("itemhq"))
         self.assertEqual(abruf.rest_until("extras"), "")
@@ -2501,7 +2498,7 @@ class Betrieb(TempData):
             seen.append(url)
             return {"error": "", "status": 404, "server": "x", "text": "nicht da", "body": b""}
         abruf._HOST_LAST.pop("www.serebii.net", None)
-        with mock.patch.object(sources, "request", fake), mock.patch.object(abruf, "sleep", lambda s: None):
+        with mock.patch.object(sources, "request", fake), im_paket(abruf, "sleep", lambda s: None):
             lines = abruf.diagnose({}, {})
         self.assertTrue(seen and not any(host in u for u in seen))
         ruht = [x for x in lines if "nicht gefragt" in x]
@@ -2514,16 +2511,12 @@ class Betrieb(TempData):
     def _lauf(self, *patches):
         def fake(url, timeout=40, headers=None, raw=False):
             raise sources.FetchError(url, 404)
-        with mock.patch.object(sources, "fetch", fake), mock.patch.object(abruf, "sleep", lambda s: None), \
-                mock.patch.object(abruf, "start_stock", lambda: None):
-            ps = [mock.patch.object(*x) for x in patches]
-            for x in ps:
-                x.start()
-            try:
+        with mock.patch.object(sources, "fetch", fake), im_paket(abruf, "sleep", lambda s: None), \
+                im_paket(abruf, "start_stock", lambda: None):
+            with contextlib.ExitStack() as stapel:
+                for ziel, name, neu in patches:
+                    stapel.enter_context(im_paket(ziel, name, neu))              # auch in den Modulen des Pakets
                 return abruf.run()
-            finally:
-                for x in ps:
-                    x.stop()
 
     def test_stand_nach_jeder_quelle(self):
         snaps = []
@@ -2577,8 +2570,9 @@ class Betrieb(TempData):
         während die erste Quelle noch antwortet. Der Stand auf der Platte reicht, um den Lauf fortzusetzen."""
         import subprocess
         import sys
-        code = ("import time\nfrom app import abruf, sources\n"
-                "sources.fetch = lambda url, **kw: time.sleep(60)\nabruf.start_stock = lambda: None\nabruf.run()\n")
+        code = ("import time\nfrom app import abruf, sources\nfrom tests.basis import im_paket\n"
+                "sources.fetch = lambda url, **kw: time.sleep(60)\n"
+                "with im_paket(abruf, 'start_stock', lambda: None):\n    abruf.run()\n")
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         child = subprocess.Popen([sys.executable, "-c", code], cwd=root, env=dict(os.environ, DATA_DIR=self.dir),
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -2739,7 +2733,7 @@ class Fehler(TempData):
 
         def fetch(url, **kw):
             raise sources.FetchError(url, 404 if url.endswith("/fehlt") else 429)
-        with mock.patch.object(sources, "fetch", fetch), mock.patch.object(abruf, "sleep", lambda s: None):
+        with mock.patch.object(sources, "fetch", fetch), im_paket(abruf, "sleep", lambda s: None):
             src = abruf._Source("serebii", zeilen.append, pause=0)
             self.assertIsNone(src.get("https://www.beispiel.invalid/fehlt"))
             self.assertIsNone(src.get("https://www.beispiel.invalid/fehlt"))
@@ -2754,10 +2748,10 @@ class Fehler(TempData):
         """Jedes „except Exception“ meldet an das Fehlerregister oder steht hier mit Grund; ebenso „.catch(() => …)“ in
         der Oberfläche. Eine neue stille Stelle lässt den Test scheitern."""
         erlaubt = {
-            ("abruf.py", "out[k] = e"): "der Aufrufer (_run) meldet",
-            ("abruf.py", 'lines[slot] = f"{head}, nicht auswertbar ({type(e).__name__}: {e})"'): "steht im Ergebnis des Verbindungstests",
-            ("abruf.py", 'lines[slot] = f"{name}: Fehler im Test ({type(e).__name__}: {e})"'): "steht im Ergebnis des Verbindungstests",
-            ("abruf.py", 'lines.append(f"{label}: nicht in der Datenbank ({e})")'): "steht im Ergebnis des Verbindungstests",
+            ("abruf/grundlage.py", "out[k] = e"): "der Aufrufer (_run) meldet",
+            ("abruf/verbindungstest.py", 'lines[slot] = f"{head}, nicht auswertbar ({type(e).__name__}: {e})"'): "steht im Ergebnis des Verbindungstests",
+            ("abruf/verbindungstest.py", 'lines[slot] = f"{name}: Fehler im Test ({type(e).__name__}: {e})"'): "steht im Ergebnis des Verbindungstests",
+            ("abruf/verbindungstest.py", 'lines.append(f"{label}: nicht in der Datenbank ({e})")'): "steht im Ergebnis des Verbindungstests",
             ("server.py", "self._fail(path, e)"): "_fail meldet",
             ("sources.py", "if whole:"): "unvollständige Antwort (Zeit abgelaufen): der Anfang wird ausgepackt",
             ("sources.py", 'out["error"] = str(e)[:160]'): "der Fehler geht an den Aufrufer zurück",
@@ -3023,7 +3017,7 @@ class Http(HttpTest):
         # ein Fehler, der die Anfrage abbricht: 500 mit Art, gezählt unter der Adresse ohne Nummern
         def kaputt(nr, q):
             raise KeyError("sterne")
-        with mock.patch.object(abfragen, "detail", kaputt):
+        with im_paket(abfragen, "detail", kaputt):
             code, h, body = self.get("/api/pokemon/25")
             self.get("/api/pokemon/133")
         self.assertEqual(code, 500)
@@ -3031,7 +3025,7 @@ class Http(HttpTest):
         def alt(q):
             import sqlite3
             raise sqlite3.OperationalError("no such table: attacke")
-        with mock.patch.object(abfragen, "move_list", alt):
+        with im_paket(abfragen, "move_list", alt):
             self.assertEqual(self.get("/api/attacken")[0], 500)
         self.assertIn("KeyError", json.loads(body)["error"])
         code, h, body = self.get("/api/fehler")
@@ -3051,7 +3045,7 @@ class Http(HttpTest):
         def karten(spiel):
             rufe.append(spiel)
             return {"spiel": spiel, "am": "2026-11-16", "karten": []} if spiel in ("emerald", "platinum") else None
-        with mock.patch.object(abruf, "mg_maps", karten), mock.patch.object(server, "_prewarm", lambda d: rufe.append(("bereit", d["spiel"]))):
+        with im_paket(abruf, "mg_maps", karten), mock.patch.object(server, "_prewarm", lambda d: rufe.append(("bereit", d["spiel"]))):
             self.assertEqual(server._warm_once(), "")              # ohne Bedarf wird nichts vorbereitet
             self.assertEqual(rufe, [])
             def warte(n):                                          # der Server merkt den Bedarf nach dem Senden der Antwort
@@ -3512,44 +3506,67 @@ class Rechnen(unittest.TestCase):
         self.assertEqual([r["wert"] for r in v["rows"]][:4], [320, 266, 253, 239])
 
 
-class AbfragenPaket(unittest.TestCase):
-    """0.62.0: abfragen.py ist ein Paket (app/abfragen/). Jeder Name eines Moduls ist weiter unter app.abfragen erreichbar,
-    und zwar dasselbe Objekt; Importe im Paket zeigen auf app, nicht auf das Paket selbst."""
+class Pakete(unittest.TestCase):
+    """Seit 0.62.0 ist abfragen.py ein Paket (app/abfragen/), seit 0.63.0 auch abruf.py (app/abruf/). Jeder Name eines
+    Moduls ist weiter unter dem Paket erreichbar, und zwar dasselbe Objekt; Importe im Paket zeigen auf app, nicht auf das
+    Paket selbst; Tests ersetzen Namen mit tests.basis.im_paket."""
+    PAKETE = {"abfragen": abfragen, "abruf": abruf}
 
-    def test_alle_namen_unter_abfragen(self):
+    def test_alle_namen_im_paket(self):
         import ast
         import importlib
-        fehlt, anders = [], []
-        for pfad, text in app_quellen("abfragen").items():
-            modul = pfad[:-3].replace("/", ".")
-            if modul.endswith("__init__"):
-                continue
-            m = importlib.import_module("app." + modul)
-            for st in ast.parse(text).body:
-                if isinstance(st, (ast.FunctionDef, ast.ClassDef)):
-                    namen = [st.name]
-                elif isinstance(st, ast.Assign):
-                    namen = [n.id for t in st.targets for n in ast.walk(t) if isinstance(n, ast.Name)]
-                else:
+        for name, paket in self.PAKETE.items():
+            fehlt, anders = [], []
+            for pfad, text in app_quellen(name).items():
+                modul = pfad[:-3].replace("/", ".")
+                if modul.endswith("__init__"):
                     continue
-                for n in namen:
-                    if not hasattr(abfragen, n):
-                        fehlt.append(f"{modul}.{n}")
-                    elif getattr(abfragen, n) is not getattr(m, n):
-                        anders.append(f"{modul}.{n}")
-        self.assertEqual((fehlt, anders), ([], []))
+                m = importlib.import_module("app." + modul)
+                for st in ast.parse(text).body:
+                    if isinstance(st, (ast.FunctionDef, ast.ClassDef)):
+                        namen = [st.name]
+                    elif isinstance(st, ast.Assign):
+                        namen = [n.id for t in st.targets for n in ast.walk(t) if isinstance(n, ast.Name)]
+                    else:
+                        continue
+                    for n in namen:
+                        if not hasattr(paket, n):
+                            fehlt.append(f"{modul}.{n}")
+                        elif getattr(paket, n) is not getattr(m, n):
+                            anders.append(f"{modul}.{n}")
+            self.assertEqual((fehlt, anders), ([], []), name)
         self.assertGreater(len(dir(abfragen)), 190)
+        self.assertGreater(len(dir(abruf)), 190)
         self.assertIs(abfragen.team, team)                                    # server.py: abfragen.team.CRITERIA
+        self.assertIs(abruf.sources, sources)
 
     def test_importe_im_paket(self):
-        """„from . import x“ hieße im Paket app.abfragen.x; gemeint ist app.x. Nur Module des Pakets dürfen so heißen."""
-        eigene = {p.split("/")[-1][:-3] for p in app_quellen("abfragen")}
+        """„from . import x“ hieße im Paket app.<paket>.x; gemeint ist app.x. Nur Module des Pakets dürfen so heißen."""
         falsch = []
-        for pfad, text in app_quellen("abfragen").items():
-            for z in text.split("\n"):
-                m = re.match(r"\s*from \. import (.+)", z)
-                if m and not {x.strip() for x in m.group(1).split(",")} <= eigene:
-                    falsch.append(f"{pfad}: {z.strip()}")
+        for name in self.PAKETE:
+            eigene = {p.split("/")[-1][:-3] for p in app_quellen(name)}
+            for pfad, text in app_quellen(name).items():
+                for z in text.split("\n"):
+                    m = re.match(r"\s*from \. import (.+)", z)
+                    if m and not {x.strip() for x in m.group(1).split(",")} <= eigene:
+                        falsch.append(f"{pfad}: {z.strip()}")
+        self.assertEqual(falsch, [])
+
+    def test_ersatz_im_paket(self):
+        """Ein Ersatz nur im Paket erreicht die Funktionen der Module nicht. Deshalb ersetzen Tests mit im_paket."""
+        with im_paket(abruf, "sleep", lambda s: None) as neu:
+            self.assertIs(abruf.sleep, neu)
+            self.assertIs(abruf.karten.sleep, neu)                         # importiert
+            self.assertIs(abruf.grundlage.sleep, neu)                      # definiert
+        self.assertIs(abruf.karten.sleep, time.sleep)
+        selbst = os.path.join(os.path.dirname(os.path.abspath(__file__)))
+        falsch = []
+        for datei in sorted(os.listdir(selbst)):
+            if datei.endswith(".py"):
+                with open(os.path.join(selbst, datei), encoding="utf-8") as f:
+                    for i, z in enumerate(f, 1):
+                        if re.search(r"patch\.object\((?:(?:abruf|abfragen), |\*)|\b(?:abruf|abfragen)\.[A-Za-z_]+ = ", z):
+                            falsch.append(f"{datei}:{i}")
         self.assertEqual(falsch, [])
 
 

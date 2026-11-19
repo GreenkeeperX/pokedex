@@ -1,5 +1,5 @@
 """Karten von IGN (ign.com/maps) für Schwert/Schild und Let’s Go: Karte, Kacheln und die Punkte, die die Seite mitbringt
-(in __NEXT_DATA__). Ohne Netz; den Abruf macht abruf.py. Das Ergebnis hat dieselbe Form wie eine Karte von Map Genie
+(in __NEXT_DATA__). Ohne Netz; den Abruf macht app.abruf. Das Ergebnis hat dieselbe Form wie eine Karte von Map Genie
 (mapgenie.parse), damit es durch dieselbe Strecke läuft.
 
 IGN legt die Karte in ein Einheitsquadrat (Breite width, Höhe height ≤ 1; Punkte mit lat ∈ [−height, 0], lng ∈ [0, width])

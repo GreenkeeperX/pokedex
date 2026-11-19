@@ -1,7 +1,7 @@
 # Abrufe
 
 Alle Abrufe laufen über `app/sources.py`: ehrliche Kennung `pokedex/<Version> (privates Nachschlage-Tool)`, nur
-öffentliche Ziele, Grenzen für Größe und Zeit. Der Abgleich in `app/abruf.py` hält je Server eine Pause ein
+öffentliche Ziele, Grenzen für Größe und Zeit. Der Abgleich in `app/abruf/` hält je Server eine Pause ein
 (`PAUSE`, Sprites 0,2 s) und versucht es nach einem Netzfehler einmal erneut. Die Pause gilt je Server für alle Quellen
 zusammen (`_HOST_LAST`, eine Sperre je Server): Quellen ohne Abhängigkeit laufen gleichzeitig (`_parallel`), Abrufe am
 selben Server aber nie. Antwortet eine Quelle mit 403, 429

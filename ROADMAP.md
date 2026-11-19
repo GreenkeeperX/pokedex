@@ -1,5 +1,26 @@
 # Roadmap
 
+## 0.63.0 (19.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 4b, dritte Etappe von P-9: `app/abruf.py` (3110 Zeilen) ist ein Paket
+`app/abruf/` mit acht Modulen: `grundlage` (Pausen und Ruhezeiten, Stand des Laufs, Einstellungen, Zeitplan, `_Source`,
+Adressen der Quellen), `medien` (Bilder, Platz), `quellen` (PKHeX, Spawnpunkte, Altissimo, Begleiter), `wiki`, `seiten`
+(Serebii, BisaFans, Bulbapedia), `karten`, `lauf` (`run`, Bau der Datenbank, Zeitplan im Hintergrund), `verbindungstest`.
+
+- **Mechanisch**, mit demselben Werkzeug wie 0.62.0: Alle 180 Anweisungen der alten Datei stehen genau einmal im Paket.
+  Wegen der tieferen Lage geändert: `EXTRA_DIR` (`"..", ".."`) und vier Importe in Funktionen (`from .. import`). Die
+  Adressen von PKHeX und den Spawnpunkten stehen jetzt in `grundlage` statt vor dem Verbindungstest, damit die Module
+  ohne Kreis voneinander abhängen.
+- **Schnittstelle**: Alle Namen von früher sind unter `app.abruf` erreichbar und dasselbe Objekt (`STATE`, Ruhezeiten,
+  Sperren), ebenso die eingebundenen Module (`abruf.sources`, `abruf.store`). Server und Abfragen sind unverändert.
+- **Tests**: Ein Ersatz nur im Paket (`mock.patch.object(abruf, "sleep", …)`) erreichte die Funktionen der Module nicht
+  mehr; der erste Lauf der Tests zeigte das (`Betrieb.test_stand_nach_jeder_quelle`). Neu `tests.basis.im_paket`: ersetzt
+  einen Namen im Paket und in jedem Modul, das ihn führt, also wie früher in der einen Datei. Alle Stellen (auch die
+  für `app.abfragen` aus 0.62.0) nutzen es; `Pakete.test_ersatz_im_paket` lässt einen Test scheitern, der es anders
+  versucht. Die Klasse `AbfragenPaket` heißt jetzt `Pakete` und prüft beide Pakete.
+
+Keine Änderung an `user.db`, an Antworten des Servers oder an `importer.VERSION`.
+
 ## 0.62.0 (19.11.2026)
 
 Arbeitsauftrag vom 13.11.2026, Abschnitt 4b, zweite Etappe von P-9: `app/abfragen.py` (3478 Zeilen) ist ein Paket
