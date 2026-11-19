@@ -2,7 +2,7 @@
 
 Reines JavaScript ohne Build (`app/static/js/`). Die Ansicht steht in der Adresse: `#pokemon`, `#pokemon/<id>`
 (`#pokemon/<id>/<platz>` für einen Team-Platz), `#team`, `#attacken`, `#typen`, `#items`, `#karte` (mit
-`#karte/mg/<Karte>`, `#karte/gebiete/<Ort>`), `#fehlt`, `#fortschritt`, `#jagd`, `#sammeln`, `#vergleich/<A>/<B>`, `#initiative`, `#kampf`,
+`#karte/mg/<Karte>`, `#karte/gebiete/<Ort>`), `#fehlt`, `#fortschritt`, `#jagd`, `#tausch`, `#sammeln`, `#vergleich/<A>/<B>`, `#initiative`, `#kampf`,
 `#raids`, `#auftraege`, `#einstellungen`. Gewähltes Spiel, Filter, aufgeklappte Kästen und das aktuelle Team merkt sich
 der Browser (`store`, `localStorage`); gespeicherte Teams und alle eigenen Daten liegen auf dem Server (user.db).
 
@@ -20,7 +20,7 @@ je Reiter zum Nachschlagen.
 | `liste.js` | Pokémon-Liste, Team-Leiste (`dock`), Speichern des Teams, Showdown-Export |
 | `detail.js` | Detailseite (Werte, Effort Levels, Fangchance, Entwicklung, Attacken), Raids, Aufträge, Forschung |
 | `team.js` | Team, Gegner und Trainer, Attacken |
-| `karte.js` | Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Was fehlt mir noch, Gebiete |
+| `karte.js` | Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch, Gebiete |
 | `items.js` | Items und Typtabelle |
 | `kampf.js` | Vergleich, Initiative-Liste, Kampf (Champions), Schadensrechner |
 | `einstellungen.js` | Einstellungen, Abgleich, Sicherung, Seite untersuchen, Verbindungstest |
@@ -283,7 +283,11 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
   (`gebiet:<Spiel>`), Filter `gebietFehlend`.
 - Auswahl mit Bildern (`.pick`): Knopf, darunter Suche und Liste aus echten Links; Enter nimmt den ersten Treffer.
 
-### Fortschritt, Shiny-Jagd, Was fehlt mir noch und Sammelobjekte
+### Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch und Sammelobjekte
+
+- `tradeView` (`#tausch`, `/api/tausch?spiel=…&edition=…`): Edition wie in „Was fehlt mir noch“ (`edition:<Spiel>`),
+  links „Suche“ mit den Gruppen als aufklappbare Kästen (`details.sub`, „ohne Weg“ zu), rechts „Biete“ und die Liste
+  zum Kopieren (`text` vom Server, Knopf mit `copyText`). Kacheln `.tk` (grüner Rahmen: gefangen oder Vorstufe da).
 
 - `huntView` (`#jagd`, `/api/jagd?spiel=…`): Suche für eine neue Jagd (`autocomplete`), darunter je laufende Jagd eine
   Karte (`huntCard`) mit Methode, Optionen und Schillerpin (nur, wo das Spiel einen hat), großer Taste (`.jplus`), Taste

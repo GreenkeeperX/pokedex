@@ -884,6 +884,9 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/fortschritt":
                 d = abfragen.fortschritt(q)
                 self._send(200 if d else 404, d or {"error": "keine Spieldaten"})
+            elif path == "/api/tausch":
+                d = abfragen.tauschliste(q)
+                self._send(200 if d else 404, d or {"error": "keine Spieldaten"})
             elif path == "/api/jagd":
                 self._send(200, jagd.ansicht(q))
             elif path == "/api/fehlt":

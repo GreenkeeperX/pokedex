@@ -1,4 +1,4 @@
-/* Pokédex-Oberfläche, Teil 6 von 10: Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Was fehlt mir noch, Gebiete.
+/* Pokédex-Oberfläche, Teil 6 von 10: Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch, Gebiete.
    Die Teile lädt index.html der Reihe nach; sie teilen sich die globalen Namen (docs/oberflaeche.md). */
 "use strict";
 /* ------------------------------------------------------------------ Karte (Legenden: Arceus)
@@ -621,7 +621,7 @@ async function progressView() {
   const fett = (x) => x.kennung === S.game ? `<b>${esc(x.name)}</b>` : esc(x.name);
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Fortschritt</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <span class="hint grow">${d.gefangen} von ${d.arten} Arten in ${esc(d.name)} gefangen (${anteil(d.gefangen, d.arten)})</span>
-      <a class="btn small" href="#fehlt">Was fehlt mir noch?</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
+      <a class="btn small" href="#fehlt">Was fehlt mir noch?</a><a class="btn small" href="#tausch">Tauschliste</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
     <div class="cols"><div><h3>Nach Generation</h3><table class="rows prog">${kopf("Generation")}${d.generationen.map((x) => zeile({...x, label: `Generation ${x.gen}`}, `#fehlt/gen/${x.gen}`)).join("")}</table></div>
       <div><h3>Nach Typ</h3><table class="rows prog">${kopf("Typ")}${d.typen.map((x) => zeile({...x, label: esc(x.name)}, `#fehlt/typ/${x.id}`)).join("")}</table></div></div>
     <h3>Alle Spiele</h3><div class="scroll"><table class="rows prog">${kopf("Spiel")}${d.spiele.map((x) => zeile({...x, label: fett(x)}, null,
@@ -684,7 +684,7 @@ async function huntView(neu, form) {
       die mit so vielen Begegnungen schon eins gefunden hätten. Leertaste oder + zählt die oberste Jagd, − nimmt eine zurück.
       Quellen: ${d.quellen.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(n)} ↗</a>`).join(", ")}.</p></div>
     <div id="jagden">${d.jagden.map(huntCard).join("") || (d.methoden ? `<p class="hint">Noch keine laufende Jagd in ${esc(gameName())}.</p>` : "")}</div>
-    ${d.gefunden.length ? `<div class="box"><h3>Gefunden</h3><table class="rows"><tbody>${d.gefunden.map((j) => `<tr data-jid="${j.id}">
+    ${d.gefunden.length ? `<div class="box"><h3>Gefunden</h3><table class="rows jfund"><tbody>${d.gefunden.map((j) => `<tr data-jid="${j.id}">
       <td>${img(j.form, "sm")} <a href="#pokemon/${j.form}">${esc(j.name)}</a></td><td class="hint">${esc(j.methode_name)}</td>
       <td class="num">${j.zaehler.toLocaleString("de-DE")} Begegnungen</td><td class="hint nw">${dt(j.start)} bis ${dt(j.gefunden)}</td><td class="hint">${esc(j.notiz || "")}</td>
       <td class="nw"><button class="small" data-jact="weiter" data-tip="Jagd wieder aufnehmen (die Marke schillernd bleibt)">Weiter</button>
@@ -737,6 +737,32 @@ document.addEventListener("keydown", (e) => {
   if (e.key === " " || e.key === "+") { e.preventDefault(); huntCount(top, 1); }
   else if (e.key === "-") { e.preventDefault(); huntCount(top, -1); }
 });
+/* 0.71.0: Tauschliste (/api/tausch): was nur ein Tauschpartner geben kann (andere Edition, Tausch-Entwicklung, ohne Weg in
+   den Daten) und was du bieten kannst; die Liste zum Kopieren baut der Server (text). Edition wie in „Was fehlt mir noch“ */
+async function tradeView() {
+  const rid = RID, ek = "edition:" + S.game;
+  let ed = store.get(ek, "");
+  const d = await api("/api/tausch?" + qs({spiel: S.game, edition: ed}));
+  if (rid !== RID) return;
+  const kachel = (x) => `<a class="tk${x.hast ? " hast" : ""}" href="#pokemon/${x.id}" data-hc="${x.id}" data-tip="${esc(x.text)}">${img(x.id, "sm")}<span><span class="hint">#${esc(x.dexk || "")}${x.nr}</span> ${esc(x.name)}${x.hast ? ` <b class="fok">${x.text.startsWith("nur in") ? "gefangen" : "Vorstufe da"}</b>` : ""}</span></a>`;
+  const block = (titel, rows, tip, zu) => rows.length ? `<details class="sub"${zu ? "" : " open"}><summary>${esc(titel)} <span class="hint">${rows.length}</span></summary>
+      ${tip ? `<p class="hint">${esc(tip)}</p>` : ""}<div class="tks">${rows.map(kachel).join("")}</div></details>` : "";
+  const TIP = {edition: "Fehlt dir und gibt es wild nur in der anderen Edition; auch nicht über eine Vorstufe oder ein Ei aus deiner Edition.",
+    tausch: "Entwickelt sich nur durch Tausch: Vorstufe hinschicken und zurücktauschen lassen.",
+    unklar: "Kein Fundort und keine Entwicklung in den Daten. Oft hilft ein Tausch aus einem anderen Spiel, sicher ist es nicht; steht deshalb nicht in der Liste zum Kopieren."};
+  main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Tauschliste</h2><span class="hint">Spiel</span><select class="gamesel"></select>
+      ${d.editionen.length ? `<select id="ted" data-tip="Deine Edition"><option value="">Edition wählen</option>${d.editionen.map((e) => `<option${e === d.edition ? " selected" : ""}>${esc(e)}</option>`).join("")}</select>` : ""}
+      <span class="grow"></span><a class="btn small" href="#fehlt">Was fehlt mir noch?</a><a class="btn small" href="#fortschritt">Fortschritt</a></div>
+    ${d.hinweis ? `<div class="note info">${esc(d.hinweis)}</div>` : ""}
+    <p class="hint">Aus „Was fehlt mir noch“: dieselben Arten und Wege, gefangen zählt je Art.</p></div>
+    ${d.gruppen.length ? `<div class="cols"><div class="box"><h3>Suche</h3>${d.gruppen.map((g) => block(g.titel, g.rows, TIP[g.id], g.id === "unklar")).join("") || `<p class="hint">Nichts.</p>`}</div>
+      <div class="box"><h3>Biete${d.edition ? ` (nur in ${esc(d.edition)})` : ""}</h3>${d.biete.length ? `<div class="tks">${d.biete.map(kachel).join("")}</div>` : `<p class="hint">Nichts erkannt.</p>`}
+        <h3>Zum Kopieren</h3><textarea id="ttext" rows="12" readonly style="width:100%">${esc(d.text)}</textarea>
+        <div class="bar"><button id="tcopy" class="primary" data-tip="Die Liste in die Zwischenablage, etwa für einen Tauschpartner">Kopieren</button></div></div></div>` : ""}`;
+  header();
+  $("#ted")?.addEventListener("change", (e) => { store.set(ek, e.target.value); tradeView(); });
+  $("#tcopy")?.addEventListener("click", (e) => copyText(d.text, e.target));
+}
 async function missingView(nach, wert) {
   const rid = RID, ek = "edition:" + S.game;
   // 0.69.0: aus dem Fortschritt nur eine Generation oder einen Typ (#fehlt/gen/3, #fehlt/typ/10)
@@ -748,7 +774,7 @@ async function missingView(nach, wert) {
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Was fehlt mir noch?</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <span id="fed"></span><input id="fq" type="search" placeholder="Pokémon oder Ort" style="width:200px"><span class="hint grow" id="fcnt"></span>
       ${nur ? `<a class="btn small on" href="#fehlt" data-tip="Wieder alle fehlenden zeigen">nur ${esc(nur.text)} ×</a>` : ""}
-      <a class="btn small" href="#fortschritt" data-tip="Wie viel du je Spiel, Generation und Typ schon hast">Fortschritt</a><a class="btn small" href="#sammeln">Sammelobjekte</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
+      <a class="btn small" href="#tausch" data-tip="Was du nur über einen Tauschpartner bekommst, und was du bieten kannst, als Liste zum Kopieren">Tauschliste</a><a class="btn small" href="#fortschritt" data-tip="Wie viel du je Spiel, Generation und Typ schon hast">Fortschritt</a><a class="btn small" href="#sammeln">Sammelobjekte</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
     <div class="bar"><span class="seg" id="fseg"></span></div><div id="fbody"></div>
     <p class="hint">Gezählt wird je Art: eine gefangene Form (Pokéball) reicht. Wege aus den Fundorten des Spiels (Spieldaten oder PokéAPI), den Entwicklungen und,
       wo es Zucht gibt, den Eiern einer Weiterentwicklung. Den Pokéball auf einer Karte kannst du gleich hier setzen.</p></div>`;

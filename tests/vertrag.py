@@ -111,6 +111,7 @@ AUFRUFE = {
     "favoriten": ("/api/favoriten?spiel=x-y", None),
     "gefangen": ("/api/gefangen?spiel=emerald", None),
     "kampftagebuch": ("/api/kampftagebuch?spiel=scarlet-violet", None),
+    "tausch": ("/api/tausch?spiel=x-y&edition=X", None),
     "jagd": ("/api/jagd?spiel=scarlet-violet", None),
     "jagd ohne Quoten": ("/api/jagd?spiel=red-blue", None),
     "jagd zählen": ("/api/jagd/zaehlen", {"id": 1, "plus": 31}),
