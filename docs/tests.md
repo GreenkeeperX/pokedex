@@ -17,6 +17,7 @@ brauchen nur die Python-Standardbibliothek; der Selbsttest der Oberfläche zusä
 | `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten; dazu die Skripte der Oberfläche (jede Datei genau einmal in `index.html`, Kennung je Datei) | ja | ja |
 | `Heimnetz` | `sources.blocked_target`: keine Abrufe an private, lokale, reservierte Adressen, auch nicht über Weiterleitung | ja | ja |
 | `Spiele` | Spielprofile: Einträge in Ordnung, dieselben Aussagen wie die Listen bis 0.59.0, Server und Oberfläche fragen das Profil statt der Kennung | ja | ja |
+| `AbfragenPaket` | jeder Name der Module in `app/abfragen/` ist unter `app.abfragen` dasselbe Objekt; Importe im Paket zeigen auf `app` | ja | ja |
 | `Oeffentlich` | nichts Privates im Repository (Dateiliste, Muster für Adressen und Zugangsdaten) | ja | ja |
 | `MiniBau` (`tests/mit_daten.py`) | der Importer baut die Mini-Datenbank, Selbstprüfung greift | ja | ja |
 | `Welt` | Abfragen der Oberfläche gegen die Mini-Datenbank (Liste, Detail, Lernlisten, Fundorte, Items, Team, Schaden, Import und Export) | ja | ja |

@@ -1,5 +1,5 @@
 """Typwirkung je Generation und Fähigkeiten, die sie ändern. Reine Funktionen ohne Datenbank: die Tabellen
-kommen als Zeilen herein (siehe abfragen.py).
+kommen als Zeilen herein (siehe app/abfragen/).
 
 Die PokéAPI führt die heutige Tabelle (type_efficacy) und frühere Werte (type_efficacy_past): Ein früherer Wert
 gilt bis einschließlich seiner Generation. Typen gibt es ab ihrer Generation (Unlicht und Stahl ab 2, Fee ab 6).

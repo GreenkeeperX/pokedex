@@ -19,7 +19,7 @@ Eigenschaften des Profils („gibt es Zucht?“), nicht mehr die Kennung des Spi
 - `pruefe()`: Fehler in `SPIELE` als Liste (unbekanntes Feld oder unbekannter Wert, Hauptspiel ohne Eintrag oder selbst
   Erweiterung, andere Generation als das Hauptspiel). Ein Test verlangt eine leere Liste.
 
-In `abfragen.py` gibt `profil(g)` das Profil zu einem Spiel aus `D.games` (ohne Spiel: das Übliche der neuesten
+In `app/abfragen/basis.py` gibt `profil(g)` das Profil zu einem Spiel aus `D.games` (ohne Spiel: das Übliche der neuesten
 Generation), `profil_von(D, kennung)` zu einer Kennung. Ein Spiel der Datenbank ohne Eintrag läuft als Hauptspiel seiner
 Generation und steht im Fehlerregister („Spiel ohne Profil“), ebenso eine abweichende Generation.
 

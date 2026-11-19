@@ -5,7 +5,8 @@
 - `MitMiniDatenbank`: ein Datenordner mit der Mini-Datenbank aus tests/minidb.py als pokeapi.db (Verweis auf die einmal
   gebaute Datei, nur lesend) und einer frischen user.db,
 - `HttpMitDaten`: beides zusammen, der Weg der Oberfläche,
-- `oberflaeche_js()`: der Text aller Skripte der Oberfläche in der Reihenfolge von index.html (seit 0.61.0 mehrere Dateien).
+- `oberflaeche_js()`: der Text aller Skripte der Oberfläche in der Reihenfolge von index.html (seit 0.61.0 mehrere Dateien),
+- `app_quellen()`: alle Python-Dateien unter app/, auch in Paketen (seit 0.62.0 `app/abfragen/`), als {Pfad: Text}.
 """
 import http.client
 import json
@@ -31,6 +32,20 @@ def oberflaeche_js():
         with open(os.path.join(server.STATIC, rel), encoding="utf-8") as f:
             texte.append(f.read())
     return "\n".join(texte)
+
+
+def app_quellen(paket=""):
+    """Alle Python-Dateien unter app/ (oder nur unter app/<paket>/), auch in Unterordnern: {Pfad ab app/: Text}, sortiert."""
+    wurzel = os.path.dirname(os.path.abspath(server.__file__))
+    out = {}
+    for ordner, unter, dateien in os.walk(os.path.join(wurzel, paket)):
+        unter[:] = sorted(u for u in unter if u != "__pycache__")
+        for name in sorted(dateien):
+            if name.endswith(".py"):
+                pfad = os.path.join(ordner, name)
+                with open(pfad, encoding="utf-8") as f:
+                    out[os.path.relpath(pfad, wurzel).replace(os.sep, "/")] = f.read()
+    return out
 
 
 class TempData(unittest.TestCase):

@@ -11,7 +11,7 @@ Zwei Teile:
   geänderter Stärke, TM-Nummern je Spiel, Begegnung nur nachts, Abweichung zwischen PokéAPI und Showdown).
 
 Wenige Bezeichner der Welt sind echt, weil Regeln im Programm an ihnen hängen: die Fähigkeiten `levitate` und
-`adaptability` (app/typen.py, app/schaden.py) und die Namen der Bälle (Fangtabelle in app/abfragen.py).
+`adaptability` (app/typen.py, app/schaden.py) und die Namen der Bälle (Fangtabelle in app/abfragen/fangen.py).
 
 Wer im Regional-Dex eines Spiels steht, hat dort eine Lernliste. Die Tests kennen die Welt aus diesem Modul und prüfen
 gegen die Angaben hier, nicht gegen abgeschriebene Zahlen.
