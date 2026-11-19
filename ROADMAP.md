@@ -1,5 +1,23 @@
 # Roadmap
 
+## 0.61.0 (19.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 4b, erste Etappe von P-9: `app/static/js/app.js` (4617 Zeilen) nach Reitern
+in zehn Dateien geteilt (`basis.js`, `kopf.js`, `liste.js`, `detail.js`, `team.js`, `karte.js`, `items.js`, `kampf.js`,
+`einstellungen.js`, `start.js`; Tabelle in `docs/oberflaeche.md`).
+
+- **Mechanisch**: geschnitten nur an Abschnittsgrenzen, in derselben Reihenfolge, ohne eine Zeile zu ändern. Die zehn
+  Teile ohne ihren dreizeiligen Kopf ergeben Byte für Byte die alte Datei (417457 Zeichen). Jeder Teil beginnt mit
+  `"use strict";`; was beim Laden sofort läuft, braucht nur Namen aus früheren Teilen, gestartet wird nur in `start.js`.
+- **Server**: `index_page` hängt jedem Skript aus `index.html` die Kennung seines Inhalts an (`skripte`), nicht mehr nur
+  `js/app.js`. Ein Update lädt nur die geänderten Teile neu. Kleine Teile (unter 20 kB) gehen wie bisher ungepackt raus.
+- **Tests**: lesen die Teile zusammen (`tests.basis.oberflaeche_js`); neu `Http.test_skripte_der_oberflaeche` (jede
+  Datei genau einmal in `index.html`, `"use strict"` je Datei, Start nur im letzten Teil). `test_dateien_der_oberflaeche`
+  prüft Kennung, Haltbarkeit und Packen je Teil und dass `/js/app.js` nicht mehr ausgeliefert wird.
+
+Keine Änderung an `user.db`, an Antworten des Servers oder an `importer.VERSION`. Der Browser holt nach dem Update
+einmal die neuen Dateien; gemerkte Einstellungen im Browser (`localStorage`) bleiben, weil die Schlüssel gleich sind.
+
 ## 0.60.0 (19.11.2026)
 
 Arbeitsauftrag vom 13.11.2026, Abschnitt 4a: Spielprofil (Review P-8). Felder, Werte und „ein neues Spiel“ stehen in
@@ -17,7 +35,7 @@ Arbeitsauftrag vom 13.11.2026, Abschnitt 4a: Spielprofil (Review P-8). Felder, W
   PokéWiki (Legenden: Arceus) und die Bezeichnung der Dimensions-Missionen (Legenden: Z-A).
   Ein Test hält die alten Listen fest und verlangt, dass das Profil dasselbe sagt. Ein Spiel der Datenbank ohne Eintrag
   läuft als Hauptspiel seiner Generation und steht im Fehlerregister.
-- **Oberfläche**: `/api/meta` gibt je Spiel unter `profil` die zehn Felder mit, die `app.js` braucht; `app.js` liest sie
+- **Oberfläche**: `/api/meta` gibt je Spiel unter `profil` die zehn Felder mit, die die Oberfläche braucht; sie liest sie
   über `PROFIL()` und vergleicht das Spiel an keiner Stelle mehr mit einer Kennung (vorher 21 Stellen, darunter die Liste
   `REQ_GAMES`). Neu `RAIDS()` für den Reiter Raids (bisher an `TERA()`).
 - **Selbsttest**: dazu die Reiter je Profil (Kampf in Champions, Aufträge und Raids in der Türkisgrünen Maske, Aufträge in
@@ -45,7 +63,7 @@ Offen:
 - Legenden: Z-A und Mega-Dimension rechnen Schaden, Typwirkung und Werte wie die Hauptreihe; Pokopia bekommt eine
   Fangtabelle. Beides unbelegt, steht in `docs/formeln.md` unter „Offen“.
 - Welche Seite einer Quelle zu welchem Spiel gehört (Map Genie, PokéWiki, PKHeX, Serebii und andere), bleibt mit Absicht
-  bei der Quelle; Einstiegswerte der Karten (`MGSTART`, `MG_EDITION`) bleiben in `app.js`.
+  bei der Quelle; Einstiegswerte der Karten (`MGSTART`, `MG_EDITION`) bleiben in der Oberfläche (`karte.js`).
 
 ## 0.59.0 (16.11.2026)
 

@@ -4,7 +4,8 @@
 - `HttpTest`: dazu der Server auf einem freien Port (nur 127.0.0.1), mit `get`, `post` und `json`,
 - `MitMiniDatenbank`: ein Datenordner mit der Mini-Datenbank aus tests/minidb.py als pokeapi.db (Verweis auf die einmal
   gebaute Datei, nur lesend) und einer frischen user.db,
-- `HttpMitDaten`: beides zusammen, der Weg der Oberfläche.
+- `HttpMitDaten`: beides zusammen, der Weg der Oberfläche,
+- `oberflaeche_js()`: der Text aller Skripte der Oberfläche in der Reihenfolge von index.html (seit 0.61.0 mehrere Dateien).
 """
 import http.client
 import json
@@ -19,6 +20,17 @@ from app import db, fehler, server, store
 from tests import minidb
 
 fehler.STUMM = True          # das Fehlerregister schreibt in den Tests nichts ins Protokoll
+
+
+def oberflaeche_js():
+    """Alle Skripte der Oberfläche hintereinander, wie der Browser sie lädt (index.html, server.skripte)."""
+    with open(os.path.join(server.STATIC, "index.html"), encoding="utf-8") as f:
+        teile = server.skripte(f.read())
+    texte = []
+    for rel in teile:
+        with open(os.path.join(server.STATIC, rel), encoding="utf-8") as f:
+            texte.append(f.read())
+    return "\n".join(texte)
 
 
 class TempData(unittest.TestCase):

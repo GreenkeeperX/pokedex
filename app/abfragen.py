@@ -1751,7 +1751,7 @@ def _more(con, f, g, gen):
     if sp["capture_rate"] is not None:
         out["fangrate"] = sp["capture_rate"]
     if sp["capture_rate"] is not None and pr["fangformel"] != "keine":
-        if hisui:                             # 0.50: eigene Fangrate und eigene Formel (Rechnung in app.js, catchHtmlLA)
+        if hisui:                             # 0.50: eigene Fangrate und eigene Formel (Rechnung in detail.js, catchHtmlLA)
             try:
                 r = con.execute("SELECT rate FROM fangrate WHERE spiel = ? AND art = ?", (g["kennung"], f["art"])).fetchone()
             except Exception as err:

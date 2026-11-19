@@ -227,7 +227,7 @@ Speichert nichts. Wiki- und Datenbankseiten bleiben gekürzt (60 000 Zeichen) al
 `/api/diag/proben` lädt sie als JSON herunter, damit sich Leser für neue Quellen bauen lassen.
 
 Seiten, die ihre Daten erst im Browser per Skript laden (Karten im PokéWiki), sieht der Server nur als Hülle. Dafür
-gibt es in den Einstellungen das Lesezeichen „Seite untersuchen“ (`probeHelper` in `app.js`, wie im VR-Navigator):
+gibt es in den Einstellungen das Lesezeichen „Seite untersuchen“ (`probeHelper` in `einstellungen.js`, wie im VR-Navigator):
 es läuft auf der fremden Seite, holt die nachgeladenen Daten-Dateien (`performance`-Einträge vom Typ fetch/xhr und
 `.json`, höchstens 40 und 6 MB) samt Inhalt, Daten in globalen Variablen, Kartenmarker, Skripte und das HTML und
 speichert alles als `pokedex-probe-<Seite>.json`. Benutzername und Schlüssel der Seite werden entfernt.

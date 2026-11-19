@@ -1,8 +1,35 @@
 # Oberfläche
 
-Reines JavaScript ohne Build (`app/static/js/app.js`), Reiter über die Adresse: `#pokemon`, `#pokemon/<id>`,
+Reines JavaScript ohne Build (`app/static/js/`), Reiter über die Adresse: `#pokemon`, `#pokemon/<id>`,
 `#team`, `#attacken`, `#typen`, `#einstellungen`. Gewähltes Spiel, Filter und das aktuelle Team merkt sich der
 Browser; gespeicherte Teams liegen auf dem Server (user.db).
+
+## Dateien
+
+Seit 0.61.0 ist die Oberfläche in Teile nach Reitern geteilt. `index.html` lädt sie als gewöhnliche Skripte der
+Reihe nach; sie teilen sich die globalen Namen wie zuvor die eine Datei `app.js`.
+
+| Datei | Inhalt |
+|---|---|
+| `basis.js` | Grundlagen: Zustand `S`, `store`, `api`, Hinweise (`hinweis`, `teil`, `ungespeichert`), Spielprofil (`PROFIL`), Bausteine (Karten, Netzdiagramm, Typwirkung), Tooltips, Kreuz- und sortierbare Tabellen |
+| `kopf.js` | Kopf, Reiter, Adresse (`route`), Spielwahl (`setGame`), Favoriten und Haken, `refreshMeta`, Filter |
+| `liste.js` | Pokémon-Liste, Team-Leiste (`dock`), Speichern des Teams, Showdown-Export |
+| `detail.js` | Detailseite (Werte, Effort Levels, Fangchance, Entwicklung, Attacken), Raids, Aufträge, Forschung |
+| `team.js` | Team, Gegner und Trainer, Attacken |
+| `karte.js` | Karten, Sammelobjekte, Was fehlt mir noch, Gebiete |
+| `items.js` | Items und Typtabelle |
+| `kampf.js` | Vergleich, Initiative-Liste, Kampf (Champions), Schadensrechner |
+| `einstellungen.js` | Einstellungen, Abgleich, Sicherung, Seite untersuchen, Verbindungstest |
+| `start.js` | Klicks und Start (ruft als einziger Teil `refreshMeta()` beim Laden) |
+
+Die Teile sind die alte Datei in derselben Reihenfolge, nur an Abschnittsgrenzen geschnitten; deshalb steht hier und da
+etwas nicht beim Reiter (die Merker der Kreuztabellen am Ende von `team.js`, Raids und Aufträge in `detail.js`).
+
+Regeln: Jede Datei beginnt mit `"use strict";`. Was beim Laden sofort läuft (nicht erst in einer Funktion), darf nur
+Namen aus derselben oder einer früheren Datei benutzen; Funktionen dürfen alles aufrufen, weil sie erst nach dem
+Laden laufen. Eine neue Datei kommt in `index.html` an ihren Platz; der Server hängt jeder Adresse die Kennung des
+Inhalts an (`server.skripte`, `index_page`), und `Http.test_skripte_der_oberflaeche` prüft, dass jede Datei genau
+einmal geladen wird. Die Tests lesen die Teile zusammen (`tests.basis.oberflaeche_js`).
 
 ## Bedienung
 

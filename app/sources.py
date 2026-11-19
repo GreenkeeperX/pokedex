@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.60.0"
+VERSION = "0.61.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.61.0", "19.11.2026", [
+        "Unter der Haube: Die Oberfläche ist in zehn Dateien nach Reitern geteilt (Liste, Detailseite, Team, Karten, "
+        "Items, Kampf, Einstellungen und andere), Inhalt unverändert; jede Datei hat eine eigene Kennung, ein Update lädt "
+        "also nur die geänderten Teile neu",
+    ]),
     ("0.60.0", "19.11.2026", [
         "Item-Liste der Erweiterungen: Die TMs des Hauptspiels tragen jetzt ihre Attacke (vorher nur die neuen TMs der "
         "Erweiterung); Die Insel der Rüstung und Die Schneelande der Krone zeigen die TMs von Schwert/Schild",

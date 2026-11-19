@@ -39,7 +39,7 @@ FELDER = {
     "spawnkarten": bool,        # Einzelkarten mit Spawnpunkten, Tageszeit und Wetter
     "eigene_dexe": bool,        # eigene Pokédexe aus der Tabelle pokopia
 }
-# Was die Oberfläche braucht: diese Felder gibt der Server je Spiel in /api/meta mit (app.js: PROFIL())
+# Was die Oberfläche braucht: diese Felder gibt der Server je Spiel in /api/meta mit (basis.js: PROFIL())
 OBERFLAECHE = ("fangformel", "baelle", "werte", "faehigkeiten", "tera", "raids", "auftraege", "forschung", "kampf", "spawnkarten")
 # Fangformel: bei diesen Werten zeigt die Tabelle nur eine Richtung (das Spiel rechnet anders als die Formel ab Generation 3)
 FANG_GROB = ("gen12", "letsgo", "legenden")

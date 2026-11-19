@@ -53,7 +53,8 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
   Attacken-Wertung und Moveset, Team-Bewertung, Teamsuche, Gegner)
 - `app/abfragen.py`: Abfragen für die Oberfläche (Liste, Detailseite, Attacken, Typtabelle, Teams)
 - `app/server.py`: Webserver und JSON-Schnittstelle
-- `app/static/`: Oberfläche (`index.html`, `style.css`, `js/app.js`); siehe `docs/oberflaeche.md`
+- `app/static/`: Oberfläche (`index.html`, `style.css`, `js/*.js` in Teilen nach Reitern, Reihenfolge in `index.html`);
+  siehe `docs/oberflaeche.md`
 - `extra/`: gepflegte Ergänzungen als JSON (`spielwissen.json`: Spielwissen für die Detailseite, liest der Server direkt)
 - `app/mapgenie.py`: Karten von Map Genie lesen, eigene Punkte ausrichten und mit ihnen zu einer Datenbank zusammenführen
 - `app/pkcompletion.py`, `app/ign.py`, `app/dittobase.py`: weitere Kartenquellen in derselben Form wie Map Genie

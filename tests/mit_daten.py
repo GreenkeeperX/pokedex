@@ -19,7 +19,7 @@ from unittest import mock
 
 from app import abfragen, db, fehler, importer, server, sources, spiele
 from tests import minidb, vertrag
-from tests.basis import HttpMitDaten, MitMiniDatenbank
+from tests.basis import HttpMitDaten, MitMiniDatenbank, oberflaeche_js
 
 SPIELE = ("red-blue", "gold-silver", "emerald", "platinum", "black-white", "x-y", "sword-shield", "legends-arceus",
           "scarlet-violet", "the-teal-mask")
@@ -668,17 +668,15 @@ class Vertrag(HttpMitDaten):
     """Vertrag zwischen Server und Oberfläche (0.59.0, nach dem Muster der Geschwister): Die Antworten haben die Form aus
     tests/vertrag.json, die Oberfläche kennt jedes Feld, und beide Seiten kennen dieselben Wege. Mit Absicht geändert:
     `python3 -m tests.vertrag` schreibt die Datei neu, die Änderung steht dann im Diff."""
-    JS = os.path.join(minidb.HIER, "..", "app", "static", "js", "app.js")
     # Felder, die der Server liefert und die Oberfläche (noch) nicht liest. Kein Fehler, aber sichtbar: Kandidaten für das
     # Aufräumen der Abfragen. Ein Eintrag, der nicht mehr stimmt, lässt den Test scheitern.
     UNGELESEN = {"max_gen", "kampfform", "formname", "effekt", "abgedeckt", "ev_summe"}
     # Wege des Servers ohne Aufruf in der Oberfläche, mit Grund
     OHNE_AUFRUFER = {"/healthz": "Lebenszeichen für Docker (HEALTHCHECK) und den Menschen",
-                     "/api/mapgenie/eigene": "kein Aufrufer in app.js gefunden (Stand 0.59.0): Kandidat für das Aufräumen, erst prüfen"}
+                     "/api/mapgenie/eigene": "kein Aufrufer in der Oberfläche gefunden (Stand 0.59.0): Kandidat für das Aufräumen, erst prüfen"}
 
     def js(self):
-        with open(self.JS, encoding="utf-8") as f:
-            return f.read()
+        return oberflaeche_js()
 
     def test_form_der_antworten(self):
         soll, ist = vertrag.lesen(), vertrag.messen(self)

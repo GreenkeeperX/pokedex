@@ -14,9 +14,9 @@ brauchen nur die Python-Standardbibliothek; der Selbsttest der Oberfläche zusä
 | `Typen`, `Attacken`, `Team`, `TeamPlaetze`, `Rechnen`, `Version` (`tests/test_all.py`) | Rechenlogik ohne Datenbank; Schaden gegen `tests/schaden_referenz.json` | ja | ja |
 | `Leser` | Leser der Quellen mit erfundenen Ausschnitten (Showdown, Smogon, Wikis, Karten) | ja | ja |
 | `Abgleich`, `Betrieb`, `Fehler` | Abgleich mit Attrappe statt Netz, Neustart mitten im Lauf, Ruhezeiten, Fehlerregister | ja | ja |
-| `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten | ja | ja |
+| `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten; dazu die Skripte der Oberfläche (jede Datei genau einmal in `index.html`, Kennung je Datei) | ja | ja |
 | `Heimnetz` | `sources.blocked_target`: keine Abrufe an private, lokale, reservierte Adressen, auch nicht über Weiterleitung | ja | ja |
-| `Spiele` | Spielprofile: Einträge in Ordnung, dieselben Aussagen wie die Listen bis 0.59.0, Server und `app.js` fragen das Profil statt der Kennung | ja | ja |
+| `Spiele` | Spielprofile: Einträge in Ordnung, dieselben Aussagen wie die Listen bis 0.59.0, Server und Oberfläche fragen das Profil statt der Kennung | ja | ja |
 | `Oeffentlich` | nichts Privates im Repository (Dateiliste, Muster für Adressen und Zugangsdaten) | ja | ja |
 | `MiniBau` (`tests/mit_daten.py`) | der Importer baut die Mini-Datenbank, Selbstprüfung greift | ja | ja |
 | `Welt` | Abfragen der Oberfläche gegen die Mini-Datenbank (Liste, Detail, Lernlisten, Fundorte, Items, Team, Schaden, Import und Export) | ja | ja |
@@ -63,7 +63,7 @@ einen neuen Fall, kommt er in die Welt, nicht als abgeschriebene Zahl in den Tes
 ## Vertrag zwischen Server und Oberfläche
 
 `tests/vertrag.json` hält für 33 Aufrufe fest, welche Felder eine Antwort hat und von welcher Art sie sind. Der Test
-`Vertrag` prüft drei Dinge: Die Antworten haben diese Form; die Oberfläche (`app.js`) kennt jedes Feld; jeder Weg des
+`Vertrag` prüft drei Dinge: Die Antworten haben diese Form; die Oberfläche (alle Skripte in `app/static/js/`) kennt jedes Feld; jeder Weg des
 Servers hat einen Aufrufer in der Oberfläche. Ausnahmen stehen mit Namen in der Klasse (`UNGELESEN`, `OHNE_AUFRUFER`).
 Leere Listen haben keine Form: Was die Mini-Datenbank nicht enthält, sichert der Vertrag nicht.
 

@@ -513,16 +513,27 @@ def static_tag(rel):
     return f"{sources.VERSION}-{static_file(rel)[2][1:11]}"
 
 
+def skripte(html=None):
+    """Die Skripte der Oberfläche in der Reihenfolge, in der index.html sie lädt (js/<name>.js)."""
+    if html is None:
+        html = static_file("index.html")[0].decode("utf-8")
+    return re.findall(r'<script src="(js/[a-z-]+\.js)"></script>', html)
+
+
 def index_page():
     """index.html mit den Adressen von CSS und JS samt Kennung (static_tag): (Inhalt, gepackt, ETag)."""
     body, _, _ = static_file("index.html")
-    tags = {rel: static_tag(rel) for rel in ("style.css", "js/app.js")}
+    text = body.decode("utf-8")
+    tags = {rel: static_tag(rel) for rel in ("style.css", *skripte(text))}
     key = ("index", body, tuple(tags.values()))
     hit = _STATIC.get("/")
     if hit and hit[0] == key:
         return hit[1:]
-    page = body.decode("utf-8").replace('href="style.css"', f'href="style.css?v={tags["style.css"]}"').replace(
-        'src="js/app.js"', f'src="js/app.js?v={tags["js/app.js"]}"').encode("utf-8")
+    page = text.replace('href="style.css"', f'href="style.css?v={tags["style.css"]}"')
+    for rel in tags:
+        if rel.startswith("js/"):
+            page = page.replace(f'src="{rel}"', f'src="{rel}?v={tags[rel]}"')
+    page = page.encode("utf-8")
     got = (key, page, gzip.compress(page, compresslevel=9), _etag(page))
     _STATIC["/"] = got
     return got[1:]
