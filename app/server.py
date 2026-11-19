@@ -895,6 +895,9 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     d = abfragen.eikette(q)
                     self._send(200 if d else 404, d or {"error": "Pokémon, Attacke oder Spiel nicht gefunden"})
+            elif path == "/api/home":
+                d = abfragen.home_boxen(q)
+                self._send(200 if d else 404, d or {"error": "keine Spieldaten"})
             elif path == "/api/tausch":
                 d = abfragen.tauschliste(q)
                 self._send(200 if d else 404, d or {"error": "keine Spieldaten"})

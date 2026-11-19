@@ -297,6 +297,16 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
 - Soul-Link („Neuer Soul-Link“): Namen der beiden Spieler im Kopf, in den Gebieten eine Spalte je Spieler, Team, Box und
   Friedhof je Spieler eine Zeile (`.nzsp`), an jeder Karte der Partner (⛓). Die Regel „Typen“ steht nur hier.
 
+### HOME-Boxen
+
+- `homeView` (Reiter HOME, `#home`, `/api/home?modus=…&shiny=1`): Kopf mit Auswahl „Arten“ oder „mit Formen“, Shiny,
+  „nur Boxen mit Lücken“ (gemerkt in `homeModus`, `homeShiny`, `homeLuecken`) und „Wo gehört … hin?“ (`#hq`, Treffer mit
+  `.hp.such` und Box, Reihe, Spalte in `#hwo`). Darunter die Boxen (`.hboxen`, je Box `.hbox` mit 6 Spalten in `.hgrid`;
+  volle Box `.voll`). Ein Platz (`.hp`) ist blass, solange er fehlt, mit gestricheltem Rand (`.woanders`), wenn ein Spiel
+  ihn hat; der Tooltip nennt die Spiele. Klick setzt oder nimmt die Marke in HOME (`/api/gefangen`, mit Shiny
+  `/api/schillernd`), danach zeichnet die Ansicht neu; bei einem Fehler nimmt sie den Klick zurück. Fragliche Formen
+  stehen eingeklappt darunter.
+
 ### Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch und Sammelobjekte
 
 - `tradeView` (`#tausch`, `/api/tausch?spiel=…&edition=…`): Edition wie in „Was fehlt mir noch“ (`edition:<Spiel>`),

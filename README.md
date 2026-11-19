@@ -60,6 +60,10 @@ dem Vorbild von VR-Navigator und eShopKompass.
   Fundorten, schon Gefangenes nach Dupes-Klausel gesperrt), Team, Box und Friedhof, Shiny und Geschenken extra, Regeln
   je Lauf und Levelgrenze bis zum nächsten Boss; Verstöße als Hinweise. Regeln nach Bulbapedia und Smogon in
   `docs/formeln.md`.
+- **HOME-Boxen** (Reiter HOME, `#home`): die Sammlung in Pokémon HOME als Living Dex in Boxen zu 30 nach Nationaldex,
+  je Art oder mit Formen, wahlweise als Shiny-Living-Dex; Lücken je Box, freie Plätze im Premium-Plan, für jedes
+  fehlende Pokémon die Spiele, in denen du es hast, und „Wo gehört … hin?“ mit Box, Reihe und Spalte. Klick auf einen
+  Platz setzt die Marke in HOME. Welche Formen HOME lagert, mit Quellen in `docs/formeln.md`.
 - **Fortschritt** (Knopf in der Liste, `#fortschritt`): gefangene Arten je Spiel und in Pokémon HOME, für das gewählte
   Spiel nach Generation und Typ; jede Zeile springt zu den fehlenden Pokémon.
 - **Was fehlt mir noch?** (Knopf in der Liste, `#fehlt`): die Arten des Spiel-Dex ohne gefangene Form, nach dem besten

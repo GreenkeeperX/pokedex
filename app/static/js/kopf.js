@@ -210,6 +210,7 @@ async function route() {
     else if (tab === "items") await itemsView();
     else if (tab === "fehlt") await missingView(arg, arg2);
     else if (tab === "fortschritt") await progressView();
+    else if (tab === "home") await homeView();
     else if (tab === "jagd") await huntView(arg, arg2);
     else if (tab === "tausch") await tradeView();
     else if (tab === "kette") await chainView(arg, arg2);

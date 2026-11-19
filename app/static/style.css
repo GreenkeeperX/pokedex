@@ -517,6 +517,14 @@ details.sub>summary .slinks{margin-left:auto;font-size:12.5px;white-space:nowrap
 table.prog tr.click{cursor:pointer}
 .kette{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0}.kglied{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;color:inherit;text-decoration:none;min-width:110px;text-align:center}
 .kglied:hover{background:var(--hov)}.kglied.hast{border-color:var(--go)}.kpfeil{display:flex;flex-direction:column;align-items:center;font-size:22px;line-height:1}.kpfeil .hint{font-size:12px}
+/* 0.75.0: HOME-Boxen: je Box 6 Spalten und 5 Reihen; leere Plätze blass, mit Rand, wenn ein Spiel das Pokémon hat */
+.hboxen{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin:8px 0}
+.hbox{border:1px solid var(--line);border-radius:8px;padding:4px 6px 6px;background:var(--panel)}.hbox.voll{border-color:var(--go)}
+.hbk{display:flex;align-items:baseline;gap:6px;margin-bottom:3px;white-space:nowrap}.hbk .hint{margin:0}.hbk .grow{min-width:0}
+.hgrid{display:grid;gap:2px}.hgrid.frei{grid-template-columns:repeat(auto-fill,40px);margin:6px 0}
+.hp{display:flex;align-items:center;justify-content:center;padding:0;min-width:0;height:40px;border:1px solid transparent;border-radius:6px;background:var(--card);cursor:pointer}
+.hp:hover{background:var(--hov)}.hp .spr{width:36px;height:36px;opacity:.28;filter:grayscale(1)}.hp.hat .spr{opacity:1;filter:none}
+.hp.woanders:not(.hat){border:1px dashed var(--info)}.hp.such{outline:2px solid var(--warn);outline-offset:1px}
 .nzks{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.nzk{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:3px 8px 3px 3px;border:1px solid var(--line);border-radius:8px;font-size:14px}
 .nzk .spr,.nzw .spr{width:40px;height:40px}.nzk.tot{opacity:.6}.nzk.ueber{border-color:var(--warn)}.nzw{display:flex;align-items:center;gap:6px}
 .nzsp{min-width:90px;font-size:13px}.nzr{display:flex;flex-wrap:wrap;gap:6px 16px;margin:6px 0}table.nzg td{vertical-align:middle}table.nzg select[data-nzneu]{max-width:420px}

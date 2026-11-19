@@ -79,6 +79,7 @@ def unterschiede(soll, ist, pfad=""):
 VORHER = (
     ("/api/gefangen", {"spiel": "emerald", "id": [1, 6]}),
     ("/api/gefangen", {"spiel": "scarlet-violet", "id": [1]}),
+    ("/api/gefangen", {"spiel": "pokemon-home", "id": [2]}),
     ("/api/favoriten", {"spiel": "x-y", "id": 11}),
     ("/api/teams", {"name": "Vertrag", "spiel": "scarlet-violet", "mitglieder": [3, 5, 7], "fest": [3],
                     "details": {"3": {"level": 50, "attacken": [23, 13]}}}),
@@ -108,6 +109,8 @@ AUFRUFE = {
     "fehlt": ("/api/fehlt?spiel=emerald", None),
     "fortschritt": ("/api/fortschritt?spiel=emerald", None),
     "fehlt in HOME": ("/api/fehlt?spiel=pokemon-home", None),
+    "home": ("/api/home", None),
+    "home mit Formen": ("/api/home?modus=formen&shiny=1", None),
     "gebiete": ("/api/gebiete?spiel=x-y", None),
     "pruefung": ("/api/pruefung", None),
     "teams": ("/api/teams", None),
