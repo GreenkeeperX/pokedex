@@ -25,8 +25,8 @@ ist nachgeschrieben, nicht übernommen; der Pokédex braucht das Paket nicht.
 
 Sonderfälle, die das Review vom 13.11.2026 genannt hat, und was jetzt gilt:
 
-- **Generation 3 und 4** rechneten bis 0.56.2 in der Reihenfolge ab Generation 5. Jetzt eigene Funktionen
-  (`rolls_gen3`, `rolls_gen4`).
+- **Generation 3 und 4** haben eigene Funktionen (`rolls_gen3`, `rolls_gen4`) mit der Reihenfolge der Faktoren und
+  Rundungen ihres Spiels, nicht der ab Generation 5.
 - **Generation 2:** Der Drachenzahn wirkt nicht, die Drachenhaut verstärkt Drache (im Spiel vertauscht;
   `TYPE_ITEMS_GEN2`). Der Volltreffer steht vor dem Typ-Item. Beide Typen des Ziels zählen als ein Produkt.
 - **Tera:** Eigentyp-Bonus in 4096steln: 4096, + 2048 für einen ursprünglichen Typ, + 2048 für den Tera-Typ. Anpassung:
@@ -153,4 +153,4 @@ Offen (so umgesetzt, aber nicht belegt):
 
 - **Legenden: Z-A und Mega-Dimension** rechnen Schaden, Typwirkung und Werte wie die Hauptreihe der Generation 9. Eine
   Quelle dafür gibt es hier nicht. Die Fangtabelle ist dort als Richtwert gekennzeichnet (`fangformel` „legenden“).
-- **Pokopia** bekommt die Fangtabelle der Generation 9, obwohl dort nicht im Kampf gefangen wird (wie bis 0.59.0).
+- **Pokopia** bekommt die Fangtabelle der Generation 9, obwohl dort nicht im Kampf gefangen wird.

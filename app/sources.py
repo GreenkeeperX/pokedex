@@ -12,11 +12,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.64.0"
+VERSION = "0.65.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
-# muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
+# muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.65.0", "19.11.2026", [
+        "Unter der Haube: Die Roadmap führt nur noch Geplantes, offene Befunde und Entscheidungen; die Versionsgeschichte "
+        "steht hier und in Git. Die Beschreibung der Oberfläche ist nach Gestaltung, Verhalten und Ansichten geordnet",
+    ]),
     ("0.64.0", "19.11.2026", [
         "Unter der Haube: vier Stücke Code ohne Aufrufer entfernt (ein Weg des Servers, eine alte Attackenabfrage, ein "
         "Zwischenspeicher, eine Tooltip-Funktion); Verhalten unverändert",

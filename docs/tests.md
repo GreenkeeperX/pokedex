@@ -16,7 +16,7 @@ brauchen nur die Python-Standardbibliothek; der Selbsttest der Oberfläche zusä
 | `Abgleich`, `Betrieb`, `Fehler` | Abgleich mit Attrappe statt Netz, Neustart mitten im Lauf, Ruhezeiten, Fehlerregister | ja | ja |
 | `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten; dazu die Skripte der Oberfläche (jede Datei genau einmal in `index.html`, Kennung je Datei) | ja | ja |
 | `Heimnetz` | `sources.blocked_target`: keine Abrufe an private, lokale, reservierte Adressen, auch nicht über Weiterleitung | ja | ja |
-| `Spiele` | Spielprofile: Einträge in Ordnung, dieselben Aussagen wie die Listen bis 0.59.0, Server und Oberfläche fragen das Profil statt der Kennung | ja | ja |
+| `Spiele` | Spielprofile: Einträge in Ordnung, dieselben Aussagen wie die früheren Listen je Spiel, Server und Oberfläche fragen das Profil statt der Kennung | ja | ja |
 | `Pakete` | jeder Name der Module in `app/abfragen/` und `app/abruf/` ist unter dem Paket dasselbe Objekt; Importe im Paket zeigen auf `app`; Tests ersetzen Namen nur mit `im_paket` | ja | ja |
 | `Oeffentlich` | nichts Privates im Repository (Dateiliste, Muster für Adressen und Zugangsdaten) | ja | ja |
 | `MiniBau` (`tests/mit_daten.py`) | der Importer baut die Mini-Datenbank, Selbstprüfung greift | ja | ja |
