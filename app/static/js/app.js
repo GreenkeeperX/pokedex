@@ -256,11 +256,15 @@ function radarTipHtml(werte) {
 
 const teamFull = () => S.team.ids.length >= 6;
 const isFav = (id) => S.favs.some((f) => f.id === id);
-/* Champions ist ein reines Kampfspiel: „im Kader“ statt gefangen, kein Schillernd, keine Fangchance, „Kampf“ statt „Karte“ */
-const BATTLE = () => S.game === "champions";
-const TERA = () => ["scarlet-violet", "the-teal-mask", "the-indigo-disk"].includes(S.game);
+/* 0.60.0: Was im gewählten Spiel gilt, sagt das Spielprofil des Servers (app/spiele.py, in /api/meta je Spiel als profil);
+   die Oberfläche fragt Eigenschaften, nicht die Kennung des Spiels. Felder und Werte: docs/spiele.md */
+const PROFIL = () => S.meta?.spiele?.find((g) => g.kennung === S.game)?.profil || {};
+/* Kampfspiel (Champions): „im Kader“ statt gefangen, kein Schillernd, keine Fangchance, „Kampf“ statt „Karte“ */
+const BATTLE = () => !!PROFIL().kampf;
+const TERA = () => !!PROFIL().tera;          // Tera-Typ je Team-Platz
+const RAIDS = () => !!PROFIL().raids;        // Reiter Raids (Tera-Raids)
 const GEN = () => S.meta?.spiele?.find((g) => g.kennung === S.game)?.gen || 9;
-const noAbil = () => S.game === "legends-arceus" || S.game === "lets-go-pikachu-lets-go-eevee" || GEN() <= 2;
+const noAbil = () => PROFIL().faehigkeiten === false;
 const isCaught = (id) => S.caught.has(id);
 const isShiny = (id) => S.shiny.has(id);
 const isAlpha = (id) => S.alpha.has(id);
@@ -748,7 +752,7 @@ async function versionsDialog() {
 }
 function nav(tab) {
   $("#nav").innerHTML = TABS.map(([k, n]) => k === "karte" && BATTLE() ? ["kampf", "Kampf"] : [k, n])
-    .flatMap((x) => x[0] === "karte" && TERA() ? [x, ["raids", "Raids"]] : x[0] === "karte" && REQ_GAME() ? [x, ["auftraege", "Aufträge"]] : [x])
+    .flatMap((x) => x[0] === "karte" && RAIDS() ? [x, ["raids", "Raids"]] : x[0] === "karte" && REQ_GAME() ? [x, ["auftraege", "Aufträge"]] : [x])
     .map(([k, n]) => `<a href="#${k}" class="${k === tab ? "on" : ""}">${n}</a>`).join("");
 }
 // Zweiter Klick auf den offenen Reiter: nach oben
@@ -791,9 +795,9 @@ async function route() {
   if ((tab === "karte") !== ONMAP) { ONMAP = tab === "karte"; MAPFOLD = ONMAP; $("#dock")?.classList.toggle("fold", MAPFOLD || $("#stick").classList.contains("hid")); }
   const rid = RID;
   if (tab === "karte" && BATTLE()) { location.replace("#kampf"); return; }
-  if (tab === "kampf" && !BATTLE()) { location.replace("#karte"); return; }   // Spielwechsel: Kampf gibt es nur in Champions
-  if (tab === "raids" && !TERA()) { location.replace("#karte"); return; }    // Raids nur in Karmesin/Purpur
-  if (tab === "auftraege" && !REQ_GAME()) { location.replace("#karte"); return; }   // Aufträge nur in Legenden: Arceus und Z-A
+  if (tab === "kampf" && !BATTLE()) { location.replace("#karte"); return; }   // Spielwechsel: Kampf gibt es nur im Kampfspiel (Champions)
+  if (tab === "raids" && !RAIDS()) { location.replace("#karte"); return; }   // Raids nur mit Tera-Raids (Karmesin/Purpur)
+  if (tab === "auftraege" && !REQ_GAME()) { location.replace("#karte"); return; }   // Aufträge nur, wo das Profil welche nennt
   // neue Ansicht: der alte Reiter verschwindet sofort; dieselbe Ansicht mit anderem Inhalt bleibt stehen, oben läuft ein Balken
   const view = tab + (tab === "pokemon" && arg ? "/d" : tab === "karte" ? "/" + (arg === "gebiete" ? "g" : !arg || arg === "mg" ? "mg" : "pla") : "");
   if (view !== VIEW && VIEW) main.innerHTML = `<p class="hint loading">Lädt …</p>`;
@@ -943,7 +947,7 @@ function encHtml(d) {
     return `<div class="scroll"><table class="sort"><thead><tr>${cols.map((c) => c[0]).join("")}</tr></thead><tbody>
       ${f.map((e) => `<tr>${cols.map((c) => c[1](e)).join("")}</tr>`).join("")}</tbody></table></div>
       <p class="hint">Aus den Spieldaten (PKHeX)${has("stellen") ? ". Stellen: wo das Pokémon im Gebiet erscheinen kann, mit Level" : ""}${has("alpha") ? "; Alpha-Pokémon sind höher" : ""}${has("zeit")
-        ? ". Tageszeit und Wetter: aus den Spawn-Tabellen (PLA-Live-Map), nur für frei auftauchende Pokémon" : ""}.${S.game === "scarlet-violet" || S.game === "the-teal-mask" || S.game === "the-indigo-disk"
+        ? ". Tageszeit und Wetter: aus den Spawn-Tabellen (PLA-Live-Map), nur für frei auftauchende Pokémon" : ""}.${RAIDS()
         ? " Level: von–bis über alle Stellen des Gebiets; Tera-Raids, Massenauftreten und feste Pokémon auf der Karte fehlen noch." : ""}</p>`;
   }
   if (f.length) return `<div class="scroll"><table class="sort"><thead><tr>${th("Ort")}${th("Methode")}${th("Level")}${th("Bedingungen")}${th("Edition")}</tr></thead><tbody>
@@ -972,7 +976,7 @@ function filterBar(f, id, opts = {}) {
         <button data-fm="und" class="${f.modus === "und" ? "on" : ""}">und</button><button data-fm="oder" class="${f.modus === "oder" ? "on" : ""}">oder</button></span>
       <select data-f="formen" data-tip="${esc(FORMEN_TIP)}"><option value="relevant">Formen mit eigenen Werten</option><option value="standard">nur Standardform</option><option value="alle">alle Formen</option></select>
       ${opts.sort === false ? "" : `<select data-f="sort"><option value="nr" data-tip="Nummer im Pokédex des Spiels; Spiele mit mehreren Dexen der Reihe nach">Nummer</option><option value="nat">Nationale Nummer</option><option value="name">Name</option><option value="summe">Basiswerte</option>
-        <option value="ang">Angriff</option><option value="spang">Sp.-Angriff</option><option value="init">Initiative</option><option value="kp">KP</option><option value="vert">Verteidigung</option>${S.game === "legends-arceus" ? `<option value="forschung" data-tip="Wo bis zum Forschungslevel 10 noch die meisten Punkte offen sind (abgehakte Stufen zählen nicht)">Offene Forschung</option>` : ""}</select>`}
+        <option value="ang">Angriff</option><option value="spang">Sp.-Angriff</option><option value="init">Initiative</option><option value="kp">KP</option><option value="vert">Verteidigung</option>${PROFIL().forschung ? `<option value="forschung" data-tip="Wo bis zum Forschungslevel 10 noch die meisten Punkte offen sind (abgehakte Stufen zählen nicht)">Offene Forschung</option>` : ""}</select>`}
       <button data-act="freset" data-fid="${id}">Zurücksetzen</button></div>
     <div class="bubbles">${bub}</div>
     <div class="bar">
@@ -1394,7 +1398,7 @@ async function detailView(id, slot = null) {
         ${dexTextHtml(d)}<div class="stats">${stats}<span><b>Summe</b></span><span class="num" data-tip="${esc(statTip("summe", d.summe))}"><b style="color:${sumColor(d.summe)}">${d.summe}</b></span><span></span></div>
         ${d.werte_alt ? `<p class="hint">Basiswerte wie in Generation ${GEN()}; später wurden sie geändert (Quelle: Pokémon Showdown).</p>` : ""}
         ${moreHtml(d)}
-        ${S.game === "legends-arceus" ? `<div id="elbox"></div>` : STATS_OK() ? `<div id="stbox"></div>` : ""}
+        ${LA() ? `<div id="elbox"></div>` : STATS_OK() ? `<div id="stbox"></div>` : ""}
         ${d.faehigkeiten.length ? `<h3>Fähigkeiten</h3>` + d.faehigkeiten.map((a) => `<div><b>${wikiLink(a.name)}</b>${a.versteckt ? " <span class='cls'>versteckt</span>" : ""}${a.wirkt ? " <span class='cls'>ändert Typwirkung</span>" : ""}<div class="why">${esc(a.text)}${fromHtml(a)}</div></div>`).join("")
           : noAbil() ? `<p class="hint">In ${esc(gameName())} gibt es keine Fähigkeiten${GEN() <= 2 ? " (erst ab Generation 3)" : ""}.</p>` : ""}
         ${GEN() <= 3 ? `<p class="hint">Bis Generation 3 hängt physisch oder speziell am Typ der Attacke: Normal, Kampf, Flug, Gift, Boden, Gestein, Käfer, Geist und Stahl sind physisch, die übrigen speziell.${GEN() === 1 ? " In Generation 1 gab es statt Sp.-Angriff und Sp.-Verteidigung einen gemeinsamen Spezial-Wert." : ""}</p>` : ""}
@@ -1421,7 +1425,7 @@ async function detailView(id, slot = null) {
     <div class="box" id="mbox"></div>`;
   header();
   renderMoves(d.attacken, level);
-  if (S.game === "legends-arceus") elBox(d, inTeam ? DSLOT : null);
+  if (LA()) elBox(d, inTeam ? DSLOT : null);
   else if (STATS_OK()) statBox(d, inTeam ? DSLOT : null);
   wireExtras(d);
   $('details[data-store="raidOpen"]')?.addEventListener("toggle", (e) => store.set("raidOpen", e.target.open));
@@ -1474,13 +1478,13 @@ async function elBox(d, slot) {
 }
 /* Werte-Diagramm (alle Spiele außer Legenden: Arceus, Champions, Pokopia): IVs und EVs (bis Generation 2
    DVs und Stat Exp, in Let's Go AVs), Wesen und Ziel-EVs; der Server rechnet die Werte. Im Team je Platz gespeichert, sonst zum Ausprobieren. */
-const STATS_OK = () => !["legends-arceus", "champions", "pokopia"].includes(S.game);
+const STATS_OK = () => ["dv", "ev", "av"].includes(PROFIL().werte);     // Werte-Rechner der Hauptreihe; Effort Levels: elBox
 async function statBox(d, slot) {
   const el = $("#stbox");
   if (!el) return;
   const det = slot !== null ? S.team.details[slot] || {} : (statBox.tmp ||= {});
   if (slot === null && statBox.tmpId !== d.id) { statBox.tmpId = d.id; Object.keys(det).forEach((k) => delete det[k]); }
-  const lv = det.level || 50, K = GEN() <= 2 ? {iv: "dvs", ev: "exp", z: "exp_ziel"} : S.game === "lets-go-pikachu-lets-go-eevee" ? {iv: "ivs", ev: "avs", z: "av_ziel"} : {iv: "ivs", ev: "evs", z: "ev_ziel"};   // bis Gen. 2 eigene Felder (Showdown schreibt dort EVs)
+  const lv = det.level || 50, K = GEN() <= 2 ? {iv: "dvs", ev: "exp", z: "exp_ziel"} : PROFIL().werte === "av" ? {iv: "ivs", ev: "avs", z: "av_ziel"} : {iv: "ivs", ev: "evs", z: "ev_ziel"};   // bis Gen. 2 eigene Felder (Showdown schreibt dort EVs)
   const r = await api("/api/werte", {spiel: S.game, id: d.id, level: lv, wesen: det.wesen || null, ivs: det[K.iv] || null, evs: det[K.ev] || null, ziel: det[K.z] || null}).catch(teil("Werte", null));
   if (!r || !$("#stbox") || !r.rows.length) return;
   const old = r.gen <= 2, lg = r.art === "lgpe", IV = old ? "DV" : "IV", EV = old ? "Stat Exp" : lg ? "AV" : "EV";
@@ -1647,9 +1651,8 @@ async function raidsView(arg) {
 let REQ_DONE = new Set();
 let REQ_REDRAW = null, REQ_OK = false;
 // Spiele mit Aufträgen und Missionen; Mega-Dimension teilt sie mit Legenden: Z-A
-const REQ_GAMES = {"legends-arceus": "legends-arceus", "legends-za": "legends-za", "mega-dimension": "legends-za",
-  "scarlet-violet": "the-indigo-disk", "the-teal-mask": "the-indigo-disk", "the-indigo-disk": "the-indigo-disk"};
-const REQ_GAME = () => REQ_GAMES[S.game] || "";
+/* Schlüssel, unter dem Aufträge und ihre Haken liegen (Profil: auftraege); eine Erweiterung teilt ihn mit dem Hauptspiel */
+const REQ_GAME = () => PROFIL().auftraege || "";
 async function loadReqDone(force = false) {      // einmal je Seitenaufruf und Spiel; die Haken ändert die Oberfläche selbst
   if (REQ_OK === REQ_GAME() && !force) return;
   const g = REQ_GAME();
@@ -1888,19 +1891,19 @@ document.addEventListener("change", (e) => {
 });
 function catchHtml(d) {
   const m = d.mehr || {};
-  if (!m.fangen || BATTLE()) return "";
-  if (S.game === "legends-arceus" && m.fang_hisui) return catchHtmlLA(d);
+  if (!m.fangen) return "";                                  // ohne Fangen (Profil: fangformel keine) schickt der Server nichts
+  if (m.fang_hisui) return catchHtmlLA(d);                   // eigene Formel (Profil: fangformel hisui)
   const pc = (v) => `<span style="color:${ramp(v / 100)}">${String(v).replace(".", ",")} %</span>`;
-  const la = (S.game || "").startsWith("legends-"), grob = m.fang_grob && !la;
+  const art = PROFIL().fangformel;                           // legenden, letsgo, gen12: die Tabelle gibt nur eine Richtung
   return `<details class="box"${isCaught(d.id) ? "" : " open"}><summary><h2>Fangchance</h2><span class="hint">Fangrate ${m.fangrate}${isCaught(d.id) ? " · schon gefangen" : ""}</span></summary>
     <table class="rows sort catch"><thead><tr>${th("Ball")}${thc("volle KP")}${thc("1 KP", "Ein einziger KP übrig: der beste Fall, etwa dreimal so gut wie volle KP. Die Chance steigt gleichmäßig, je weniger KP übrig sind, ohne Schwellen")}${thc("1 KP, gelähmt", "Paralyse, Vergiftung und Verbrennung: Fangrate ×1,5")}${thc("1 KP, schlafend", `Schlaf und Einfrieren: Fangrate ×${m.schlaf_faktor || 2.5}`)}</tr></thead>
     <tbody>${m.fangen.map((f) => { const ct = (lbl, sh, st, stl, v, col) => f.faktor != null ? tipRef(catchTip(m, f, lbl, sh, st, stl, v, col)) : "";
       return `<tr><td>${esc(f.ball)}</td><td class="c" data-s="${f.voll}" ${ct("volle KP", 1, 1, "", f.voll, "voll")}>${pc(f.voll)}</td><td class="c" data-s="${f.rot}" ${ct("1 KP", 0, 1, "", f.rot, "rot")}>${pc(f.rot)}</td>
         <td class="c" data-s="${f.status ?? ""}" ${f.status != null ? ct("1 KP", 0, 1.5, "gelähmt, vergiftet oder verbrannt", f.status, "status") : ""}>${f.status != null ? pc(f.status) : "–"}</td>
         <td class="c" data-s="${f.schlaf}" ${ct("1 KP", 0, +String(m.schlaf_faktor || 2.5).replace(",", "."), "schlafend oder eingefroren", f.schlaf, "schlaf")}>${pc(f.schlaf)}</td></tr>`; }).join("")}</tbody></table>
-    <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${la ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
-      : grob && S.game.startsWith("lets-go") ? ". Let’s Go rechnet anders (siehe unten); die Werte geben nur eine Richtung."
-      : grob ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p>${wissenHtml(d.spielwissen)}</details>`;
+    <p class="hint">Je Wurf, ohne kritischen Fang und ohne Boni durch Level oder Runde. Statusprobleme helfen: Schlaf und Einfrieren am meisten, Paralyse, Gift und Verbrennung etwas${art === "legenden" ? ". Die Legenden-Spiele rechnen anders (Wurf in den Rücken, Level, Alpha); die Werte geben nur eine Richtung."
+      : art === "letsgo" ? ". Let’s Go rechnet anders (siehe unten); die Werte geben nur eine Richtung."
+      : art === "gen12" ? ". Generation 1 und 2 rechnen anders; die Werte geben nur eine Richtung." : "."}</p>${wissenHtml(d.spielwissen)}</details>`;
 }
 /* Gepflegtes Spielwissen (extra/spielwissen.json), bisher Let’s Go: Fangen ohne Kampf und Fang-Kombo */
 const miniTable = (head, rows) => `<table class="rows">${head ? `<tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>` : ""}${rows.map((r) => `<tr>${r.map((c, i) => `<td${i && String(c).length < 14 ? ' class="c"' : ""}>${esc(c)}</td>`).join("")}</tr>`).join("")}</table>`;
@@ -2751,7 +2754,7 @@ async function mgView(slug, want) {
   const rid = RID;
   const lst = await api("/api/mapgenie?" + qs({spiel: S.game})).catch(teil("Karten des Spiels", {karten: []}));
   if (rid !== RID) return;
-  if (!lst.karten.length) return S.game === "legends-arceus" ? mapView() : areasView();
+  if (!lst.karten.length) return PROFIL().spawnkarten ? mapView() : areasView();
   // 0.48.6: Karten einer Schwester-Edition nicht anbieten (Rot/Blau zeigt nicht Gelb und umgekehrt), sonst blieb beim
   // Spielwechsel die Karte der anderen Edition stehen
   lst.karten = lst.karten.filter((k) => (want && k.slug === slug) || !MG_EDITION[k.slug] || MG_EDITION[k.slug].includes(S.game));   // ein Link auf eine Ebene (want) darf auch die Karte der Erweiterung öffnen
@@ -2802,7 +2805,7 @@ async function mgView(slug, want) {
     <div class="bar"><h2 style="margin:0">Karte</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       ${lst.karten.length > 1 ? `<span class="seg">${lst.karten.map((k) => `<a class="btn${k.slug === slug ? " on" : ""}" href="#karte/mg/${esc(k.slug)}">${esc(k.titel)}</a>`).join("")}</span>` : ""}
       ${regions.length ? `<select id="mggo" aria-label="Gehe zu"><option value="">Gehe zu …</option>${regions.map((r, i) => `<option value="${i}">${esc(r[0])}</option>`).join("")}</select>` : ""}
-      ${S.game === "legends-arceus" ? `<a class="btn" href="#karte/obsidianfieldlands" data-tip="Einzelkarten je Gebiet mit Tageszeit- und Wetterfilter">Einzelkarten</a>` : ""}
+      ${PROFIL().spawnkarten ? `<a class="btn" href="#karte/obsidianfieldlands" data-tip="Einzelkarten je Gebiet mit Tageszeit- und Wetterfilter">Einzelkarten</a>` : ""}
       <a class="btn" href="#karte/gebiete" data-tip="Alle Orte mit ihren Pokémon als Liste">Gebiete</a>
       <a class="btn" href="#sammeln" data-tip="Sammelobjekte aller Karten des Spiels mit deinem Fortschritt (Haken per Rechtsklick)">Sammelobjekte</a>
       <input id="mgq" type="search" placeholder="Ort, Symbol oder Pokémon suchen" style="width:240px">
@@ -3209,7 +3212,7 @@ async function areasView(want) {
   main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Gebiete</h2><span class="hint">Spiel</span><select class="gamesel"></select>
       <input id="gq" type="search" placeholder="Ort oder Pokémon" style="width:220px">
       <label data-tip="Pokémon, die du in diesem Spiel schon gefangen hast, ausblenden"><input type="checkbox" id="gmiss"${miss ? " checked" : ""}> nur noch nicht gefangene</label>
-      ${S.game === "legends-arceus" ? `<a class="btn" href="#karte/obsidianfieldlands">Zur Karte</a>` : ""}<span class="hint grow">${d.gebiete.length} Orte</span></div>
+      ${PROFIL().spawnkarten ? `<a class="btn" href="#karte/obsidianfieldlands">Zur Karte</a>` : ""}<span class="hint grow">${d.gebiete.length} Orte</span></div>
     <div class="gwrap"><nav class="glist" id="glist"></nav><div class="gmain" id="gmain"></div></div>
     <p class="hint">Quelle: ${d.quelle === "PKHeX" ? "Spieldaten (PKHeX)" : "PokéAPI"}. Anteil: so oft erscheint es mit dieser Methode (Summe der Plätze).</p></div>`;
   header();
@@ -3297,7 +3300,7 @@ async function mapView(karte, fid) {
     ${objs.length || pts.length ? `<div class="bar mlays">${pts.length ? `<button class="mlay heatbtn${heatOn ? " on" : ""}" id="heatbtn" data-tip="Wo es welche Pokémon gibt: Bilder je Kartenfeld, je größer, desto wahrscheinlicher">▦ Übersicht mit Bildern</button>` : ""}${hasCond ? condSel("mapZeit", "Tageszeit", d.zeiten || [], fz) + condSel("mapWetter", "Wetter", d.wetterarten || [], fw) : ""}
       ${objs.length ? `<label class="mgot" data-tip="Symbole, die du als erledigt markiert hast (Rechtsklick auf ein Symbol oder ✓ in den Details), ausblenden"><input type="checkbox" id="gothide"${gotHide ? " checked" : ""}> gefundene ausblenden</label>` : ""}
 </div>` : ""}
-    ${S.game && S.game !== "legends-arceus" ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus. <a href="#karte/gebiete">Gebiete von ${esc(gameName())}</a></div>` : ""}
+    ${S.game && !PROFIL().spawnkarten ? `<div class="note info">Für ${esc(gameName())} gibt es noch keine Karte; gezeigt ist Legenden: Arceus. <a href="#karte/gebiete">Gebiete von ${esc(gameName())}</a></div>` : ""}
     ${d.kacheln || d.bild ? "" : `<div class="note">Das Kartenbild fehlt noch; der nächste Abgleich lädt es (Einstellungen → Abgleich). Die Spawnpunkte stimmen trotzdem.</div>`}
     <div class="mapwrap"><div class="mapcol"><div id="map" class="map"><div class="mapin"><div class="tiles"></div><div class="pins"></div></div></div>
       <div class="mapzoom"><button data-mz="1" data-tip="näher">+</button><input type="range" id="mapz" aria-label="Zoom" data-tip="Zoom stufenlos"><button data-mz="-1" data-tip="weiter weg">−</button><button data-mz="0" data-tip="ganze Karte">⤢</button></div></div>
@@ -3542,7 +3545,7 @@ const BALL = {"Pokéball": [1, ""], "Superball": [1.5, ""], "Hyperball": [2, ""]
   "Traumball": [4, "×4 bei schlafenden Pokémon"], "Ultraball": [5, "×5 bei Ultrabestien, sonst ×0,1"], "Kirschball": [1, ""], "Kirschenball": [1, ""]};
 // 0.57.0: Die Bälle aus Hisui kommen vom Server (/api/meta, hisui_baelle); hier steht keine eigene Tabelle mehr
 const ballHisui = (n) => { const b = (S.meta?.hisui_baelle || []).find((x) => x[0] === n); return b ? [b[1], b[4] || ""] : null; };
-const ballOf = (x) => { const h = / \(Hisui\)$/.test(x.name) || S.game === "legends-arceus"; const n = x.name.replace(/ \(Hisui\)$/, "");
+const ballOf = (x) => { const h = / \(Hisui\)$/.test(x.name) || PROFIL().baelle === "hisui"; const n = x.name.replace(/ \(Hisui\)$/, "");
   return (h ? ballHisui(n) : null) || BALL[n] || null; };
 /* Wirkung von Medizin und Beeren in schmalen Spalten: KP, AP, EP und die Statusprobleme. Aus Kurztext und Beschreibung
    des Spiels gelesen (die Beschreibung gilt, wenn sie eine Zahl nennt: Werte ändern sich zwischen den Spielen) */
@@ -3777,7 +3780,7 @@ const EL_FAKTOR = [0, 2, 3, 4, 7, 8, 9, 14, 15, 16, 25];
 // 0.57.0: wie app/effort.py: das Spiel rechnet mit einfacher Genauigkeit (Math.fround), das Wesen wirkt auf den abgerundeten Grundwert
 const laStat = (base, lv, el, nat = 1) => { const f = Math.fround;
   return natAmp(Math.trunc(f(f(f(f(lv / 50) + 1) * base) / 1.5)), nat) + Math.floor(f(f(f(Math.sqrt(base) * EL_FAKTOR[el]) + lv) / 2.5) + 0.5); };
-const LA = () => S.game === "legends-arceus";
+const LA = () => PROFIL().werte === "el";      // Effort Levels statt EVs und DVs (Legenden: Arceus)
 /* Rechenweg einer Zelle der Initiative-Liste (Spalte k: minimal, neutral, maximal, maximal +), Einstellungen aus SPO */
 let SPO = {};
 const SPEED_COLS = ["minimal", "neutral", "maximal", "maximal +"];

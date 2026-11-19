@@ -143,3 +143,14 @@ oder 1,25, Flügelball 1,25 oder 1,5, Pokéball 0,75 oder 1).
 Offen: **Federball.** Die Tabelle im Artikel „Catch rate“ nennt 0,5 als Grundwert, der Artikel „Feather Ball“ nennt × 1
 und × 1,25 nur „bei bestimmten fliegenden Begegnungen“. Der Pokédex nimmt wie bisher 1. Wer es im Spiel prüfen kann:
 Ein Federball auf ein Pokémon am Boden entscheidet es.
+
+## Spiele ohne eigene Formel
+
+Welches Spiel welche Formel nimmt, steht im Spielprofil (`app/spiele.py`, `docs/spiele.md`: Felder `schaden`,
+`typfaktoren`, `fangformel`, `werte`). Eigene Formeln haben nur Legenden: Arceus (oben) und Let's Go (AV, `schaden.stat_lgpe`).
+
+Offen (so umgesetzt, aber nicht belegt):
+
+- **Legenden: Z-A und Mega-Dimension** rechnen Schaden, Typwirkung und Werte wie die Hauptreihe der Generation 9. Eine
+  Quelle dafür gibt es hier nicht. Die Fangtabelle ist dort als Richtwert gekennzeichnet (`fangformel` „legenden“).
+- **Pokopia** bekommt die Fangtabelle der Generation 9, obwohl dort nicht im Kampf gefangen wird (wie bis 0.59.0).

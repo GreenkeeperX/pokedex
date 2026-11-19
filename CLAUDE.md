@@ -29,6 +29,8 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
   Grund in `test_keine_stillen_ersatzwerte`,
 - user.db lädt nach jedem Update weiter: nur neue Tabellen und Spalten, nie löschen (`app/db.py`),
 - ändern sich die aufbereiteten Tabellen in `app/importer.py`, `importer.VERSION` erhöhen; dann baut der nächste Abgleich neu,
+- eine Regel je Spiel gehört ins Spielprofil (`app/spiele.py`), nicht als Vergleich mit einer Kennung in Server oder
+  Oberfläche (Test `Spiele`),
 - ändert sich eine Antwort des Servers mit Absicht, `python3 -m tests.vertrag` ausführen; liest eine Abfrage eine neue
   Tabelle der PokéAPI, gehört sie in `importer.NEEDED` (Test).
 
@@ -45,6 +47,8 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
   `docs/formeln.md`, Vergleichswerte in `tests/schaden_referenz.json` (erzeugt mit `tools/schaden_referenz.js`)
 - `app/effort.py`: Effort Levels in Legenden: Arceus (Werte, Kosten bis zum Ziel, ohne Netz)
 - `app/abruf.py`: Abgleich (holen, bauen, Sprites), Zeitplan, Einstellungen, Verbindungstest; siehe `docs/abrufe.md`
+- `app/spiele.py`: Spielprofil, was in welchem Spiel gilt (ohne Datenbank); Server und Oberfläche fragen das Profil, nicht
+  die Kennung des Spiels. Felder und „ein neues Spiel“: `docs/spiele.md`
 - `app/typen.py`, `app/attacken.py`, `app/team.py`: Rechenlogik ohne Datenbank (Typwirkung je Generation,
   Attacken-Wertung und Moveset, Team-Bewertung, Teamsuche, Gegner)
 - `app/abfragen.py`: Abfragen für die Oberfläche (Liste, Detailseite, Attacken, Typtabelle, Teams)

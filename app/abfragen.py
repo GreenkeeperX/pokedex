@@ -10,10 +10,9 @@ import re
 import sqlite3
 import threading
 
-from . import altissimo, attacken, db, fehler, importer, mapgenie, showdown, store, team, typen
+from . import altissimo, attacken, db, fehler, importer, mapgenie, showdown, spiele, store, team, typen
 
-LA = "legends-arceus"          # Legenden: Arceus kennt keine Fähigkeiten und eigene Attackenwerte
-NO_ABILITIES = {LA, "lets-go-pikachu-lets-go-eevee"}
+LA = "legends-arceus"          # Schlüssel der Tabellen von Legenden: Arceus (Forschung, Fangrate, Aufträge, eigene Attackenwerte)
 WIKI = "https://www.pokewiki.de/"
 _lock = threading.Lock()
 _cache = {"stamp": None}
@@ -55,6 +54,13 @@ class Data:
             self.past = []
         self.games = [dict(r) for r in con.execute("SELECT id, kennung, name, gen, reihenfolge FROM spiel ORDER BY reihenfolge")]
         self.game_by = {g["kennung"]: g for g in self.games}
+        for g in self.games:                    # 0.60.0: ein Spiel ohne Profil gilt als Hauptspiel seiner Generation, das soll man sehen
+            if not spiele.bekannt(g["kennung"]):
+                fehler.notiere("abfrage", "spiele.profil", "Spiel ohne Profil",
+                               f"{g['kennung']} gilt als Hauptspiel der Generation {g['gen']}; Eintrag in app/spiele.py fehlt")
+            elif spiele.profil(g["kennung"])["gen"] != g["gen"]:
+                fehler.notiere("abfrage", "spiele.profil", "Generation weicht ab",
+                               f"{g['kennung']}: Datenbank {g['gen']}, Profil {spiele.profil(g['kennung'])['gen']}; es gilt die der Datenbank")
         self.forms = {}
         for r in con.execute("SELECT * FROM form"):
             f = dict(r)
@@ -169,9 +175,20 @@ def game_of(D, kennung):
     return g, gen, chart_of(D, g, gen)
 
 
+def profil(g):
+    """Profil eines Spiels aus D.games (app/spiele.py); ohne Spiel das Übliche der neuesten Generation."""
+    return spiele.profil(g["kennung"], g.get("gen")) if g else spiele.profil("")
+
+
+def profil_von(D, kennung):
+    """Profil zu einer Kennung, auch wenn die Datenbank das Spiel (noch) nicht führt."""
+    g = D.game_by.get(kennung or "") if D else None
+    return profil(g) if g else spiele.profil(kennung or "")
+
+
 def chart_of(D, g, gen):
     """Typtabelle des Spiels: die der Generation, in Legenden: Arceus mit eigener Regel (×2,5 und ×0,4, Eigentyp ×1,25)."""
-    if g and g["kennung"] == LA:
+    if profil(g)["typfaktoren"] == "la":
         if ("la", gen) not in D.charts:
             D.charts[("la", gen)] = typen.for_la(D.chart(gen))
         return D.charts[("la", gen)]
@@ -199,7 +216,7 @@ def form_stats(D, f, gen):
 
 def no_abilities(g):
     """Spiele ohne Fähigkeiten: Generation 1 und 2, Let's Go und Legenden: Arceus."""
-    return bool(g) and (g["kennung"] in NO_ABILITIES or (g.get("gen") or 9) <= 2)
+    return not profil(g)["faehigkeiten"]
 
 
 def old_class(v, gen):
@@ -362,7 +379,7 @@ def search(p):
         return {"rows": [], "n": 0, "ohne_daten": True}
     g, gen, found = candidates(D, p)
     rows = [row(D, f, g, gen, nr) for f, nr in found]
-    if g and g["kennung"] == LA and p.get("sort") == "forschung":      # 0.49: wo noch viele Forschungspunkte zu holen sind
+    if profil(g)["forschung"] and p.get("sort") == "forschung":      # 0.49: wo noch viele Forschungspunkte zu holen sind
         con = db.game()
         try:
             op = research_open(con)
@@ -393,12 +410,6 @@ def _ints(v):
 
 # ------------------------------------------------------------------ Attacken
 
-# Spiele ohne eigene Texte: die Erweiterungen nehmen die ihres Hauptspiels
-TEXT_BASE = {"the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield", "the-teal-mask": "scarlet-violet",
-             "the-indigo-disk": "scarlet-violet", "mega-dimension": "legends-za", "red-green-japan": "red-blue",
-             "blue-japan": "red-blue"}
-
-
 def pick_text(D, per, g):
     """Text für das gewählte Spiel aus {Spiel: [(Edition, Text, Quelle)]}: das Spiel selbst (bei Erweiterungen das
     Hauptspiel), sonst das letzte Spiel davor mit Text, sonst das erste danach. Gibt {"texte": [{edition, text}], "quelle",
@@ -407,7 +418,7 @@ def pick_text(D, per, g):
         return {"texte": [], "quelle": "", "aus": ""}
     order = {x["kennung"]: x["reihenfolge"] for x in D.games}
     names = {x["kennung"]: x["name"] for x in D.games}
-    want = TEXT_BASE.get(g["kennung"], g["kennung"]) if g else None
+    want = spiele.basis(g["kennung"]) if g else None         # Erweiterungen ohne eigene Texte nehmen die ihres Hauptspiels
     if want in per:
         sp = want
     else:
@@ -458,15 +469,12 @@ def move_view(D, m, g):
     return old_class(v, g.get("gen") or 9) if g else v
 
 
-# Erweiterungen ohne eigene Lernliste: die PokéAPI führt deren Lehrer-Attacken und TMs beim Hauptspiel
-LEARN_PARENT = {"the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield",
-                "the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet"}
-
-
 def learn_game(D, g):
-    """Spiel, dessen Lernliste für g gilt: das Hauptspiel bei Erweiterungen, sonst g selbst."""
-    if g and g["kennung"] in LEARN_PARENT:
-        return next((x for x in D.games if x["kennung"] == LEARN_PARENT[g["kennung"]]), g)
+    """Spiel, dessen Lernliste für g gilt: das Hauptspiel bei Erweiterungen ohne eigene Lernliste (die PokéAPI führt deren
+    Lehrer-Attacken und TMs beim Hauptspiel), sonst g selbst."""
+    pr = profil(g)
+    if pr["lernliste"] == "hauptspiel":
+        return next((x for x in D.games if x["kennung"] == pr["hauptspiel"]), g)
     return g
 
 
@@ -1257,7 +1265,7 @@ def _point_pics(r):
 def _quests_de(r, spiel=LA):
     """Aufträge und Hauptmissionen auf der Karte: deutscher Name und Text von BisaFans vor dem englischen von Map Genie;
     „aq“ nennt den Schlüssel, unter dem der Haken liegt (wie im Reiter Aufträge)."""
-    spiel = QUEST_GAMES.get(spiel, spiel)
+    spiel = _auftragsspiel(spiele.profil(spiel)) or spiel
     cats = {c["id"]: quest_kind(c["en"]) for g in r["gruppen"] for c in g["kategorien"]}
     con = db.game()
     try:
@@ -1352,9 +1360,9 @@ _MERGE_LOCK = threading.Lock()
 
 
 def _mg_map(m, spiel, stamp, key, hit):
-    own = mg_overlay(m, stamp) if spiel == "legends-arceus" else None
+    own = mg_overlay(m, stamp) if spiele.profil(spiel)["spawnkarten"] else None      # eigene Spawnpunkte (Legenden: Arceus)
     r = mapgenie.merge(m, own, mg_names())
-    if spiel in QUEST_GAMES:
+    if _auftragsspiel(spiele.profil(spiel)):
         _quests_de(r, spiel)
     if m.get("quelle") in ("pokearth", "ironmon", "raidnester"):       # Orte mit englischem Namen: Pokémon aus den Fundorten
         _pokearth_mons(r, spiel)
@@ -1728,7 +1736,7 @@ def sleep_factor(gen):
 
 def _more(con, f, g, gen):
     """Mehr Details: Fangrate mit Fangchance, Geschlecht, Wachstum, Ei-Gruppen, Ei-Zyklen, EV-Ausbeute. Was es im Spiel
-    nicht gibt, bleibt weg (Legenden: Arceus: keine Eier, keine EVs)."""
+    nicht gibt, bleibt weg; das sagt das Spielprofil (fangformel, baelle, zucht, werte)."""
     out = {}
     try:
         sp = con.execute("SELECT capture_rate, gender_rate, hatch_counter, base_happiness, growth_rate_id FROM pokemon_species "
@@ -1738,19 +1746,21 @@ def _more(con, f, g, gen):
         return out
     if not sp:
         return out
-    kennung = g["kennung"] if g else ""
+    pr = profil(g)
+    hisui = pr["fangformel"] == "hisui"
     if sp["capture_rate"] is not None:
         out["fangrate"] = sp["capture_rate"]
-        if kennung == "legends-arceus":       # 0.50: eigene Fangrate und eigene Formel (Rechnung in app.js, catchHtmlLA)
+    if sp["capture_rate"] is not None and pr["fangformel"] != "keine":
+        if hisui:                             # 0.50: eigene Fangrate und eigene Formel (Rechnung in app.js, catchHtmlLA)
             try:
-                r = con.execute("SELECT rate FROM fangrate WHERE spiel = ? AND art = ?", (kennung, f["art"])).fetchone()
+                r = con.execute("SELECT rate FROM fangrate WHERE spiel = ? AND art = ?", (g["kennung"], f["art"])).fetchone()
             except Exception as err:
                 fehler.melden(err)
                 r = None
             out["fangrate_la"] = r[0] if r else None
             out["fang_hisui"] = [b[:4] for b in HISUI_BALLS if b[0] not in HISUI_NO_TABLE]
         extra = ()
-        if g and kennung != "legends-arceus":
+        if g and pr["baelle"] == "standard":
             try:
                 have = {r["name"] for r in con.execute("SELECT name, spiele FROM item WHERE tasche = 'Bälle'")
                         if g["id"] in json.loads(r["spiele"] or "[]")}
@@ -1759,7 +1769,7 @@ def _more(con, f, g, gen):
             except Exception as err:
                 fehler.melden(err)
                 extra = ()
-        if kennung == "legends-arceus":       # dieselbe Tabelle und Formel wie die Oberfläche (Sternrang 10, Level bis 10)
+        if hisui:                             # dieselbe Tabelle und Formel wie die Oberfläche (Sternrang 10, Level bis 10)
             rate_la = out.get("fangrate_la") or sp["capture_rate"]
             out["fangen"] = [{"ball": b[0], "faktor": b[1], "voll": catch_chance_la(rate_la, b[1]), "rot": catch_chance_la(rate_la, b[1], 0),
                               "status": catch_chance_la(rate_la, b[1], 0, 2.0), "schlaf": catch_chance_la(rate_la, b[1], 0, 2.0)}
@@ -1768,7 +1778,7 @@ def _more(con, f, g, gen):
             out["fangen"] = catch_table(sp["capture_rate"], gen, BALLS, extra)
         out["schlaf_faktor"] = str(sleep_factor(gen)).replace(".", ",")
         out["fang_gen"] = gen
-        out["fang_grob"] = gen <= 2 or (kennung.startswith("legends-") and kennung != LA) or kennung.startswith("lets-go")
+        out["fang_grob"] = pr["fangformel"] in spiele.FANG_GROB
     if sp["gender_rate"] is not None and gen >= 2:
         gr = sp["gender_rate"]
         out["geschlecht"] = "geschlechtslos" if gr < 0 else f"{100 - gr * 12.5:g} % männlich, {gr * 12.5:g} % weiblich"
@@ -1778,7 +1788,7 @@ def _more(con, f, g, gen):
             out["wachstum"] = GROWTH_DE.get(gk[0], gk[0])
     except Exception as err:
         fehler.melden(err)
-    if kennung != "legends-arceus":
+    if pr["zucht"]:                           # 0.60.0: Ei-Gruppen nur, wo es Zucht gibt (vorher überall außer in Legenden: Arceus)
         try:
             eg = [r[0] for r in con.execute(
                 "SELECT COALESCE(p.name, pe.egg_group_id) FROM pokemon_egg_groups pe LEFT JOIN egg_group_prose p "
@@ -1786,17 +1796,17 @@ def _more(con, f, g, gen):
         except Exception as err:
             fehler.melden(err)
             eg = []
-        if eg and gen >= 2:
+        if eg:
             out["eigruppen"] = eg
             if sp["hatch_counter"] is not None:
                 out["eizyklen"] = sp["hatch_counter"]
-        if gen >= 3:
-            try:
-                ev = [(r[0], r[1]) for r in con.execute("SELECT stat_id, effort FROM pokemon_stats WHERE pokemon_id = ? AND effort > 0",
-                                                         (f["id"],))]
-                out["ev"] = [{"wert": STAT_KEYS[s - 1], "punkte": e} for s, e in ev if 1 <= s <= 6]
-            except Exception as err:
-                fehler.melden(err)
+    if pr["werte"] == "ev":                   # 0.60.0: EV-Ausbeute nur, wo es EVs gibt (vorher ab Generation 3 überall außer in Legenden: Arceus)
+        try:
+            ev = [(r[0], r[1]) for r in con.execute("SELECT stat_id, effort FROM pokemon_stats WHERE pokemon_id = ? AND effort > 0",
+                                                     (f["id"],))]
+            out["ev"] = [{"wert": STAT_KEYS[s - 1], "punkte": e} for s, e in ev if 1 <= s <= 6]
+        except Exception as err:
+            fehler.melden(err)
     return out
 
 
@@ -1815,6 +1825,7 @@ def detail(fid, p):
         return None
     f = D.forms[fid]
     g, gen, ch = game_of(D, p.get("spiel"))
+    pr = profil(g)
     con = db.game()
     try:
         ts = form_types(D, f, gen)
@@ -1841,14 +1852,14 @@ def detail(fid, p):
         return dict(row(D, f, g, gen, nr), formname=f["formname"], kategorie=genus[0] if genus else "",
                     text=joined(dex) if dex["texte"] else (" ".join(str(flavor[0]).split()) if flavor else ""),
                     texte=dex["texte"], text_aus=dex["aus"], text_quelle=dex["quelle"] or ("PokéAPI" if flavor else ""),
-                    forschung=_research(con, f["art"]) if g and g["kennung"] == LA else [], faehigkeiten=abil,
-                    auftraege=_requests(con, D, f["art"], QUEST_GAMES[g["kennung"]]) if g and g["kennung"] in QUEST_GAMES else [],
+                    forschung=_research(con, f["art"]) if pr["forschung"] else [], faehigkeiten=abil,
+                    auftraege=_requests(con, D, f["art"], _auftragsspiel(pr)) if _auftragsspiel(pr) else [],
                     wirkung={str(a): v for a, v in dvec.items()}, faehigkeit_wirkt=ab if ab in typen.ABILITY_DEFENSE else "",
                     entwicklung=_evolutions(con, D, f), fundorte=_enc(con, g, fid), fundquelle="PKHeX" if g and g["kennung"] in D.areas else "PokéAPI", formen=siblings, attacken=moves,
                     im_spiel=(fid in D.in_game.get(g["id"], {})) if g else True, mehr=_more(con, f, g, gen), extras=_extras(fid),
                     wiki=WIKI + _wiki_title(D, f), getragen=_held(con, g, f), optik=_optik(con, f), pokopia=_pokopia(con, g, f),
-                    raids=_raids(con, D, g, form=fid) if g and g["kennung"] in TERA_GAMES else [],
-                    crypto=_crypto(con, D, g, fid) if g and g["kennung"] in ("colosseum", "xd") else [],
+                    raids=_raids(con, D, g, form=fid) if pr["raids"] else [],
+                    crypto=_crypto(con, D, g, fid) if pr["crypto"] else [],
                     spielwissen=knowledge(con, g["kennung"] if g else "", fid))
     finally:
         con.close()
@@ -1940,7 +1951,7 @@ def _held(con, g, f):
 
 def _pokopia(con, g, f):
     """Einträge der Art in den Pokédexen von Pokopia (Serebii): [{dex, nr, name, spezial: [deutsch]}]."""
-    if not g or g["kennung"] != "pokopia":
+    if not profil(g)["eigene_dexe"]:
         return []
     from . import serebii
     try:
@@ -2039,8 +2050,12 @@ def _missions(con, spiel=LA):
 
 
 ZA = "legends-za"
-QUEST_GAMES = {LA: LA, ZA: ZA, "mega-dimension": ZA}       # Spiel → Spiel, unter dem Aufträge und Haken liegen
-BBQ_GAMES = ("scarlet-violet", "the-teal-mask", "the-indigo-disk")   # Blaubeer-Missionen (Indigoblaue Scheibe)
+
+
+def _auftragsspiel(pr):
+    """Spiel, unter dem Aufträge und Missionen in der Datenbank liegen (Profilfeld auftraege); leer ohne Aufträge und bei
+    den Blaubeer-Missionen (eigene Tabelle)."""
+    return "" if pr["blaubeer"] else pr["auftraege"]
 
 
 def _blaubeer(con):
@@ -2094,17 +2109,18 @@ def quest_points(m):
 
 
 def request_list(p):
-    """Aufträge und Missionen eines Spiels mit Aufträgen (QUEST_GAMES): {"spiel", "rows": [...], "missionen": [...],
+    """Aufträge und Missionen eines Spiels mit Aufträgen (Profilfeld auftraege): {"spiel", "rows": [...], "missionen": [...],
     "kapitel", "quelle", "karte": {auftrag: {Nr: [Karte, Ort-id]}, mission: {...}}} (leer in anderen Spielen)."""
     D = data()
-    if D and p.get("spiel") in BBQ_GAMES:
+    pr = profil_von(D, p.get("spiel") or LA)
+    if D and pr["blaubeer"]:
         con = db.game()
         try:
-            return {"spiel": "the-indigo-disk", "rows": [], "missionen": [], "blaubeer": _blaubeer(con),
+            return {"spiel": pr["auftraege"], "rows": [], "missionen": [], "blaubeer": _blaubeer(con),
                     "quelle": "Blaubeer-Missionen aus dem PokéWiki"}
         finally:
             con.close()
-    spiel = QUEST_GAMES.get(p.get("spiel") or LA)
+    spiel = _auftragsspiel(pr)
     if not D or not spiel:
         return {"rows": [], "missionen": []}
     from . import abruf
@@ -2174,11 +2190,14 @@ def item_list(p):
                 fehler.melden(err)
                 recs, mats = {}, {}
         tms = {}
+        # 0.60.0: Eine Erweiterung führt bei der PokéAPI nur ihre neuen Maschinen; die übrigen stehen beim Hauptspiel
+        haupt = D.game_by.get(profil(g)["hauptspiel"]) if g else None
         if vg:
             try:
-                for r in con.execute("SELECT m.item_id, a.name, a.typ, a.klasse, a.staerke, a.genauigkeit, a.ap, a.kurz FROM machines m "
-                                     "JOIN attacke a ON a.id = m.move_id WHERE m.version_group_id = ?", (vg,)):
-                    tms[r[0]] = {"name": r[1], "typ": r[2], "klasse": r[3], "staerke": r[4], "genauigkeit": r[5], "ap": r[6], "kurz": r[7] or ""}
+                for v in ([haupt["id"]] if haupt else []) + [vg]:          # die eigenen zuletzt: sie gelten, wo beide eine haben
+                    for r in con.execute("SELECT m.item_id, a.name, a.typ, a.klasse, a.staerke, a.genauigkeit, a.ap, a.kurz FROM machines m "
+                                         "JOIN attacke a ON a.id = m.move_id WHERE m.version_group_id = ?", (v,)):
+                        tms[r[0]] = {"name": r[1], "typ": r[2], "klasse": r[3], "staerke": r[4], "genauigkeit": r[5], "ap": r[6], "kurz": r[7] or ""}
             except Exception as err:
                 fehler.melden(err)
                 tms = {}
@@ -2339,11 +2358,8 @@ def team_view(body):
     ev["fremde_attacken"] = foreign_moves(D, ms, details, g)
     ev["matrix"] = {str(m["id"]): {str(a): f for a, f in ctx.dvec(m).items()} for m in ms}
     ev["mitglieder"] = [row(D, D.forms[m["id"]], g, gen) for m in ms]
-    ev["tera"] = tera_effect(D, ms, details, ch) if g and g["kennung"] in TERA_GAMES else []
+    ev["tera"] = tera_effect(D, ms, details, ch) if profil(g)["tera"] else []
     return ev
-
-
-TERA_GAMES = {"scarlet-violet", "the-teal-mask", "the-indigo-disk"}
 
 
 def tera_effect(D, ms, details, ch):
@@ -2480,12 +2496,8 @@ def team_caught(body):
     return {"alternativen": alt[:8], "potential": pot[:8], "gefangen": len(caught), "wertung": base}
 
 
-# 0.54: Spiele ohne Zucht (kein Ei, keine Pension): „Zucht“ fällt dort als Weg weg
-NO_BREEDING = {"red-green-japan", "blue-japan", "red-blue", "yellow", "colosseum", "xd", "lets-go-pikachu-lets-go-eevee",
-               "legends-arceus", "legends-za", "mega-dimension", "champions"}
 NO_EGGS = 15                     # Ei-Gruppe „Unbekannt“: legendäre und manche besondere Pokémon schlüpfen nie
 WAYS = ("jetzt", "wild", "fest", "entwicklung", "raid", "zucht", "tausch", "edition", "unklar")
-SV_FAMILY = ("scarlet-violet", "the-teal-mask", "the-indigo-disk")
 
 
 def missing(p):
@@ -2538,9 +2550,9 @@ def missing(p):
                 e["texte"].append(t)
             e["tausch"] = e["tausch"] or r.get("evolution_trigger_id") == 2
         raids = {}
-        if g["kennung"] in SV_FAMILY:
+        if profil(g)["raids"]:
             try:
-                for fid, st in con.execute("SELECT form, sterne FROM raid WHERE spiel = 'scarlet-violet'"):
+                for fid, st in con.execute("SELECT form, sterne FROM raid WHERE spiel = ?", (profil(g)["raids"],)):
                     if fid in D.forms:
                         raids.setdefault(D.forms[fid]["art"], set()).add(st)
             except Exception as err:
@@ -2566,7 +2578,7 @@ def missing(p):
             out |= {k} | (later(k, n + 1) if n < 4 else set())
         return out
 
-    breeding = g["kennung"] not in NO_BREEDING and gen >= 2
+    breeding = profil(g)["zucht"]              # 0.54: ohne Zucht (kein Ei, keine Pension) fällt „Zucht“ als Weg weg
     out = []
     for art, (_, f, nr, di) in rep.items():
         if art in caught:
@@ -2695,9 +2707,6 @@ def _furthest(pot, D, skip):
     return [r for _, r in best.values()]
 
 
-# Erweiterungen und Schwester-Editionen zeigen die Trainer ihres Hauptspiels
-TRAINER_SHARE = {"the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet", "the-isle-of-armor": "sword-shield",
-                 "the-crown-tundra": "sword-shield", "mega-dimension": "legends-za", "red-green-japan": "red-blue", "blue-japan": "red-blue"}
 TRAINER_ROLLEN = ("Arenaleiter", "Top Vier", "Champ", "Rivale", "Trainer")
 
 
@@ -2708,7 +2717,7 @@ def trainer_list(p):
     if not D:
         return {"trainer": []}
     g, _, _ = game_of(D, p.get("spiel"))
-    spiel = TRAINER_SHARE.get(g["kennung"], g["kennung"]) if g else ""
+    spiel = spiele.basis(g["kennung"]) if g else ""        # Erweiterungen und Schwester-Editionen zeigen die Trainer ihres Hauptspiels
     std = {}
     for f in D.forms.values():
         if f["standard"]:
@@ -2786,7 +2795,7 @@ def team_matchup(body):
     return {"rows": first["rows"], "gegner": first["gegner"], "einzeln": out, "uebersicht": summary, "ohne_antwort": uncovered}
 
 
-HOME = "pokemon-home"       # kein Spiel der PokéAPI: alle Pokémon mit den neuesten Werten, eigene Sammlung
+HOME = spiele.HOME          # kein Spiel der PokéAPI: alle Pokémon mit den neuesten Werten, eigene Sammlung
 
 
 def games():
@@ -2794,9 +2803,9 @@ def games():
     if not D:
         return []
     home = {"kennung": HOME, "name": "Pokémon HOME", "gen": 0, "home": True, "gebiete": [],
-            "pokemon": sum(1 for f in D.forms.values() if f["relevant"])}
+            "pokemon": sum(1 for f in D.forms.values() if f["relevant"]), "profil": spiele.fuer_oberflaeche(spiele.profil(HOME, D.max_gen))}
     return [home] + [{"kennung": g["kennung"], "name": g["name"], "gen": g["gen"], "pokemon": len(D.in_game.get(g["id"], {})),
-                      "gebiete": list(D.areas.get(g["kennung"], {}))} for g in reversed(D.games)]
+                      "gebiete": list(D.areas.get(g["kennung"], {})), "profil": spiele.fuer_oberflaeche(profil(g))} for g in reversed(D.games)]
 
 
 def meta():
@@ -3114,12 +3123,8 @@ def effort_view(body):
     return out
 
 
-STATS_OTHER = ("legends-arceus", "champions", "pokopia")   # eigene Formeln (Effort Levels) oder keine Werte
-LGPE = "lets-go-pikachu-lets-go-eevee"                     # Let's Go: IVs und AVs statt EVs
-
-
 def stats_view(body):
-    """Werte-Diagramm einer Form (alle Spiele außer STATS_OTHER): body spiel, id, level, wesen (ID), ivs, evs, ziel (je
+    """Werte-Diagramm einer Form (Profilfeld werte: dv, ev oder av): body spiel, id, level, wesen (ID), ivs, evs, ziel (je
     sechs Zahlen; bis Generation 2 DVs und Stat Exp). Dazu die Wesen zur Auswahl (ab Generation 3)."""
     from . import schaden
     D = data()
@@ -3127,7 +3132,8 @@ def stats_view(body):
     if not f:
         raise ValueError("Pokémon nicht gefunden")
     g, gen, _ = game_of(D, body.get("spiel"))
-    if g and g["kennung"] in STATS_OTHER:
+    werte = profil(g)["werte"]
+    if werte in ("el", "ohne"):             # eigene Formel (Effort Levels, effort.py) oder nicht gerechnet
         return {"rows": [], "hinweis": "In diesem Spiel rechnen die Werte anders."}
     P = _paste_names(D)
     wesen = _int(body.get("wesen"))
@@ -3135,7 +3141,7 @@ def stats_view(body):
     six = lambda v: [_int(x) for x in v][:6] if isinstance(v, list) and len(v) == 6 else None
     out = schaden.stat_view(form_stats(D, f, gen)[0], level, gen, six(body.get("ivs")), six(body.get("evs")),
                             six(body.get("ziel")), P["nat_mod"].get(wesen) if wesen and gen >= 3 else None,
-                            lgpe=bool(g) and g["kennung"] == LGPE)
+                            lgpe=werte == "av")
     out["wesen_liste"] = sorted(({"id": i, "name": n, "mod": P["nat_mod"].get(i)} for i, n in P["nat_de"].items()),
                                 key=lambda x: x["name"]) if gen >= 3 else []
     out["wesen"] = wesen if gen >= 3 else None
@@ -3217,7 +3223,8 @@ def damage_view(body):
         return {"rows": []}
     f, d = D.forms[ids[slot]], per[slot]
     mv = move_view(D, D.moves[_int(body.get("attacke"))], g)
-    champ = not g or g["kennung"] == "champions"
+    pr = profil(g)
+    champ = not g or pr["kampf"]             # Kampfspiel (und ohne Spiel): Level 50 fest
     level = 50 if champ else min(100, max(1, _int(body.get("level")) or _int(d.get("level")) or 50))
     d_level = level if champ else min(100, max(1, _int(body.get("level_vert")) or level))
     P = _paste_names(D) if _int(d.get("wesen")) else None
@@ -3235,7 +3242,7 @@ def damage_view(body):
             D.move_target = dict(con.execute("SELECT id, target_id FROM moves"))
         finally:
             con.close()
-    doubles = bool(g) and g["kennung"] == "champions"
+    doubles = pr["kampf"]                    # Doppelkampf: Flächenattacken treffen schwächer
     spread = body.get("flaeche")
     spread = (doubles and D.move_target.get(mv["id"]) in (doppel.ALL_OTHERS, doppel.ALL_FOES)) if spread is None else bool(spread)
     inv = {"0": (0, 0), "kp": (schaden.EV_MAX, 0), "kp_vert": (schaden.EV_MAX, schaden.EV_MAX)}.get(str(body.get("vert") or "0"), (0, 0))
@@ -3250,7 +3257,7 @@ def damage_view(body):
         a_abil = ""
     tkey = D.type_key.get(mv["typ"], "")
     from . import effort
-    art = "la" if g and g["kennung"] == LA else "lgpe" if g and g["kennung"] == LGPE else ""
+    art = "" if pr["schaden"] == "hauptreihe" else pr["schaden"]       # "la" oder "lgpe": eigene Werte-Formel
     a_base, EV_ALL = form_stats(D, f, gen)[0], schaden.EV_MAX
     six = lambda v, d: [max(0, _int(x) or 0) for x in v][:6] if isinstance(v, list) and len(v) == 6 else [d] * 6
     a_el, a_av = six(d.get("el"), 0), six(d.get("avs"), 0)

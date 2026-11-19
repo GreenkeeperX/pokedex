@@ -16,12 +16,13 @@ brauchen nur die Python-Standardbibliothek; der Selbsttest der Oberfläche zusä
 | `Abgleich`, `Betrieb`, `Fehler` | Abgleich mit Attrappe statt Netz, Neustart mitten im Lauf, Ruhezeiten, Fehlerregister | ja | ja |
 | `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten | ja | ja |
 | `Heimnetz` | `sources.blocked_target`: keine Abrufe an private, lokale, reservierte Adressen, auch nicht über Weiterleitung | ja | ja |
+| `Spiele` | Spielprofile: Einträge in Ordnung, dieselben Aussagen wie die Listen bis 0.59.0, Server und `app.js` fragen das Profil statt der Kennung | ja | ja |
 | `Oeffentlich` | nichts Privates im Repository (Dateiliste, Muster für Adressen und Zugangsdaten) | ja | ja |
 | `MiniBau` (`tests/mit_daten.py`) | der Importer baut die Mini-Datenbank, Selbstprüfung greift | ja | ja |
 | `Welt` | Abfragen der Oberfläche gegen die Mini-Datenbank (Liste, Detail, Lernlisten, Fundorte, Items, Team, Schaden, Import und Export) | ja | ja |
 | `ServerMitDaten` | alle Wege des Servers über HTTP mit Spieldaten, eigene Daten, Zwischenspeicher | ja | ja |
 | `Vertrag` | Form der Antworten (`tests/vertrag.json`), die Oberfläche kennt jedes Feld, jeder Weg hat einen Aufrufer | ja | ja |
-| `Selbsttest` | die echte Oberfläche im Browser ohne Fenster: 72 Schritte, 5 Spiele, 1366 × 768 | ja, Pflicht | ja, wenn ein Browser da ist |
+| `Selbsttest` | die echte Oberfläche im Browser ohne Fenster: 79 Schritte, 5 Spiele mit allen Reitern, dazu die Reiter je Spielprofil in 4 weiteren, 1366 × 768 | ja, Pflicht | ja, wenn ein Browser da ist |
 | `MitDatenbank` (`tests/test_all.py`) | Stichproben gegen echte Spieldaten (Namen, Zahlen, Fundorte echter Pokémon) | nein | nur mit `POKEAPI_DB` |
 
 Die CI (`.github/workflows/tests.yml`) läuft bei jedem Pull Request. Sie setzt `POKEDEX_SELBSTTEST=muss`: Fehlt dort
@@ -69,7 +70,9 @@ Leere Listen haben keine Form: Was die Mini-Datenbank nicht enthält, sichert de
 ## Selbsttest der Oberfläche
 
 `tests/ui_selbsttest.html` lädt die Oberfläche in einen Rahmen von 1366 × 768 Bildpunkten und geht einen Plan durch,
-den der Test aus der Welt ableitet: je Spiel alle Reiter, zwei Detailseiten, Karte, Einstellungen. Je Schritt gilt:
+den der Test aus der Welt ableitet: je Spiel alle Reiter, zwei Detailseiten, Karte, Einstellungen; dazu die Reiter, die
+es nur nach dem Spielprofil gibt (Kampf, Aufträge, Raids), und dass sie in anderen Spielen zur Karte führen. Das Spiel
+wechselt die Seite im Rahmen selbst (wie eine Auswahl in der Liste), danach öffnet sie die Ansicht. Je Schritt gilt:
 keine Ausnahme, kein `console.error`, keine Antwort ab 500, kein Hinweis über der Ansicht, keine Fehlermeldung in der
 Ansicht, der erwartete Text steht da, nichts ragt seitlich aus dem Fenster. Die Seite misst nebenbei, wie lange der
 Inhalt einer Antwort nach ihren Kopfzeilen braucht. Sie liegt nicht im Image; nur der Test liefert sie aus.

@@ -64,7 +64,7 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
   Rückfrage); `slotExtra` zeigt Item, Fähigkeit, Wesen und Tera-Typ aus `plaetze` der Bewertung.
 - Initiative-Liste (`speedView`, `#initiative`, Einstellungen in `speed`): Spalten minimal, neutral, maximal, maximal mit
   Wesen; Team-Zeilen (`tr.mine`) mit eigenem Wert an ihrer Stelle in der Liste.
-- Kampf (`battleView`, `#kampf`): Doppelkampf-Bewertung aus `/api/team/doppel`. `BATTLE()` (Champions) benennt den
+- Kampf (`battleView`, `#kampf`): Doppelkampf-Bewertung aus `/api/team/doppel`. `BATTLE()` (Profil `kampf`: Champions) benennt den
   Reiter „Karte“ in „Kampf“ um, leitet `#karte` dorthin und macht aus „gefangen“ „im Kader“ (ohne Schillernd, ohne Fangchance).
 - Map Genie: nur Kacheln innerhalb von `bounds`; `#mgwarn` erklärt fehlende Kacheln (`kacheln` in `/api/mapgenie`);
   `mgMd` für Beschreibungen (Markdown, Feldnamen deutsch über `MGWORDS`, Werte über `MGVALS`).
@@ -97,8 +97,10 @@ Browser; gespeicherte Teams liegen auf dem Server (user.db).
 - Raids (`raidsView`, `#raids/<Sterne>`, nur Karmesin/Purpur, Reiter neben der Karte): `/api/raids`, Konter und Gefahr aus dem
   Team; auf der Detailseite `raidHtml` (aufklappbar `raidOpen`) und in Colosseum/XD `cryptoHtml`.
 - Team-Bewertung: Tera-Hinweis (`ev.tera`); Detailseite eines Mitglieds: `#formsel` tauscht die Form des Platzes.
-- Spiele: `GEN()`, `noAbil()` (Gen 1–2, Let's Go, Legenden: Arceus), `TERA()` (Karmesin/Purpur mit Erweiterungen, Tera-Typ je
-  Platz über `#terasel`).
+- Spiele: Regeln je Spiel kommen aus dem Spielprofil (`PROFIL()`, in `/api/meta` je Spiel unter `profil`; Felder in
+  `docs/spiele.md`), nie aus einem Vergleich mit der Kennung. Helfer: `GEN()`, `noAbil()` (`faehigkeiten`), `TERA()`
+  (`tera`, Tera-Typ je Platz über `#terasel`), `RAIDS()` (`raids`, Reiter Raids), `REQ_GAME()` (`auftraege`, Reiter
+  Aufträge), `BATTLE()` (`kampf`), `LA()` (`werte` „el“: Effort Levels), `STATS_OK()` (`werte` dv, ev oder av).
 - `favStar(id)`: Stern zum Favorisieren an Team-Karten und Vorschlägen, `redrawMarks` hält ihn aktuell.
 - Map Genie: eine Datenbank (`d.punkte` aus `mapgenie.merge`): `t` "mg" (Ort von Map Genie, vielleicht mit `o` und `drin`
   aus den Spieldaten), "ob" (nur Spieldaten), "sp" (Spawnpunkt); Kategorien mit `art` zeigen das Symbol der Einzelkarten.

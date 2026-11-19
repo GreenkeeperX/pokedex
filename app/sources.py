@@ -12,11 +12,22 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.59.0"
+VERSION = "0.60.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in ROADMAP.md.
 NEUIGKEITEN = [
+    ("0.60.0", "19.11.2026", [
+        "Item-Liste der Erweiterungen: Die TMs des Hauptspiels tragen jetzt ihre Attacke (vorher nur die neuen TMs der "
+        "Erweiterung); Die Insel der Rüstung und Die Schneelande der Krone zeigen die TMs von Schwert/Schild",
+        "Mehr Details: Ei-Gruppen und Ei-Zyklen nur noch in Spielen mit Zucht (nicht mehr in Colosseum, XD, Let’s Go, "
+        "Legenden: Z-A, Mega-Dimension und Champions), die EV-Ausbeute nur, wo es EVs gibt (nicht in Let’s Go, Champions "
+        "und Pokopia)",
+        "Champions zeigt keine Fangchance mehr (gefangen wird dort nicht); Mega-Dimension kennzeichnet die Fangchance wie "
+        "Legenden: Z-A als Richtwert",
+        "Unter der Haube: Was in welchem Spiel gilt (Fähigkeiten, Zucht, Tera, Raids, Aufträge, Formeln, Bälle, "
+        "Statuswerte), steht an einer Stelle, dem Spielprofil; Server und Oberfläche fragen nur noch das Profil",
+    ]),
     ("0.59.0", "16.11.2026", [
         "Gebiete: Die Häufigkeit eines Pokémon stimmt jetzt in Spielen mit zwei Editionen (vorher doppelt gezählt: Route 1 "
         "in Rot und Blau zeigte zweimal 100 % statt zweimal 50 %) und bei Tageszeit, Schwarm oder Radio (vorher mehrfach "
