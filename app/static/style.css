@@ -515,6 +515,8 @@ details.sub>summary .slinks{margin-left:auto;font-size:12.5px;white-space:nowrap
 .plan{margin:6px 0 4px}.plan h3{margin-top:4px}
 .pbar{display:inline-block;width:120px;height:8px;border-radius:4px;background:var(--line);overflow:hidden;vertical-align:middle}.pbar i{display:block;height:100%;background:var(--go)}
 table.prog tr.click{cursor:pointer}
+.kette{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0}.kglied{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;color:inherit;text-decoration:none;min-width:110px;text-align:center}
+.kglied:hover{background:var(--hov)}.kglied.hast{border-color:var(--go)}.kpfeil{display:flex;flex-direction:column;align-items:center;font-size:22px;line-height:1}.kpfeil .hint{font-size:12px}
 .tks{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.tk{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;border:1px solid var(--line);border-radius:8px;color:inherit;text-decoration:none;font-size:14px}
 .tk:hover{background:var(--hov)}.tk.hast{border-color:var(--go)}.tk .spr{width:40px;height:40px}table.jfund .spr{width:36px;height:36px;vertical-align:middle}
 .jagd.pin{border-color:var(--accent)}.jzahl{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;margin-top:8px}

@@ -3117,6 +3117,24 @@ class MitDatenbank(TempData):
         self.assertEqual(len(abfragen._AREAS), abfragen.AREAS_MAX)
         abfragen._AREAS.clear()
 
+    def test_eikette_ueber_mehrere_schritte(self):
+        """0.72.0: bekannte Ketten aus HeartGold/SoulSilver: Garados (Drache) gibt Glurak Drachentanz; Glumanda bekommt
+        Prügler über Rettan (Feld und Drache) von Hunduster; Volttackle-Pichu ist ein besonderes Ei."""
+        from app import abfragen
+        D, con = abfragen.data(), db.game()
+        mv = lambda n: con.execute("SELECT id FROM attacke WHERE name = ?", (n,)).fetchone()[0]
+        form = lambda n: next(i for i, f in D.forms.items() if f["name"] == n)
+        try:
+            d = abfragen.eikette({"spiel": "heartgold-soulsilver", "id": form("Glurak"), "attacke": mv("Drachentanz")})
+            self.assertEqual((d["art"], d["kette"][-1]["gruppe"]), ("kette", "Drache"))
+            self.assertEqual(len(d["kette"]), 2)
+            d = abfragen.eikette({"spiel": "heartgold-soulsilver", "id": form("Glumanda"), "attacke": mv("Prügler")})
+            self.assertEqual([x["name"] for x in d["kette"]], ["Hunduster", "Rettan", "Glumanda"])
+            self.assertEqual([x["gruppe"] for x in d["kette"][1:]], ["Feld", "Drache"])
+            self.assertEqual(abfragen.eikette({"spiel": "platinum", "id": form("Pichu"), "attacke": mv("Volttackle")})["art"], "besonders")
+        finally:
+            con.close()
+
     def test_showdown_import_export(self):
         from app import abfragen
         r = abfragen.paste_import({"text": "Rotom-Wash @ Sitrus Berry\nAbility: Levitate\nModest Nature\n- Hydro Pump\n\n"
@@ -4317,6 +4335,55 @@ class Tausch(HttpMitDaten):
         self.assertEqual(gr, {"edition": ["P1", "P2", "P3"], "tausch": ["P4"], "unklar": ["P5"]})
         self.assertNotIn("P5", d["text"])                                                # „ohne Weg“ nicht zum Kopieren
         self.assertIn("Suche, entwickelt sich durch Tausch:\n- #4 P4", d["text"])
+
+
+
+class Eikette(HttpMitDaten):
+    """0.72.0: Ei-Attacken-Kette in der Mini-Welt: Zappel bekommt Kraftschub von Lohrax (Ei-Gruppe Feld), Keimling von Rankel
+    aus der eigenen Familie, in Karmesin/Purpur per Spiegelkraut von jedem, der Kraftschub kann."""
+
+    def setUp(self):
+        super().setUp()
+        D, con = abfragen.data(), db.game()
+        self.mv = {k: i for i, k in con.execute("SELECT id, kennung FROM attacke")}
+        con.close()
+        self.form = {f["art"]: i for i, f in D.forms.items() if f["standard"]}
+        self.name = {f["art"]: f["name"] for f in D.forms.values() if f["standard"]}
+
+    def kette(self, spiel, art, attacke, status=200):
+        return self.json(f"/api/eikette?spiel={spiel}&id={self.form[art]}&attacke={self.mv[attacke]}", status=status)
+
+    def test_faelle(self):
+        n = self.name
+        d = self.kette("x-y", 8, "kraftschub")
+        self.assertEqual((d["art"], d["modus"], [x["name"] for x in d["kette"]]), ("kette", "zucht", [n[5], n[8]]))
+        self.assertEqual((d["kette"][0]["wie"], d["kette"][1]["wie"], d["kette"][1]["gruppe"]), ("Level 36", "Ei", "Feld"))
+        self.assertIn(f"{n[5]} (♂) mit {n[8]} (♀) züchten, Ei-Gruppe Feld", d["text"])
+        self.assertEqual([x["name"] for x in self.kette("emerald", 8, "kraftschub")["kette"]], [n[5], n[8]])
+        k = self.kette("x-y", 1, "kraftschub")                                  # Vater aus der eigenen Familie
+        self.assertEqual([x["name"] for x in k["kette"]], [n[2], n[1]])
+        self.assertEqual([x["name"] for x in k["alternativen"]], [n[3]])
+        sv = self.kette("scarlet-violet", 8, "kraftschub")                     # Spiegelkraut: ohne Ei-Gruppe
+        self.assertEqual((sv["modus"], sv["kette"][-1]["wie"]), ("spiegelkraut", "Spiegelkraut"))
+        self.assertIn(sv["kette"][0]["name"], {n[2], n[3], n[5], n[10]})
+        self.assertEqual(self.kette("x-y", 5, "kraftschub")["art"], "selbst")
+        self.assertEqual(self.kette("x-y", 8, "urknall")["art"], "keine_ei")
+        self.assertEqual(self.kette("legends-arceus", 8, "kraftschub")["art"], "keine_ei")   # dort keine Ei-Attacken
+        self.assertEqual(self.kette("x-y", 4, "nachtklaue")["art"], "keine_kette")          # nur Dornwald, andere Ei-Gruppe
+        self.assertEqual(self.kette("x-y", 11, "schnellhieb")["art"], "nicht_vererbbar")   # geschlechtslos: nur mit Ditto
+        self.assertEqual(self.kette("scarlet-violet", 11, "schnellhieb")["art"], "kette")   # Spiegelkraut geht trotzdem
+        # gefangene zuerst: mit gefangenem Dornwald steht er am Anfang, Rankel unter den Alternativen
+        self.json("/api/gefangen", {"spiel": "x-y", "id": self.form[3]})
+        k = self.kette("x-y", 1, "kraftschub")
+        self.assertEqual(([x["name"] for x in k["kette"]], k["kette"][0]["gefangen"]), ([n[3], n[1]], True))
+        self.kette("x-y", 8, "kraftschub")
+        self.json("/api/eikette?spiel=x-y&id=abc&attacke=1", status=400)
+        self.json(f"/api/eikette?spiel=x-y&id=99999&attacke={self.mv['kraftschub']}", status=404)
+        self.ohne_fehler()
+
+    def test_profil(self):
+        self.assertEqual(spiele.profil("the-teal-mask")["eiattacken"], "spiegelkraut")      # Erweiterung wie das Hauptspiel
+        self.assertEqual(spiele.profil("sword-shield")["eiattacken"], "zucht")
 
 
 # Tests mit Spieldaten (Mini-Datenbank), Vertrag zwischen Server und Oberfläche, Selbsttest im Browser: eigene Datei, hier

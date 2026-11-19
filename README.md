@@ -52,6 +52,9 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Tauschliste** (Knopf in „Was fehlt mir noch“ und im Fortschritt, `#tausch`): was du im Spiel nur über einen
   Tauschpartner bekommst (nur in der anderen Edition, auch nicht über Vorstufe oder Ei; Tausch-Entwicklungen; ohne Weg in
   den Daten) und was du bieten kannst (nur in deiner Edition, Gefangenes markiert); als Text zum Kopieren.
+- **Ei-Attacken-Kette** (Link „Ei ›“ in den Attacken der Detailseite, `#kette/<Form>/<Attacke>`): die kürzeste Kette
+  von Eltern, über die das Pokémon die Ei-Attacke bekommt, mit Ei-Gruppe je Schritt, Gefangene zuerst; in
+  Karmesin/Purpur der Weg per Spiegelkraut im Picknick. Regeln nach Bulbapedia in `docs/formeln.md`.
 - **Fortschritt** (Knopf in der Liste, `#fortschritt`): gefangene Arten je Spiel und in Pokémon HOME, für das gewählte
   Spiel nach Generation und Typ; jede Zeile springt zu den fehlenden Pokémon.
 - **Was fehlt mir noch?** (Knopf in der Liste, `#fehlt`): die Arten des Spiel-Dex ohne gefangene Form, nach dem besten

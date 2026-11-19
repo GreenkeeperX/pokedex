@@ -29,6 +29,7 @@ FELDER = {
     "werte": {"dv", "ev", "av", "el", "ohne"},  # Statuswerte: DV und Stat Exp, DV und EV, DV und AV, Effort Levels, nicht gerechnet
     "faehigkeiten": bool,
     "zucht": bool,              # Eier und Pension: „Zucht“ als Weg, Ei-Gruppen und Ei-Zyklen
+    "eiattacken": {"zucht", "spiegelkraut"},    # Weitergabe von Ei-Attacken: nur beim Züchten (Vater, Ei-Gruppe) oder auch per Spiegelkraut
     "tera": bool,               # Tera-Typ je Team-Platz
     "raids": str,               # Spiel, unter dem die Tera-Raids liegen (Reiter Raids); leer ohne
     "auftraege": str,           # Schlüssel, unter dem Aufträge und ihre Haken liegen (Reiter Aufträge); leer ohne
@@ -49,7 +50,7 @@ def grund(gen):
     """Das Übliche einer Generation: ein Hauptspiel ohne Besonderheiten."""
     return {"gen": gen, "hauptspiel": "", "lernliste": "eigene", "schaden": "hauptreihe", "typfaktoren": "hauptreihe",
             "fangformel": "gen12" if gen <= 2 else "genau", "baelle": "standard", "werte": "dv" if gen <= 2 else "ev",
-            "faehigkeiten": gen >= 3, "zucht": gen >= 2, "tera": False, "raids": "", "auftraege": "", "blaubeer": False,
+            "faehigkeiten": gen >= 3, "zucht": gen >= 2, "eiattacken": "zucht", "tera": False, "raids": "", "auftraege": "", "blaubeer": False,
             "forschung": False, "crypto": False, "kampf": False, "spawnkarten": False, "eigene_dexe": False}
 
 
@@ -89,7 +90,8 @@ SPIELE = {
     "legends-arceus": {"gen": 8, "schaden": "la", "typfaktoren": "la", "fangformel": "hisui", "baelle": "hisui", "werte": "el",
                        "faehigkeiten": False, "zucht": False, "auftraege": "legends-arceus", "forschung": True,
                        "spawnkarten": True},
-    "scarlet-violet": {"gen": 9, "tera": True, "raids": "scarlet-violet", "auftraege": "the-indigo-disk", "blaubeer": True},
+    "scarlet-violet": {"gen": 9, "tera": True, "raids": "scarlet-violet", "auftraege": "the-indigo-disk", "blaubeer": True,
+                       "eiattacken": "spiegelkraut"},
     "the-teal-mask": {"gen": 9, **_ERWEITERUNG_KAPU},
     "the-indigo-disk": {"gen": 9, **_ERWEITERUNG_KAPU},
     "legends-za": {"gen": 9, "fangformel": "legenden", "zucht": False, "auftraege": "legends-za"},

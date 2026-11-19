@@ -13,15 +13,14 @@ nachvollziehbar halten. Nutzen belegen. Nutzerdaten haben Vorrang vor jeder tech
 In dieser Reihenfolge, nach dem Arbeitsauftrag vom 13.11.2026. Abschnitte 1 bis 4 (Rechenlogik, Betrieb, Tests,
 Spielprofil, Aufteilen der großen Dateien, Aufräumen), die Statuskarte (0.66.0), der monatliche
 Wiederherstellungstest (0.67.0), der Leistungstest auf Klick (0.68.0), der Fortschritt auf einen Blick (0.69.0),
-der Shiny-Jagd-Zähler (0.70.0) und die Tauschliste (0.71.0) sind erledigt.
+der Shiny-Jagd-Zähler (0.70.0), die Tauschliste (0.71.0) und die Ei-Attacken-Kette (0.72.0) sind erledigt.
 
 1. **Messung auf dem Heimserver auswerten.** Dort einmal die Karten des meistgenutzten Spiels öffnen, dann in der
    Statuskarte „messen“ (der Test öffnet selbst keine Karten, weil das Zusammenführen den Kartencache schreibt). Danach
    anhand von Arbeitsspeicher und Antwortzeiten entscheiden, ob der Speicher der Karten verkleinert werden soll
    (Python-Objekte, fertige und gepackte Antworten); ohne Messung keine Optimierung.
 2. **Funktionen**, in dieser Reihenfolge:
-   1. Ei-Attacken-Kette: kürzeste nachvollziehbare Elternkette für Pokémon und Attacke.
-   2. Spielstandimport: Machbarkeit je Konsolengeneration bis zur Switch, Switch 2 gesondert prüfen; Matrix je Spiel und
+   1. Spielstandimport: Machbarkeit je Konsolengeneration bis zur Switch, Switch 2 gesondert prüfen; Matrix je Spiel und
       Dateiformat (exportierbar und lesbar getrennt); PKHeX und dokumentierte Formate als Referenz, kein Code aus PKHeX
       (GPL-3.0); eigene schlanke Umsetzung prüfen, keine Abhängigkeit ohne nachgewiesenen Nutzen. Dateien automatisch
       erkennen, Team, Boxen und Pokédex lesen, soweit verlässlich enthalten; Vorschau aller Änderungen, ausdrückliche
@@ -75,6 +74,8 @@ Gefunden und nicht behoben; in Klammern die Version, in der der Befund aufgenomm
 - Tauschliste: Die Fundorte von Karmesin/Purpur und einigen anderen Spielen nennen keine Editionen; Exklusive lassen
   sich dort nicht erkennen und stehen meist unter „Ohne Weg in den Daten“. Auch in X/Y fehlen einzelne bekannte
   Exklusive, weil ihre Fundorte in den Daten in beiden Editionen stehen (0.71.0).
+- Ei-Attacken-Kette: sucht nur in den Arten des Spiel-Dex; Arten aus HOME oder anderen Spielen und die Weitergabe im
+  Pokémon-Hort stehen nicht in der Kette (`docs/formeln.md`, „Ei-Attacken“, 0.72.0).
 
 ## Zu entscheiden
 

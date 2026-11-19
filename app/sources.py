@@ -12,11 +12,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.71.0"
+VERSION = "0.72.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.72.0", "19.11.2026", [
+        "Ei-Attacken-Kette (Link „Ei ›“ bei den Attacken der Detailseite): die kürzeste Kette von Eltern, über die das "
+        "Pokémon die Ei-Attacke bekommt, mit Ei-Gruppe je Schritt; gefangene Pokémon zuerst",
+        "Karmesin und Purpur: der Weg per Spiegelkraut im Picknick; geschlechtslose und nur männliche Pokémon sagen, "
+        "warum sie keine Ei-Attacken erben",
+    ]),
     ("0.71.0", "19.11.2026", [
         "Tauschliste (Knopf in „Was fehlt mir noch“ und im Fortschritt): was du im Spiel nur über einen Tauschpartner "
         "bekommst und was du ihm bieten kannst, als Text zum Kopieren",

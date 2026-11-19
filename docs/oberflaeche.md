@@ -2,7 +2,7 @@
 
 Reines JavaScript ohne Build (`app/static/js/`). Die Ansicht steht in der Adresse: `#pokemon`, `#pokemon/<id>`
 (`#pokemon/<id>/<platz>` für einen Team-Platz), `#team`, `#attacken`, `#typen`, `#items`, `#karte` (mit
-`#karte/mg/<Karte>`, `#karte/gebiete/<Ort>`), `#fehlt`, `#fortschritt`, `#jagd`, `#tausch`, `#sammeln`, `#vergleich/<A>/<B>`, `#initiative`, `#kampf`,
+`#karte/mg/<Karte>`, `#karte/gebiete/<Ort>`), `#fehlt`, `#fortschritt`, `#jagd`, `#tausch`, `#kette/<Form>/<Attacke>`, `#sammeln`, `#vergleich/<A>/<B>`, `#initiative`, `#kampf`,
 `#raids`, `#auftraege`, `#einstellungen`. Gewähltes Spiel, Filter, aufgeklappte Kästen und das aktuelle Team merkt sich
 der Browser (`store`, `localStorage`); gespeicherte Teams und alle eigenen Daten liegen auf dem Server (user.db).
 
@@ -18,7 +18,7 @@ je Reiter zum Nachschlagen.
 | `basis.js` | Grundlagen: Zustand `S`, `store`, `api`, Hinweise (`hinweis`, `teil`, `ungespeichert`), Spielprofil (`PROFIL`), Bausteine (Karten, Netzdiagramm, Typwirkung), Tooltips, Kreuz- und sortierbare Tabellen |
 | `kopf.js` | Kopf, Reiter, Adresse (`route`), Spielwahl (`setGame`), Favoriten und Haken, `refreshMeta`, Filter |
 | `liste.js` | Pokémon-Liste, Team-Leiste (`dock`), Speichern des Teams, Showdown-Export |
-| `detail.js` | Detailseite (Werte, Effort Levels, Fangchance, Entwicklung, Attacken), Raids, Aufträge, Forschung |
+| `detail.js` | Detailseite (Werte, Effort Levels, Fangchance, Entwicklung, Attacken), Ei-Attacken-Kette, Raids, Aufträge, Forschung |
 | `team.js` | Team, Gegner und Trainer, Attacken |
 | `karte.js` | Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch, Gebiete |
 | `items.js` | Items und Typtabelle |
@@ -196,6 +196,9 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
 - Effort Levels `elBox` (`#elbox`, wenn `LA()`): `/api/effort`, Team-Platz `el`, `el_ziel`, `wesen`; ohne Team ein
   Zwischenstand nur für die Seite (`elBox.tmp`). Diagramm `elChart` (Balken und Netz aus `teile`), Rechenweg
   `elTipHtml`.
+- Ei-Attacken-Kette (`chainView`, `#kette/<Form>/<Attacke>`, `/api/eikette`): „Ei ›“ in der Spalte „Weg“ der
+  Attacken öffnet sie. Antworttext als Hinweis, darunter die Kette als Karten (`.kette`, `.kglied`, Pfeil `.kpfeil` mit
+  Ei-Gruppe; Gefangene mit `.hast`), andere Anfänge derselben Länge als `.tk`.
 - Mehr Details (`moreHtml`, `detail.mehr`): eingeklappt; Eier und EVs nur, wo das Spielprofil sie kennt.
 - Formen zum Ansehen (`optikHtml`, `detail.optik`): eingeklappt unter den getragenen Items, nur bei Pokémon mit mehreren
   Formen gleicher Werte; die Standardform zuerst.
