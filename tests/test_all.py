@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, statuskarte, store, team, typen, wiederherstellung
-from app import leistung
+from app import jagd, leistung
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
 from tests.basis import HttpMitDaten, HttpTest, TempData, app_quellen, im_paket, oberflaeche_js
 
@@ -4133,6 +4133,139 @@ class Fortschritt(HttpMitDaten):
         # HOME gewählt; unbekanntes Spiel: das neueste
         self.assertEqual(self.json(f"/api/fortschritt?spiel={abfragen.HOME}")["gefangen"], 1)
         self.assertEqual(self.json("/api/fortschritt?spiel=gibtsnicht")["spiel"], D.games[-1]["kennung"])
+        self.ohne_fehler()
+
+
+
+class Jagd(unittest.TestCase):
+    """0.70.0: Quoten der Shiny-Jagd (extra/shiny_quoten.json, app/jagd.py) gegen die Werte der Quellen (docs/formeln.md)."""
+
+    def setUp(self):
+        self.T = jagd.tabelle()
+
+    def eins_zu(self, spiel, methode, zaehler=0, pin=False, **optionen):
+        return jagd.quote(self.T, spiel, methode, zaehler, optionen, pin)["eins_zu"]
+
+    def test_tabelle_in_ordnung(self):
+        self.assertEqual(jagd.pruefe(), [])
+        self.assertTrue(all(u.startswith("https://") for _, u in self.T["quellen"]))
+        kaputt = {"quellen": [], "methoden": {"a": {"name": "A", "farbe": 1, "stufen": [[5, 1], [2, 2]], "quote": "1:99"}},
+                  "spiele": {"gibtsnicht": {"nenner": 100, "pin": 0, "methoden": ["b"]}, "the-teal-mask": {"nenner": 4096, "pin": 2, "methoden": ["a"]}}}
+        self.assertEqual(len(jagd.pruefe(kaputt)), 8, jagd.pruefe(kaputt))
+
+    def test_bulbapedia_legenden_arceus(self):
+        # Bulbapedia „Shiny Pokémon“, Tabellen zu Legenden: Arceus (Wild, Massenausbruch, Massiver Massenausbruch)
+        for methode, werte in (("pla_wild", (4096, 2048.25, 1024.38, 819.6, 585.57)), ("pla_ausbruch", (158.02, 152.19, 141.72, 137.02, 128.49)),
+                               ("pla_massiv", (315.54, 293.04, 256.47, 241.41, 216.05))):
+            got = (self.eins_zu("legends-arceus", methode), self.eins_zu("legends-arceus", methode, forschung=1),
+                   self.eins_zu("legends-arceus", methode, forschung=2), self.eins_zu("legends-arceus", methode, pin=True, forschung=1),
+                   self.eins_zu("legends-arceus", methode, pin=True, forschung=2))
+            for a, b in zip(got, werte):
+                self.assertAlmostEqual(a, b, delta=0.01, msg=methode)
+
+    def test_serebii_karmesin_purpur(self):
+        # Serebii, Tabelle zu Karmesin und Purpur: Ausbruch 0, 30, 60 mit und ohne Schillerpin, Schillerkraft 1 und 3
+        for zaehler, kraft, ohne, mit in ((0, 0, 4096, 1365.67), (30, 0, 2048.25, 1024.38), (60, 0, 1365.67, 819.6), (0, 1, 2048.25, 1024.38),
+                                         (30, 1, 1365.67, 819.6), (60, 1, 1024.38, 683.08), (0, 3, 1024.38, 683.08), (30, 3, 819.6, 585.57),
+                                         (60, 3, 683.08, 512.44)):
+            self.assertAlmostEqual(self.eins_zu("scarlet-violet", "sv_ausbruch", zaehler, kraft=kraft), ohne, delta=0.01)
+            self.assertAlmostEqual(self.eins_zu("scarlet-violet", "sv_ausbruch", zaehler, pin=True, kraft=kraft), mit, delta=0.01)
+        self.assertAlmostEqual(self.eins_zu("the-teal-mask", "masuda", pin=True), 512.44, delta=0.01)     # Erweiterung wie das Hauptspiel
+
+    def test_ketten_und_kombo(self):
+        # SOS-Kette (Bulbapedia) und Fang-Kombo (dieselbe Tabelle steht in extra/spielwissen.json)
+        for zaehler, ohne, mit in ((10, 4096, 1365.67), (11, 819.6, 585.57), (21, 455.56, 372.82), (31, 315.54, 273.53)):
+            self.assertAlmostEqual(self.eins_zu("sun-moon", "sos", zaehler), ohne, delta=0.01)
+            self.assertAlmostEqual(self.eins_zu("ultra-sun-ultra-moon", "sos", zaehler, pin=True), mit, delta=0.01)
+        with open(abfragen.WISSEN, encoding="utf-8") as fh:
+            tab = json.load(fh)["lets-go-pikachu-lets-go-eevee"]["kombo"]["schillernd"]
+        for zeile, zaehler in zip(tab, (0, 11, 21, 31)):
+            got = [self.eins_zu("lets-go-pikachu-lets-go-eevee", "kombo", zaehler, pin=pin, parfuem=lp) for pin, lp in ((0, 0), (0, 1), (1, 0), (1, 1))]
+            self.assertEqual([int(x) for x in got], [int(x.split(":")[1]) for x in zeile[1:]], zeile[0])
+        # Schwert/Schild, Besiegte derselben Art (Bulbapedia): 1, 50, 100, 200, 300, 500
+        for zaehler, ohne, mit in ((1, 2048.25, 1024.38), (50, 1365.67, 819.6), (100, 1024.38, 683.08), (200, 819.6, 585.57),
+                                   (300, 683.08, 512.44), (500, 585.57, 455.56)):
+            self.assertAlmostEqual(self.eins_zu("sword-shield", "besiegt", zaehler), ohne, delta=0.01)
+            self.assertAlmostEqual(self.eins_zu("the-isle-of-armor", "besiegt", zaehler, pin=True), mit, delta=0.01)
+
+    def test_werte_der_quelle_als_bruch(self):
+        # Wo die Quelle n/Nenner schreibt, rechnet der Pokédex mit n Würfen: höchstens 0,5 % Unterschied
+        for spiel, methode, zaehler, bruch in (("platinum", "masuda4", 0, 8192 / 5), ("black-white", "masuda", 0, 8192 / 6),
+                                               ("x-y", "masuda", 0, 4096 / 6), ("x-y", "kettenangeln", 20, 4096 / 41),
+                                               ("black-2-white-2", "zufall", 0, 8192 / 3)):
+            got = self.eins_zu(spiel, methode, zaehler, pin=spiel == "black-2-white-2")
+            self.assertLess(abs(got / bruch - 1), 0.005, (spiel, methode))
+        self.assertEqual(self.eins_zu("x-y", "kettenangeln", 20), self.eins_zu("x-y", "kettenangeln", 500))     # ab 20 gleich
+        self.assertAlmostEqual(self.eins_zu("diamond-pearl", "radar4", 40), 8192 / 41, delta=0.01)
+        q = jagd.quote(self.T, "diamond-pearl", "radar4", 39)
+        self.assertEqual((q["eins_zu"], q["wuerfe"], len(q["hinweise"])), (8192, 1, 1))                    # vor 40: Untergrenze, gesagt
+        self.assertEqual(self.eins_zu("the-crown-tundra", "dynamax", pin=True), 100)
+        q = jagd.quote(self.T, "brilliant-diamond-shining-pearl", "radar_bdsp", 40, pin=True)
+        self.assertEqual((q["eins_zu"], q["wuerfe"], len(q["hinweise"])), (99, None, 1))                   # Schillerpin nicht belegt
+        self.assertEqual(self.eins_zu("black-white", "zufall", pin=True), 8192)                            # ohne Schillerpin im Spiel
+        for spiel in ("red-blue", "colosseum", "champions", "pokopia", spiele.HOME):
+            self.assertIsNone(jagd.methoden(self.T, spiel), spiel)
+        with self.assertRaises(ValueError):
+            jagd.quote(self.T, "emerald", "masuda", 0)
+
+    def test_bis_jetzt(self):
+        p = 1 / 4096
+        self.assertAlmostEqual(jagd.schon(self.T, "x-y", "zufall", 4096), 1 - (1 - p) ** 4096, places=12)
+        self.assertEqual(jagd.schon(self.T, "x-y", "zufall", 0), 0)
+        # Kettenangeln: jede Begegnung mit ihrer eigenen Quote, Begegnung k beim Zählerstand k
+        erwartet = 1.0
+        for k in range(30):
+            erwartet *= 1 - jagd.quote(self.T, "x-y", "kettenangeln", k)["p"]
+        self.assertAlmostEqual(jagd.schon(self.T, "x-y", "kettenangeln", 30), 1 - erwartet, places=12)
+        erwartet = 1.0
+        for k in range(120):
+            erwartet *= 1 - jagd.quote(self.T, "sword-shield", "besiegt", k, None, True)["p"]
+        self.assertAlmostEqual(jagd.schon(self.T, "sword-shield", "besiegt", 120, None, True), 1 - erwartet, places=12)
+
+
+class JagdHttp(HttpMitDaten):
+    """0.70.0: Jagden über die Schnittstelle: anlegen, zählen, ändern, abschließen, sichern und zurückspielen."""
+
+    def test_ablauf(self):
+        form = next(i for i, f in abfragen.data().forms.items() if f["relevant"])
+        d = self.json("/api/jagd?spiel=x-y")
+        self.assertEqual((d["nenner"], d["pin"], d["jagden"], [m["id"] for m in d["methoden"]]), (4096, True, [], ["zufall", "masuda", "kettenangeln"]))
+        j = self.json("/api/jagd", {"spiel": "x-y", "form": form, "methode": "kettenangeln"})
+        self.assertEqual((j["zaehler"], j["eins_zu"], j["schon"], j["name"]), (0, 4096, 0, abfragen.data().forms[form]["name"]))
+        for _ in range(3):
+            j = self.json("/api/jagd/zaehlen", {"id": j["id"], "plus": 1})
+        self.assertEqual((j["zaehler"], j["wuerfe"]), (3, 7))
+        self.assertAlmostEqual(j["schon"], round(jagd.schon(jagd.tabelle(), "x-y", "kettenangeln", 3), 4))
+        self.assertEqual(self.json("/api/jagd/zaehlen", {"id": j["id"], "plus": -10})["zaehler"], 0)       # nie unter 0
+        j = self.json("/api/jagd/zaehlen", {"id": j["id"], "wert": 25})
+        j = self.json("/api/jagd", {"id": j["id"], "pin": True, "angeheftet": True, "notiz": "  Route   8 "})
+        self.assertEqual((j["wuerfe"], j["pin"], j["angeheftet"], j["notiz"], j["zaehler"]), (43, True, True, "Route 8", 25))
+        self.json("/api/jagd", {"id": j["id"], "methode": "sos"}, status=400)                             # nicht in X/Y
+        self.json("/api/jagd", {"spiel": "red-blue", "form": form, "methode": "zufall"}, status=400)     # Generation 1
+        self.assertIn("Generation 1", self.json("/api/jagd?spiel=red-blue")["text"])
+        self.json("/api/jagd/zaehlen", {"id": 9999, "plus": 1}, status=400)
+        # gefunden: abgeschlossen, schillernd und gefangen gesetzt; wieder aufnehmen lässt die Marken stehen
+        self.json("/api/jagd", {"id": j["id"], "gefunden": True})
+        d = self.json("/api/jagd?spiel=x-y")
+        self.assertEqual((len(d["jagden"]), len(d["gefunden"]), d["gefunden"][0]["zaehler"]), (0, 1, 25))
+        self.assertIn(form, self.json("/api/schillernd?spiel=x-y"))
+        self.assertIn(form, self.json("/api/gefangen?spiel=x-y"))
+        self.json("/api/jagd", {"id": j["id"], "gefunden": False})
+        self.assertEqual(len(self.json("/api/jagd?spiel=x-y")["jagden"]), 1)
+        self.assertIn(form, self.json("/api/schillernd?spiel=x-y"))
+        # Shiny-Sperre steht an der Jagd
+        with im_paket(abfragen, "shiny_locks", return_value={"tausch": [], "nie": [form], "gen1": False}):
+            self.assertEqual(self.json("/api/jagd?spiel=x-y")["jagden"][0]["sperre"], "nie")
+        # Sicherung: enthalten; zurückgespielt gleich; eine ältere Sicherung ohne Jagden lässt sie stehen
+        exp = self.json("/api/export")
+        self.assertEqual([(x["form"], x["zaehler"], x["methode"], x["pin"]) for x in exp["jagden"]], [(form, 25, "kettenangeln", 1)])
+        self.json("/api/jagd/loeschen", {"id": j["id"]})
+        self.assertEqual(self.json("/api/restore", exp)["jagden"], 1)
+        z = self.json("/api/jagd?spiel=x-y")["jagden"][0]
+        self.assertEqual((z["zaehler"], z["notiz"], z["wuerfe"]), (25, "Route 8", 43))
+        alt = {k: v for k, v in exp.items() if k != "jagden"}
+        self.json("/api/restore", alt)
+        self.assertEqual(len(self.json("/api/jagd?spiel=x-y")["jagden"]), 1)
         self.ohne_fehler()
 
 

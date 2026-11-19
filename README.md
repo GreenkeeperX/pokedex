@@ -44,6 +44,11 @@ dem Vorbild von VR-Navigator und eShopKompass.
   der PokéAPI (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, SDLP) nach PKHeX; in Legenden: Arceus „Herstellen“
   mit Rezepten und Zutaten.
 - **Rezepte abhaken** (Legenden: Arceus, Items → Herstellen): Spalte ✓ für Rezepte, die du schon hast.
+- **Shiny-Jagd** (Knopf in der Liste oder auf der Detailseite, `#jagd`): Zähler je Jagd mit Methode des Spiels
+  (Masuda, Ketten, Kombo, Massenausbrüche …), Optionen wie Lockparfüm oder Schillerkraft und Schillerpin; zeigt die
+  Quote der nächsten Begegnung und wie viele Jäger mit so vielen Begegnungen schon eins gefunden hätten. Große Taste,
+  Leertaste oder +, angeheftete Jagden oben; „Gefunden“ setzt das Pokémon auf schillernd gefangen. Quoten mit Quelle in
+  `extra/shiny_quoten.json` und `docs/formeln.md`.
 - **Fortschritt** (Knopf in der Liste, `#fortschritt`): gefangene Arten je Spiel und in Pokémon HOME, für das gewählte
   Spiel nach Generation und Typ; jede Zeile springt zu den fehlenden Pokémon.
 - **Was fehlt mir noch?** (Knopf in der Liste, `#fehlt`): die Arten des Spiel-Dex ohne gefangene Form, nach dem besten

@@ -144,6 +144,58 @@ Offen: **Federball.** Die Tabelle im Artikel „Catch rate“ nennt 0,5 als Grun
 und × 1,25 nur „bei bestimmten fliegenden Begegnungen“. Der Pokédex nimmt wie bisher 1. Wer es im Spiel prüfen kann:
 Ein Federball auf ein Pokémon am Boden entscheidet es.
 
+## Schillernde Pokémon (Shiny-Jagd)
+
+Quellen: Bulbapedia, „Shiny Pokémon“ (https://bulbapedia.bulbagarden.net/wiki/Shiny_Pok%C3%A9mon), für Karmesin und
+Purpur zusätzlich Serebii (https://serebii.net/scarletviolet/shinypokemon.shtml); Stand 19.11.2026. Die Tabelle liegt
+gepflegt in `extra/shiny_quoten.json`, gerechnet wird in `app/jagd.py`.
+
+**Würfe.** Für eine Begegnung prüft das Spiel n Werte, jeder ist mit 1/Nenner schillernd (Nenner 8192 bis Generation 5,
+4096 ab Generation 6). Die Quote ist
+
+    p = 1 − (1 − 1/Nenner)^n
+
+Die Methoden unterscheiden sich nur in n: Grundwurf, Zusatzwürfe der Kette (`stufen`: ab welchem Zählerstand wie viele,
+oder `je`: so viele je Zählerstand bis zu einer Grenze), Optionen (Lockparfüm, Forschung, Schillerkraft) und Schillerpin
+(`pin` je Spiel: 2, in Legenden: Arceus 3, 0 wo es keinen gibt). Mit dieser Formel kommen alle Dezimalwerte der
+Quellen auf zwei Stellen heraus, etwa 2 Würfe 1/2048,25, 7 Würfe 1/585,57, 26 Würfe 1/158,02 (Tests `Jagd`). Daraus
+ließ sich auch die Zahl der Würfe ablesen, wo die Quelle nur die Quote nennt: In der Fang-Kombo von Let's Go sind es
+3, 7 und 11 Zusatzwürfe (1/1024,38 bei Kombo 11), in der SOS-Kette 4, 8 und 12 (1/819,6 bei Kette 11).
+
+Wo die Quelle n/Nenner schreibt (Masuda-Methode 6/4096, Kettenangeln 41/4096, Schillerpin in Generation 5 3/8192),
+rechnet der Pokédex mit n Würfen; der Unterschied ist höchstens 0,5 % (1/683,08 statt 1/682,67).
+
+| Methode | Würfe | Spiele |
+|---|---|---|
+| Zufällige Begegnung | 1 | alle mit Eintrag |
+| Masuda-Methode | 5 in Generation 4, sonst 6 | DPPt, HGSS, ab Schwarz/Weiß mit Zucht |
+| Kettenangeln | 1 + 2 je Fang in Folge, ab 20 gleich | X/Y, ORAS |
+| SOS-Kette | +4 ab 11, +8 ab 21, +12 ab 31 | Sonne/Mond, Ultrasonne/Ultramond |
+| Fang-Kombo | +3 ab 11, +7 ab 21, +11 ab 31; Lockparfüm +1 | Let's Go |
+| Besiegte derselben Art | +1 ab 1, +2 ab 50, +3 ab 100, +4 ab 200, +5 ab 300, +6 ab 500 | Schwert/Schild |
+| Massenausbruch (Legenden: Arceus) | 26; Massiver Massenausbruch 13; Forschung Stufe 10 +1, perfekt +3 | Legenden: Arceus |
+| Massenausbruch (Karmesin/Purpur) | +1 ab 30, +2 ab 60; Schillerkraft +1 bis +3 | Karmesin/Purpur |
+
+Feste Quoten der Quelle statt Würfen: Pokéradar ab Kette 40 (41/8192 in DPPt, 1/99 in SDLP), Dyna-Abenteuer etwa
+1/300, mit Schillerpin etwa 1/100.
+
+**Bis jetzt.** Der Zähler zählt Begegnungen, die Quote gilt für die nächste beim aktuellen Zählerstand. Die
+Wahrscheinlichkeit, in z Begegnungen mindestens ein schillerndes gesehen zu haben, ist `1 − Π (1 − p(k))` für k von 0
+bis z − 1; zwischen zwei Stufen ist p gleich, das Produkt also eine Potenz (`jagd.schon`).
+
+Offen (so umgesetzt, aber nicht belegt):
+
+- **Pokéradar unter Kette 40.** Die Quelle nennt Werte erst ab 40. Darunter zeigt der Pokédex die Grundquote und sagt,
+  dass sie eine Untergrenze ist; „bis jetzt“ ist dann ebenfalls eine Untergrenze.
+- **Pokéradar in SDLP mit Schillerpin** und andere feste Quoten ohne Wert mit Schillerpin: der Schillerpin ist nicht
+  eingerechnet, die Jagd sagt das.
+- **Schwert/Schild, Besiegte derselben Art.** Die Quelle nennt die Zusatzwürfe neben der Chance auf ein funkelndes
+  Pokémon (1,5 bis 3 %). Ob sie nur bei einem funkelnden Pokémon gelten, steht dort nicht eindeutig; der Pokédex nimmt
+  die Quote der Tabelle.
+- **Ohne Eintrag:** DexNav (ORAS), Pokéradar und Kontaktsafari in X/Y, Zucht mit schillerndem Elternteil in
+  Generation 2, Legenden: Z-A über die Grundquote hinaus (Methoden, Schillerpin). Colosseum und XD haben keinen
+  Eintrag (keine wilden Begegnungen), Champions und Pokopia auch nicht.
+
 ## Spiele ohne eigene Formel
 
 Welches Spiel welche Formel nimmt, steht im Spielprofil (`app/spiele.py`, `docs/spiele.md`: Felder `schaden`,

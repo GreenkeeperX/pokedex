@@ -41,6 +41,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/store.py`: kleine JSON-Dateien im Datenordner (`settings.json`, `sync.json`, `ruhe.json`, `fehler.json`, `bedarf.json`)
 - `app/fehler.py`: Fehlerregister (`melden` für Ausnahmen, `notiere` für Ereignisse; eine fehlende Tabelle ist kein Fehler)
 - `app/statuskarte.py`: Statuskarte der Einstellungen (Gesamtstatus und Gründe, ohne Netz); Regeln in `docs/abrufe.md`
+- `app/jagd.py`: Shiny-Jagd (Quoten aus `extra/shiny_quoten.json`, Wahrscheinlichkeit, Zähler in user.db); Formel in `docs/formeln.md`
 - `app/leistung.py`: Leistungstest auf Klick (eigene Schnittstelle über 127.0.0.1, ohne Netz, user.db unberührt)
 - `app/wiederherstellung.py`: monatlicher Wiederherstellungstest der jüngsten Sicherung (temporärer Ordner, Produktivdaten unberührt)
 - `app/db.py`: pokeapi.db (Spieldaten, nur lesend) und user.db (Teams, Entscheidungen), tägliche Sicherung
@@ -65,7 +66,8 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/server.py`: Webserver und JSON-Schnittstelle
 - `app/static/`: Oberfläche (`index.html`, `style.css`, `js/*.js` in Teilen nach Reitern, Reihenfolge in `index.html`);
   siehe `docs/oberflaeche.md`
-- `extra/`: gepflegte Ergänzungen als JSON (`spielwissen.json`: Spielwissen für die Detailseite, liest der Server direkt)
+- `extra/`: gepflegte Ergänzungen als JSON (`spielwissen.json`: Spielwissen für die Detailseite, `shiny_quoten.json`: Quoten
+  der Shiny-Jagd; beide liest der Server direkt)
 - `app/mapgenie.py`: Karten von Map Genie lesen, eigene Punkte ausrichten und mit ihnen zu einer Datenbank zusammenführen
 - `app/pkcompletion.py`, `app/ign.py`, `app/dittobase.py`: weitere Kartenquellen in derselben Form wie Map Genie
   (DittoBase: Kacheln selbst gezeichnet mit `app/png.py`, PNG lesen und schreiben ohne Abhängigkeit)

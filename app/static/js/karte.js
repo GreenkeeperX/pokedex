@@ -1,4 +1,4 @@
-/* Pokédex-Oberfläche, Teil 6 von 10: Karten, Sammelobjekte, Was fehlt mir noch, Gebiete.
+/* Pokédex-Oberfläche, Teil 6 von 10: Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Was fehlt mir noch, Gebiete.
    Die Teile lädt index.html der Reihe nach; sie teilen sich die globalen Namen (docs/oberflaeche.md). */
 "use strict";
 /* ------------------------------------------------------------------ Karte (Legenden: Arceus)
@@ -632,6 +632,111 @@ async function progressView() {
   $$("tr[data-href]", main).forEach((tr) => tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = tr.dataset.href; }));
   $$("tr[data-spiel]", main).forEach((tr) => tr.addEventListener("click", () => setGame(tr.dataset.spiel)));
 }
+/* 0.70.0: Shiny-Jagd (/api/jagd): Zähler je Jagd mit Methode, Optionen und Schillerpin. Quote und Wahrscheinlichkeit
+   „bis jetzt“ rechnet der Server (app/jagd.py, Tabelle extra/shiny_quoten.json); hier wird nur gezeigt und gezählt.
+   Leertaste oder + zählt die oberste Jagd, − nimmt eine zurück. #jagd/neu/<Form> legt eine Jagd an (Detailseite). */
+let JAGD = null;
+const prozent = (x) => x === null || x === undefined ? "–" : `${(100 * x).toLocaleString("de-DE", {maximumFractionDigits: x < 0.1 ? 1 : 0})} %`;
+const einsZu = (x) => x ? `1 zu ${x.toLocaleString("de-DE", {maximumFractionDigits: x < 1000 ? 2 : 0})}` : "–";
+const SPERRE = {tausch: "Shiny-Sperre: in diesem Spiel nur per Tausch schillernd zu bekommen.", nie: "Shiny-Sperre: in diesem Spiel nie schillernd."};
+function huntCard(j) {
+  const M = JAGD.methoden || [], m = M.find((x) => x.id === j.methode);
+  const opts = (m?.optionen || []).map((o) => `<label class="hint">${esc(o.name)} <select data-jopt="${esc(o.id)}">${o.werte.map((w, i) =>
+    `<option value="${i}"${(j.optionen[o.id] || 0) === i ? " selected" : ""}>${esc(w)}</option>`).join("")}</select></label>`).join("");
+  return `<div class="box jagd${j.angeheftet ? " pin" : ""}" data-jid="${j.id}">
+    <div class="bar">${img(j.form)}<h3 style="margin:0"><a href="#pokemon/${j.form}">${esc(j.name)}</a></h3>
+      ${M.length ? `<select data-jm data-tip="Methode">${M.map((x) => `<option value="${esc(x.id)}"${x.id === j.methode ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select>` : `<span class="hint">${esc(j.methode_name)}</span>`}
+      ${opts}${JAGD.pin ? `<label class="hint" data-tip="Der Schillerpin bringt in diesem Spiel zusätzliche Würfe"><input type="checkbox" data-jpin${j.pin ? " checked" : ""}> Schillerpin</label>` : ""}
+      <span class="grow"></span>
+      <button class="small${j.angeheftet ? " on" : ""}" data-jact="anheften" data-tip="${j.angeheftet ? "Nicht mehr anheften" : "Anheften: steht oben, die oberste Jagd zählt mit der Tastatur"}">📌</button>
+      <button class="small x" data-jact="loeschen" data-tip="Jagd löschen">✕</button></div>
+    ${j.sperre ? `<div class="note warn">${SPERRE[j.sperre] || esc(j.sperre)}</div>` : ""}
+    <div class="jzahl">
+      <button class="jminus" data-jact="minus" data-tip="Eine Begegnung zurück (Taste −)">−</button>
+      <button class="jplus primary" data-jact="plus" data-tip="Eine Begegnung mehr (Leertaste oder +)"><b>${j.zaehler.toLocaleString("de-DE")}</b><span>Begegnungen</span></button>
+      <div class="jinfo">
+        <div>Quote jetzt: <b>${einsZu(j.eins_zu)}</b>${j.wuerfe ? ` <span class="hint">(${j.wuerfe} ${j.wuerfe === 1 ? "Wurf" : "Würfe"})</span>` : ""}</div>
+        <div>Bis jetzt hätten <b>${prozent(j.schon)}</b> schon eins gefunden.</div>
+        ${j.hinweise.map((h) => `<div class="hint">${esc(h)}</div>`).join("")}
+        <div class="bar slim"><input type="number" min="0" value="${j.zaehler}" data-jwert style="width:100px" data-tip="Zählerstand setzen (Enter)">
+          <input type="text" value="${esc(j.notiz || "")}" data-jnotiz placeholder="Notiz" maxlength="300" class="grow">
+          <button class="small" data-jact="gefunden" data-tip="Jagd abschließen; das Pokémon gilt dann in diesem Spiel als schillernd gefangen">Gefunden ✨</button></div>
+      </div></div>
+    ${m?.text ? `<p class="hint">${esc(m.text)}</p>` : ""}</div>`;
+}
+async function huntView(neu, form) {
+  const rid = RID;
+  const d = await api("/api/jagd?" + qs({spiel: S.game}));
+  if (rid !== RID) return;
+  if (neu === "neu" && +form && d.methoden) {
+    await api("/api/jagd", {spiel: S.game, form: +form, methode: d.methoden[0].id}).catch(ungespeichert());
+    location.replace("#jagd");
+    return;
+  }
+  JAGD = d;
+  const dt = (s) => esc(String(s || "").slice(0, 10).split("-").reverse().join("."));
+  main.innerHTML = `<div class="box"><div class="bar"><h2 style="margin:0">Shiny-Jagd</h2><span class="hint">Spiel</span><select class="gamesel"></select>
+      <span class="hint grow">${d.methoden ? `Grundquote 1 zu ${d.nenner.toLocaleString("de-DE")}` : ""}</span>
+      <a class="btn small" href="#fortschritt">Fortschritt</a><a class="btn small" href="#pokemon">Zur Liste</a></div>
+    ${d.methoden ? `<div class="bar"><div class="ac"><input id="jagdq" type="search" placeholder="Neue Jagd: Pokémon suchen" style="width:220px"></div></div>` : ""}
+    ${d.text ? `<div class="note ${d.methoden ? "info" : "warn"}">${esc(d.text)}</div>` : ""}
+    <p class="hint">Der Zähler zählt Begegnungen (bei Ketten die Länge der Kette); die Quote gilt für die nächste. „Bis jetzt“: Anteil der Jäger,
+      die mit so vielen Begegnungen schon eins gefunden hätten. Leertaste oder + zählt die oberste Jagd, − nimmt eine zurück.
+      Quellen: ${d.quellen.map(([n, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(n)} ↗</a>`).join(", ")}.</p></div>
+    <div id="jagden">${d.jagden.map(huntCard).join("") || (d.methoden ? `<p class="hint">Noch keine laufende Jagd in ${esc(gameName())}.</p>` : "")}</div>
+    ${d.gefunden.length ? `<div class="box"><h3>Gefunden</h3><table class="rows"><tbody>${d.gefunden.map((j) => `<tr data-jid="${j.id}">
+      <td>${img(j.form, "sm")} <a href="#pokemon/${j.form}">${esc(j.name)}</a></td><td class="hint">${esc(j.methode_name)}</td>
+      <td class="num">${j.zaehler.toLocaleString("de-DE")} Begegnungen</td><td class="hint nw">${dt(j.start)} bis ${dt(j.gefunden)}</td><td class="hint">${esc(j.notiz || "")}</td>
+      <td class="nw"><button class="small" data-jact="weiter" data-tip="Jagd wieder aufnehmen (die Marke schillernd bleibt)">Weiter</button>
+        <button class="small x" data-jact="loeschen" data-tip="Eintrag löschen">✕</button></td></tr>`).join("")}</tbody></table></div>` : ""}`;
+  header();
+  if (d.methoden) autocomplete($("#jagdq"), (r) => api("/api/jagd", {spiel: S.game, form: r.id, methode: d.methoden[0].id}).then(() => huntView()).catch(ungespeichert()));
+}
+// Eine Jagd neu zeichnen (Antwort des Servers); ohne Antwort die Ansicht neu laden
+function huntPut(j) {
+  const el = $(`#jagden [data-jid="${j.id}"]`);
+  if (el) el.outerHTML = huntCard(j); else huntView();
+}
+function huntCount(el, plus, wert) {
+  const id = +el.dataset.jid, b = $(".jplus b", el), alt = b.textContent;
+  const n = Math.max(0, wert ?? ((JAGD.jagden.find((j) => j.id === id)?.zaehler || 0) + plus));
+  const j = JAGD.jagden.find((x) => x.id === id);
+  if (j) j.zaehler = n;
+  b.textContent = n.toLocaleString("de-DE");
+  api("/api/jagd/zaehlen", wert === undefined ? {id, plus} : {id, wert}).then((x) => { if (j) Object.assign(j, x); huntPut(x); })
+    .catch(ungespeichert(() => { b.textContent = alt; if (j) j.zaehler = +alt.replace(/\D/g, ""); }));
+}
+function huntSave(id, body, ganz) {
+  return api("/api/jagd", Object.assign({id}, body)).then((x) => { if (ganz) huntView(); else huntPut(x); }).catch(ungespeichert(() => huntView()));
+}
+main.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-jact]"), el = b?.closest("[data-jid]");
+  if (!b || !el || !JAGD) return;
+  const id = +el.dataset.jid, j = [...JAGD.jagden, ...JAGD.gefunden].find((x) => x.id === id), act = b.dataset.jact;
+  if (act === "plus" || act === "minus") huntCount(el, act === "plus" ? 1 : -1);
+  else if (act === "anheften") huntSave(id, {angeheftet: !j?.angeheftet}, true);
+  else if (act === "gefunden") huntSave(id, {gefunden: true}, true).then(() => loadCaught(true)).catch(teil("Sammlung", null));
+  else if (act === "weiter") huntSave(id, {gefunden: false}, true);
+  else if (act === "loeschen" && await ask(`Jagd auf ${j?.name || "dieses Pokémon"} löschen?`, `Der Zähler (${j?.zaehler ?? 0}) geht verloren.`, "Löschen", true))
+    api("/api/jagd/loeschen", {id}).then(() => huntView()).catch(ungespeichert());
+});
+main.addEventListener("change", (e) => {
+  const el = e.target.closest("#jagden [data-jid]");
+  if (!el) return;
+  const id = +el.dataset.jid, t = e.target;
+  if (t.matches("[data-jm]")) huntSave(id, {methode: t.value, optionen: {}});
+  else if (t.matches("[data-jopt]")) huntSave(id, {optionen: Object.fromEntries($$("[data-jopt]", el).map((s) => [s.dataset.jopt, +s.value]))});
+  else if (t.matches("[data-jpin]")) huntSave(id, {pin: t.checked});
+  else if (t.matches("[data-jwert]")) huntCount(el, 0, Math.max(0, Math.floor(+t.value || 0)));
+  else if (t.matches("[data-jnotiz]")) huntSave(id, {notiz: t.value});
+});
+document.addEventListener("keydown", (e) => {
+  if (!location.hash.startsWith("#jagd") || !JAGD || e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, select, textarea, dialog")) return;
+  const top = $("#jagden [data-jid]");
+  if (!top) return;
+  if (e.key === " " || e.key === "+") { e.preventDefault(); huntCount(top, 1); }
+  else if (e.key === "-") { e.preventDefault(); huntCount(top, -1); }
+});
 async function missingView(nach, wert) {
   const rid = RID, ek = "edition:" + S.game;
   // 0.69.0: aus dem Fortschritt nur eine Generation oder einen Typ (#fehlt/gen/3, #fehlt/typ/10)

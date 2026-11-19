@@ -32,6 +32,9 @@ USER_SCHEMA = (
     """CREATE TABLE IF NOT EXISTS gefunden (spiel TEXT, karte TEXT, objekt TEXT, seit TEXT, PRIMARY KEY (spiel, karte, objekt))""",
     # 0.22.0: Kampftagebuch (Champions): Ergebnis sieg|niederlage, eigenes Team und Gegner als JSON-Listen von Form-IDs
     """CREATE TABLE IF NOT EXISTS kampf (id INTEGER PRIMARY KEY, spiel TEXT, at TEXT, ergebnis TEXT, team TEXT, gegner TEXT, notiz TEXT)""",
+    # 0.70.0: Shiny-Jagd (app/jagd.py): Zähler je Jagd mit Methode, Optionen (JSON), Schillerpin; gefunden: Zeitpunkt oder leer
+    """CREATE TABLE IF NOT EXISTS jagd (id INTEGER PRIMARY KEY, spiel TEXT, form INTEGER, methode TEXT, optionen TEXT, pin INTEGER,
+       zaehler INTEGER, angeheftet INTEGER, start TEXT, geaendert TEXT, gefunden TEXT, notiz TEXT)""",
 )
 # Spalten, die später dazukamen: (Tabelle, Spalte, Typ). Alte Dateien bekommen sie beim Start
 USER_COLUMNS = (

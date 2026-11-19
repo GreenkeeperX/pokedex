@@ -55,6 +55,7 @@ async function detailView(id, slot = null) {
       <button data-act="fav" data-id="${d.id}" data-markbtn="fav" class="mark${isFav(d.id) ? " on" : ""}">${markLabel("fav", isFav(d.id))}</button>
       <button data-act="caught" data-id="${d.id}" data-markbtn="gef" class="mark${isCaught(d.id) ? " on" : ""}" data-tip="${ballTip(d.id)}">${markLabel("gef", isCaught(d.id), d.id)}</button>
       ${S.alphaOk.has(d.id) || isAlpha(d.id) ? `<button data-act="alpha" data-id="${d.id}" data-markbtn="alpha" class="mark${isAlpha(d.id) ? " on" : ""}">${markLabel("alpha", isAlpha(d.id), d.id)}</button>` : ""}
+      ${PROFIL().kampf ? "" : `<a class="btn" href="#jagd/neu/${d.id}" data-tip="Zähler für die Suche nach dem schillernden Pokémon in diesem Spiel">✨ Shiny-Jagd</a>`}
       <a class="btn" href="${esc(d.wiki)}" target="_blank" rel="noopener noreferrer" data-tip="Seite im PokéWiki in einem neuen Tab">PokéWiki ↗</a>
       <span class="seg"><a class="btn mark" href="#vergleich/${d.id}/-" data-tip="Neben ein anderes Pokémon stellen: Werte, Typwirkung, Fähigkeiten, Attacken">⚖ Vergleichen</a>
       <button data-act="cmpmark" data-id="${d.id}" data-markbtn="cmp" class="mark${cmpMarked(d.id) ? " on" : ""}" data-tip="Merkt das Pokémon für den Vergleich (bis zu 8). Im Vergleich stehen gemerkte und Favoriten zur schnellen Wahl bereit">${markLabel("cmp", cmpMarked(d.id))}</button></span>
