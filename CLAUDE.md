@@ -42,6 +42,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/fehler.py`: Fehlerregister (`melden` für Ausnahmen, `notiere` für Ereignisse; eine fehlende Tabelle ist kein Fehler)
 - `app/statuskarte.py`: Statuskarte der Einstellungen (Gesamtstatus und Gründe, ohne Netz); Regeln in `docs/abrufe.md`
 - `app/jagd.py`: Shiny-Jagd (Quoten aus `extra/shiny_quoten.json`, Wahrscheinlichkeit, Zähler in user.db); Formel in `docs/formeln.md`
+- `app/nuzlocke.py`: Nuzlocke-Läufe (Regeln, erste Begegnung je Gebiet, Levelgrenze; Läufe in user.db); Regeln in `docs/formeln.md`
 - `app/leistung.py`: Leistungstest auf Klick (eigene Schnittstelle über 127.0.0.1, ohne Netz, user.db unberührt)
 - `app/wiederherstellung.py`: monatlicher Wiederherstellungstest der jüngsten Sicherung (temporärer Ordner, Produktivdaten unberührt)
 - `app/db.py`: pokeapi.db (Spieldaten, nur lesend) und user.db (Teams, Entscheidungen), tägliche Sicherung

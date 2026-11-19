@@ -2,7 +2,7 @@
 
 Reines JavaScript ohne Build (`app/static/js/`). Die Ansicht steht in der Adresse: `#pokemon`, `#pokemon/<id>`
 (`#pokemon/<id>/<platz>` für einen Team-Platz), `#team`, `#attacken`, `#typen`, `#items`, `#karte` (mit
-`#karte/mg/<Karte>`, `#karte/gebiete/<Ort>`), `#fehlt`, `#fortschritt`, `#jagd`, `#tausch`, `#kette/<Form>/<Attacke>`, `#sammeln`, `#vergleich/<A>/<B>`, `#initiative`, `#kampf`,
+`#karte/mg/<Karte>`, `#karte/gebiete/<Ort>`), `#fehlt`, `#fortschritt`, `#jagd`, `#tausch`, `#kette/<Form>/<Attacke>`, `#nuzlocke` (mit `#nuzlocke/<Lauf>`), `#sammeln`, `#vergleich/<A>/<B>`, `#initiative`, `#kampf`,
 `#raids`, `#auftraege`, `#einstellungen`. Gewähltes Spiel, Filter, aufgeklappte Kästen und das aktuelle Team merkt sich
 der Browser (`store`, `localStorage`); gespeicherte Teams und alle eigenen Daten liegen auf dem Server (user.db).
 
@@ -19,7 +19,7 @@ je Reiter zum Nachschlagen.
 | `kopf.js` | Kopf, Reiter, Adresse (`route`), Spielwahl (`setGame`), Favoriten und Haken, `refreshMeta`, Filter |
 | `liste.js` | Pokémon-Liste, Team-Leiste (`dock`), Speichern des Teams, Showdown-Export |
 | `detail.js` | Detailseite (Werte, Effort Levels, Fangchance, Entwicklung, Attacken), Ei-Attacken-Kette, Raids, Aufträge, Forschung |
-| `team.js` | Team, Gegner und Trainer, Attacken |
+| `team.js` | Team, Gegner und Trainer, Attacken, Nuzlocke |
 | `karte.js` | Karten, Sammelobjekte, Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch, Gebiete |
 | `items.js` | Items und Typtabelle |
 | `kampf.js` | Vergleich, Initiative-Liste, Kampf (Champions), Schadensrechner |
@@ -285,6 +285,15 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
   das Bildergitter nach Methode; Spiele ohne Karte landen unter „Karte“ direkt hier. Ort je Spiel gemerkt
   (`gebiet:<Spiel>`), Filter `gebietFehlend`.
 - Auswahl mit Bildern (`.pick`): Knopf, darunter Suche und Liste aus echten Links; Enter nimmt den ersten Treffer.
+
+### Nuzlocke
+
+- `nuzView` (`#nuzlocke/<Lauf>`, `/api/nuzlocke?spiel=…&lauf=…`): Kopf mit Lauf-Auswahl und „Neuer Lauf“; Name und
+  Stand des Laufs, Hinweise des Servers (`.note.warn`), Levelgrenze, „Regeln“ und „Bosse“ eingeklappt (offen gemerkt in
+  `nuzRegeln`, `nuzBosse`). Team, Box und Friedhof als Karten (`.nzk`, über der Grenze `.ueber`), darunter die Gebiete
+  (`table.nzg`): ohne Begegnung eine Auswahl der Pokémon des Gebiets (gesperrte mit Grund, nicht wählbar), sonst
+  Spitzname, Level und Status. „Von Hand“: Gebiet frei, erste Begegnung, Shiny oder Geschenk, Pokémon über
+  `autocomplete`. Jede Änderung schickt die ganze Ansicht zurück (`nuzRender`); bei einem Fehler zeichnet sie die alte.
 
 ### Fortschritt, Shiny-Jagd, Tauschliste, Was fehlt mir noch und Sammelobjekte
 

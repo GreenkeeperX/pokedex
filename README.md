@@ -55,6 +55,10 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Ei-Attacken-Kette** (Link „Ei ›“ in den Attacken der Detailseite, `#kette/<Form>/<Attacke>`): die kürzeste Kette
   von Eltern, über die das Pokémon die Ei-Attacke bekommt, mit Ei-Gruppe je Schritt, Gefangene zuerst; in
   Karmesin/Purpur der Weg per Spiegelkraut im Picknick. Regeln nach Bulbapedia in `docs/formeln.md`.
+- **Nuzlocke** (Knopf in der Liste, `#nuzlocke`): Läufe je Spiel mit erster Begegnung je Gebiet (Auswahl aus den
+  Fundorten, schon Gefangenes nach Dupes-Klausel gesperrt), Team, Box und Friedhof, Shiny und Geschenken extra, Regeln
+  je Lauf und Levelgrenze bis zum nächsten Boss; Verstöße als Hinweise. Regeln nach Bulbapedia und Smogon in
+  `docs/formeln.md`.
 - **Fortschritt** (Knopf in der Liste, `#fortschritt`): gefangene Arten je Spiel und in Pokémon HOME, für das gewählte
   Spiel nach Generation und Typ; jede Zeile springt zu den fehlenden Pokémon.
 - **Was fehlt mir noch?** (Knopf in der Liste, `#fehlt`): die Arten des Spiel-Dex ohne gefangene Form, nach dem besten

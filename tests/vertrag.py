@@ -84,6 +84,9 @@ VORHER = (
                     "details": {"3": {"level": 50, "attacken": [23, 13]}}}),
     ("/api/kampftagebuch", {"spiel": "scarlet-violet", "ergebnis": "sieg", "team": [3, 5], "gegner": [7, 9], "notiz": "Probe"}),
     ("/api/jagd", {"spiel": "scarlet-violet", "form": 3, "methode": "sv_ausbruch", "optionen": {"kraft": 2}, "pin": True, "notiz": "Probe"}),
+    ("/api/nuzlocke", {"spiel": "emerald", "name": "Vertrag"}),
+    ("/api/nuzlocke/begegnung", {"lauf": 1, "ort": "Nebelwiese", "form": 8, "status": "team", "level": 20}),
+    ("/api/nuzlocke/begegnung", {"lauf": 1, "form": 2, "extra": "geschenk", "status": "tot", "spitzname": "Probe"}),
 )
 _SV = {"spiel": "scarlet-violet"}
 # Name: (Weg, Rumpf oder None für GET). Die Namen sind die Abschnitte in vertrag.json.
@@ -112,6 +115,8 @@ AUFRUFE = {
     "gefangen": ("/api/gefangen?spiel=emerald", None),
     "kampftagebuch": ("/api/kampftagebuch?spiel=scarlet-violet", None),
     "tausch": ("/api/tausch?spiel=x-y&edition=X", None),
+    "nuzlocke": ("/api/nuzlocke?spiel=emerald", None),
+    "nuzlocke begegnung": ("/api/nuzlocke/begegnung", {"lauf": 1, "n": 1, "status": "box"}),
     "eikette": ("/api/eikette?spiel=x-y&id=8&attacke=21", None),
     "jagd": ("/api/jagd?spiel=scarlet-violet", None),
     "jagd ohne Quoten": ("/api/jagd?spiel=red-blue", None),

@@ -35,6 +35,9 @@ USER_SCHEMA = (
     # 0.70.0: Shiny-Jagd (app/jagd.py): Zähler je Jagd mit Methode, Optionen (JSON), Schillerpin; gefunden: Zeitpunkt oder leer
     """CREATE TABLE IF NOT EXISTS jagd (id INTEGER PRIMARY KEY, spiel TEXT, form INTEGER, methode TEXT, optionen TEXT, pin INTEGER,
        zaehler INTEGER, angeheftet INTEGER, start TEXT, geaendert TEXT, gefunden TEXT, notiz TEXT)""",
+    # 0.73.0: Nuzlocke (app/nuzlocke.py): ein Lauf je Zeile; regeln, begegnungen, besiegt und spieler als JSON
+    """CREATE TABLE IF NOT EXISTS nuzlocke (id INTEGER PRIMARY KEY, spiel TEXT, name TEXT, modus TEXT, spieler TEXT, regeln TEXT,
+       begegnungen TEXT, besiegt TEXT, status TEXT, start TEXT, geaendert TEXT, notiz TEXT)""",
 )
 # Spalten, die später dazukamen: (Tabelle, Spalte, Typ). Alte Dateien bekommen sie beim Start
 USER_COLUMNS = (

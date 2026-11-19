@@ -204,6 +204,19 @@ BEGEGNUNGEN = (
 # Getragene Items wilder Pokémon: Edition, Pokémon, Item, Anteil in %. Nebula trägt die Glücksfeder in X und Y, Keimling das
 # Blattamulett nur in X.
 GETRAGEN = (("emerald", 6, "kraeutersaft", 50), ("x", 11, "gluecksfeder", 5), ("y", 11, "gluecksfeder", 5), ("x", 1, "blattamulett", 5))
+# Wichtige Trainer (wie aus dem PokéWiki): Bosse für die Levelgrenze im Nuzlocke. In Smaragd zwei Arenaleiter und ein Champ
+# (die Reihenfolge ergibt sich aus dem höchsten Level), dazu ein Rückkampf, der nicht als Boss zählt, und ein Rivale.
+TRAINER = (
+    {"spiele": ["emerald"], "name": "Erfunda", "seite": "Erfunda", "rolle": "Arenaleiter", "titel": "Arena 1",
+     "team": [{"nr": 4, "lvl": 12}, {"nr": 1, "lvl": 14}]},
+    {"spiele": ["emerald"], "name": "Kieselmo", "seite": "Kieselmo", "rolle": "Arenaleiter", "titel": "Arena 2",
+     "team": [{"nr": 10, "lvl": 25}]},
+    {"spiele": ["emerald"], "name": "Gipfelchamp", "seite": "Gipfelchamp", "rolle": "Champ", "titel": "Champ",
+     "team": [{"nr": 12, "lvl": 60}, {"nr": 7, "lvl": 58}]},
+    {"spiele": ["emerald"], "name": "Erfunda", "seite": "Erfunda", "rolle": "Arenaleiter", "titel": "Rückkampf", "rueckkampf": True,
+     "team": [{"nr": 5, "lvl": 70}]},
+    {"spiele": ["emerald"], "name": "Rivalo", "seite": "Rivalo", "rolle": "Rivale", "titel": "Route 1", "team": [{"nr": 6, "lvl": 5}]},
+)
 # Bewährte Sets (Showdown, Random Battle) für Generation 9
 SETS = {9: {"dornwald": {"level": 84, "sets": [{"role": "Bulky Attacker", "movepool": ["Saugwurzel", "Giftranke", "Erdstoss", "Kraftschub"],
                                                  "abilities": ["Blattwerk"], "teraTypes": ["Grass"]}]}}}      # englische Namen
@@ -455,7 +468,7 @@ def bauen(path):
     Gibt die Zahlen des Importers zurück."""
     extra = importer.load_extra(os.path.join(HIER, "..", "extra"))
     with mock.patch.multiple(importer, MIN_SPECIES=len(ARTEN), MIN_MOVES=len(ATTACKEN)):
-        return importer.build(path, csvs(), sd_texts(), extra, sets=SETS)
+        return importer.build(path, csvs(), sd_texts(), extra, sets=SETS, wiki={"trainer": [dict(t) for t in TRAINER]})
 
 
 _fertig = {}
