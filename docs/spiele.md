@@ -36,7 +36,8 @@ Generation und steht im Fehlerregister („Spiel ohne Profil“), ebenso eine ab
 | `baelle` | `standard`, `hisui` | Balltabelle | `_more`, `ballOf` |
 | `werte` | `dv`, `ev`, `av`, `el`, `ohne` | Statuswerte: DV und Stat Exp, EV, AV, Effort Levels, nicht gerechnet | `stats_view`, `_more` (EV-Ausbeute), `STATS_OK()`, `LA()`, `statBox` |
 | `faehigkeiten` | ja/nein | gibt es Fähigkeiten | `no_abilities`, `noAbil()` |
-| `zucht` | ja/nein | Eier und Pension: Weg „Zucht“, Ei-Gruppen und Ei-Zyklen | `missing`, `_more` |
+| `zucht` | ja/nein | Eier und Pension: Weg „Zucht“, Ei-Gruppen und Ei-Zyklen | `missing`, `_more`, `eikette` |
+| `eiattacken` | `zucht`, `spiegelkraut` | wie Ei-Attacken weitergehen: nur beim Züchten (ein männlicher Elternteil derselben Ei-Gruppe) oder auch im Picknick per Spiegelkraut von jedem Pokémon, das die Attacke kann (Karmesin/Purpur) | `eikette` |
 | `tera` | ja/nein | Tera-Typ je Team-Platz | `team_view`, `TERA()` |
 | `raids` | Kennung oder leer | Spiel, unter dem die Tera-Raids liegen; Reiter Raids | `detail`, `missing`, `RAIDS()` |
 | `auftraege` | Kennung oder leer | Schlüssel, unter dem Aufträge und Haken liegen; Reiter Aufträge | `request_list`, `detail`, `_quests_de`, `REQ_GAME()` |

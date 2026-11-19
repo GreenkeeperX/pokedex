@@ -884,6 +884,12 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/fortschritt":
                 d = abfragen.fortschritt(q)
                 self._send(200 if d else 404, d or {"error": "keine Spieldaten"})
+            elif path == "/api/eikette":
+                if not all(re.fullmatch(r"\d{1,6}", q.get(k, "")) for k in ("id", "attacke")):
+                    self._send(400, {"error": "id und attacke: Zahlen"})
+                else:
+                    d = abfragen.eikette(q)
+                    self._send(200 if d else 404, d or {"error": "Pokémon, Attacke oder Spiel nicht gefunden"})
             elif path == "/api/tausch":
                 d = abfragen.tauschliste(q)
                 self._send(200 if d else 404, d or {"error": "keine Spieldaten"})

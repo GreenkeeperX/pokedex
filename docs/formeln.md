@@ -196,6 +196,41 @@ Offen (so umgesetzt, aber nicht belegt):
   Generation 2, Legenden: Z-A über die Grundquote hinaus (Methoden, Schillerpin). Colosseum und XD haben keinen
   Eintrag (keine wilden Begegnungen), Champions und Pokopia auch nicht.
 
+## Ei-Attacken
+
+Quelle: Bulbapedia, „Egg Move“ (https://bulbapedia.bulbagarden.net/wiki/Egg_Move), Stand 19.11.2026. Gerechnet wird in
+`app/abfragen/eikette.py`; welche Regel ein Spiel hat, sagt das Spielprofil (`zucht`, `eiattacken`).
+
+**Zucht.** Das Ei erbt eine Ei-Attacke, wenn ein Elternteil sie kann: bis Generation 5 nur der Vater, ab Generation 6
+beide. Die Art des Eis bestimmt die Mutter (oder der Partner von Ditto). Über Artgrenzen hinweg gibt deshalb immer ein
+männlicher Elternteil weiter, der eine Ei-Gruppe mit der Mutter teilt; das gilt in allen Generationen und ist die Regel,
+nach der die Kette sucht. Ditto gibt nichts weiter. Wer nur mit Ditto züchten kann (geschlechtslos, wie Sterndu in der
+Quelle, oder nur männlich), erbt keine Ei-Attacken.
+
+**Kette.** Ein Schritt ist ein Ei: Vater (♂, Art mit Männchen, nicht Unbekannt oder Ditto) und Mutter (♀, eine Art
+derselben Familie wie das Ei, die Weibchen hat) teilen eine Ei-Gruppe. Am Anfang steht ein Vater, der die Attacke
+selbst lernt (Level, TM, Lehrer …); jeder weitere Vater hat sie als Ei-Attacke geerbt, seine Familie muss sie also als
+Ei-Attacke haben. Gesucht wird rückwärts von der Familie des gewählten Pokémon (Breitensuche, höchstens fünf Schritte);
+eine Familie kommt nur einmal vor, außer ein Vater der eigenen Familie lernt die Attacke selbst (etwa die Endstufe per
+Level für die Basisstufe).
+
+**Karmesin und Purpur** (`eiattacken`: `spiegelkraut`): Im Picknick lernt ein Pokémon mit Spiegelkraut und freiem
+Platz eine Ei-Attacke von einem anderen Pokémon der Gruppe, ohne Ei-Gruppe; laut Quelle der einzige Weg für nur
+männliche und geschlechtslose Pokémon. Die Kette ist dann ein Schritt.
+
+**Besondere Eier.** Volttackle für Pichu ist keine Ei-Attacke: ab Smaragd kann ein gezüchtetes Pichu sie, wenn ein
+Elternteil einen Kugelblitz trägt. Die PokéAPI führt das als eigene Lernmethode; die Kette zeigt ihren Text.
+
+Offen (so umgesetzt, aber nicht belegt oder bewusst weggelassen):
+
+- **Nur Arten des Spiel-Dex.** Arten, die nur per Tausch oder aus HOME ins Spiel kommen, stehen nicht in der Kette.
+- **TM-Vererbung bis Generation 5** (das Ei erbt TM-Attacken des Vaters, wenn es sie lernen kann) ist kein Schritt der
+  Kette; sie betrifft keine Ei-Attacke.
+- **Weitergabe im Pokémon-Hort** (Schwert/Schild, Strahlender Diamant/Leuchtende Perle: zwei Pokémon derselben Art,
+  eins mit freiem Platz) sucht die Kette nicht; sie bringt keine neue Art in die Kette.
+- **Mutter mit der Attacke ab Generation 6**: Die Kette nutzt sie nicht, weil die Mutter dieselbe Familie wie das Ei
+  hat; die Kette wäre nicht kürzer.
+
 ## Spiele ohne eigene Formel
 
 Welches Spiel welche Formel nimmt, steht im Spielprofil (`app/spiele.py`, `docs/spiele.md`: Felder `schaden`,

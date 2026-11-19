@@ -21,6 +21,7 @@ Seit 0.62.0 ein Paket mit Modulen nach Thema (in der Reihenfolge der Abhängigke
 - fortschritt: Fortschritt je Spiel und in HOME, nach Generation und Typ (0.69.0)
 - teams: Teams: Plätze, Verbesserungen, Vorschläge, Gefangen, Was fehlt mir noch, Trainer, Gegner; Showdown-Text
   (Import und Export)
+- eikette: Ei-Attacken-Kette: kürzeste Elternkette für Pokémon und Attacke (0.72.0)
 - tausch: Tauschliste aus „Was fehlt mir noch“: Suche und Biete, als Text zum Kopieren (0.71.0)
 - kampf: Doppelkampf (Smogon), Werte, Effort Levels und Schadensrechner
 
@@ -55,5 +56,6 @@ from .teams import (slot_details, _members, improvements, foreign_moves, team_vi
     team_optimize, team_caught, NO_EGGS, WAYS, missing, _missing_home, _evolves_from, _between, _stage, _furthest, TRAINER_ROLLEN,
     trainer_list, _move_types, team_matchup, _paste_names, slot_info, paste_import, paste_export)
 from .tausch import GRUPPEN, HIER, AUS, _eintrag, _fundorte, _erreichbar, tauschliste, _nr, _text
+from .eikette import DITTO, TIEFE, ALTERNATIVEN, _arten, _saetze, eikette
 from .kampf import (smogon_view, team_doubles, effort_view, stats_view, effort_team, damage_matrix, damage_view,
     _calc_steps, _calc_names)

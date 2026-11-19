@@ -142,7 +142,9 @@ SD_ANDERS_ART = {"steinchen": {"spe": 35}}
 SD_MOD = {5: {"tropfi": {"spa": 50}}}
 
 # Lernlisten: Pokémon → (Level-up als (Level, Attacke), TM, Ei, Attacken-Lehrer). Attacken, die jünger sind als das Spiel,
-# fallen weg (Feenglanz erst ab Generation 6). In Legenden: Arceus gibt es weder TMs noch Ei-Attacken.
+# fallen weg (Feenglanz erst ab Generation 6). In Legenden: Arceus gibt es weder TMs noch Ei-Attacken. Ei-Ketten: Zappel
+# (Feld) bekommt Kraftschub von Lohrax (Feld, Level 36), Keimling von Rankel aus der eigenen Familie (Level 25); Nebula ist
+# geschlechtslos und erbt seine Ei-Attacke Schnellhieb deshalb nie.
 _GRAS = ((1, "rempler"), (5, "blattschlag"), (9, "schlummerpollen"), (13, "giftranke"), (20, "saugwurzel"))
 _FEUER = ((1, "rempler"), (6, "glutstoss"), (12, "schnellhieb"), (18, "zwillingstritt"), (30, "flammenwand"))
 _WASSER = ((1, "rempler"), (5, "wasserstrahl"), (11, "frostbiss"), (25, "flutwelle"))
@@ -154,10 +156,10 @@ LERNEN = {
     5: (_FEUER + ((36, "kraftschub"), (45, "urknall")), ("flammenwand", "erdstoss"), (), ()),
     6: (_WASSER, ("flutwelle",), ("heilruf",), ()),
     7: (_WASSER + ((38, "urknall"),), ("flutwelle", "geistesblitz"), (), ()),
-    8: (((1, "rempler"), (4, "funkenschlag"), (10, "schnellhieb"), (22, "donnerkeil")), ("donnerkeil",), (), ()),
+    8: (((1, "rempler"), (4, "funkenschlag"), (10, "schnellhieb"), (22, "donnerkeil")), ("donnerkeil",), ("kraftschub",), ()),
     9: (((1, "funkenschlag"), (1, "boeenhieb"), (30, "donnerkeil"), (44, "feenglanz")), ("donnerkeil", "geistesblitz"), (), ()),
     10: (((1, "rempler"), (8, "geroellwurf"), (20, "erdstoss"), (33, "kraftschub")), ("erdstoss",), (), ()),
-    11: (((1, "schattenhauch"), (10, "feenglanz"), (20, "geistesblitz"), (30, "heilruf")), ("geistesblitz",), (), ()),
+    11: (((1, "schattenhauch"), (10, "feenglanz"), (20, "geistesblitz"), (30, "heilruf")), ("geistesblitz",), ("schnellhieb",), ()),
     12: (((1, "drachenschwinge"), (1, "geistesblitz"), (50, "urknall"), (70, "heilruf")),
          ("flammenwand", "flutwelle", "donnerkeil", "erdstoss", "geistesblitz"), (), ()),
     13: (((1, "rempler"), (4, "funkenschlag")), (), ("heilruf",), ()),

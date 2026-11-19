@@ -1,4 +1,4 @@
-/* Pokédex-Oberfläche, Teil 4 von 10: Detailseite, Raids, Aufträge, Forschung.
+/* Pokédex-Oberfläche, Teil 4 von 10: Detailseite, Ei-Attacken-Kette, Raids, Aufträge, Forschung.
    Die Teile lädt index.html der Reihe nach; sie teilen sich die globalen Namen (docs/oberflaeche.md). */
 "use strict";
 /* ------------------------------------------------------------------ Detailseite */
@@ -617,6 +617,28 @@ const accCell = (v) => v ? `<span style="color:${ramp((v - 60) / 40)}">${v}</spa
 const scoreColor = (v) => ramp((v - 20) / 120);
 // Alle Attacken des Spiels, für „andere Attacke hinzufügen“ (TM, Lehrer, Trainingsgelände)
 const ALLMOVES = {};
+/* 0.72.0: Ei-Attacken-Kette (/api/eikette): kürzeste Elternkette für Pokémon und Attacke im gewählten Spiel; die Suche und
+   die Sätze macht der Server (app/abfragen/eikette.py). Aufruf aus der Attackenliste der Detailseite („Ei ›“) */
+async function chainView(form, attacke) {
+  const rid = RID;
+  const d = await api("/api/eikette?" + qs({spiel: S.game, id: +form, attacke: +attacke}));
+  if (rid !== RID) return;
+  const karte = (x, i) => `${i ? `<div class="kpfeil" data-tip="Ei-Gruppe ${esc(x.gruppe)}">→<span class="hint">${esc(x.gruppe)}</span></div>` : ""}
+    <a class="kglied${x.gefangen ? " hast" : ""}" href="#pokemon/${x.id}" data-hc="${x.id}">${img(x.id)}<b>${esc(x.name)}</b>
+      <span class="hint">${i ? (x.wie === "Ei" ? "Ei" : esc(x.wie)) : `lernt es: ${esc(x.wie)}`}</span>${x.gefangen ? `<span class="fok">gefangen</span>` : ""}</a>`;
+  main.innerHTML = `<div class="box"><div class="bar"><a class="btn small" href="#pokemon/${d.id}">‹ ${esc(d.name)}</a>
+      <h2 style="margin:0">Ei-Attacken-Kette</h2><span>${tchip(d.attacke.typ)} <b>${esc(d.attacke.name)}</b> für <b>${esc(d.name)}</b></span>
+      <span class="hint grow"></span><label class="game2">Spiel <select class="gamesel"></select></label></div>
+    <div class="note ${d.art === "kette" || d.art === "selbst" ? "go" : d.art === "besonders" ? "info" : "warn"}">${esc(d.text)}</div>
+    ${d.kette.length ? `<div class="kette">${d.kette.map(karte).join("")}</div>` : ""}
+    ${d.alternativen.length ? `<h3>Statt ${esc(d.kette[0].name)} am Anfang</h3><div class="tks">${d.alternativen.map((x) =>
+      `<a class="tk${x.gefangen ? " hast" : ""}" href="#pokemon/${x.id}" data-hc="${x.id}" data-tip="${esc(x.wie)}">${img(x.id, "sm")}<span>${esc(x.name)} <span class="hint">${esc(x.wie)}</span></span></a>`).join("")}</div>` : ""}
+    <p class="hint">${d.modus === "spiegelkraut" ? "In diesem Spiel geht eine Ei-Attacke im Picknick per Spiegelkraut weiter, ohne Ei-Gruppe."
+      : "Die Art des Eis bestimmt die Mutter; über Artgrenzen gibt deshalb ein männlicher Elternteil derselben Ei-Gruppe weiter. Ditto gibt nichts weiter."}
+      Gesucht in den Pokémon des Spiel-Dex, kürzeste Kette zuerst, bei gleicher Länge Gefangene. Regeln:
+      <a href="${esc(d.quelle[1])}" target="_blank" rel="noopener noreferrer">${esc(d.quelle[0])} ↗</a>.</p></div>`;
+  header();
+}
 async function allMoves() {
   const k = S.game || "-";
   if (!ALLMOVES[k]) ALLMOVES[k] = (await api("/api/attacken?" + qs({spiel: S.game, lernbar: 0}))).rows;
@@ -646,7 +668,7 @@ function renderMoves(A, level) {
   mine.map(mv).filter((m) => m.klasse !== 1 && m.staerke).forEach((m) => Object.entries(S.chart?.[m.typ] || {}).forEach(([t, f]) => f > 1 && covered.add(t)));
   const mrow = (m, status = false) => `<tr class="${m.jetzt === false ? "off" : ""}${mine.includes(m.id) ? " sel" : ""}"><td data-s="${esc(m.name)}"><span${m.text ? ` data-tip="${esc(m.text)}"` : ""}>${wikiLink(m.name)}</span>${m.geaendert ? ' <span class="cls" data-tip="Werte in diesem Spiel anders als heute">Spielwert</span>' : ""}${m.tm_fehlt ? ` <span class="cls tmfehlt" data-tip="${esc(`Nur per ${m.tm_fehlt}, und die hast du in diesem Spiel nicht abgehakt (Items › Maschinen); der Vorschlag lässt sie weg`)}">${esc(m.tm_fehlt)} fehlt</span>` : ""}${moveMarks(m)}</td>
     <td class="c" data-s="${tname(m.typ)}">${tchip(m.typ)}</td><td class="c"><span class="cls">${CLS[m.klasse] || ""}</span></td><td class="c num" data-s="${m.staerke ?? 0}">${powStil(m)}</td><td class="c num" data-s="${m.genauigkeit ?? 101}">${accCell(m.genauigkeit)}</td>
-    <td class="c num" data-s="${status ? 0 : m.wertung}">${status ? "–" : `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>`}</td><td class="c weg" data-s="${esc(m.wege[0] || "")}">${m.wege.map((w) => esc(w).replace(", Beherrschung", "<br>Beherrschung")).join("<br>")}</td><td class="why">${status ? (m.kurz ? `<b>${kurzHtml(m.kurz)}</b>` : esc(m.text || "")) : (m.kurz ? kurzHtml(m.kurz) + (m.gruende.length ? " · " : "") : "") + esc(m.gruende.join(" · "))}</td>
+    <td class="c num" data-s="${status ? 0 : m.wertung}">${status ? "–" : `<b style="color:${scoreColor(m.wertung)}">${m.wertung}</b>`}</td><td class="c weg" data-s="${esc(m.wege[0] || "")}">${m.wege.map((w) => w === "Ei" ? `<a href="#kette/${id}/${m.id}" data-tip="Kürzeste Elternkette für diese Ei-Attacke">Ei ›</a>` : esc(w).replace(", Beherrschung", "<br>Beherrschung")).join("<br>")}</td><td class="why">${status ? (m.kurz ? `<b>${kurzHtml(m.kurz)}</b>` : esc(m.text || "")) : (m.kurz ? kurzHtml(m.kurz) + (m.gruende.length ? " · " : "") : "") + esc(m.gruende.join(" · "))}</td>
     <td class="c">${mine.includes(m.id) ? `<button class="small on" data-act="mvdel" data-mid="${m.id}" data-tip="Aus deiner Auswahl">✓</button>` : mine.length < 4 ? `<button class="small" data-act="mvadd" data-mid="${m.id}" data-tip="In deine Auswahl (4 Plätze)">+</button>` : ""}</td></tr>`;
   const std = (A.standard || []).map((x) => all[x]?.name).filter(Boolean);
   // Deine Auswahl als feste Tabelle mit vier Zeilen: springt nicht, wenn Attacken dazukommen oder gehen
