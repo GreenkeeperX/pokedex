@@ -145,7 +145,7 @@ einmal geladen wird. Die Tests lesen die Teile zusammen (`tests.basis.oberflaech
 - Effort Levels `elBox` (`#elbox`, Legenden: Arceus): `/api/effort`, Team-Platz `el`, `el_ziel`, `wesen`; ohne Team ein
   Zwischenstand nur für die Seite (`elBox.tmp`), aufgeklappt `elOpen`. Team: `elTeam` (`#elteam`, `/api/effort/team`,
   `elTeamOpen`); Initiative: `laStat`, `EL_FAKTOR`, nur wenn `LA()`. Diagramm `elChart` (Balken und Netz aus `teile`),
-  Rechnung `elTip`. Entwicklung: `evoHtml` (Raster, ein Ast je Zeile). Hover-Karte lädt fehlende Pokémon einmal nach (`HCLOAD`).
+  Rechnung `elTipHtml`. Entwicklung: `evoHtml` (Raster, ein Ast je Zeile). Hover-Karte lädt fehlende Pokémon einmal nach (`HCLOAD`).
   Karten: Seitenleiste `.mgside` (Details oben fest, Ebenen darunter), auch in den Einzelkarten.
 - Map Genie (`mgView`, `#karte/mg/<Karte>`, `/api/mapgenie`, Kacheln `/mgkachel/<Spiel>/<Karte>/<z>/<x>/<y>`): eigene
   Kachelanzeige (Web-Mercator, ganze Zoomstufen), Punkte je Kategorie in der Farbe der Gruppe, Ebenen rechts zum

@@ -44,7 +44,7 @@ from .karten import (_range, ZEIT_DE, WETTER_DE, _pct, _cond_text, _ALPHA, shiny
     METHOD_DE, FIXED_METHODS, _methods, _place, areas, _areas_pkhex, _areas_pokeapi)
 from .lernen import (pick_text, text_rows, joined, move_view, learn_game, learnset, how, ROLLEN, _sd_move_map,
     proven_sets, owned_tms, _tm_missing, TM_RX, tm_key, COLLECT_RX, _js_round, point_key, collectibles, tm_places,
-    ranked_moves, move_list, best_of_type, moves_of)
+    ranked_moves, move_list, moves_of)
 from .raids import _raids, raid_list, _crypto
 from .detailseite import (_evolutions, evo_text, _more, _extras, detail, WISSEN, _WISSEN, knowledge, _optik, _held,
     _pokopia)

@@ -599,6 +599,8 @@ class ServerMitDaten(HttpMitDaten):
         self.assertEqual(self.json("/api/pokemon/999/attacken", status=404), {"error": "Pokémon nicht gefunden"})
         self.assertEqual(self.json("/api/gibt-es-nicht", status=404), {"error": "nicht gefunden"})
         self.assertEqual(self.json("/api/gibt-es-nicht", {}, status=404), {"error": "nicht gefunden"})
+        # 0.64.0 entfernt (ohne Aufrufer; die eigenen Punkte stehen in der zusammengeführten Karte von /api/mapgenie)
+        self.assertEqual(self.json("/api/mapgenie/eigene?spiel=legends-arceus&karte=x", status=404), {"error": "nicht gefunden"})
         self.assertEqual(self.json("/api/fehlt?spiel=gibt-es-nicht", status=404), {"error": "kein Spiel"})
         # falsche Eingaben: 400 mit Grund, kein 500
         self.assertEqual(self.json("/api/werte", {"spiel": "scarlet-violet", "id": 999}, status=400)["error"], "Pokémon nicht gefunden")
@@ -667,8 +669,7 @@ class Vertrag(HttpMitDaten):
     # Aufräumen der Abfragen. Ein Eintrag, der nicht mehr stimmt, lässt den Test scheitern.
     UNGELESEN = {"max_gen", "kampfform", "formname", "effekt", "abgedeckt", "ev_summe"}
     # Wege des Servers ohne Aufruf in der Oberfläche, mit Grund
-    OHNE_AUFRUFER = {"/healthz": "Lebenszeichen für Docker (HEALTHCHECK) und den Menschen",
-                     "/api/mapgenie/eigene": "kein Aufrufer in der Oberfläche gefunden (Stand 0.59.0): Kandidat für das Aufräumen, erst prüfen"}
+    OHNE_AUFRUFER = {"/healthz": "Lebenszeichen für Docker (HEALTHCHECK) und den Menschen"}
 
     def js(self):
         return oberflaeche_js()
