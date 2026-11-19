@@ -44,7 +44,7 @@ from .grundlage import (PAUSE, REST_H, NET_RETRY, MAX_ERRORS, BOOT_WAIT_S, LOG_L
     csv_list, PKHEX_RAW, PKHEX_ITEMS, PKHEX_SRC, POKEAPI_RAW, PROBE_MAX, pkhex_areas, PLA_MAPS, SPAWN_POINTS,
     SPAWN_SLOTS, PKHEX_GAMES)
 from .medien import (IMAGES, EXTRAS, ITEM_HQ, ITEM_HQ_MAX, MEDIA_LABEL, miss_name, serebii_key, media_ids, DISK_LABEL,
-    DISK_TILES, DISK_CACHE_S, _disk, _du, disk_usage, media_inventory, file_kind, _images, SEREBII, GAMERGUIDES,
+    DISK_TILES, DISK_CACHE_S, _disk, _du, disk_known, disk_usage, media_inventory, file_kind, _images, SEREBII, GAMERGUIDES,
     POKEBIP, MAP_TILES, MAP_ZOOM, map_tiles, _tiles, _sprites)
 from .quellen import _pkhex, _spawns, _altissimo, _companion
 from .wiki import wiki_titles, _pokewiki, WIKI_TEXT_KINDS, _WIKI_SUFFIX, wiki_text_titles, _wiki_page, _wiki_texts

@@ -90,6 +90,7 @@ AUFRUFE = {
     "meta": ("/api/meta", None),
     "stand": ("/api/stand", None),
     "status": ("/api/status", None),
+    "statuskarte": ("/api/statuskarte", None),
     "neuigkeiten": ("/api/neuigkeiten", None),
     "fehler": ("/api/fehler", None),
     "liste": ("/api/pokemon?spiel=x-y", None),

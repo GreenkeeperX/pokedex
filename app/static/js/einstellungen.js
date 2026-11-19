@@ -24,13 +24,17 @@ function foldBoxes(root) {
       if (bar) { sm.append(...bar.childNodes); bar.remove(); } else { sm.append(h); }
       d.append(sm, ...b.childNodes); b.replaceWith(d);
     }
-    d.id = "s-" + id; d.classList.add("fold"); d.open = !shut.has(id);
+    d.id = "s-" + id; d.classList.add("fold");
+    d.open = id === "status" ? store.get("statusOpen", false) : !shut.has(id);     // die Statuskarte ist anfangs zu
     $("summary", d).addEventListener("click", (e) => { if (e.target.closest("button")) e.preventDefault(); });   // Knöpfe im Kopf klappen nicht
-    d.addEventListener("toggle", () => { if (d.open) shut.delete(id); else shut.add(id); store.set("setShut", [...shut]); });
+    d.addEventListener("toggle", () => {
+      if (id === "status") { store.set("statusOpen", d.open); return; }
+      if (d.open) shut.delete(id); else shut.add(id); store.set("setShut", [...shut]);
+    });
   });
   root.insertAdjacentHTML("afterbegin", `<div class="jump">${jumps.map(([id, l]) => `<a href="#einstellungen" data-jump="s-${id}">${esc(l)}</a>`).join("")}
     <span class="foldall"><button class="link" data-fold="1">alle auf</button> · <button class="link" data-fold="0">alle zu</button></span></div>`);
-  $$("[data-jump]", root).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); const d = $("#" + a.dataset.jump); d.open = true; d.scrollIntoView({behavior: "smooth", block: "start"}); }));
+  $$("[data-jump]", root).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); const d = $("#" + a.dataset.jump); d.open = true; const box = d.parentElement?.closest("details.fold"); if (box) box.open = true; d.scrollIntoView({behavior: "smooth", block: "start"}); }));
   $$("[data-fold]", root).forEach((b) => b.addEventListener("click", () => $$("details.fold", root).forEach((d) => { d.open = b.dataset.fold === "1"; })));
 }
 /* Speicherplatz des Datenordners (/api/speicher): Teile nach Größe, Karten aufklappbar nach Quelle und Karte */
@@ -51,6 +55,40 @@ async function diskBox(neu) {
     ${d.teile.filter((t) => t.bytes > 0).map((t) => row(t, 0)).join("")}`;
   $("#diskneu").addEventListener("click", () => { el.innerHTML = `<p class="hint">Zählt …</p>`; diskBox(true); });
 }
+/* Statuskarte (/api/statuskarte): eingeklappt nur der Gesamtstatus, aufgeklappt die Einzelheiten. Die Gründe für den
+   Gesamtstatus rechnet der Server (app/statuskarte.py); die Oberfläche zeigt sie nur. */
+const QUELLEN_DE = {pokeapi: "PokéAPI", showdown: "Showdown", pkhex: "PKHeX", spawns: "Spawnpunkte", karten: "Kartenbilder",
+  sprites: "Bilder", extras: "Extras", itemhq: "Große Item-Bilder", mapgenie: "Map Genie", smogon: "Smogon", pokewiki: "PokéWiki",
+  altissimo: "Altissimo", companion: "PLA Companion", serebii: "Serebii"};
+const STATUS_DE = {ok: ["ok", "Alles in Ordnung"], eingeschraenkt: ["warn", "Einschränkungen"], fehler: ["bad", "Fehler vorhanden"]};
+function statusBox(k) {
+  if (!k) return `<div class="box"><div class="bar"><h2>Status</h2> <span class="badge warn">nicht lesbar</span></div><p class="hint">Der Server hat den Status nicht geliefert.</p></div>`;
+  const [cls, label] = STATUS_DE[k.gesamt] || STATUS_DE.fehler, sp = k.speicher, ab = k.abgleich, v = k.version, w = k.wiederherstellung;
+  const note = (g) => `<div class="note ${g.stufe === "fehler" ? "stop" : "warn"}">${esc(g.text)}</div>`;
+  const qn = (s) => QUELLEN_DE[s] || s;
+  const tr = (th, td) => `<tr><th>${th}</th><td>${td}</td></tr>`;
+  const letzte = k.sicherung.letzte;
+  return `<div class="box"><div class="bar"><h2>Status</h2> <span class="badge ${cls}" data-tip="${esc(k.gruende.map((g) => g.text).join(" ") || "Abgleich, Quellen, Fehlerregister, Platz und Sicherung sind in Ordnung.")}">${label}</span></div>
+    ${k.gruende.map(note).join("") || `<div class="note go">Abgleich, Quellen, Fehlerregister, Platz und Sicherung sind in Ordnung.</div>`}
+    <table class="rows kv">
+      ${tr("Abgleich", ab.laeuft ? "läuft" : ab.start ? `${esc(deTime(ab.start))}${ab.unterbrochen ? ", unterbrochen" : ab.ok === false ? ", mit Fehlern" : ab.ende ? ", fertig " + esc(deTime(ab.ende)) : ""}` : "noch keiner")}
+      ${ab.naechster && !ab.laeuft ? tr("Nächster Lauf", esc(deTime(ab.naechster))) : ""}
+      ${tr("Version", `Pokédex ${esc(v.anwendung)}, Datenstand ${esc(v.daten)}${ab.gebaut ? `, Datenbank gebaut ${esc(deTime(ab.gebaut))}` : ""}${v.gebaut_mit && v.gebaut_mit !== v.daten ? ` mit Stand ${esc(v.gebaut_mit)}` : ""}`)}
+      ${tr("Sicherung", letzte ? `${esc(deTime(letzte.zeit))} (${esc(letzte.name)}, ${fmtBytes(letzte.bytes)}), ${k.sicherung.anzahl} vorhanden` : "noch keine")}
+      ${tr("Wiederherstellungstest", w ? `${esc(deTime(w.zeit))}: ${w.ok ? "bestanden" : "<b class=\"errc\">gescheitert</b>"}${w.text ? " – " + esc(w.text) : ""}` : "noch keiner")}
+      ${tr("Platz", sp.frei != null ? `frei ${fmtBytes(sp.frei)} von ${fmtBytes(sp.platte)}` : "nicht lesbar")}
+      ${tr("Daten", `pokeapi.db ${sp.pokeapi_db != null ? fmtBytes(sp.pokeapi_db) : "fehlt"}, user.db ${sp.user_db != null ? fmtBytes(sp.user_db) : "fehlt"}, Datenordner ${sp.datenordner != null ? fmtBytes(sp.datenordner) : `<button class="link" data-jump="diskd" data-tip="Zählt den Datenordner (Speicherplatz im Kasten Sicherung)">zählen</button>`}`)}
+      ${tr("Arbeitsspeicher", `${sp.ram.jetzt != null ? `jetzt ${fmtBytes(sp.ram.jetzt)}, ` : ""}höchstens ${fmtBytes(sp.ram.spitze)} seit dem Start`)}
+    </table>
+    ${k.quellen.length ? `<h3>Letzter Abgleich je Quelle</h3><div class="scroll"><table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Fehler</th><th>Zeit</th></tr>
+      ${k.quellen.map((q) => `<tr><td>${esc(qn(q.quelle))}</td><td>${q.ok ? "✓" : "✗"} ${esc(q.meldung)}</td><td class="num">${q.fehler}</td><td class="nw">${esc(deTime(q.zeit))}</td></tr>`).join("")}</table></div>` : ""}
+    ${k.ruhe.length ? `<h3>Ruhezeiten</h3><table class="rows"><tr><th>Quelle oder Server</th><th>Ruht bis</th></tr>
+      ${k.ruhe.map((r) => `<tr><td>${esc(qn(r.schluessel))}</td><td class="nw">${esc(deTime(r.bis))}</td></tr>`).join("")}</table>` : ""}
+    ${k.fehler.anzahl ? `<h3>Fehler (${k.fehler.anzahl})</h3><div class="scroll"><table class="rows"><tr><th>Zuletzt</th><th>Quelle</th><th>Art</th><th>Anzahl</th></tr>
+      ${k.fehler.eintraege.map((f) => `<tr><td class="nw">${esc(deTime(f.zuletzt))}</td><td>${esc(f.quelle)}</td><td>${esc(f.art)}</td><td class="num">${f.anzahl}</td></tr>`).join("")}</table></div>
+      ${k.fehler.anzahl > k.fehler.eintraege.length ? `<p class="hint">Alle ${k.fehler.anzahl} mit Text stehen im Kasten Abgleich unter Fehler.</p>` : ""}` : ""}
+  </div>`;
+}
 /* Uhrzeit des Abgleichs: Der Server führt sie als Weltzeit (UTC, „HH:MM“), das Feld zeigt die Ortszeit des Browsers */
 const uhrShift = (hm, sign) => { const m = /^(\d\d):(\d\d)$/.exec(hm || ""); if (!m) return "";
   const t = ((+m[1] * 60 + +m[2] + sign * new Date().getTimezoneOffset()) % 1440 + 1440) % 1440;
@@ -58,8 +96,8 @@ const uhrShift = (hm, sign) => { const m = /^(\d\d):(\d\d)$/.exec(hm || ""); if 
 const uhrLocal = (utc) => uhrShift(utc || "02:30", -1), uhrUtc = (local) => uhrShift(local, 1);
 async function settingsView() {
   const rid = RID;
-  const [st, pr, fe] = await Promise.all([api("/api/status"), S.meta?.has_data ? api("/api/pruefung") : [],
-    api("/api/fehler").catch(teil("Fehlerliste", {fehler: [], max: 0}))]);
+  const [st, pr, fe, sk] = await Promise.all([api("/api/status"), S.meta?.has_data ? api("/api/pruefung") : [],
+    api("/api/fehler").catch(teil("Fehlerliste", {fehler: [], max: 0})), api("/api/statuskarte").catch(teil("Statuskarte", null))]);
   if (rid !== RID) return;
   const fehler = fe.fehler || [];
   const s = S.meta?.einstellungen || {};
@@ -68,7 +106,7 @@ async function settingsView() {
   const srcRow = (k, n) => { const r = src[k]; return r ? `<tr><td>${n}</td><td>${r.ok ? "✓" : "✗"} ${esc(r.msg || "")}</td><td class="num">${r.requests}</td><td class="num">${r.errors}</td><td class="nw">${esc(deTime(r.at))}</td></tr>` : ""; };
   const srcKeys = ["pokeapi", "showdown", "pkhex", "spawns", "karten", "sprites", "extras", "itemhq", "mapgenie", "smogon", "pokewiki", "altissimo", "companion"].filter((k) => src[k]);
   const okN = srcKeys.filter((k) => src[k].ok).length, bad = srcKeys.filter((k) => !src[k].ok);
-  main.innerHTML = `<div class="cols">
+  main.innerHTML = `${statusBox(sk)}<div class="cols">
     <div class="box"><h2>Abgleich</h2>
       ${st.running ? `<div class="note info">Läuft: ${esc(st.step || "")}${st.total ? ` (${st.done}/${st.total})` : ""}</div>` : ""}
       ${st.unterbrochen ? `<div class="note info">Der letzte Lauf wurde von einem Neustart unterbrochen. Er wird in wenigen Minuten fortgesetzt; was schon geholt war, bleibt.</div>` : ""}
