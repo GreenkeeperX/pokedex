@@ -14,7 +14,7 @@ import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, fehler, sources, statuskarte, store, wiederherstellung
+from . import abfragen, abruf, altissimo, aufgaben, db, fehler, leistung, sources, statuskarte, store, wiederherstellung
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -988,10 +988,13 @@ class Handler(BaseHTTPRequestHandler):
         "/api/diag": lambda b: {"started": start_diag()},
         "/api/fehler/leeren": lambda b: fehler.leeren(),
         "/api/wiederherstellung": lambda b: wiederherstellung.pruefen(),
+        "/api/leistung": leistung.messen,
         "/api/kacheln/umwandeln": abruf.tile_upload,
     }
     # größere Rümpfe: Datensicherung, Kacheln aus dem Browser (je Anfrage einige, als Base64)
     BODY_MAX = {"/api/restore": 8_000_000, "/api/kacheln/umwandeln": 6_000_000}
+    # Wege, die den Port dieses Servers brauchen (der Leistungstest fragt sich selbst über 127.0.0.1); nie aus der Anfrage
+    MIT_PORT = {"/api/leistung"}
 
     def do_POST(self):
         path = urllib.parse.urlsplit(self.path).path
@@ -1004,7 +1007,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.close_connection = True      # Rumpf ungelesen: die Verbindung nicht weiter nutzen
                 self._send(404, {"error": "nicht gefunden"})
                 return
-            self._send(200, fn(self._body(self.BODY_MAX.get(path, 200_000))))
+            body = self._body(self.BODY_MAX.get(path, 200_000))
+            self._send(200, fn(self.server.server_address[1], body) if path in self.MIT_PORT else fn(body))
         except ValueError as e:
             self.close_connection = True
             self._send(400, {"error": str(e)})

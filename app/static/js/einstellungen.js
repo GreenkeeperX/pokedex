@@ -67,7 +67,8 @@ function statusBox(k) {
   const note = (g) => `<div class="note ${g.stufe === "fehler" ? "stop" : "warn"}">${esc(g.text)}</div>`;
   const qn = (s) => QUELLEN_DE[s] || s;
   const tr = (th, td) => `<tr><th>${th}</th><td>${td}</td></tr>`;
-  const letzte = k.sicherung.letzte;
+  const letzte = k.sicherung.letzte, lt = k.leistung;
+  const ms = (x) => x == null ? "–" : `${x.toLocaleString("de-DE", {maximumFractionDigits: 0})} ms`;
   return `<div class="box"><div class="bar"><h2>Status</h2> <span class="badge ${cls}" data-tip="${esc(k.gruende.map((g) => g.text).join(" ") || "Abgleich, Quellen, Fehlerregister, Platz und Sicherung sind in Ordnung.")}">${label}</span></div>
     ${k.gruende.map(note).join("") || `<div class="note go">Abgleich, Quellen, Fehlerregister, Platz und Sicherung sind in Ordnung.</div>`}
     <table class="rows kv">
@@ -76,12 +77,20 @@ function statusBox(k) {
       ${tr("Version", `Pokédex ${esc(v.anwendung)}, Datenstand ${esc(v.daten)}${ab.gebaut ? `, Datenbank gebaut ${esc(deTime(ab.gebaut))}` : ""}${v.gebaut_mit && v.gebaut_mit !== v.daten ? ` mit Stand ${esc(v.gebaut_mit)}` : ""}`)}
       ${tr("Sicherung", letzte ? `${esc(deTime(letzte.zeit))} (${esc(letzte.name)}, ${fmtBytes(letzte.bytes)}), ${k.sicherung.anzahl} vorhanden` : "noch keine")}
       ${tr("Wiederherstellungstest", `${w ? `${esc(deTime(w.zeit))}${w.datei ? ` (${esc(w.datei)}, ${w.dauer_ms} ms)` : ""}: ${w.ok ? "bestanden" : "<b class=\"errc\">gescheitert</b>"}${w.text ? " – " + esc(w.text) : ""}` : "noch keiner"} · <button class="link" data-act="wtest" data-tip="Stellt die jüngste Sicherung in einem temporären Ordner wieder her und prüft, ob sie heil ist und sich laden lässt. Deine Daten bleiben unberührt. Läuft sonst von selbst einmal im Monat.">jetzt prüfen</button>`)}
+      ${tr("Leistungstest", `${lt ? `${esc(deTime(lt.zeit))}, Pokédex ${esc(lt.version)}: ${lt.ok ? "" : "<b class=\"errc\">nicht alle Wege beantwortet</b>, "}${(lt.dauer_ms / 1000).toLocaleString("de-DE")} s, Arbeitsspeicher danach ${lt.ram.nachher != null ? fmtBytes(lt.ram.nachher) : "?"}` : "noch keiner"} · <button class="link" data-act="leistung"${ab.laeuft ? " disabled" : ""} data-tip="Misst die Antwortzeiten der wichtigsten Wege (je einmal und dreimal wiederholt), Größe der Antworten, Speicher, Rechenzeit und das Speichern in einer temporären Datenbank mit erfundenen Teams. Ohne Netz, nicht während eines Abgleichs; deine Daten bleiben unberührt. Dauert einige Sekunden.">messen</button>`)}
       ${tr("Platz", sp.frei != null ? `frei ${fmtBytes(sp.frei)} von ${fmtBytes(sp.platte)}` : "nicht lesbar")}
       ${tr("Daten", `pokeapi.db ${sp.pokeapi_db != null ? fmtBytes(sp.pokeapi_db) : "fehlt"}, user.db ${sp.user_db != null ? fmtBytes(sp.user_db) : "fehlt"}, Datenordner ${sp.datenordner != null ? fmtBytes(sp.datenordner) : `<button class="link" data-jump="diskd" data-tip="Zählt den Datenordner (Speicherplatz im Kasten Sicherung)">zählen</button>`}`)}
       ${tr("Arbeitsspeicher", `${sp.ram.jetzt != null ? `jetzt ${fmtBytes(sp.ram.jetzt)}, ` : ""}höchstens ${fmtBytes(sp.ram.spitze)} seit dem Start`)}
     </table>
     ${k.quellen.length ? `<h3>Letzter Abgleich je Quelle</h3><div class="scroll"><table class="rows"><tr><th>Quelle</th><th>Stand</th><th>Fehler</th><th>Zeit</th></tr>
       ${k.quellen.map((q) => `<tr><td>${esc(qn(q.quelle))}</td><td>${q.ok ? "✓" : "✗"} ${esc(q.meldung)}</td><td class="num">${q.fehler}</td><td class="nw">${esc(deTime(q.zeit))}</td></tr>`).join("")}</table></div>` : ""}
+    ${lt ? `<details class="sub" id="leistungd"><summary><b>Leistungstest</b> <span class="hint">${esc(deTime(lt.zeit))}, ${esc(gameName(lt.spiel))}, Detailseite von Form ${lt.pokemon}</span></summary>
+      <div class="scroll"><table class="rows"><tr><th>Weg</th><th>erste</th><th>wiederholt</th><th>Größe</th><th>gepackt</th></tr>
+      ${lt.abrufe.map((a) => `<tr><td data-tip="${esc(a.weg)}">${esc(a.name)}${a.status === 200 ? "" : ` <b class="errc">${a.status || esc(a.meldung || "")}</b>`}</td><td class="num">${ms(a.erste_ms)}</td><td class="num">${ms(a.wieder_ms)}</td><td class="num">${fmtBytes(a.bytes)}</td><td class="num">${fmtBytes(a.gepackt)}</td></tr>`).join("")}</table></div>
+      <p class="hint">Rechenzeit ${lt.cpu_s.toLocaleString("de-DE")} s in ${(lt.dauer_ms / 1000).toLocaleString("de-DE")} s (${lt.kerne || "?"} Kerne${lt.last != null ? `, Last ${lt.last.toLocaleString("de-DE")}` : ""}).
+        Arbeitsspeicher vorher ${lt.ram.vorher != null ? fmtBytes(lt.ram.vorher) : "?"}, nachher ${lt.ram.nachher != null ? fmtBytes(lt.ram.nachher) : "?"}, höchstens ${fmtBytes(lt.ram.spitze)}.
+        ${lt.laden ? `Spieldaten laden zuletzt ${ms(lt.laden.ms)} (${esc(deTime(lt.laden.am))}).` : ""}
+        Speichern: ${lt.schreiben.anzahl} erfundene Teams in einer temporären Datenbank, ${ms(lt.schreiben.ms)}, je Team ${lt.schreiben.ms_je.toLocaleString("de-DE")} ms. Datenstand ${esc(lt.daten)}.</p></details>` : ""}
     ${k.ruhe.length ? `<h3>Ruhezeiten</h3><table class="rows"><tr><th>Quelle oder Server</th><th>Ruht bis</th></tr>
       ${k.ruhe.map((r) => `<tr><td>${esc(qn(r.schluessel))}</td><td class="nw">${esc(deTime(r.bis))}</td></tr>`).join("")}</table>` : ""}
     ${k.fehler.anzahl ? `<h3>Fehler (${k.fehler.anzahl})</h3><div class="scroll"><table class="rows"><tr><th>Zuletzt</th><th>Quelle</th><th>Art</th><th>Anzahl</th></tr>

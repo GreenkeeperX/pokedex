@@ -17,6 +17,7 @@ FREI_KNAPP = 2 * 1024 ** 3          # weniger frei auf dem Laufwerk des Datenord
 FREI_FEHLER = 500 * 1024 ** 2       # weniger: Fehler (Kacheln und eine neue Datenbank passen dann nicht mehr sicher)
 SICHERUNG_ALT = timedelta(days=2)   # die tägliche Sicherung ist älter: Einschränkung
 FEHLER_ZEILEN = 10                  # so viele Einträge des Fehlerregisters zeigt die Karte (alle stehen unter Fehler)
+LEISTUNG = "leistung.json"          # Ergebnisse des Leistungstests (app/leistung.py), das jüngste zuerst
 
 
 def _iso(t):
@@ -42,7 +43,7 @@ def sicherung():
     return {"letzte": _datei(os.path.join(ordner, namen[-1])) if namen else None, "anzahl": len(namen)}
 
 
-def _ram():
+def ram():
     """Arbeitsspeicher des Dienstes in Bytes: jetzt (VmRSS aus /proc, nur unter Linux) und die Spitze seit dem Start."""
     jetzt = None
     if os.path.exists("/proc/self/status"):
@@ -65,7 +66,7 @@ def speicher():
     gezaehlt = abruf.disk_known()
     return {"frei": frei, "platte": gesamt, "pokeapi_db": (_datei(db.pokeapi_path()) or {}).get("bytes"),
             "user_db": (_datei(db.user_path()) or {}).get("bytes"), "datenordner": gezaehlt["gesamt"] if gezaehlt else None,
-            "ram": _ram()}
+            "ram": ram()}
 
 
 def karte(at=None):
@@ -82,6 +83,7 @@ def karte(at=None):
     platz = speicher()
     liste = fehler.liste()      # zuletzt: was eben beim Lesen scheiterte, steht schon darin
     test = wiederherstellung.letzter()
+    leistung = [r for r in store.load_json(LEISTUNG, []) if isinstance(r, dict)]
     gebaut_mit = (st.get("stand") or {}).get("importer")
 
     gruende = []
@@ -134,4 +136,5 @@ def karte(at=None):
         "version": {"anwendung": sources.VERSION, "daten": importer.VERSION, "gebaut_mit": gebaut_mit},
         "sicherung": sich,
         "wiederherstellung": test,
+        "leistung": leistung[0] if leistung else None,
     }

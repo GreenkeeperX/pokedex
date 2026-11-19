@@ -122,6 +122,7 @@ AUFRUFE = {
     "effort": ("/api/effort", {"spiel": "legends-arceus", "id": 14, "level": 50}),
     "effort team": ("/api/effort/team", {"spiel": "legends-arceus", "ids": [14, 8]}),
     "wiederherstellung": ("/api/wiederherstellung", {}),
+    "leistung": ("/api/leistung", {"spiel": "emerald"}),
 }
 
 
