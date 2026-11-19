@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.70.0"
+VERSION = "0.71.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.71.0", "19.11.2026", [
+        "Tauschliste (Knopf in „Was fehlt mir noch“ und im Fortschritt): was du im Spiel nur über einen Tauschpartner "
+        "bekommst und was du ihm bieten kannst, als Text zum Kopieren",
+        "Nur in der anderen Edition heißt: auch nicht über eine Vorstufe oder ein Ei aus deiner Edition",
+    ]),
     ("0.70.0", "19.11.2026", [
         "Shiny-Jagd (Knopf in der Liste oder auf der Detailseite): Zähler je Jagd mit der Methode des Spiels, Optionen wie "
         "Lockparfüm oder Schillerkraft und Schillerpin; zeigt die Quote der nächsten Begegnung und den Anteil der Jäger, die "

@@ -211,6 +211,7 @@ async function route() {
     else if (tab === "fehlt") await missingView(arg, arg2);
     else if (tab === "fortschritt") await progressView();
     else if (tab === "jagd") await huntView(arg, arg2);
+    else if (tab === "tausch") await tradeView();
     else if (tab === "sammeln") await collectView();
     else if (tab === "karte" && arg === "gebiete") await areasView(arg2);
     else if (tab === "karte" && (arg === "mg" || !arg)) await mgView(arg2 && decodeURIComponent(arg2), location.hash.split("/")[3]);

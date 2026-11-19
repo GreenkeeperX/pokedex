@@ -4269,6 +4269,56 @@ class JagdHttp(HttpMitDaten):
         self.ohne_fehler()
 
 
+
+class Tausch(HttpMitDaten):
+    """0.71.0: Tauschliste aus „Was fehlt mir noch“: andere Edition (mit Kette), Tausch-Entwicklung, ohne Weg; Biete."""
+
+    def test_editionen_der_welt(self):
+        # In X gibt es Keimling nur in X und Glutli nur in Y (Mini-Welt, Lichterhain)
+        D = abfragen.data()
+        name = {f["art"]: f["name"] for f in D.forms.values() if f["standard"]}
+        d = self.json("/api/tausch?spiel=x-y&edition=X")
+        gr = {g["id"]: g["rows"] for g in d["gruppen"]}
+        self.assertEqual([x["name"] for x in gr["edition"]], [name[4]])
+        self.assertEqual([(x["name"], x["hast"]) for x in d["biete"]], [(name[1], False)])
+        self.assertIn(f"Suche, nur in Y:\n- #{gr['edition'][0]['dexk']}{gr['edition'][0]['nr']} {name[4]}", d["text"])
+        self.assertIn("(noch nicht gefangen)", d["text"])
+        keimling = next(i for i, f in D.forms.items() if f["art"] == 1 and f["standard"])
+        self.json("/api/gefangen", {"spiel": "x-y", "id": keimling})
+        self.assertEqual(self.json("/api/tausch?spiel=x-y&edition=X")["biete"][0]["hast"], True)
+        y = self.json("/api/tausch?spiel=x-y&edition=Y")
+        self.assertEqual([x["name"] for x in y["gruppen"][0]["rows"]], [])          # Keimling ist gefangen: fehlt nicht
+        self.assertEqual([x["name"] for x in y["biete"]], [name[4]])
+        # ohne Edition: Hinweis, nichts zu bieten; HOME: nur ein Hinweis; Spiel ohne Editionen in den Fundorten
+        ohne = self.json("/api/tausch?spiel=x-y")
+        self.assertEqual((ohne["gruppen"][0]["rows"], ohne["biete"]), ([], []))
+        self.assertIn("Edition", ohne["hinweis"])
+        self.assertEqual(self.json(f"/api/tausch?spiel={abfragen.HOME}")["gruppen"], [])
+        self.assertIn("keine Editionen", self.json("/api/tausch?spiel=red-blue&edition=Rot")["hinweis"])
+        self.ohne_fehler()
+
+    def test_gruppen(self):
+        # erfundene Antwort von „Was fehlt mir noch“: 1 nur in der anderen Edition, 2 „Ei von 3“, und 3 gibt es auch nur dort
+        # (also Tausch), 4 Tausch-Entwicklung mit Vorstufe da, 5 ohne Weg, 6 wild hier und dort (kein Tausch)
+        D = abfragen.data()
+        f = {a: next(i for i, x in D.forms.items() if x["art"] == a and x["standard"]) for a in range(1, 8)}
+        x = lambda a, weg, *wege: {"art": a, "id": f[a], "name": f"P{a}", "nr": a, "dexk": "", "typen": [], "legendaer": False,
+                                   "weg": weg, "wege": list(wege)}
+        fehlt = [x(1, "edition", {"art": "edition", "text": "nur in Y: tauschen"}),
+                 x(2, "zucht", {"art": "zucht", "text": "Ei von P3", "von": f[3]}, {"art": "edition", "text": "nur in Y: tauschen"}),
+                 x(3, "edition", {"art": "edition", "text": "nur in Y: tauschen"}),
+                 x(4, "jetzt", {"art": "tausch", "text": "aus P7", "von": f[7], "hast": True}),
+                 x(5, "unklar", {"art": "unklar", "text": "kein Fundort"}),
+                 x(6, "wild", {"art": "wild", "text": "Wiese"}, {"art": "edition", "text": "nur in Y: tauschen"})]
+        antwort = {"spiel": "x-y", "editionen": ["X", "Y"], "edition": "X", "arten": 9, "gefangen": 3, "fehlt": fehlt}
+        with im_paket(abfragen, "missing", return_value=antwort):
+            d = abfragen.tauschliste({"spiel": "x-y", "edition": "X"})
+        gr = {g["id"]: [r["name"] for r in g["rows"]] for g in d["gruppen"]}
+        self.assertEqual(gr, {"edition": ["P1", "P2", "P3"], "tausch": ["P4"], "unklar": ["P5"]})
+        self.assertNotIn("P5", d["text"])                                                # „ohne Weg“ nicht zum Kopieren
+        self.assertIn("Suche, entwickelt sich durch Tausch:\n- #4 P4", d["text"])
+
+
 # Tests mit Spieldaten (Mini-Datenbank), Vertrag zwischen Server und Oberfläche, Selbsttest im Browser: eigene Datei, hier
 # geladen, damit ein Aufruf alles ausführt
 from tests.mit_daten import MiniBau, Selbsttest, ServerMitDaten, Vertrag, Welt  # noqa: E402,F401
