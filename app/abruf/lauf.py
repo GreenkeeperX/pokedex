@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import timedelta
 
-from .. import db, fehler, importer, smogon, sources, store
+from .. import db, fehler, importer, smogon, sources, store, wiederherstellung
 
 from .grundlage import (BOOT_WAIT_S, CSV_RAW, EXTRA_DIR, LOG_LINES, NAMES, REST_H, SD_RAW, STATE, _Source, _hash, _iso,
     _parallel, _resting, _running, csv_list, due, load_settings, now, rests)
@@ -407,6 +407,8 @@ def scheduler():
             if due(boot=boot) and not _running.locked():
                 run()
             db.backup()
+            if wiederherstellung.faellig():       # monatlich: die jüngste Sicherung probehalber wiederherstellen
+                wiederherstellung.pruefen()
         except Exception as e:
             fehler.melden(e, "Zeitplan", "abgleich", immer=True)
         boot = False

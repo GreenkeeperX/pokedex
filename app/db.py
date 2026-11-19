@@ -13,6 +13,7 @@ from . import store
 
 BACKUP_KEEP = 14
 _lock = threading.Lock()
+sicherung_lock = threading.Lock()     # Schreiben einer Sicherung und ihre Prüfung (wiederherstellung.py) nie gleichzeitig
 
 USER_SCHEMA = (
     """CREATE TABLE IF NOT EXISTS team (id INTEGER PRIMARY KEY, name TEXT NOT NULL, spiel TEXT, mitglieder TEXT NOT NULL,
@@ -54,10 +55,12 @@ def has_data():
     return os.path.isfile(pokeapi_path())
 
 
-def migrate():
+def migrate(pfad=None):
+    """Tabellen und Spalten von user.db anlegen, die fehlen. pfad: eine andere Datei mit derselben Form (die Prüfung der
+    Sicherung lädt so eine Kopie wie nach einem Update)."""
     os.makedirs(data_dir(), exist_ok=True)
     with _lock:
-        con = sqlite3.connect(user_path())
+        con = sqlite3.connect(pfad or user_path())
         try:
             for sql in USER_SCHEMA:
                 con.execute(sql)
@@ -90,6 +93,11 @@ def backup(today=None, force=False):
     force: zusätzlich eine Kopie vor dem Einlesen einer Sicherung (vor-einlesen-…, die letzten fünf bleiben)."""
     if not os.path.isfile(user_path()):
         return ""
+    with sicherung_lock:
+        return _backup(today, force)
+
+
+def _backup(today, force):
     day = (today or datetime.date.today()).strftime("%Y%m%d")
     folder = os.path.join(data_dir(), "sicherung")
     os.makedirs(folder, exist_ok=True)

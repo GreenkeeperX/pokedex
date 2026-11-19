@@ -121,6 +121,7 @@ AUFRUFE = {
     "werte": ("/api/werte", {**_SV, "id": 12, "level": 100, "evs": [0, 252, 0, 0, 4, 252]}),
     "effort": ("/api/effort", {"spiel": "legends-arceus", "id": 14, "level": 50}),
     "effort team": ("/api/effort/team", {"spiel": "legends-arceus", "ids": [14, 8]}),
+    "wiederherstellung": ("/api/wiederherstellung", {}),
 }
 
 

@@ -180,7 +180,9 @@ nicht mehr zum gebauten Stand (nach einem Update mit neuen Tabellen), ist der Ab
 Uhrzeit (`uhr` in `settings.json`, Voreinstellung 02:30 UTC), wenn der letzte Lauf mindestens den eingestellten Abstand
 in Kalendertagen zurückliegt (1 bis 30, Standard 7); `abruf.due`, `next_run`. Ein verpasster Termin (Server aus) wird
 am selben Tag nachgeholt. Nach einem Fehlschlag frühestens nach einer Stunde. Der Zeitplan hängt nicht am Neustart
-durch ein Update: Ein Neustart löst keinen Lauf aus, außer es war einer unterbrochen.
+durch ein Update: Ein Neustart löst keinen Lauf aus, außer es war einer unterbrochen. Bei jeder Prüfung legt der
+Zeitplan außerdem die tägliche Sicherung an (einmal am Tag) und startet den monatlichen Wiederherstellungstest, wenn er
+fällig ist.
 
 Die Uhrzeit steht als Weltzeit (UTC) in der Einstellung, weil der Container keine Zeitzone kennt. Die Oberfläche zeigt
 und nimmt die Ortszeit des Browsers; mit der Zeitumstellung verschiebt sich der Lauf um eine Stunde.
@@ -257,7 +259,7 @@ Der Server sammelt je Anfrage, was dabei gemeldet wurde (`beginne`, `ende`), und
 und nächster Lauf, letzter Stand je Quelle (aus `sync.json`), laufende Ruhezeiten, die zehn jüngsten Einträge des
 Fehlerregisters (Quelle, Zeitpunkt, Art, Anzahl), freier Platz, Größe von `pokeapi.db` und `user.db`, Arbeitsspeicher
 des Dienstes (jetzt aus `/proc/self/status`, Spitze seit dem Start), Version von Anwendung und Daten, letzte tägliche
-Sicherung und das Ergebnis des letzten Wiederherstellungstests (`wiederherstellung.json`, noch ohne Test). Die Antwort
+Sicherung und das Ergebnis des letzten Wiederherstellungstests (`wiederherstellung.json`, siehe unten). Die Antwort
 braucht kein Netz und zählt den Datenordner nicht: dessen Größe steht nur darin, wenn `/api/speicher` ihn vor kurzem
 gezählt hat (`abruf.disk_known`, gilt fünf Minuten und nur für denselben Datenordner).
 
@@ -282,6 +284,29 @@ Liest die Karte selbst etwas nicht (etwa den freien Platz), meldet sie es ins Re
 Angenommen, nicht gemessen: die Grenzen für den Platz (2 GiB reichen für einen Neubau der Datenbank und neue Kacheln,
 500 MiB nicht mehr sicher) und zwei Tage für die Sicherung (sie läuft täglich; ein ausgefallener Tag ist noch keine
 Einschränkung).
+
+## Wiederherstellungstest
+
+`app/wiederherstellung.py` prüft einmal im Monat, ob sich die jüngste tägliche Sicherung (`sicherung/user-JJJJMMTT.db`)
+zurückholen lässt. Der Zeitplan (`abruf.scheduler`) startet ihn nach der täglichen Sicherung, wenn es eine Sicherung gibt
+und der letzte Test fehlt oder 30 Tage alt ist (`faellig`, `ABSTAND`), nach einem gescheiterten Test schon nach einem Tag
+(`ABSTAND_FEHLER`, dann mit der nächsten Sicherung); „jetzt prüfen“ in der Statuskarte
+(`POST /api/wiederherstellung`) startet ihn von Hand.
+
+1. Die Sicherung wird nur lesend geöffnet (`mode=ro`) und mit dem SQLite-Backup in einen temporären Ordner kopiert
+   (`/tmp`, im Container ein tmpfs), danach ist der Ordner wieder weg. Während der Kopie schreibt niemand eine Sicherung
+   (`db.sicherung_lock`, auch in `db.backup`).
+2. An der Kopie: `PRAGMA integrity_check` muss „ok“ melden.
+3. `db.migrate` an der Kopie: Sie lädt wie `user.db` nach einem Update (fehlende Tabellen und Spalten der jetzigen
+   Version kommen dazu, nur in der Kopie).
+4. Lesen wie die Anwendung: jede Tabelle zählen, die JSON-Spalten von `team` und `kampf` zerlegen.
+
+`user.db`, die Sicherungen und der übrige Datenordner bleiben unberührt (Test: Inhalt und Zeit jeder Datei gleich).
+Geschrieben wird nur `wiederherstellung.json`: Zeit, Ergebnis (`ok`), ein Satz (bei Erfolg die gezählten Einträge, sonst
+der Grund), die geprüfte Datei und die Dauer. Taugt die Sicherung nicht (keine Datenbank, verletzte Integrität, nicht
+lesbare Einträge), steht das nur im Ergebnis; die Statuskarte zeigt dann „Fehler vorhanden“. Scheitert der Test selbst
+(etwa kein Platz im temporären Ordner), steht das zusätzlich im Fehlerregister. Ohne Sicherung gibt es keinen Test und
+kein Ergebnis.
 
 ## Karten vorbereiten
 
