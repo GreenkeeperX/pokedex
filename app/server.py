@@ -14,7 +14,7 @@ import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, fehler, sources, statuskarte, store
+from . import abfragen, abruf, altissimo, aufgaben, db, fehler, sources, statuskarte, store, wiederherstellung
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -987,6 +987,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/abgleich": lambda b: {"started": abruf.start(force=bool(b.get("neu")))},
         "/api/diag": lambda b: {"started": start_diag()},
         "/api/fehler/leeren": lambda b: fehler.leeren(),
+        "/api/wiederherstellung": lambda b: wiederherstellung.pruefen(),
         "/api/kacheln/umwandeln": abruf.tile_upload,
     }
     # größere Rümpfe: Datensicherung, Kacheln aus dem Browser (je Anfrage einige, als Base64)

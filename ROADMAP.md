@@ -11,18 +11,16 @@ nachvollziehbar halten. Nutzen belegen. Nutzerdaten haben Vorrang vor jeder tech
 ## Als Nächstes
 
 In dieser Reihenfolge, nach dem Arbeitsauftrag vom 13.11.2026. Abschnitte 1 bis 4 (Rechenlogik, Betrieb, Tests,
-Spielprofil, Aufteilen der großen Dateien, Aufräumen) und die Statuskarte (0.66.0) sind erledigt.
+Spielprofil, Aufteilen der großen Dateien, Aufräumen), die Statuskarte (0.66.0) und der monatliche
+Wiederherstellungstest (0.67.0) sind erledigt.
 
-1. **Monatliche Prüfung der Sicherung.** Jüngste Sicherung in ein temporäres Verzeichnis wiederherstellen, Integrität
-   und Nutzbarkeit prüfen, Ergebnis in der Statuskarte (dort schon vorgesehen: `wiederherstellung.json` mit Zeit,
-   Ergebnis, Text). Produktivdaten bleiben unberührt.
-2. **Leistungstest auf Klick** in der Statuskarte: Speicher nach Start und Vorbereiten, CPU (soweit verlässlich), erste
+1. **Leistungstest auf Klick** in der Statuskarte: Speicher nach Start und Vorbereiten, CPU (soweit verlässlich), erste
    und wiederholte Antwortzeiten (`/api/attacken`, `/api/pokemon/…` und weitere), Antwortgrößen. Nicht während eines
    Abgleichs, keine Netzabrufe, keine Änderung an `user.db`, Schreibtests nur mit temporären erfundenen Daten, kein
    Docker-Socket, kein Neustart. Ergebnis mit Version und Zeitpunkt gespeichert. Danach anhand der Messung auf dem
    Heimserver entscheiden, ob der Speicher der Karten verkleinert werden soll (Python-Objekte, fertige und gepackte
    Antworten); ohne Messung keine Optimierung.
-3. **Funktionen**, in dieser Reihenfolge:
+2. **Funktionen**, in dieser Reihenfolge:
    1. Fortschritt auf einen Blick: Sammlung je Spiel und für HOME, nach Generation und Typ, mit Sprung zu fehlenden
       Pokémon.
    2. Shiny-Jagd-Zähler: Methode, Pin, Schillerpin, laufende Wahrscheinlichkeit; Quoten als gepflegte Tabelle, Zähler in

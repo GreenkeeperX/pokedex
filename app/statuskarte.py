@@ -9,7 +9,7 @@ import resource
 import shutil
 from datetime import datetime, timedelta, timezone
 
-from . import abruf, db, fehler, importer, sources, store
+from . import abruf, db, fehler, importer, sources, store, wiederherstellung
 
 OK, EINGESCHRAENKT, FEHLER = "ok", "eingeschraenkt", "fehler"
 _RANG = {OK: 0, EINGESCHRAENKT: 1, FEHLER: 2}
@@ -17,7 +17,6 @@ FREI_KNAPP = 2 * 1024 ** 3          # weniger frei auf dem Laufwerk des Datenord
 FREI_FEHLER = 500 * 1024 ** 2       # weniger: Fehler (Kacheln und eine neue Datenbank passen dann nicht mehr sicher)
 SICHERUNG_ALT = timedelta(days=2)   # die tägliche Sicherung ist älter: Einschränkung
 FEHLER_ZEILEN = 10                  # so viele Einträge des Fehlerregisters zeigt die Karte (alle stehen unter Fehler)
-WIEDERHERSTELLUNG = "wiederherstellung.json"   # Ergebnis des letzten Wiederherstellungstests (monatlich)
 
 
 def _iso(t):
@@ -82,7 +81,7 @@ def karte(at=None):
     sich = sicherung()
     platz = speicher()
     liste = fehler.liste()      # zuletzt: was eben beim Lesen scheiterte, steht schon darin
-    test = store.load_json(WIEDERHERSTELLUNG, {}) or None     # {}: mit None legte store die Datei als kaputt beiseite
+    test = wiederherstellung.letzter()
     gebaut_mit = (st.get("stand") or {}).get("importer")
 
     gruende = []

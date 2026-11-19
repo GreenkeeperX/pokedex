@@ -14,7 +14,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, statuskarte, store, team, typen
+from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, statuskarte, store, team, typen, wiederherstellung
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
 from tests.basis import HttpTest, TempData, app_quellen, im_paket, oberflaeche_js
 
@@ -3854,7 +3854,7 @@ class Statuskarte(TempData):
         st["ok"] = False
         store.save_json("sync.json", st)
         self.frei = statuskarte.FREI_FEHLER - 1
-        store.save_json(statuskarte.WIEDERHERSTELLUNG, {"zeit": "2026-11-01T03:00:00+00:00", "ok": False, "text": "beschädigt"})
+        store.save_json(wiederherstellung.DATEI, {"zeit": "2026-11-01T03:00:00+00:00", "ok": False, "text": "beschädigt"})
         k = statuskarte.karte(at=self.at)
         self.assertEqual(k["gesamt"], "fehler")
         stufen = [g["stufe"] for g in k["gruende"]]
@@ -3888,6 +3888,143 @@ class StatuskarteHttp(HttpTest):
         self.assertIn(k["gesamt"], ("ok", "eingeschraenkt", "fehler"))
         self.assertTrue(k["gruende"])
         self.assertEqual(k["version"]["anwendung"], sources.VERSION)
+
+
+class Wiederherstellung(TempData):
+    """0.67.0: Der monatliche Wiederherstellungstest holt die jüngste Sicherung in einen temporären Ordner zurück, prüft
+    sie und lässt user.db, die Sicherungen und den Datenordner unberührt."""
+
+    def setUp(self):
+        super().setUp()
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())
+        self.at = datetime(2026, 11, 19, 12, 0, tzinfo=timezone.utc)
+
+    def tearDown(self):
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())
+        super().tearDown()
+
+    def _eigene_daten(self):
+        """Eine user.db mit erfundenen Einträgen und ihre Sicherung."""
+        db.migrate()
+        con = db.user()
+        con.execute("INSERT INTO team (name, spiel, mitglieder, fest, gewichte, details, geaendert) VALUES (?,?,?,?,?,?,?)",
+                    ("Testteam", "emerald", "[3, 5]", "[]", "{}", "{}", "2026-11-18T10:00:00+00:00"))
+        con.executemany("INSERT INTO gefangen (spiel, form, seit) VALUES (?,?,?)", [("emerald", 3, "x"), ("emerald", 5, "x")])
+        con.commit()
+        con.close()
+        return db.backup(today=datetime(2026, 11, 19).date())
+
+    def _stand(self):
+        """Inhalt und Zeit jeder Datei im Datenordner (ohne das Ergebnis des Tests)."""
+        out = {}
+        for ordner, _, dateien in os.walk(db.data_dir()):
+            for name in dateien:
+                pfad = os.path.join(ordner, name)
+                if name != wiederherstellung.DATEI:
+                    with open(pfad, "rb") as f:
+                        out[os.path.relpath(pfad, db.data_dir())] = (f.read(), os.stat(pfad).st_mtime_ns)
+        return out
+
+    def _tmp_reste(self):
+        return {n for n in os.listdir(tempfile.gettempdir()) if n.startswith("pokedex-wiederherstellung-")}
+
+    def test_ohne_sicherung(self):
+        self.assertFalse(wiederherstellung.faellig(at=self.at))
+        r = wiederherstellung.pruefen(at=self.at)
+        self.assertIsNone(r["ok"])
+        self.assertIsNone(wiederherstellung.letzter())          # nichts gespeichert
+        self.assertIsNone(statuskarte.karte(at=self.at)["wiederherstellung"])
+
+    def test_bestanden_und_unberuehrt(self):
+        self.assertEqual(self._eigene_daten(), "user-20261119.db")
+        vorher, reste = self._stand(), self._tmp_reste()
+        self.assertTrue(wiederherstellung.faellig(at=self.at))
+        r = wiederherstellung.pruefen(at=self.at)
+        self.assertEqual((r["ok"], r["datei"], r["zeit"]), (True, "user-20261119.db", "2026-11-19T12:00:00+00:00"))
+        self.assertEqual(r["text"], "Wiederhergestellt und lesbar: 1 Team, 2 Gefangene.")
+        self.assertGreaterEqual(r["dauer_ms"], 0)
+        self.assertEqual(self._stand(), vorher)                  # user.db und Sicherung Byte für Byte und mit Zeit gleich
+        self.assertEqual(self._tmp_reste(), reste)               # der temporäre Ordner ist wieder weg
+        self.assertEqual(wiederherstellung.letzter(), r)
+        k = statuskarte.karte(at=self.at)
+        self.assertEqual(k["wiederherstellung"], r)
+        self.assertNotIn("Wiederherstellungstest", " ".join(g["text"] for g in k["gruende"]))
+        # monatlich: erst nach 30 Tagen wieder fällig
+        self.assertFalse(wiederherstellung.faellig(at=self.at + timedelta(days=29)))
+        self.assertTrue(wiederherstellung.faellig(at=self.at + timedelta(days=30)))
+
+    def test_alte_sicherung_laedt(self):
+        """Eine Sicherung aus einer frühen Version (nur team, ohne details) lädt wie user.db nach einem Update."""
+        import sqlite3
+        ordner = os.path.join(db.data_dir(), "sicherung")
+        os.makedirs(ordner)
+        alt = os.path.join(ordner, "user-20261101.db")
+        con = sqlite3.connect(alt)
+        con.execute("CREATE TABLE team (id INTEGER PRIMARY KEY, name TEXT NOT NULL, spiel TEXT, mitglieder TEXT NOT NULL, "
+                    "fest TEXT, gewichte TEXT, geaendert TEXT)")
+        con.execute("INSERT INTO team (name, mitglieder) VALUES ('Alt', '[1]')")
+        con.commit()
+        con.close()
+        vorher = self._stand()
+        r = wiederherstellung.pruefen(at=self.at)
+        self.assertTrue(r["ok"], r["text"])
+        self.assertEqual(r["text"], "Wiederhergestellt und lesbar: 1 Team.")
+        self.assertEqual(self._stand(), vorher)                  # die alte Sicherung bekommt keine neuen Tabellen
+
+    def test_kaputte_sicherung(self):
+        self._eigene_daten()
+        ordner = os.path.join(db.data_dir(), "sicherung")
+        with open(os.path.join(ordner, "user-20261120.db"), "wb") as f:      # die jüngste ist keine Datenbank
+            f.write(b"kein SQLite " * 100)
+        r = wiederherstellung.pruefen(at=self.at)
+        self.assertEqual((r["ok"], r["datei"]), (False, "user-20261120.db"))
+        self.assertTrue(r["text"].startswith("Nicht wiederherstellbar:"), r["text"])
+        k = statuskarte.karte(at=self.at)
+        self.assertEqual(k["gesamt"], "fehler")
+        self.assertIn("Wiederherstellungstest ist gescheitert", " ".join(g["text"] for g in k["gruende"]))
+        self.assertEqual(fehler.liste(), [])                     # erwartetes Scheitern: im Ergebnis, nicht im Register
+        # lesbare Datenbank, aber ein Team, das die Anwendung nicht lesen könnte
+        os.remove(os.path.join(ordner, "user-20261120.db"))
+        con = db.user()
+        con.execute("UPDATE team SET mitglieder = '[3, 5'")
+        con.commit()
+        con.close()
+        os.remove(os.path.join(ordner, "user-20261119.db"))
+        db.backup(today=datetime(2026, 11, 19).date())
+        r = wiederherstellung.pruefen(at=self.at)
+        self.assertFalse(r["ok"])
+        self.assertIn("team Zeile 1: mitglieder", r["text"])
+        # ein unerwarteter Fehler (etwa kein Platz im temporären Ordner) steht zusätzlich im Fehlerregister
+        with mock.patch.object(wiederherstellung.tempfile, "TemporaryDirectory", side_effect=OSError("kein Platz")):
+            r = wiederherstellung.pruefen(at=self.at)
+        self.assertFalse(r["ok"])
+        self.assertIn("Test nicht möglich", r["text"])
+        self.assertEqual([e["quelle"] for e in fehler.liste()], ["abgleich"])
+        # nach einem gescheiterten Test schon am nächsten Tag wieder, nicht erst in einem Monat
+        self.assertFalse(wiederherstellung.faellig(at=self.at + timedelta(hours=23)))
+        self.assertTrue(wiederherstellung.faellig(at=self.at + timedelta(days=1)))
+
+    def test_zeitplan_prueft_monatlich(self):
+        self._eigene_daten()
+        aufrufe, echt = [], wiederherstellung.pruefen
+        with mock.patch.object(wiederherstellung, "pruefen", lambda: aufrufe.append(echt()["ok"])), \
+                im_paket(abruf, "due", lambda boot=False: False), im_paket(abruf, "BOOT_WAIT_S", 0), \
+                mock.patch.object(abruf.lauf.time, "sleep", side_effect=[None, StopIteration]):
+            with self.assertRaises(StopIteration):
+                abruf.scheduler()
+        self.assertEqual(aufrufe, [True])          # zwei Runden des Zeitplans, ein Test: der nächste erst in 30 Tagen
+
+
+class WiederherstellungHttp(HttpTest):
+    """0.67.0: „jetzt prüfen“ in der Statuskarte."""
+
+    def test_jetzt_pruefen(self):
+        self.assertIsNone(self.json("/api/wiederherstellung", {})["ok"])       # ohne Sicherung
+        db.migrate()
+        db.backup()
+        r = self.json("/api/wiederherstellung", {})
+        self.assertTrue(r["ok"], r["text"])
+        self.assertEqual(self.json("/api/statuskarte")["wiederherstellung"]["zeit"], r["zeit"])
 
 
 # Tests mit Spieldaten (Mini-Datenbank), Vertrag zwischen Server und Oberfläche, Selbsttest im Browser: eigene Datei, hier

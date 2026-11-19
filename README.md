@@ -100,7 +100,7 @@ dem Vorbild von VR-Navigator und eShopKompass.
 - **Let’s Go**: Fangen ohne Kampf und Fang-Kombo auf der Detailseite, Partner-Techniken und Geheime Techniken beim Partner.
 - **Gebiete** (alle Spiele mit Fundorten): Ort wählen, alle Pokémon dort als Bilder mit Methode, Level, Anteil und Edition;
   Gefangene blass, auf Wunsch nur die fehlenden.
-- **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen, wie im VR-Navigator): oben eine Statuskarte (eingeklappt „Alles in Ordnung“, „Einschränkungen“ oder „Fehler vorhanden“; aufgeklappt Abgleich je Quelle, Ruhezeiten, Fehler, Platz, Arbeitsspeicher, Versionen, letzte Sicherung), Abgleich mit Zeitplan, Speicherplatz (Datenbanken, Bilder, Kartenkacheln je Quelle und Karte), Quellen, Protokoll und Verbindungstest zum Aufklappen; der Verbindungstest (auch für mögliche
+- **Einstellungen** (Leiste mit den Abschnitten, Kästen zum Einklappen, wie im VR-Navigator): oben eine Statuskarte (eingeklappt „Alles in Ordnung“, „Einschränkungen“ oder „Fehler vorhanden“; aufgeklappt Abgleich je Quelle, Ruhezeiten, Fehler, Platz, Arbeitsspeicher, Versionen, letzte Sicherung und der monatliche Wiederherstellungstest, der die jüngste Sicherung probehalber zurückholt und prüft), Abgleich mit Zeitplan, Speicherplatz (Datenbanken, Bilder, Kartenkacheln je Quelle und Karte), Quellen, Protokoll und Verbindungstest zum Aufklappen; der Verbindungstest (auch für mögliche
   neue Quellen, mit Probe-Seiten zum Herunterladen) fragt verschiedene Server gleichzeitig an, zeigt seinen Fortschritt und
   läuft weiter, wenn du den Reiter wechselst, Lesezeichen „Seite untersuchen“ für Seiten, deren Karten erst im Browser laden (liest geladene
   Daten-Dateien, Variablen und Kartenmarker in eine Datei; nichts geht an einen Server), „Zu erledigen“ (Abweichungen zwischen
@@ -153,7 +153,7 @@ Aufruf über IP-Adresse oder Namen im eigenen Netz. Für eine Domain `ALLOWED_HO
 ### Datenordner (`/data`)
 
 - `pokeapi.db`: Spieldaten, baut jeder Abgleich neu, wenn sich eine Quelle geändert hat
-- `user.db`: deine Teams, Favoriten, Gefangenen und Entscheidungen; der Abgleich berührt sie nie. Tägliche Kopie in `sicherung/` (14 Tage)
+- `user.db`: deine Teams, Favoriten, Gefangenen und Entscheidungen; der Abgleich berührt sie nie. Tägliche Kopie in `sicherung/` (14 Tage), einmal im Monat probehalber wiederhergestellt (`wiederherstellung.json`)
 - `sprites/`, `artwork/`: Bilder (Sprites 96 × 96, offizielle Artworks 475 × 475, zusammen gut 180 MB)
 - `settings.json`, `sync.json`: Einstellungen und Stand des Abgleichs (nach jeder Quelle gespeichert)
 - `ruhe.json`: Quellen und Server, die nach einer Sperre (403, 429) ruhen, mit dem Ende der Ruhe

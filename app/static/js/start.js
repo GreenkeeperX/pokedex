@@ -99,6 +99,7 @@ document.addEventListener("click", async (e) => {
       renderMoves(DETAIL.attacken, $("#lvl")?.value);
     } else if (act === "mreset") { store.set("mfilter2", {}); movesView(); }
     else if (act === "fehlerleeren") { await api("/api/fehler/leeren", {}); route(); }
+    else if (act === "wtest") { b.disabled = true; const r = await api("/api/wiederherstellung", {}); if (r.ok === null) hinweis(r.text); route(); }
     else if (act === "sync" || act === "rebuild") {
       await api("/api/abgleich", {neu: act === "rebuild"});
       setTimeout(refreshMeta, 800);

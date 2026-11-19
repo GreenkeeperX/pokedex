@@ -322,7 +322,8 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
 - Status (`statusBox`, `/api/statuskarte`): ganz oben, anfangs zu (gemerkt in `statusOpen`, nicht in `setShut`).
   Eingeklappt nur der Gesamtstatus als `.badge` (`STATUS_DE`: „Alles in Ordnung“, „Einschränkungen“, „Fehler
   vorhanden“), die Gründe im Tooltip. Aufgeklappt die Gründe als Hinweise, eine Tabelle `.kv` (Abgleich, nächster Lauf,
-  Version, Sicherung, Wiederherstellungstest, Platz, Daten, Arbeitsspeicher), dann je Quelle, Ruhezeiten und Fehler. Ist
+  Version, Sicherung, Wiederherstellungstest mit „jetzt prüfen“ (`wtest`, `/api/wiederherstellung`, danach neu
+  gezeichnet), Platz, Daten, Arbeitsspeicher), dann je Quelle, Ruhezeiten und Fehler. Ist
   der Datenordner nicht gezählt, springt „zählen“ zu `#diskd` und öffnet es samt Kasten. Namen der Quellen deutsch aus
   `QUELLEN_DE`. Was welche Stufe ergibt, rechnet der Server
   (`docs/abrufe.md`, „Statuskarte“).
