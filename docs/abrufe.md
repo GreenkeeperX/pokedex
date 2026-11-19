@@ -251,6 +251,38 @@ Der Server sammelt je Anfrage, was dabei gemeldet wurde (`beginne`, `ende`), und
 `X-Pokedex-Fehler` mit; eine solche Antwort ist nicht zwischenspeicherbar und trägt keinen `ETag`. Anzeige: siehe
 `docs/oberflaeche.md`, „Fehler und Hinweise“.
 
+## Statuskarte
+
+`app/statuskarte.py` (`/api/statuskarte`) fasst den Betrieb für die Karte oben in den Einstellungen zusammen: Abgleich
+und nächster Lauf, letzter Stand je Quelle (aus `sync.json`), laufende Ruhezeiten, die zehn jüngsten Einträge des
+Fehlerregisters (Quelle, Zeitpunkt, Art, Anzahl), freier Platz, Größe von `pokeapi.db` und `user.db`, Arbeitsspeicher
+des Dienstes (jetzt aus `/proc/self/status`, Spitze seit dem Start), Version von Anwendung und Daten, letzte tägliche
+Sicherung und das Ergebnis des letzten Wiederherstellungstests (`wiederherstellung.json`, noch ohne Test). Die Antwort
+braucht kein Netz und zählt den Datenordner nicht: dessen Größe steht nur darin, wenn `/api/speicher` ihn vor kurzem
+gezählt hat (`abruf.disk_known`, gilt fünf Minuten und nur für denselben Datenordner).
+
+Der Gesamtstatus ist die schlechteste Stufe der Gründe; jeder Grund steht als Satz in der Karte.
+
+| Lage | Stufe |
+|---|---|
+| noch keine Spieldaten; Datenbank aus einer älteren Version (`importer.VERSION`) | Einschränkungen |
+| letzter Abgleich von einem Neustart unterbrochen | Einschränkungen |
+| letzter Abgleich mit Fehlern beendet | Fehler |
+| eine Quelle mit Problem beim letzten Abgleich; eine Quelle ruht | Einschränkungen |
+| mindestens ein Eintrag im Fehlerregister | Fehler |
+| weniger als 2 GiB frei auf dem Laufwerk des Datenordners | Einschränkungen |
+| weniger als 500 MiB frei | Fehler |
+| `user.db` vorhanden, aber keine Sicherung oder die jüngste älter als zwei Tage | Einschränkungen |
+| letzter Wiederherstellungstest gescheitert | Fehler |
+
+Das Fehlerregister zählt auch, was beim Aufbau eines Zwischenspeichers scheitert (Spieldaten beim Start, zusammengeführte
+Karten): Solange der Eintrag steht, zeigt die Karte „Fehler vorhanden“, nicht nur die eine Anfrage, die ihn auslöste.
+Liest die Karte selbst etwas nicht (etwa den freien Platz), meldet sie es ins Register und kommt trotzdem.
+
+Angenommen, nicht gemessen: die Grenzen für den Platz (2 GiB reichen für einen Neubau der Datenbank und neue Kacheln,
+500 MiB nicht mehr sicher) und zwei Tage für die Sicherung (sie läuft täglich; ein ausgefallener Tag ist noch keine
+Einschränkung).
+
 ## Karten vorbereiten
 
 Nach dem Start und nach jedem Abgleich bereitet der Server die Karten eines Spiels vor (`server._warm_loop`,

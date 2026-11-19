@@ -97,7 +97,7 @@ DISK_LABEL = {"pokeapi.db": "Spieldatenbank", "user.db": "Deine Daten (Teams, Sa
 DISK_TILES = {"im": "HeartGold/SoulSilver: Weltkarten (im Browser umgewandelt)", "rn": "Schwert/Schild: Raid-Nester",
               "se": "Serebii PokéEarth", "rb": "RankedBoost", "pc": "pokemoncompletion", "db": "DittoBase", "ign": "IGN"}
 DISK_CACHE_S = 300          # so lange gilt eine Zählung (viele Kacheln: das Durchzählen dauert)
-_disk = {"at": 0.0, "data": None}
+_disk = {"at": 0.0, "data": None, "dir": None}
 
 
 def _du(path):
@@ -124,10 +124,17 @@ def _du(path):
     return total, n
 
 
+def disk_known():
+    """Die letzte Zählung des Datenordners, solange sie gilt (DISK_CACHE_S, derselbe Ordner), sonst None. Zählt nicht selbst."""
+    if _disk["data"] and _disk["dir"] == db.data_dir() and time.monotonic() - _disk["at"] < DISK_CACHE_S:
+        return _disk["data"]
+    return None
+
+
 def disk_usage(force=False):
     """Speicherplatz des Datenordners: {gesamt, frei, teile: [{name, titel, bytes, dateien, teile?}]}, groß zuerst;
     Karten aufgeschlüsselt nach Quelle der Kacheln und je Karte. Gezählt höchstens alle DISK_CACHE_S Sekunden."""
-    if not force and _disk["data"] and time.monotonic() - _disk["at"] < DISK_CACHE_S:
+    if not force and disk_known():
         return _disk["data"]
     import shutil
     root = db.data_dir()
@@ -168,7 +175,7 @@ def disk_usage(force=False):
         frei = platte = None
     data = {"gesamt": sum(t["bytes"] for t in teile), "frei": frei, "platte": platte, "am": _iso(now()),
             "teile": sorted(big, key=lambda t: -t["bytes"])}
-    _disk.update(at=time.monotonic(), data=data)
+    _disk.update(at=time.monotonic(), data=data, dir=root)
     return data
 
 

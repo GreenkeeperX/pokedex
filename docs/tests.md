@@ -14,6 +14,7 @@ brauchen nur die Python-Standardbibliothek; der Selbsttest der Oberfläche zusä
 | `Typen`, `Attacken`, `Team`, `TeamPlaetze`, `Rechnen`, `Version` (`tests/test_all.py`) | Rechenlogik ohne Datenbank; Schaden gegen `tests/schaden_referenz.json` | ja | ja |
 | `Leser` | Leser der Quellen mit erfundenen Ausschnitten (Showdown, Smogon, Wikis, Karten) | ja | ja |
 | `Abgleich`, `Betrieb`, `Fehler` | Abgleich mit Attrappe statt Netz, Neustart mitten im Lauf, Ruhezeiten, Fehlerregister | ja | ja |
+| `Statuskarte`, `StatuskarteHttp` | Gesamtstatus und Gründe der Statuskarte (Stufen, Grenzen für Platz und Sicherung, nicht lesbarer Platz), `/api/statuskarte` ohne Spieldaten | ja | ja |
 | `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten; dazu die Skripte der Oberfläche (jede Datei genau einmal in `index.html`, Kennung je Datei) | ja | ja |
 | `Heimnetz` | `sources.blocked_target`: keine Abrufe an private, lokale, reservierte Adressen, auch nicht über Weiterleitung | ja | ja |
 | `Spiele` | Spielprofile: Einträge in Ordnung, dieselben Aussagen wie die früheren Listen je Spiel, Server und Oberfläche fragen das Profil statt der Kennung | ja | ja |

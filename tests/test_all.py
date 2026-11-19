@@ -14,7 +14,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, store, team, typen
+from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, statuskarte, store, team, typen
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
 from tests.basis import HttpTest, TempData, app_quellen, im_paket, oberflaeche_js
 
@@ -3770,6 +3770,124 @@ class Oeffentlich(unittest.TestCase):
             self.assertTrue(self.BAD_NAME.search(f) or ("/" not in f and f not in self.ROOT_FILES), f)
         for f in ("app/server.py", "tests/schaden_referenz.json", "extra/spielwissen.json", "docs/formeln.md"):
             self.assertFalse(self.BAD_NAME.search(f), f)
+
+
+class Statuskarte(TempData):
+    """0.66.0: Die Statuskarte in den Einstellungen nennt den Gesamtstatus und die Gründe dafür, ohne Netz und ohne den
+    Datenordner zu zählen."""
+    GIB = 1024 ** 3
+
+    def setUp(self):
+        super().setUp()
+        abruf._REST.clear()
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())
+        self.frei = 100 * self.GIB
+        platte = mock.patch.object(statuskarte.shutil, "disk_usage",
+                                   lambda p: shutil._ntuple_diskusage(500 * self.GIB, 500 * self.GIB - self.frei, self.frei))
+        platte.start()
+        self.addCleanup(platte.stop)
+        self.at = datetime(2026, 11, 19, 12, 0, tzinfo=timezone.utc)
+
+    def tearDown(self):
+        abruf._REST.clear()
+        fehler._reg.update(dir=None, liste={}, gedruckt=set())
+        super().tearDown()
+
+    def _alles_gut(self):
+        """Daten da, mit der aktuellen Version gebaut, Abgleich ok, frische Sicherung: nichts zu melden."""
+        open(db.pokeapi_path(), "w").close()
+        open(db.user_path(), "w").close()
+        store.save_json("sync.json", {"ok": True, "started": "2026-11-19T02:30:00+00:00", "finished": "2026-11-19T02:40:00+00:00",
+                                      "stand": {"importer": importer.VERSION},
+                                      "sources": {"pokeapi": {"at": "2026-11-19T02:31:00+00:00", "ok": True, "msg": "1 Datei"}}})
+        ordner = os.path.join(db.data_dir(), "sicherung")
+        os.makedirs(ordner)
+        for tag, alter in (("20261117", 2.5), ("20261119", 0.25)):
+            pfad = os.path.join(ordner, f"user-{tag}.db")
+            open(pfad, "w").close()
+            t = (self.at - timedelta(days=alter)).timestamp()
+            os.utime(pfad, (t, t))
+
+    def test_ohne_daten_eingeschraenkt(self):
+        k = statuskarte.karte(at=self.at)
+        self.assertEqual(k["gesamt"], "eingeschraenkt")
+        self.assertEqual([g["text"][:22] for g in k["gruende"]], ["Noch keine Spieldaten;"])
+        self.assertEqual(k["sicherung"], {"letzte": None, "anzahl": 0})
+        self.assertIsNone(k["wiederherstellung"])
+        self.assertEqual(k["version"]["anwendung"], sources.VERSION)
+        self.assertIsNone(k["speicher"]["datenordner"])          # nicht gezählt: die Karte zählt nicht selbst
+        abruf.disk_usage(force=True)
+        self.assertEqual(statuskarte.karte(at=self.at)["speicher"]["datenordner"], abruf.disk_known()["gesamt"])
+        self.assertEqual(k["speicher"]["frei"], self.frei)
+        self.assertGreater(k["speicher"]["ram"]["spitze"], 0)
+
+    def test_alles_in_ordnung(self):
+        self._alles_gut()
+        k = statuskarte.karte(at=self.at)
+        self.assertEqual((k["gesamt"], k["gruende"]), ("ok", []))
+        self.assertEqual(k["sicherung"]["anzahl"], 2)
+        self.assertEqual(k["sicherung"]["letzte"]["name"], "user-20261119.db")
+        self.assertEqual(k["quellen"], [{"quelle": "pokeapi", "zeit": "2026-11-19T02:31:00+00:00", "ok": True,
+                                         "meldung": "1 Datei", "fehler": 0}])
+        self.assertEqual(k["fehler"], {"anzahl": 0, "eintraege": []})
+
+    def test_stufen(self):
+        self._alles_gut()
+        # Einschränkungen: Quelle ruht, Sicherung alt, Platz knapp, ältere Datenbank, Quelle mit Problem
+        abruf.rest_set("smogon", at=self.at)
+        os.remove(os.path.join(db.data_dir(), "sicherung", "user-20261119.db"))
+        self.frei = statuskarte.FREI_KNAPP - 1
+        st = store.load_json("sync.json", {})
+        st["stand"]["importer"] = "0.0"
+        st["sources"]["serebii"] = {"at": "2026-11-19T02:35:00+00:00", "ok": False, "msg": "HTTP 404", "errors": 3}
+        store.save_json("sync.json", st)
+        k = statuskarte.karte(at=self.at)
+        self.assertEqual(k["gesamt"], "eingeschraenkt")
+        texte = " | ".join(g["text"] for g in k["gruende"])
+        for teil in ("älteren Version", "1 Quelle mit Problem beim letzten Abgleich: serebii.", "1 Quelle ruht",
+                     "Platz knapp", "älter als zwei Tage"):
+            self.assertIn(teil, texte)
+        self.assertEqual(k["ruhe"], [{"schluessel": "smogon", "bis": "2026-11-20T12:00:00+00:00"}])
+        # Fehler: Eintrag im Register, Abgleich mit Fehlern, fast kein Platz, gescheiterter Wiederherstellungstest
+        fehler.notiere("serebii", "www.beispiel.invalid", "HTTP 404")
+        fehler.notiere("serebii", "www.beispiel.invalid", "HTTP 404")
+        st["ok"] = False
+        store.save_json("sync.json", st)
+        self.frei = statuskarte.FREI_FEHLER - 1
+        store.save_json(statuskarte.WIEDERHERSTELLUNG, {"zeit": "2026-11-01T03:00:00+00:00", "ok": False, "text": "beschädigt"})
+        k = statuskarte.karte(at=self.at)
+        self.assertEqual(k["gesamt"], "fehler")
+        stufen = [g["stufe"] for g in k["gruende"]]
+        self.assertEqual(stufen, sorted(stufen, key=lambda s: -statuskarte._RANG[s]))      # die schlimmsten zuerst
+        self.assertEqual(stufen.count("fehler"), 4)
+        self.assertNotIn("Platz knapp", " ".join(g["text"] for g in k["gruende"]))     # nur die schlimmere Stufe zum Platz
+        (e,) = k["fehler"]["eintraege"]
+        self.assertEqual((e["quelle"], e["art"], e["anzahl"]), ("serebii", "HTTP 404", 2))
+        self.assertEqual(set(e), {"zuletzt", "quelle", "art", "anzahl"})                # ohne Text und Stelle
+        # unterbrochener Lauf zählt als Einschränkung, nicht als Fehler
+        st.update(ok=None, laeuft=True)
+        store.save_json("sync.json", st)
+        self.assertIn("unterbrochen", " ".join(g["text"] for g in statuskarte.karte(at=self.at)["gruende"]))
+        self.assertEqual([g for g in statuskarte.karte(at=self.at)["gruende"] if "endete mit Fehlern" in g["text"]], [])
+
+    def test_platz_nicht_lesbar(self):
+        def kaputt(p):
+            raise OSError("nicht lesbar")
+        with mock.patch.object(statuskarte.shutil, "disk_usage", kaputt):
+            k = statuskarte.karte(at=self.at)
+        self.assertIsNone(k["speicher"]["frei"])
+        self.assertEqual(k["gesamt"], "fehler")                # im Fehlerregister, also sichtbar
+        self.assertEqual(k["fehler"]["anzahl"], 1)
+
+
+class StatuskarteHttp(HttpTest):
+    """0.66.0: /api/statuskarte antwortet auch ohne Spieldaten."""
+
+    def test_antwort(self):
+        k = self.json("/api/statuskarte")
+        self.assertIn(k["gesamt"], ("ok", "eingeschraenkt", "fehler"))
+        self.assertTrue(k["gruende"])
+        self.assertEqual(k["version"]["anwendung"], sources.VERSION)
 
 
 # Tests mit Spieldaten (Mini-Datenbank), Vertrag zwischen Server und Oberfläche, Selbsttest im Browser: eigene Datei, hier

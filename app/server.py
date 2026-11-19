@@ -14,7 +14,7 @@ import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, fehler, sources, store
+from . import abfragen, abruf, altissimo, aufgaben, db, fehler, sources, statuskarte, store
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -936,6 +936,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, aufgaben.task(abfragen.pruefung()))
             elif path == "/api/status":
                 self._send(200, abruf.status())
+            elif path == "/api/statuskarte":
+                self._send(200, statuskarte.karte())
             elif path == "/api/diag":
                 with _diag_lock:
                     st = DIAG["stand"]

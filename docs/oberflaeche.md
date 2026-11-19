@@ -319,6 +319,13 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
 
 - `foldBoxes` macht aus jedem Kasten ein `details.fold` mit Leiste oben (`.jump`, „alle auf“, „alle zu“); zugeklappte
   merkt sich `setShut`. Zeiten mit `deTime` (deutsch, Zeit des Browsers), Protokollzeilen mit `logLocal`.
+- Status (`statusBox`, `/api/statuskarte`): ganz oben, anfangs zu (gemerkt in `statusOpen`, nicht in `setShut`).
+  Eingeklappt nur der Gesamtstatus als `.badge` (`STATUS_DE`: „Alles in Ordnung“, „Einschränkungen“, „Fehler
+  vorhanden“), die Gründe im Tooltip. Aufgeklappt die Gründe als Hinweise, eine Tabelle `.kv` (Abgleich, nächster Lauf,
+  Version, Sicherung, Wiederherstellungstest, Platz, Daten, Arbeitsspeicher), dann je Quelle, Ruhezeiten und Fehler. Ist
+  der Datenordner nicht gezählt, springt „zählen“ zu `#diskd` und öffnet es samt Kasten. Namen der Quellen deutsch aus
+  `QUELLEN_DE`. Was welche Stufe ergibt, rechnet der Server
+  (`docs/abrufe.md`, „Statuskarte“).
 - Abgleich: oben der Zeitplan (Abstand in Tagen und feste Uhrzeit, `uhrLocal`/`uhrUtc` rechnen zwischen Ortszeit und der
   Weltzeit des Servers um; darüber der nächste Lauf), dann `details.sub` (Quellen mit farbigen Zählern `.badge`,
   Verbindungstest mit Fortschrittsbalken, Protokoll); „kopieren“ und „herunterladen“ stehen im Kopf (`.slinks`), Knöpfe

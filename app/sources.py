@@ -12,11 +12,17 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.65.0"
+VERSION = "0.66.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.66.0", "19.11.2026", [
+        "Einstellungen: oben eine Statuskarte. Eingeklappt zeigt sie „Alles in Ordnung“, „Einschränkungen“ oder „Fehler "
+        "vorhanden“, aufgeklappt die Gründe, den letzten Abgleich je Quelle, Ruhezeiten, die jüngsten Fehler, freien Platz, "
+        "Größe der Datenbanken, Arbeitsspeicher, Versionen und die letzte Sicherung",
+        "Der Speicherplatz merkt sich seine Zählung nur noch für denselben Datenordner",
+    ]),
     ("0.65.0", "19.11.2026", [
         "Unter der Haube: Die Roadmap führt nur noch Geplantes, offene Befunde und Entscheidungen; die Versionsgeschichte "
         "steht hier und in Git. Die Beschreibung der Oberfläche ist nach Gestaltung, Verhalten und Ansichten geordnet",
