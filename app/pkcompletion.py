@@ -1,6 +1,6 @@
 """Karten von pokemoncompletion (GPL-3.0, github.com/RainingChain/pokemoncompletion) für Kristall, Smaragd und Platin:
 Kartenpunkte aus den Spieldaten im Repository, das Kartenbild als Kacheln von dessen CDN. Ohne Netz; den Abruf macht
-abruf.py. Das Ergebnis hat dieselbe Form wie eine Karte von Map Genie (mapgenie.parse), damit es durch dieselbe
+app.abruf. Das Ergebnis hat dieselbe Form wie eine Karte von Map Genie (mapgenie.parse), damit es durch dieselbe
 Strecke läuft (Zusammenführen, Oberfläche, Kachelvorrat).
 
 Dort ist die Karte ein Bild in Leaflet-CRS.Simple: Kacheln {z}_{x}_{y}.png zu 512 Pixeln, z = 1 volle Auflösung, jede

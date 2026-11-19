@@ -46,7 +46,10 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/schaden.py`: Schadensrechnung je Generation und für Legenden: Arceus (ohne Netz); Formeln und Quellen in
   `docs/formeln.md`, Vergleichswerte in `tests/schaden_referenz.json` (erzeugt mit `tools/schaden_referenz.js`)
 - `app/effort.py`: Effort Levels in Legenden: Arceus (Werte, Kosten bis zum Ziel, ohne Netz)
-- `app/abruf.py`: Abgleich (holen, bauen, Sprites), Zeitplan, Einstellungen, Verbindungstest; siehe `docs/abrufe.md`
+- `app/abruf/`: Abgleich, ein Paket mit Modulen nach Thema (`grundlage`: Pausen, Ruhezeiten, Stand, Einstellungen,
+  Zeitplan, Zugriff auf eine Quelle; `medien` (Bilder, Platz), `quellen` (PKHeX, Spawnpunkte, Altissimo, Begleiter),
+  `wiki`, `seiten` (Serebii, BisaFans, Bulbapedia), `karten`, `lauf` (run, Bau der Datenbank, Zeitplan im Hintergrund),
+  `verbindungstest`); siehe `docs/abrufe.md`. Tests ersetzen Namen beider Pakete mit `tests.basis.im_paket`
 - `app/spiele.py`: Spielprofil, was in welchem Spiel gilt (ohne Datenbank); Server und Oberfläche fragen das Profil, nicht
   die Kennung des Spiels. Felder und „ein neues Spiel“: `docs/spiele.md`
 - `app/typen.py`, `app/attacken.py`, `app/team.py`: Rechenlogik ohne Datenbank (Typwirkung je Generation,
@@ -54,7 +57,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/abfragen/`: Abfragen für die Oberfläche, ein Paket mit Modulen nach Thema (`basis`: Daten im Speicher, Spiel und
   Formen; `liste`, `lernen` (Attacken), `karten` (Fundorte, Karten, Gebiete), `fangen`, `detailseite`, `auftraege`,
   `items` (mit Typtabelle), `teams` (mit Showdown-Text), `kampf`, `raids`). Alle Namen sind unter `app.abfragen`
-  erreichbar; Werte für Tests im Modul ersetzen, das sie liest (Übersicht in `app/abfragen/__init__.py`)
+  erreichbar (Übersicht in `app/abfragen/__init__.py`)
 - `app/server.py`: Webserver und JSON-Schnittstelle
 - `app/static/`: Oberfläche (`index.html`, `style.css`, `js/*.js` in Teilen nach Reitern, Reihenfolge in `index.html`);
   siehe `docs/oberflaeche.md`

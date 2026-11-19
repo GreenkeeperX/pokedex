@@ -1,5 +1,5 @@
 """pokeapi.db bauen, ohne Netz: alle PokéAPI-Tabellen 1:1, dazu aufbereitete Tabellen, Showdown und die
-gepflegten Ergänzungen. Abgerufen wird in abruf.py; hier kommen nur fertige Texte an.
+gepflegten Ergänzungen. Abgerufen wird in app.abruf; hier kommen nur fertige Texte an.
 
 Aufbereitete Tabellen (deutsche Namen, Sprache 6, sonst Englisch 9):
 - spiel: Editionsgruppen (Karmesin / Purpur …) mit Generation und Reihenfolge
