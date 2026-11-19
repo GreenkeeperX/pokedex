@@ -865,6 +865,9 @@ class Handler(BaseHTTPRequestHandler):
                     if d:
                         map_need(q.get("spiel"))        # der Bedarf: nach dem nächsten Start bereitet der Server diese Karten vor
                         _prewarm(d)
+            elif path == "/api/fortschritt":
+                d = abfragen.fortschritt(q)
+                self._send(200 if d else 404, d or {"error": "keine Spieldaten"})
             elif path == "/api/fehlt":
                 d = abfragen.missing(q)
                 self._send(200 if d else 404, d or {"error": "kein Spiel"})

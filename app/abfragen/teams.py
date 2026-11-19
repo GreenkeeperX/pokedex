@@ -7,7 +7,8 @@ import json
 
 from .. import attacken, db, fehler, importer, spiele, team, typen
 
-from .basis import _names, data, form_stats, form_types, game_of, member, no_abilities, profil, row
+from .basis import HOME, _names, data, form_stats, form_types, game_of, member, no_abilities, profil, row
+from .fortschritt import vertreter
 from .liste import _int, _ints, candidates, own_marks
 from .karten import FIXED_METHODS, areas
 from .lernen import learn_game, learnset, move_view, ranked_moves
@@ -275,7 +276,7 @@ def team_caught(body):
 
 
 NO_EGGS = 15                     # Ei-Gruppe „Unbekannt“: legendäre und manche besondere Pokémon schlüpfen nie
-WAYS = ("jetzt", "wild", "fest", "entwicklung", "raid", "zucht", "tausch", "edition", "unklar")
+WAYS = ("jetzt", "wild", "fest", "entwicklung", "raid", "zucht", "tausch", "edition", "unklar", "home")
 
 
 def missing(p):
@@ -285,26 +286,19 @@ def missing(p):
     dexk, typen, legendaer, weg, wege: [{art, text, ort?, von?, hast?}]}]} zurück; weg ist der beste Weg:
     jetzt (Vorstufe oder Weiterentwicklung gefangen: entwickeln oder züchten), wild, fest (Geschenk oder einmalige
     Begegnung), entwicklung, raid (Tera-Raid), zucht, tausch (Tausch-Entwicklung), edition (nur in der anderen Edition),
-    unklar (kein Weg in den Daten); Reihenfolge wie WAYS."""
+    unklar (kein Weg in den Daten); Reihenfolge wie WAYS. 0.69.0: auch für Pokémon HOME (jede Art mit dem Weg home:
+    in einem Spiel fangen und übertragen); jeder Eintrag trägt die Generation der Art (gen)."""
     D = data()
     if not D:
         return None
+    if p.get("spiel") == HOME:
+        return _missing_home(D)
     g, gen, _ = game_of(D, p.get("spiel"))
     if not g:
         return None
-    in_game = D.in_game.get(g["id"], {})
     caught_forms = own_marks("gefangen", g["kennung"])
     caught = {D.forms[i]["art"] for i in caught_forms if i in D.forms}
-    # je Art die Form, die der Dex des Spiels zeigt (niedrigste Nummer, sonst die Standardform)
-    rep = {}
-    for fid, nr in in_game.items():
-        f = D.forms.get(fid)
-        if not f:
-            continue
-        di = D.in_dex.get(g["id"], {}).get(fid, (0, ""))
-        k = (di[0] or 99, nr or 99999, not f["standard"], fid)
-        if f["art"] not in rep or k < rep[f["art"]][0]:
-            rep[f["art"]] = (k, f, nr, di)
+    rep = vertreter(D, g)           # je Art die Form, die der Dex des Spiels zeigt
     con = db.game()
     try:
         vn = _names(con, "version_names", "version_id")
@@ -415,11 +409,28 @@ def missing(p):
         best = "jetzt" if any(w.get("hast") for w in ways) else min((w["art"] for w in ways), key=WAYS.index)
         werte, summe = form_stats(D, f, gen)      # 0.56.2: für die Standard-Karte und die Hover-Karte
         out.append({"art": art, "id": f["id"], "name": f["name"], "nr": nr if nr is not None else art, "dex": di[0], "dexk": di[1],
-                    "typen": form_types(D, f, gen), "werte": werte, "summe": summe,
+                    "typen": form_types(D, f, gen), "werte": werte, "summe": summe, "gen": f["gen"],
                     "legendaer": bool(f["legendaer"] or f["mysterioes"]), "weg": best, "wege": ways})
     out.sort(key=lambda x: (x["dex"] or 99, x["nr"] or 99999, x["id"]))
     return {"spiel": g["kennung"], "editionen": eds if len(eds) > 1 else [], "edition": edition, "arten": len(rep),
             "gefangen": len(set(rep) & caught), "fehlt": out}
+
+
+def _missing_home(D):
+    """Was fehlt in Pokémon HOME: jede Art ohne gefangene Form in HOME. Einziger Weg: in einem Spiel fangen und übertragen
+    (welches Spiel, steht je Spiel unter „Was fehlt mir noch“)."""
+    rep = vertreter(D, None)
+    caught = {D.forms[i]["art"] for i in own_marks("gefangen", HOME) if i in D.forms}
+    out = []
+    for art, (_, f, nr, di) in sorted(rep.items()):
+        if art in caught:
+            continue
+        werte, summe = form_stats(D, f, D.max_gen)
+        out.append({"art": art, "id": f["id"], "name": f["name"], "nr": art, "dex": 0, "dexk": "",
+                    "typen": form_types(D, f, D.max_gen), "werte": werte, "summe": summe, "gen": f["gen"],
+                    "legendaer": bool(f["legendaer"] or f["mysterioes"]), "weg": "home",
+                    "wege": [{"art": "home", "text": "in einem Spiel fangen und nach HOME übertragen"}]})
+    return {"spiel": HOME, "editionen": [], "edition": "", "arten": len(rep), "gefangen": len(set(rep) & caught), "fehlt": out}
 
 
 def _evolves_from():

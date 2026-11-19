@@ -20,7 +20,7 @@ je Reiter zum Nachschlagen.
 | `liste.js` | Pokémon-Liste, Team-Leiste (`dock`), Speichern des Teams, Showdown-Export |
 | `detail.js` | Detailseite (Werte, Effort Levels, Fangchance, Entwicklung, Attacken), Raids, Aufträge, Forschung |
 | `team.js` | Team, Gegner und Trainer, Attacken |
-| `karte.js` | Karten, Sammelobjekte, Was fehlt mir noch, Gebiete |
+| `karte.js` | Karten, Sammelobjekte, Fortschritt, Was fehlt mir noch, Gebiete |
 | `items.js` | Items und Typtabelle |
 | `kampf.js` | Vergleich, Initiative-Liste, Kampf (Champions), Schadensrechner |
 | `einstellungen.js` | Einstellungen, Abgleich, Sicherung, Seite untersuchen, Verbindungstest |
@@ -283,11 +283,16 @@ Leitsatz: lieber melden als raten. Ein Fehler darf nicht aussehen wie „keine D
   (`gebiet:<Spiel>`), Filter `gebietFehlend`.
 - Auswahl mit Bildern (`.pick`): Knopf, darunter Suche und Liste aus echten Links; Enter nimmt den ersten Treffer.
 
-### Was fehlt mir noch und Sammelobjekte
+### Fortschritt, Was fehlt mir noch und Sammelobjekte
 
+- `progressView` (`#fortschritt`, `/api/fortschritt?spiel=…`): oben das gewählte Spiel (Auswahl `.gamesel` wie im Kopf),
+  darunter zwei Tabellen nach Generation und nach Typ, dann alle Spiele mit HOME zuerst. Jede Zeile mit Balken
+  (`.pbar`) und Anteil (`anteil`, abgerundet); eine Zeile nach Generation oder Typ springt zu `#fehlt/gen/<N>` oder
+  `#fehlt/typ/<Typ>`, eine Zeile der Spiele wählt das Spiel (`setGame`).
 - `missingView` (`#fehlt`, `/api/fehlt?spiel=…&edition=…`): Standard-Karten (`monCard` mit `extra`), Gruppen nach `weg`
   in der Reihenfolge von `WEG` (wie `abfragen.WAYS`), darunter der Weg als Marke, alle Wege im Hinweis. Knöpfe `#fseg`
-  filtern, Edition je Spiel im Browser (`edition:<Spiel>`). Der Pokéball auf einer Karte (`.fmon .gball`,
+  filtern, Edition je Spiel im Browser (`edition:<Spiel>`). Aus dem Fortschritt nur eine Generation oder ein Typ
+  (`#fehlt/gen/3`, `#fehlt/typ/10`, Knopf „nur … ×“ zeigt wieder alle). In HOME gibt es nur den Weg „Übertragen“. Der Pokéball auf einer Karte (`.fmon .gball`,
   `data-act="caught"`) macht sie
   blass; aus der Liste fällt sie erst beim nächsten Öffnen.
 - Sammelobjekte (`collectView`, `#sammeln`, `/api/sammeln?spiel=…`): Tabelle mit Balken (`.cbar`) und Links auf die

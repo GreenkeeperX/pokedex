@@ -44,9 +44,12 @@ dem Vorbild von VR-Navigator und eShopKompass.
   der PokéAPI (Legenden: Arceus, Karmesin/Purpur, Legenden: Z-A, SDLP) nach PKHeX; in Legenden: Arceus „Herstellen“
   mit Rezepten und Zutaten.
 - **Rezepte abhaken** (Legenden: Arceus, Items → Herstellen): Spalte ✓ für Rezepte, die du schon hast.
+- **Fortschritt** (Knopf in der Liste, `#fortschritt`): gefangene Arten je Spiel und in Pokémon HOME, für das gewählte
+  Spiel nach Generation und Typ; jede Zeile springt zu den fehlenden Pokémon.
 - **Was fehlt mir noch?** (Knopf in der Liste, `#fehlt`): die Arten des Spiel-Dex ohne gefangene Form, nach dem besten
   Weg geordnet (geht jetzt, wild, Geschenk oder einmalig, entwickeln, Tera-Raid, züchten, Tausch-Entwicklung, andere
-  Edition), mit Wahl der eigenen Edition und Pokéball direkt auf der Karte.
+  Edition), mit Wahl der eigenen Edition und Pokéball direkt auf der Karte; auch für Pokémon HOME und auf Wunsch nur eine
+  Generation oder ein Typ (aus dem Fortschritt).
 - **Sammelobjekte** (`#sammeln`): Geisterlichter, Icognito, Pflöcke, Schrauben und alles aus der Gruppe „Sammelobjekte“
   aller Karten des Spiels mit Fortschritt; ein Klick öffnet die Karte mit nur dieser Ebene.
 - **Typtabelle** der Generation des Spiels; Zeile und Spalte lassen sich festhalten, jede Tabelle hat ihren eigenen
