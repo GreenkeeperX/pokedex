@@ -41,6 +41,7 @@ Feste Regeln (wie im VR-Navigator und im eShopKompass):
 - `app/store.py`: kleine JSON-Dateien im Datenordner (`settings.json`, `sync.json`, `ruhe.json`, `fehler.json`, `bedarf.json`)
 - `app/fehler.py`: Fehlerregister (`melden` für Ausnahmen, `notiere` für Ereignisse; eine fehlende Tabelle ist kein Fehler)
 - `app/statuskarte.py`: Statuskarte der Einstellungen (Gesamtstatus und Gründe, ohne Netz); Regeln in `docs/abrufe.md`
+- `app/leistung.py`: Leistungstest auf Klick (eigene Schnittstelle über 127.0.0.1, ohne Netz, user.db unberührt)
 - `app/wiederherstellung.py`: monatlicher Wiederherstellungstest der jüngsten Sicherung (temporärer Ordner, Produktivdaten unberührt)
 - `app/db.py`: pokeapi.db (Spieldaten, nur lesend) und user.db (Teams, Entscheidungen), tägliche Sicherung
 - `app/importer.py`: baut pokeapi.db aus den CSV-Texten der PokéAPI, Showdown und `extra/` (ohne Netz), Selbstprüfung

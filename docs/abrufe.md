@@ -308,6 +308,30 @@ lesbare Einträge), steht das nur im Ergebnis; die Statuskarte zeigt dann „Feh
 (etwa kein Platz im temporären Ordner), steht das zusätzlich im Fehlerregister. Ohne Sicherung gibt es keinen Test und
 kein Ergebnis.
 
+## Leistungstest
+
+`app/leistung.py` misst auf Klick („messen“ in der Statuskarte, `POST /api/leistung`) am laufenden Dienst. Er fragt die
+eigene Schnittstelle über `127.0.0.1` und den Port dieses Servers (`Handler.MIT_PORT`: der Port kommt vom Server, nie aus
+der Anfrage), also auf dem Weg der Oberfläche mit JSON und Packen; nach außen geht nichts.
+
+- Wege (`wege`): Pokémon-Liste, Attacken, Detailseite und Attacken eines Pokémon, Items, Typen, „Was fehlt mir noch“,
+  Metadaten, Statuskarte. Spiel ist das in der Oberfläche gewählte (sonst das neueste), das Pokémon das erste der Liste.
+- Je Weg die erste Antwort im Test und der Median von drei weiteren (`WIEDERHOLUNGEN`), Größe ausgepackt und übertragen
+  (ab 20 KB gepackt). Ein Weg, der scheitert (Status nicht 200, Zeitlimit 120 s), steht mit Status und Meldung im
+  Ergebnis; `ok` ist dann falsch, der Test läuft weiter.
+- Arbeitsspeicher vorher und nachher (`/proc/self/status`), Spitze seit dem Start, Rechenzeit des Prozesses während des
+  Tests (`os.times`, alle Fäden, also auch die, die die Anfragen beantworten), Kerne und Last. Die Rechenzeit ist nur
+  so genau, wie das System sie zählt; andere Anfragen zur selben Zeit zählen mit.
+- Wie lange das letzte Laden der Spieldaten in den Speicher dauerte (`abfragen.ladezeit`, beim Start oder nach einem
+  Abgleich).
+- Schreibtest: 100 erfundene Teams, jedes für sich gespeichert, in einer temporären Datenbank in einem temporären
+  Ordner im Datenordner (`.leistung-…`, dasselbe Laufwerk wie `user.db`); danach ist der Ordner wieder weg.
+
+Nicht während eines Abgleichs und nie zwei zugleich (Antwort 400 mit Grund), ohne Spieldaten nicht. `user.db` wird
+nicht geschrieben (Test: Inhalt und Zeit gleich); kein Neustart, kein Docker-Socket. Karten öffnet der Test nicht: Das
+Zusammenführen schriebe den Kartencache. Das Ergebnis steht mit Version, Datenstand und Zeit in `leistung.json` (die
+letzten zehn, das jüngste zuerst); die Statuskarte zeigt das jüngste.
+
 ## Karten vorbereiten
 
 Nach dem Start und nach jedem Abgleich bereitet der Server die Karten eines Spiels vor (`server._warm_loop`,

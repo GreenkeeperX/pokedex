@@ -15,8 +15,9 @@ from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, statuskarte, store, team, typen, wiederherstellung
+from app import leistung
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
-from tests.basis import HttpTest, TempData, app_quellen, im_paket, oberflaeche_js
+from tests.basis import HttpMitDaten, HttpTest, TempData, app_quellen, im_paket, oberflaeche_js
 
 # Kleine Typtabelle: alle 18 Typen, dazu die Werte, die die Tests brauchen
 EFF = [(a, d, 100) for a in range(1, 19) for d in range(1, 19)]
@@ -4025,6 +4026,76 @@ class WiederherstellungHttp(HttpTest):
         r = self.json("/api/wiederherstellung", {})
         self.assertTrue(r["ok"], r["text"])
         self.assertEqual(self.json("/api/statuskarte")["wiederherstellung"]["zeit"], r["zeit"])
+
+
+class Leistung(HttpMitDaten):
+    """0.68.0: Der Leistungstest misst über die eigene Schnittstelle, ohne Netz, nicht während eines Abgleichs, und lässt
+    user.db unberührt; das Ergebnis steht mit Version und Zeit in leistung.json."""
+
+    def _user_db(self):
+        with open(db.user_path(), "rb") as f:
+            return f.read(), os.stat(db.user_path()).st_mtime_ns
+
+    def test_messen(self):
+        vorher = self._user_db()
+        kein_netz = mock.Mock(side_effect=AssertionError("Netz"))
+        with mock.patch.object(sources, "fetch", kein_netz), mock.patch.object(sources, "request", kein_netz):
+            r = self.json("/api/leistung", {"spiel": "emerald"})
+        kein_netz.assert_not_called()
+        self.assertTrue(r["ok"])
+        self.assertEqual((r["version"], r["daten"], r["spiel"]), (sources.VERSION, importer.VERSION, "emerald"))
+        self.assertEqual([a["name"] for a in r["abrufe"]], [n for n, _ in leistung.wege("emerald", r["pokemon"])])
+        for a in r["abrufe"]:
+            self.assertEqual(a["status"], 200, a["weg"])
+            self.assertGreater(a["erste_ms"], 0)
+            self.assertGreater(a["wieder_ms"], 0)
+            self.assertGreaterEqual(a["bytes"], a["gepackt"])
+            self.assertGreater(a["gepackt"], 0)
+        # große Antworten (ab 20 KB) kommen gepackt: „bytes“ ist die Größe ausgepackt (in der Mini-Welt ist keine so groß)
+        _, status, roh, gepackt = leistung._abruf(self.port, "/style.css")
+        self.assertEqual((status, roh), (200, os.path.getsize(os.path.join(server.STATIC, "style.css"))))
+        self.assertLess(gepackt, roh / 2)
+        self.assertEqual(r["schreiben"]["anzahl"], leistung.SCHREIBEN)
+        self.assertGreaterEqual(r["cpu_s"], 0)
+        self.assertGreater(r["ram"]["spitze"], 0)
+        self.assertIsNotNone(r["laden"])
+        self.assertEqual(self._user_db(), vorher)                      # user.db Byte für Byte und mit Zeit gleich
+        self.assertEqual([n for n in os.listdir(db.data_dir()) if n.startswith(".leistung-")], [])
+        self.assertEqual(leistung.letzte(), [r])
+        self.assertEqual(self.json("/api/statuskarte")["leistung"], r)
+        # unbekanntes Spiel: das neueste; die letzten BEHALTEN bleiben, das jüngste zuerst
+        store.save_json(leistung.DATEI, [dict(r, zeit=f"alt{i}") for i in range(leistung.BEHALTEN)])
+        r2 = self.json("/api/leistung", {"spiel": "gibtsnicht"})
+        self.assertEqual(r2["spiel"], abfragen.data().games[-1]["kennung"])
+        alle = leistung.letzte()
+        self.assertEqual((len(alle), alle[0]["zeit"], alle[-1]["zeit"]), (leistung.BEHALTEN, r2["zeit"], f"alt{leistung.BEHALTEN - 2}"))
+
+    def test_sperren(self):
+        with im_paket(abruf, "brief", lambda: {"running": True}):
+            self.assertIn("Abgleichs", self.json("/api/leistung", {}, status=400)["error"])
+        with leistung._lock:
+            self.assertIn("läuft schon", self.json("/api/leistung", {}, status=400)["error"])
+        self.assertEqual(leistung.letzte(), [])                        # nichts gemessen, nichts gespeichert
+
+    def test_gescheiterter_weg(self):
+        echt = leistung._abruf
+
+        def abruf_(port, weg):
+            if "typen" in weg:
+                raise TimeoutError("timed out")
+            return echt(port, weg)
+        mit_fehler = lambda spiel, pokemon: [("Gibt es nicht", "/api/gibtsnicht"), ("Typen", f"/api/typen?spiel={spiel}"),
+                                             ("Metadaten", "/api/meta")]
+        with mock.patch.object(leistung, "wege", mit_fehler), mock.patch.object(leistung, "_abruf", abruf_):
+            r = self.json("/api/leistung", {"spiel": "emerald"})
+        self.assertFalse(r["ok"])
+        self.assertEqual([a["status"] for a in r["abrufe"]], [404, 0, 200])
+        self.assertEqual(r["abrufe"][1]["meldung"], "TimeoutError: timed out")
+
+
+class LeistungOhneDaten(HttpTest):
+    def test_ohne_daten(self):
+        self.assertIn("Noch keine Spieldaten", self.json("/api/leistung", {}, status=400)["error"])
 
 
 # Tests mit Spieldaten (Mini-Datenbank), Vertrag zwischen Server und Oberfläche, Selbsttest im Browser: eigene Datei, hier

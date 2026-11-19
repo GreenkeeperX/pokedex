@@ -11,15 +11,13 @@ nachvollziehbar halten. Nutzen belegen. Nutzerdaten haben Vorrang vor jeder tech
 ## Als Nächstes
 
 In dieser Reihenfolge, nach dem Arbeitsauftrag vom 13.11.2026. Abschnitte 1 bis 4 (Rechenlogik, Betrieb, Tests,
-Spielprofil, Aufteilen der großen Dateien, Aufräumen), die Statuskarte (0.66.0) und der monatliche
-Wiederherstellungstest (0.67.0) sind erledigt.
+Spielprofil, Aufteilen der großen Dateien, Aufräumen), die Statuskarte (0.66.0), der monatliche
+Wiederherstellungstest (0.67.0) und der Leistungstest auf Klick (0.68.0) sind erledigt.
 
-1. **Leistungstest auf Klick** in der Statuskarte: Speicher nach Start und Vorbereiten, CPU (soweit verlässlich), erste
-   und wiederholte Antwortzeiten (`/api/attacken`, `/api/pokemon/…` und weitere), Antwortgrößen. Nicht während eines
-   Abgleichs, keine Netzabrufe, keine Änderung an `user.db`, Schreibtests nur mit temporären erfundenen Daten, kein
-   Docker-Socket, kein Neustart. Ergebnis mit Version und Zeitpunkt gespeichert. Danach anhand der Messung auf dem
-   Heimserver entscheiden, ob der Speicher der Karten verkleinert werden soll (Python-Objekte, fertige und gepackte
-   Antworten); ohne Messung keine Optimierung.
+1. **Messung auf dem Heimserver auswerten.** Dort einmal die Karten des meistgenutzten Spiels öffnen, dann in der
+   Statuskarte „messen“ (der Test öffnet selbst keine Karten, weil das Zusammenführen den Kartencache schreibt). Danach
+   anhand von Arbeitsspeicher und Antwortzeiten entscheiden, ob der Speicher der Karten verkleinert werden soll
+   (Python-Objekte, fertige und gepackte Antworten); ohne Messung keine Optimierung.
 2. **Funktionen**, in dieser Reihenfolge:
    1. Fortschritt auf einen Blick: Sammlung je Spiel und für HOME, nach Generation und Typ, mit Sprung zu fehlenden
       Pokémon.

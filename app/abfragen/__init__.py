@@ -31,7 +31,7 @@ from .. import altissimo, attacken, db, fehler, importer, mapgenie, showdown, sp
 
 from .fangen import (BALLS, HISUI_BALLS, HISUI_NO_TABLE, catch_chance_la, rank_la, GROWTH_DE, STAT_KEYS, catch_chance,
     catch_steps, catch_b_gen34, catch_table, MOON_SPECIES, ULTRA_BEASTS, ball_rows, sleep_factor)
-from .basis import (LA, WIKI, _lock, _cache, _stamp, _names, Data, data, game_of, profil, profil_von, chart_of,
+from .basis import (LA, WIKI, _lock, _cache, _stamp, _names, Data, data, ladezeit, game_of, profil, profil_von, chart_of,
     form_types, form_stats, no_abilities, old_class, ability_of, member, row, machine_label, HOME, games, meta,
     pruefung)
 from .auftraege import (research_done, _research, research_open, _requests, _missions, ZA, _auftragsspiel, _blaubeer,

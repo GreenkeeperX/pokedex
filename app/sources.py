@@ -12,11 +12,16 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = "0.67.0"
+VERSION = "0.68.0"
 
 # Was sich je Version ändert, für den Hinweis in der Oberfläche. Neueste zuerst; der erste Eintrag
 # muss VERSION sein (Test). Ausführlich steht es in Git (Commit und Pull Request); ROADMAP.md führt nur Geplantes.
 NEUIGKEITEN = [
+    ("0.68.0", "19.11.2026", [
+        "Statuskarte: Leistungstest auf Klick („messen“). Er misst die Antwortzeiten der wichtigsten Wege (einmal und "
+        "wiederholt), ihre Größe, Arbeitsspeicher, Rechenzeit und das Speichern mit erfundenen Teams in einer "
+        "temporären Datenbank; ohne Netz, nicht während eines Abgleichs, deine Daten bleiben unberührt",
+    ]),
     ("0.67.0", "19.11.2026", [
         "Sicherung: Einmal im Monat holt der Server die jüngste Sicherung probehalber in einen temporären Ordner zurück "
         "und prüft, ob sie heil ist und sich laden lässt; deine Daten bleiben dabei unberührt. Das Ergebnis steht in der "

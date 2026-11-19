@@ -6,6 +6,8 @@ import json
 import os
 import re
 import threading
+import time
+from datetime import datetime, timezone
 
 from .. import attacken, db, fehler, spiele, typen
 
@@ -15,7 +17,7 @@ from .fangen import HISUI_BALLS
 LA = "legends-arceus"          # Schlüssel der Tabellen von Legenden: Arceus (Forschung, Fangrate, Aufträge, eigene Attackenwerte)
 WIKI = "https://www.pokewiki.de/"
 _lock = threading.Lock()
-_cache = {"stamp": None}
+_cache = {"stamp": None, "laden": None}
 
 
 def _stamp():
@@ -157,13 +159,21 @@ def data():
         return None
     with _lock:
         if _cache["stamp"] != st:
+            start = time.monotonic()
             con = db.game()
             try:
                 _cache["data"] = Data(con)
             finally:
                 con.close()
             _cache["stamp"] = st
+            _cache["laden"] = {"ms": round((time.monotonic() - start) * 1000),
+                               "am": datetime.now(timezone.utc).replace(microsecond=0).isoformat()}
         return _cache["data"]
+
+
+def ladezeit():
+    """Wie lange das letzte Laden der Spieldaten in den Speicher dauerte ({ms, am}) oder None (für den Leistungstest)."""
+    return _cache["laden"]
 
 
 # ------------------------------------------------------------------ Spiel und Formen

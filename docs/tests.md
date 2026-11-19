@@ -15,6 +15,7 @@ brauchen nur die Python-Standardbibliothek; der Selbsttest der Oberfläche zusä
 | `Leser` | Leser der Quellen mit erfundenen Ausschnitten (Showdown, Smogon, Wikis, Karten) | ja | ja |
 | `Abgleich`, `Betrieb`, `Fehler` | Abgleich mit Attrappe statt Netz, Neustart mitten im Lauf, Ruhezeiten, Fehlerregister | ja | ja |
 | `Wiederherstellung`, `WiederherstellungHttp` | Wiederherstellungstest: bestanden mit unberührtem Datenordner, alte Sicherung lädt, kaputte Sicherung und unlesbare Einträge, monatlich im Zeitplan, „jetzt prüfen“ | ja | ja |
+| `Leistung`, `LeistungOhneDaten` | Leistungstest über HTTP: alle Wege beantwortet, kein Netz, `user.db` unverändert, kein temporärer Ordner übrig, gespeichert (die letzten zehn); gesperrt während eines Abgleichs und doppelt; gescheiterter Weg | ja | ja |
 | `Statuskarte`, `StatuskarteHttp` | Gesamtstatus und Gründe der Statuskarte (Stufen, Grenzen für Platz und Sicherung, nicht lesbarer Platz), `/api/statuskarte` ohne Spieldaten | ja | ja |
 | `Server`, `Http` | Server-Hilfen und der Server über HTTP auf einem freien Port, ohne Spieldaten; dazu die Skripte der Oberfläche (jede Datei genau einmal in `index.html`, Kennung je Datei) | ja | ja |
 | `Heimnetz` | `sources.blocked_target`: keine Abrufe an private, lokale, reservierte Adressen, auch nicht über Weiterleitung | ja | ja |
