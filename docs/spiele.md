@@ -44,7 +44,7 @@ Generation und steht im Fehlerregister („Spiel ohne Profil“), ebenso eine ab
 | `forschung` | ja/nein | Forschungsaufgaben | `detail`, `candidates` (Sortierung), Filter der Liste |
 | `crypto` | ja/nein | Crypto-Pokémon | `detail` |
 | `kampf` | ja/nein | Kampfspiel: Kader statt Sammlung, Reiter Kampf statt Karte, Level 50 fest, Doppelkampf | `damage_view`, `BATTLE()` |
-| `spawnkarten` | ja/nein | Einzelkarten mit Spawnpunkten, eigene Punkte auf der Karte von Map Genie | `_mg_map`, `/api/mapgenie/eigene`, Karte in `karte.js` |
+| `spawnkarten` | ja/nein | Einzelkarten mit Spawnpunkten, eigene Punkte auf der Karte von Map Genie | `_mg_map` (eigene Punkte in der zusammengeführten Karte), Karte in `karte.js` |
 | `eigene_dexe` | ja/nein | eigene Pokédexe (Tabelle `pokopia`) | `_pokopia` |
 
 Die Spiele mit Abweichungen: Rot/Grün und Blau (Japan) mit Hauptspiel Rot/Blau; Colosseum und XD (Crypto, keine Zucht);

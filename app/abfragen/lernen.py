@@ -419,13 +419,6 @@ def move_list(p):
     return {"rows": rows, "spiel": g["kennung"] if g else ""}
 
 
-def best_of_type(p):
-    """Kompatibel zu 0.1: die besten Schadens-Attacken eines Typs."""
-    r = move_list(dict(p, lernbar=1))
-    r["rows"] = [x for x in r["rows"] if x["wertung"] > 0][: min(_int(p.get("limit")) or 30, 1000)]
-    return r
-
-
 def moves_of(fid, p):
     """Attacken einer Form im Spiel (für die Detailseite, ohne den Rest neu zu laden)."""
     D = data()

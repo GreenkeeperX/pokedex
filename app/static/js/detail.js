@@ -204,13 +204,6 @@ function elTipHtml(x, i, lv) {
     [i === 0 ? `Grundwert: (Level/100 + 1) × Basis + Level = (${lv}/100 + 1) × ${x.basis} + ${lv}` : `Grundwert: (Level/50 + 1) × Basis / 1,5${x.wesen !== 1 ? " × Wesen" : ""} = (${lv}/50 + 1) × ${x.basis} / 1,5${x.wesen !== 1 ? ` × ${de(x.wesen)}` : ""}`,
       `Bonus: (√Basis × Faktor + Level) / 2,5, gerundet; Faktor bei Stufe ${x.el}: ${x.faktor}, Bonus ${x.bonus}`]);
 }
-function elTip(x, i, lv) {
-  const t = x.teile, n = x.wesen > 1 ? "× 1,1 (Wesen)" : x.wesen < 1 ? "× 0,9 (Wesen)" : "";
-  return `${STAT[i]} ${x.wert} = Grundwert ${t.basis + t.level - (x.bonus - t.el) + t.wesen} + Bonus ${x.bonus}\n`
-    + (i === 0 ? `Grundwert: (Level/100 + 1) × Basis + Level = (${lv}/100 + 1) × ${x.basis} + ${lv}` : `Grundwert: (Level/50 + 1) × Basis / 1,5 ${n} = (${lv}/50 + 1) × ${x.basis} / 1,5 ${n}`)
-    + `\nBonus: (√Basis × Faktor + Level) / 2,5, gerundet; Faktor bei Stufe ${x.el}: ${x.faktor}`
-    + `\nDavon: Basiswert ${t.basis}, durch das Level +${t.level}, durch Effort Levels +${t.el}${t.wesen ? `, Wesen ${t.wesen > 0 ? "+" : ""}${t.wesen}` : ""}`;
-}
 /* Live-Diagramm zu den Effort Levels: je Wert ein gestapelter Balken (Basiswert, Level, Effort Levels, Wesen, bis
    zum Ziel gestrichelt) und ein Netz mit denselben Schichten. Maßstab: der höchste Wert mit Stufe 10 */
 function elChart(rows, lv) {

@@ -1,5 +1,40 @@
 # Roadmap
 
+## 0.64.0 (19.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 4b, letzte Etappe von P-9: toten Code nachweisen und entfernen. Gesucht wurde
+nach Funktionen und Klassen in `app/` ohne Verweis außerhalb ihrer Definition (auch über Pakete, Wege des Servers und
+Tests), nach Namen in der Oberfläche ohne Verweis und nach Wegen des Servers ohne Aufrufer (Test `Vertrag.test_wege`).
+Entfernt nur, was nachweislich niemand aufruft, auch nicht dynamisch (Wege des Servers stehen als Text, die Oberfläche
+ruft nur, was in ihren Skripten steht), und wofür ein Ersatz da ist oder kein Bedarf besteht:
+
+- **`/api/mapgenie/eigene`** (`server.py`): eigene Punkte einer Einzelkarte von Legenden: Arceus. Aufrufer: keiner, weder
+  in der Oberfläche noch in Tests oder Werkzeugen, in keinem Stand der Git-Historie. Ersatz: Dieselben Punkte stehen in der
+  zusammengeführten Karte (`/api/mapgenie?spiel=…&karte=…`, `abfragen.mg_map` ruft `mg_overlay`); `mg_overlay` bleibt.
+  Test: `ServerMitDaten.test_unbekanntes` erwartet 404; `Vertrag.OHNE_AUFRUFER` führt den Weg nicht mehr.
+- **`abfragen.best_of_type`** (`app/abfragen/lernen.py`, „kompatibel zu 0.1“): beste Schadens-Attacken eines Typs.
+  Aufrufer: keiner, kein Weg des Servers, in keinem Stand der Historie. Ersatz: `move_list` mit `lernbar=1`, die es selbst
+  nur filterte (Reiter Attacken). Test: `Pakete` (die Namen des Pakets stimmen mit den Modulen überein).
+- **`server._packed` und `server._PACKED`**: Zwischenspeicher für einmal in JSON gewandelte Karten. Aufrufer seit 0.53.0
+  keiner mehr (ersetzt durch `_map_body` mit Kartencache im Datenordner). Damit war in `_send` der Zweig, der gepackte
+  Antworten aus `_PACKED` in `_GZ` merkte, nie wahr; er ist mit entfernt. `_GZ` bleibt: `_map_body` legt die gepackten
+  Karten dort ab, `_send` nimmt sie von dort. Tests: alle Wege über HTTP (`Http`, `ServerMitDaten`), der Kartencache
+  (`Leser.test_0_53_kartencache_und_tms`).
+- **`elTip`** (`app/static/js/detail.js`): Tooltip-Text zu einem Wert in Legenden: Arceus. Aufrufer: keiner in keinem Stand
+  der Historie; ersetzt durch `elTipHtml` (Rechenweg als HTML). Test: Selbsttest im Browser (Detailseite Legenden: Arceus).
+- **`import spiele, mapgenie` in `server.py`**: nach dem Wegfall des Weges nicht mehr benutzt (`mapgenie` nie).
+
+Nicht entfernt, mit Grund: `abfragen.catch_chance` und `rank_la` (Formeln mit Vergleichswerten in den Tests, die
+Oberfläche rechnet dieselben in JavaScript; `docs/formeln.md`), `abruf.rest_clear` (für einen Eingriff von Hand
+gedacht, so dokumentiert), `effort.start_level` und `schaden._round` (Teile der Formeln mit Tests), `spiele.pruefe`
+(prüft die Profile, ein Test ruft es). Die sechs Felder, die der Server liefert und die Oberfläche nicht liest
+(`Vertrag.UNGELESEN`: `max_gen`, `kampfform`, `formname`, `effekt`, `abgedeckt`, `ev_summe`), bleiben: Sie gehören zur
+Schnittstelle, kosten wenig, und `kampfform` und `abgedeckt` braucht der Server selbst.
+
+Keine Änderung an `user.db`, an Antworten des Servers (`tests/vertrag.json` unverändert), an Einstellungen oder an
+`importer.VERSION`. Wer `/api/mapgenie/eigene` von außen gerufen hätte, bekommt 404 und findet die Punkte in
+`/api/mapgenie`.
+
 ## 0.63.0 (19.11.2026)
 
 Arbeitsauftrag vom 13.11.2026, Abschnitt 4b, dritte Etappe von P-9: `app/abruf.py` (3110 Zeilen) ist ein Paket

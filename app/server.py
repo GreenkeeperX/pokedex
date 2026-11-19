@@ -14,7 +14,7 @@ import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, fehler, mapgenie, sources, spiele, store
+from . import abfragen, abruf, altissimo, aufgaben, db, fehler, sources, store
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -544,21 +544,7 @@ IMMUTABLE = "public, max-age=31536000, immutable"
 
 # ------------------------------------------------------------------ HTTP
 
-_PACKED = {}
-_GZ = {}
-
-
-def _packed(obj):
-    """Große, unveränderte Antworten (zusammengeführte Karten) nur einmal in JSON wandeln; das Objekt selbst ist der
-    Schlüssel (abfragen hält es, solange es gilt)."""
-    hit = _PACKED.get(id(obj))
-    if hit and hit[0] is obj:
-        return hit[1]
-    body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
-    if len(_PACKED) >= 16:
-        _PACKED.clear()
-    _PACKED[id(obj)] = (obj, body)
-    return body
+_GZ = {}                    # gepackte Karten aus _map_body: {id(Inhalt): (Inhalt, gepackt)}, _send packt sie nicht neu
 
 
 _WARM = set()
@@ -736,12 +722,7 @@ class Handler(BaseHTTPRequestHandler):
             if hit and hit[0] is body:
                 body = hit[1]
             else:
-                gz = gzip.compress(body, compresslevel=5)
-                if any(body is b for _, b in _PACKED.values()):   # gleiche große Antwort: nur einmal packen
-                    if len(_GZ) >= 16:
-                        _GZ.clear()
-                    _GZ[id(body)] = (body, gz)
-                body = gz
+                body = gzip.compress(body, compresslevel=5)
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         if packed:
@@ -865,12 +846,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200 if d else 404, d or {"error": "keine Karte zum Umwandeln"})
             elif path == "/api/smogon":
                 self._send(200, abfragen.smogon_view(q.get("spiel")))
-            elif path == "/api/mapgenie/eigene":
-                # eigene Punkte (Legenden: Arceus) auf der Karte von Map Genie
-                d = abruf.mg_maps(q.get("spiel"))
-                m = next((m for m in (d or {}).get("karten", []) if m["slug"] == q.get("karte")), None)
-                ok = m and spiele.profil(d["spiel"])["spawnkarten"]
-                self._send(200 if ok else 404, abfragen.mg_overlay(m, d.get("am")) if ok else {"error": "keine eigenen Punkte"})
             elif path == "/api/mapgenie":
                 d = abruf.mg_maps(q.get("spiel"))
                 if d and q.get("karte"):
