@@ -170,7 +170,8 @@ Die Tests laufen ohne Netz gegen eine erfundene Mini-Datenbank, die der echte Im
 im Browser ohne Fenster (Chromium oder Chrome; fehlt er lokal, wird nur dieser Test übersprungen). Bei jedem Pull Request
 laufen sie in der CI. Nur lokal: `POKEAPI_DB=./data/pokeapi.db python3 -m unittest tests.test_all` prüft zusätzlich gegen
 eine gebaute Datenbank. Welche Tests wo laufen und was kein Test abdeckt: `docs/tests.md`.
-Formeln für Schaden, Statuswerte, Typwirkung und Fangchance mit Quellen: `docs/formeln.md`. Die Vergleichswerte der
+Formeln für Schaden, Statuswerte, Typwirkung und Fangchance mit Quellen: `docs/formeln.md`. Was in welchem Spiel gilt
+und wie ein neues Spiel dazukommt: `docs/spiele.md`. Die Vergleichswerte der
 Schadensrechnung (`tests/schaden_referenz.json`) erzeugt `tools/schaden_referenz.js` aus `@smogon/calc`; das Werkzeug
 braucht Node, der Pokédex und seine Tests nicht.
 Hinweise zum Arbeiten am Repository: `CLAUDE.md`. Geplantes: `ROADMAP.md`.

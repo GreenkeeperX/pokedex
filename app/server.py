@@ -14,7 +14,7 @@ import urllib.parse
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import abfragen, abruf, altissimo, aufgaben, db, fehler, mapgenie, sources, store
+from . import abfragen, abruf, altissimo, aufgaben, db, fehler, mapgenie, sources, spiele, store
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LOCAL_SUFFIXES = (".home.arpa", ".local", ".lan", ".internal", ".localhost")
@@ -858,7 +858,7 @@ class Handler(BaseHTTPRequestHandler):
                 # eigene Punkte (Legenden: Arceus) auf der Karte von Map Genie
                 d = abruf.mg_maps(q.get("spiel"))
                 m = next((m for m in (d or {}).get("karten", []) if m["slug"] == q.get("karte")), None)
-                ok = m and d["spiel"] == "legends-arceus"
+                ok = m and spiele.profil(d["spiel"])["spawnkarten"]
                 self._send(200 if ok else 404, abfragen.mg_overlay(m, d.get("am")) if ok else {"error": "keine eigenen Punkte"})
             elif path == "/api/mapgenie":
                 d = abruf.mg_maps(q.get("spiel"))

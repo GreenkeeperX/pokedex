@@ -13,7 +13,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, store, team, typen
+from app import abfragen, abruf, attacken, aufgaben, db, fehler, importer, server, showdown, sources, spiele, store, team, typen
 from app.typen import BODEN, DRACHE, EIS, ELEKTRO, FEE, FEUER, FLUG, GEIST, KAMPF, NORMAL, PFLANZE, PSYCHO, STAHL, UNLICHT, WASSER
 from tests.basis import HttpTest, TempData
 
@@ -3489,6 +3489,130 @@ class Rechnen(unittest.TestCase):
                             self.assertEqual(sum(effort.parts(base, lv, el, i, nat).values()), effort.stat(base, lv, el, i, nat))
         v = effort.view([100] * 6, 50, [10] * 6, None, (1, 3))
         self.assertEqual([r["wert"] for r in v["rows"]][:4], [320, 266, 253, 239])
+
+
+class Spiele(unittest.TestCase):
+    """0.60.0: Spielprofile (app/spiele.py): eine Beschreibung je Spiel statt verstreuter Listen in Server und Oberfläche."""
+    ROOT = os.path.join(os.path.dirname(__file__), "..")
+    # Die Listen, wie sie bis 0.59.0 in abfragen.py und app.js standen (dort entfernt). Das Profil muss dasselbe sagen.
+    SV = {"scarlet-violet", "the-teal-mask", "the-indigo-disk"}
+    HAUPTSPIEL = {"the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield", "the-teal-mask": "scarlet-violet",
+                  "the-indigo-disk": "scarlet-violet", "mega-dimension": "legends-za", "red-green-japan": "red-blue",
+                  "blue-japan": "red-blue"}                                                    # TEXT_BASE und TRAINER_SHARE
+    LEARN_PARENT = {"the-isle-of-armor": "sword-shield", "the-crown-tundra": "sword-shield",
+                    "the-teal-mask": "scarlet-violet", "the-indigo-disk": "scarlet-violet"}
+    NO_ABILITIES = {"legends-arceus", "lets-go-pikachu-lets-go-eevee"}                         # dazu Generation 1 und 2
+    NO_BREEDING = {"red-green-japan", "blue-japan", "red-blue", "yellow", "colosseum", "xd", "lets-go-pikachu-lets-go-eevee",
+                   "legends-arceus", "legends-za", "mega-dimension", "champions"}              # dazu Generation 1
+    QUEST_GAMES = {"legends-arceus": "legends-arceus", "legends-za": "legends-za", "mega-dimension": "legends-za"}
+    REQ_GAMES = {**QUEST_GAMES, "scarlet-violet": "the-indigo-disk", "the-teal-mask": "the-indigo-disk",
+                 "the-indigo-disk": "the-indigo-disk"}                                         # app.js
+    STATS_OTHER = {"legends-arceus", "champions", "pokopia"}
+    LGPE, LA = "lets-go-pikachu-lets-go-eevee", "legends-arceus"
+
+    def setUp(self):
+        self.p = {k: spiele.profil(k) for k in spiele.SPIELE}
+
+    def wo(self, bedingung):
+        return {k for k, p in self.p.items() if bedingung(p)}
+
+    def test_eintraege_in_ordnung(self):
+        self.assertEqual(spiele.pruefe(), [])
+        self.assertTrue(all(set(p) == set(spiele.FELDER) for p in self.p.values()))
+        self.assertLessEqual(set(spiele.OBERFLAECHE), set(spiele.FELDER))
+        with mock.patch.dict(spiele.SPIELE, {"neu": {"gen": 9, "fangformel": "anders", "wetter": True, "hauptspiel": "mega-dimension"},
+                                             "ohne": {"zucht": 1}}):
+            spiele._fertig.clear()
+            schlecht = " | ".join(spiele.pruefe())
+        spiele._fertig.clear()
+        for teil in ("neu: fangformel = 'anders'", "neu: unbekanntes Feld wetter", "mega-dimension ist selbst eine Erweiterung",
+                     "ohne: zucht = 1 ist kein bool", "ohne: ohne Generation"):
+            self.assertIn(teil, schlecht)
+
+    def test_profil_sagt_dasselbe_wie_die_alten_listen(self):
+        gen = {k: p["gen"] for k, p in self.p.items()}
+        self.assertEqual({k: spiele.basis(k) for k in self.p if spiele.basis(k) != k}, self.HAUPTSPIEL)
+        self.assertEqual({k: p["hauptspiel"] for k, p in self.p.items() if p["hauptspiel"]}, self.HAUPTSPIEL)
+        self.assertEqual({k: p["hauptspiel"] for k, p in self.p.items() if p["lernliste"] == "hauptspiel"}, self.LEARN_PARENT)
+        self.assertEqual(self.wo(lambda p: not p["faehigkeiten"]), self.NO_ABILITIES | {k for k in gen if gen[k] <= 2})
+        self.assertEqual(self.wo(lambda p: not p["zucht"]), self.NO_BREEDING | {k for k in gen if gen[k] < 2})
+        self.assertEqual({k: p["auftraege"] for k, p in self.p.items() if p["auftraege"] and not p["blaubeer"]}, self.QUEST_GAMES)
+        self.assertEqual({k: p["auftraege"] for k, p in self.p.items() if p["auftraege"]}, self.REQ_GAMES)
+        self.assertEqual(self.wo(lambda p: p["blaubeer"]), self.SV)
+        self.assertEqual(self.wo(lambda p: p["tera"]), self.SV)
+        self.assertEqual({k: p["raids"] for k, p in self.p.items() if p["raids"]}, dict.fromkeys(self.SV, "scarlet-violet"))
+        self.assertEqual(self.wo(lambda p: p["werte"] in ("el", "ohne")), self.STATS_OTHER)
+        self.assertEqual(self.wo(lambda p: p["werte"] == "av"), {self.LGPE})
+        self.assertEqual(self.wo(lambda p: p["werte"] == "dv"), {k for k in gen if gen[k] <= 2})
+        self.assertEqual(self.wo(lambda p: p["schaden"] == "lgpe"), {self.LGPE})
+        for feld, wert in (("schaden", "la"), ("typfaktoren", "la"), ("fangformel", "hisui"), ("baelle", "hisui"), ("werte", "el")):
+            self.assertEqual(self.wo(lambda p: p[feld] == wert), {self.LA}, feld)
+        for feld, wer in (("forschung", {self.LA}), ("spawnkarten", {self.LA}), ("crypto", {"colosseum", "xd"}),
+                          ("kampf", {"champions"}), ("eigene_dexe", {"pokopia"})):
+            self.assertEqual(self.wo(lambda p: p[feld]), wer, feld)
+        self.assertEqual(self.wo(lambda p: p["fangformel"] == "keine"), {"champions"})
+        # Richtwert statt genauer Fangchance: wie bisher, dazu Mega-Dimension (erbt von Legenden: Z-A; fehlte bis 0.59.0)
+        grob = {k for k in gen if gen[k] <= 2 or (k.startswith("legends-") and k != self.LA) or k.startswith("lets-go")}
+        self.assertEqual(self.wo(lambda p: p["fangformel"] in spiele.FANG_GROB), grob | {"mega-dimension"})
+        self.assertEqual(spiele.EIGENE, (("pokopia", "Pokopia", 9),))
+        self.assertIs(importer.EIGENE_SPIELE, spiele.EIGENE)
+        self.assertEqual((abfragen.HOME, spiele.HOME), ("pokemon-home", "pokemon-home"))
+
+    def test_erweiterung_erbt_vom_hauptspiel(self):
+        erbt = lambda k: {f: v for f, v in self.p[k].items() if f not in ("hauptspiel", "lernliste")}
+        for k, haupt in self.HAUPTSPIEL.items():
+            self.assertEqual(erbt(k), erbt(haupt), k)
+        self.assertEqual(self.p["mega-dimension"]["lernliste"], "eigene")              # eigene Lernliste aus PKHeX
+        self.assertEqual(self.p["scarlet-violet"]["lernliste"], "eigene")
+
+    def test_spiel_ohne_eintrag(self):
+        self.assertFalse(spiele.bekannt("neues-spiel"))
+        self.assertTrue(spiele.bekannt("emerald") and spiele.bekannt(spiele.HOME))
+        self.assertEqual(dict(spiele.profil("neues-spiel", 2)), spiele.grund(2))
+        self.assertEqual(spiele.profil("neues-spiel")["gen"], spiele.NEUESTE)
+        self.assertEqual(spiele.profil("")["gen"], spiele.NEUESTE)
+        self.assertEqual((spiele.profil("emerald")["gen"], spiele.profil("emerald", 4)["gen"]), (3, 4))    # die Datenbank geht vor
+        self.assertEqual((spiele.grund(1)["zucht"], spiele.grund(2)["zucht"], spiele.grund(2)["faehigkeiten"],
+                          spiele.grund(3)["faehigkeiten"], spiele.grund(2)["werte"], spiele.grund(3)["werte"],
+                          spiele.grund(2)["fangformel"], spiele.grund(3)["fangformel"]),
+                         (False, True, False, True, "dv", "ev", "gen12", "genau"))
+        with self.assertRaises(TypeError):
+            spiele.profil("emerald")["zucht"] = False                                  # nur lesen
+        # ohne Spiel gilt nichts Besonderes (wie bisher)
+        self.assertFalse(abfragen.no_abilities(None))
+        self.assertEqual(abfragen.profil(None)["schaden"], "hauptreihe")
+        self.assertTrue(abfragen.no_abilities({"kennung": "gold-silver", "gen": 2}))
+        self.assertTrue(abfragen.no_abilities({"kennung": "neues-spiel", "gen": 2}))
+        self.assertFalse(abfragen.no_abilities({"kennung": "neues-spiel", "gen": 5}))
+
+    def quelle(self, *teile):
+        with open(os.path.join(self.ROOT, *teile), encoding="utf-8") as f:
+            return f.read()
+
+    def test_server_fragt_das_profil(self):
+        """Keine Regel hängt im Server mehr an der Kennung eines Spiels. Was bleibt, steht hier mit Grund."""
+        erlaubt = {
+            'x["kennung"] == pr["hauptspiel"]': "learn_game sucht das Hauptspiel aus dem Profil",
+            'used["kennung"] == LA': "Hinweis zu den Attackenwerten aus dem PokéWiki (Daten von Legenden: Arceus)",
+            'm["kennung"] in role_moves': "Attacken, kein Spiel",
+            'g["kennung"] in D.areas': "ob es Gebiete aus PKHeX gibt, sagt die Datenbank",
+        }
+        muster = re.compile(r'\w+\["kennung"\] *(?:==|!=|in\b|not in\b)')
+        for datei in ("abfragen.py", "server.py"):
+            src = self.quelle("app", datei)
+            zeilen = [z.strip() for z in src.splitlines() if muster.search(z)]
+            self.assertEqual([z for z in zeilen if not any(e in z for e in erlaubt)], [], datei)
+            self.assertEqual(re.findall(r'kennung\.startswith|kennung *[!=]= *"|spiel *[!=]= *"[a-z]', src), [], datei)
+            for name in ("NO_ABILITIES", "TEXT_BASE", "LEARN_PARENT", "QUEST_GAMES", "BBQ_GAMES", "TERA_GAMES", "NO_BREEDING",
+                         "SV_FAMILY", "TRAINER_SHARE", "STATS_OTHER", "LGPE"):
+                self.assertNotIn(name, src, datei)
+
+    def test_oberflaeche_fragt_das_profil(self):
+        """app.js vergleicht das gewählte Spiel nicht mehr mit einer Kennung und liest genau die Felder, die der Server schickt."""
+        js = self.quelle("app", "static", "js", "app.js")
+        self.assertEqual(re.findall(r'S\.game *[!=]==? *"[^"]*"|"\]\.includes\(S\.game\)|S\.game(?: \|\| "")?\)?\.startsWith', js), [])
+        self.assertEqual(set(re.findall(r"PROFIL\(\)\.([a-z_]+)", js)), set(spiele.OBERFLAECHE))
+        self.assertNotIn("REQ_GAMES", js)
 
 
 class Oeffentlich(unittest.TestCase):

@@ -74,8 +74,16 @@
     for (const s of plan.schritte) {
       jetzt = `${s.spiel} ${s.ansicht}`;
       const t0 = Date.now(), vorher = out.probleme.length;
-      if (s.spiel !== spiel) { spiel = s.spiel; win.location.hash = s.ansicht; await warte(0); win.setGame(spiel); }
-      else if (win.location.hash !== s.ansicht) win.location.hash = s.ansicht;
+      // erst das Spiel, dann die Ansicht: Reiter, die es nur in manchen Spielen gibt, prüfen beim Öffnen das gewählte Spiel.
+      // setGame läuft im Rahmen selbst (Funktion des Rahmens über seinen Zeitgeber), wie nach einer Auswahl in der Liste:
+      // direkt von hier gerufen, löste location.replace("#karte") den Weg gegen diese Seite auf und lud sie in den Rahmen
+      if (s.spiel !== spiel) {
+        spiel = s.spiel;
+        win.setTimeout(new win.Function("k", "setGame(k)"), 0, spiel);
+        await warte(20);
+        await beruhigt(plan.grenze);
+      }
+      if (win.location.hash !== s.ansicht) win.location.hash = s.ansicht;
       await warte(20);
       if (!await beruhigt(plan.grenze)) melde(`${jetzt}: nach ${plan.grenze} ms noch nicht fertig`);
       const main = doc.getElementById("main"), text = main.textContent;

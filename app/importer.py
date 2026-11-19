@@ -18,7 +18,7 @@ import os
 import re
 import sqlite3
 
-from . import altissimo, companion, fehler, pokewiki, serebii, shiny, showdown
+from . import altissimo, companion, fehler, pokewiki, serebii, shiny, showdown, spiele
 
 VERSION = "27"                 # erhöhen, wenn sich die aufbereiteten Tabellen ändern: dann baut der nächste Abgleich neu
 DE, EN = 6, 9
@@ -49,7 +49,7 @@ REQUIRED = ("pokemon", "pokemon_species", "pokemon_species_names", "pokemon_type
 
 # Mindestmengen für die Selbstprüfung
 MIN_SPECIES, MIN_MOVES, MIN_GAMES = 1025, 900, 25
-EIGENE_SPIELE = (("pokopia", "Pokopia", 9),)
+EIGENE_SPIELE = spiele.EIGENE        # Spiele, die die PokéAPI nicht führt: stehen im Spielprofil (app/spiele.py, Feld „eigen“)
 
 
 def _table_name(name):

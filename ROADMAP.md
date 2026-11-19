@@ -1,5 +1,52 @@
 # Roadmap
 
+## 0.60.0 (19.11.2026)
+
+Arbeitsauftrag vom 13.11.2026, Abschnitt 4a: Spielprofil (Review P-8). Felder, Werte und „ein neues Spiel“ stehen in
+`docs/spiele.md`.
+
+- **`app/spiele.py`**: je Spiel ein Profil mit 19 Feldern (Generation, Hauptspiel, Lernliste, Schadensformel,
+  Typfaktoren, Fangformel, Balltabelle, Statuswerte, Fähigkeiten, Zucht, Tera, Raids, Aufträge, Blaubeer, Forschung,
+  Crypto, Kampfspiel, Spawnkarten, eigene Dexe). Das Übliche folgt aus der Generation, eine Erweiterung erbt vom
+  Hauptspiel; im Eintrag steht nur, was abweicht. Pokopia (von der PokéAPI nicht geführt) steht dort mit Namen;
+  `importer.EIGENE_SPIELE` verweist darauf.
+- **Server**: Elf verstreute Listen in `abfragen.py` sind durch das Profil ersetzt und entfernt (`NO_ABILITIES`,
+  `TEXT_BASE`, `LEARN_PARENT`, `QUEST_GAMES`, `BBQ_GAMES`, `TERA_GAMES`, `NO_BREEDING`, `SV_FAMILY`, `TRAINER_SHARE`,
+  `STATS_OTHER`, `LGPE`), ebenso die Vergleiche mit der Kennung eines Spiels in `abfragen.py` und `server.py` (rund 30).
+  Übrig sind drei mit Grund, weil sie an Daten genau eines Spiels hängen: der Hinweis zu den Attackenwerten aus dem
+  PokéWiki (Legenden: Arceus) und die Bezeichnung der Dimensions-Missionen (Legenden: Z-A).
+  Ein Test hält die alten Listen fest und verlangt, dass das Profil dasselbe sagt. Ein Spiel der Datenbank ohne Eintrag
+  läuft als Hauptspiel seiner Generation und steht im Fehlerregister.
+- **Oberfläche**: `/api/meta` gibt je Spiel unter `profil` die zehn Felder mit, die `app.js` braucht; `app.js` liest sie
+  über `PROFIL()` und vergleicht das Spiel an keiner Stelle mehr mit einer Kennung (vorher 21 Stellen, darunter die Liste
+  `REQ_GAMES`). Neu `RAIDS()` für den Reiter Raids (bisher an `TERA()`).
+- **Selbsttest**: dazu die Reiter je Profil (Kampf in Champions, Aufträge und Raids in der Türkisgrünen Maske, Aufträge in
+  Mega-Dimension) und dass sie anderswo zur Karte führen; 79 statt 72 Schritte. Das Spiel wechselt jetzt im Rahmen selbst:
+  Direkt von der Testseite gerufen, löste `location.replace("#karte")` den Weg gegen die Testseite auf und lud sie in
+  den Rahmen (ein Fehler des Tests, nicht der Oberfläche).
+
+Geändert, mit Absicht (Vergleich alt gegen neu über 3455 Antworten mit der lokalen echten Datenbank: sonst gleich):
+
+- **TMs in Erweiterungen** (`item_list`): Die PokéAPI führt bei einer Erweiterung nur deren neue Maschinen; die übrigen
+  kommen jetzt vom Hauptspiel. Mit echten Daten: Türkisgrüne Maske 229 TMs mit Attacke statt 35, Indigoblaue Scheibe 229
+  statt 133, Mega-Dimension 160 statt 53; Die Insel der Rüstung und Die Schneelande der Krone zeigen die 208 Maschinen
+  von Schwert/Schild statt keiner. Widersprüche zwischen Hauptspiel und Erweiterung gibt es in den Daten nicht (gleiche
+  TM, andere Attacke: 0); wo beide eine Angabe haben, gilt die der Erweiterung. Behebt den offenen Befund aus 0.59.0.
+- **Ei-Gruppen und Ei-Zyklen** nur noch in Spielen mit Zucht (vorher überall außer Legenden: Arceus, also auch in
+  Colosseum, XD, Let's Go, Legenden: Z-A, Mega-Dimension, Champions); **EV-Ausbeute** nur, wo mit EVs gerechnet wird
+  (nicht mehr in Let's Go, Champions, Pokopia).
+- **Champions** bekommt keine Fangtabelle mehr (die Oberfläche zeigte sie schon nicht). **Mega-Dimension** kennzeichnet
+  die Fangchance wie Legenden: Z-A als Richtwert (fehlte, weil die alte Regel am Namen „legends-“ hing).
+
+Keine Änderung an `user.db`, keine Migration; `importer.VERSION` unverändert.
+
+Offen:
+
+- Legenden: Z-A und Mega-Dimension rechnen Schaden, Typwirkung und Werte wie die Hauptreihe; Pokopia bekommt eine
+  Fangtabelle. Beides unbelegt, steht in `docs/formeln.md` unter „Offen“.
+- Welche Seite einer Quelle zu welchem Spiel gehört (Map Genie, PokéWiki, PKHeX, Serebii und andere), bleibt mit Absicht
+  bei der Quelle; Einstiegswerte der Karten (`MGSTART`, `MG_EDITION`) bleiben in `app.js`.
+
 ## 0.59.0 (16.11.2026)
 
 Arbeitsauftrag vom 13.11.2026, Abschnitt 3: Testinfrastruktur (Review P-6), vor den Strukturänderungen. Welche Tests wo
@@ -159,6 +206,15 @@ stehen in `docs/formeln.md`.
 Was beim Arbeiten am Pokédex auffällt und für eShopKompass oder VR-Navigator taugen könnte. Nur Empfehlungen; die
 anderen Repositories ändert niemand von hier aus.
 
+- **19.11.2026, Regeln je Gegenstand an einer Stelle.** Im Pokédex hingen Regeln je Spiel an Listen von Kennungen in
+  Server und Oberfläche (elf Listen, rund 50 Vergleiche); eine neue Erweiterung musste an jede Stelle. Jetzt ein Profil je
+  Spiel mit Vorgaben je Generation, die Oberfläche bekommt es über die Grunddaten, ein Test verbietet den Vergleich mit
+  Kennungen. Empfehlung: in den Geschwistern suchen, wo Regeln an Kennungen hängen (etwa je Shop oder je Gerät), und
+  erst dann entscheiden; ob es dort solche Listen gibt, ist von hier aus nicht geprüft.
+- **19.11.2026, Selbsttest im Rahmen: Aufrufe im Rahmen laufen lassen.** Ruft die Testseite eine Funktion der Oberfläche
+  direkt auf und diese setzt `location.replace("#…")`, löst der Browser den Weg gegen die Testseite auf und lädt sie in
+  den Rahmen. Abhilfe: die Funktion über den Zeitgeber des Rahmens starten (`win.setTimeout(new win.Function(…))`).
+  Empfehlung: in den Selbsttests der Geschwister prüfen, ob sie Funktionen der Oberfläche direkt aufrufen.
 - **16.11.2026, `TCP_NODELAY` am Webserver.** Wer mit `http.server` Kopfzeilen und Inhalt getrennt schreibt und
   Verbindungen offen hält (HTTP/1.1), verliert je Antwort rund 40 ms (Nagle trifft auf verzögerte Bestätigung). Eine
   Zeile behebt es: `disable_nagle_algorithm = True` am Handler. Ob die Geschwister betroffen sind, ist von hier aus

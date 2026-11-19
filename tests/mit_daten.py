@@ -17,7 +17,7 @@ import unittest
 import urllib.parse
 from unittest import mock
 
-from app import abfragen, db, fehler, importer, server, sources
+from app import abfragen, db, fehler, importer, server, sources, spiele
 from tests import minidb, vertrag
 from tests.basis import HttpMitDaten, MitMiniDatenbank
 
@@ -25,6 +25,12 @@ SPIELE = ("red-blue", "gold-silver", "emerald", "platinum", "black-white", "x-y"
           "scarlet-violet", "the-teal-mask")
 OHNE_DATEN = ("sun-moon", "legends-za", "pokopia")          # im Gerüst, aber ohne Arten: Die Abfragen antworten leer
 TYP = minidb.TYP
+
+
+def lernspiel_von(spiel):
+    """Spiel, dessen Lernliste gilt: bei Erweiterungen ohne eigene Liste das Hauptspiel (Spielprofil)."""
+    pr = spiele.profil(spiel)
+    return pr["hauptspiel"] if pr["lernliste"] == "hauptspiel" else spiel
 
 
 def erwartete_liste(spiel):
@@ -202,7 +208,7 @@ class Welt(MitMiniDatenbank):
         """Jede Lernliste der Welt kommt so an, wie sie in minidb.LERNEN steht: Attacken, Wege, TM-Nummer des Spiels."""
         n = 0
         for spiel in SPIELE:
-            lernspiel = abfragen.LEARN_PARENT.get(spiel, spiel)         # Erweiterungen nehmen die Liste des Hauptspiels
+            lernspiel = lernspiel_von(spiel)
             self.assertEqual(lernspiel, minidb.ERWEITERUNG.get(spiel, spiel))
             for pid, _, _ in erwartete_liste(spiel):
                 soll = minidb.lernt(pid, lernspiel)
@@ -243,7 +249,7 @@ class Welt(MitMiniDatenbank):
     def test_attackenliste(self):
         for spiel in SPIELE:
             gen = minidb.SPIEL_GEN[minidb.SPIEL[spiel]]
-            lernbar = {minidb.ATTACKE[m][0] for pid in minidb.LERNEN for m, _, _ in minidb.lernt(pid, abfragen.LEARN_PARENT.get(spiel, spiel))}
+            lernbar = {minidb.ATTACKE[m][0] for pid in minidb.LERNEN for m, _, _ in minidb.lernt(pid, lernspiel_von(spiel))}
             rows = abfragen.move_list({"spiel": spiel})["rows"]
             self.assertTrue(all(m["gen"] <= gen for m in rows), spiel)
             self.assertLessEqual(lernbar, {m["id"] for m in rows}, spiel)
@@ -336,11 +342,11 @@ class Welt(MitMiniDatenbank):
                 self.assertEqual({i["name"] for i in r["items"]}, soll, spiel)
                 self.assertEqual(r["hinweis"], "", spiel)
                 for i in r["items"]:
-                    # die TM traegt die Attacke dieses Spiels. Offen (ROADMAP, für das Spielprofil): In Erweiterungen
-                    # fehlt die Attacke bei den TMs des Hauptspiels, weil die PokéAPI die Maschinen nur dort führt.
-                    if i["tasche"] == "Maschinen" and spiel not in minidb.ERWEITERUNG:
+                    # die TM trägt die Attacke dieses Spiels; in Erweiterungen die des Hauptspiels (die PokéAPI führt die
+                    # Maschinen dort; bis 0.59.0 fehlte die Attacke, in der Welt hat die Erweiterung keine eigenen)
+                    if i["tasche"] == "Maschinen":
                         nr = int(i["name"][2:])
-                        soll_att = next(m for m in minidb.TM if minidb.tm_nummer(m, spiel) == nr)
+                        soll_att = next(m for m in minidb.TM if minidb.tm_nummer(m, minidb.ERWEITERUNG.get(spiel, spiel)) == nr)
                         self.assertEqual(i["attacke"]["name"], minidb.ATTACKE[soll_att][2], (spiel, i["name"]))
             em = abfragen.item_list({"spiel": "emerald"})
             self.assertEqual(em["taschen"], ["Items", "Medizin", "Bälle", "Maschinen"])
@@ -365,6 +371,64 @@ class Welt(MitMiniDatenbank):
         self.assertEqual([x["ball"] for x in la["fangen"]], [b[0] for b in la["fang_hisui"]])
         self.assertEqual([b[:2] for b in la["fang_hisui"]], [b[:2] for b in server.meta()["hisui_baelle"]][:len(la["fang_hisui"])])
         self.ohne_fehler()
+
+    def test_spielprofil(self):
+        """0.60.0: Was die Detailseite zeigt, folgt dem Spielprofil (app/spiele.py), nicht mehr der Kennung des Spiels."""
+        D = abfragen.data()
+        self.assertEqual(len(D.games), len(minidb.SPIEL) + len(spiele.EIGENE))
+        for g in D.games:                                                       # jedes Spiel hat einen Eintrag, dieselbe Generation
+            self.assertTrue(spiele.bekannt(g["kennung"]), g["kennung"])
+            self.assertEqual(spiele.profil(g["kennung"])["gen"], g["gen"], g["kennung"])
+        mehr = lambda spiel: abfragen.detail(1, {"spiel": spiel})["mehr"]
+        hat = lambda spiel, *felder: [f in mehr(spiel) for f in felder]
+        # Ei-Gruppen nur, wo es Zucht gibt; EV-Ausbeute nur, wo es EVs gibt
+        self.assertEqual(hat("emerald", "eigruppen", "eizyklen", "ev"), [True, True, True])
+        self.assertEqual(hat("gold-silver", "eigruppen", "ev"), [True, False])
+        self.assertEqual(hat("red-blue", "eigruppen", "ev"), [False, False])
+        self.assertEqual(hat("legends-za", "eigruppen", "eizyklen", "ev"), [False, False, True])
+        for spiel in ("colosseum", "xd", "lets-go-pikachu-lets-go-eevee", "legends-arceus", "mega-dimension", "champions"):
+            self.assertEqual(hat(spiel, "eigruppen", "eizyklen"), [False, False], spiel)
+        for spiel in ("lets-go-pikachu-lets-go-eevee", "legends-arceus", "champions", "pokopia"):
+            self.assertEqual(hat(spiel, "ev"), [False], spiel)
+        # Fangchance: genau, als Richtwert (auch in der Erweiterung von Legenden: Z-A) oder gar nicht (Kampfspiel)
+        self.assertEqual({s_: mehr(s_)["fang_grob"] for s_ in ("emerald", "scarlet-violet", "gold-silver", "legends-za", "mega-dimension",
+                                                             "lets-go-pikachu-lets-go-eevee", "legends-arceus")},
+                         {"emerald": False, "scarlet-violet": False, "gold-silver": True, "legends-za": True, "mega-dimension": True,
+                          "lets-go-pikachu-lets-go-eevee": True, "legends-arceus": False})
+        self.assertEqual(hat("champions", "fangrate", "fangen", "fang_grob", "fang_gen", "schlaf_faktor"), [True, False, False, False, False])
+        self.assertEqual(hat("legends-arceus", "fangen", "fang_hisui"), [True, True])
+        self.assertEqual(hat("emerald", "fangen", "fang_hisui"), [True, False])
+        # die Oberfläche bekommt je Spiel genau ihre Felder, auch für Pokémon HOME
+        sp = {g["kennung"]: g["profil"] for g in server.meta()["spiele"]}
+        self.assertEqual(set(sp), set(minidb.SPIEL) | {"pokopia", spiele.HOME})
+        for kennung, pr in sp.items():
+            self.assertEqual(pr, spiele.fuer_oberflaeche(spiele.profil(kennung)), kennung)
+        self.assertEqual((sp["champions"]["kampf"], sp["the-teal-mask"]["auftraege"], sp["mega-dimension"]["auftraege"],
+                          sp["legends-arceus"]["werte"], sp[spiele.HOME]["werte"]), (True, "the-indigo-disk", "legends-za", "el", "ev"))
+        # Aufträge: die Erweiterung fragt unter dem Schlüssel ihres Hauptspiels, Karmesin/Purpur die Blaubeer-Missionen
+        self.assertEqual([abfragen.request_list({"spiel": s_}).get("spiel") for s_ in
+                          ("legends-arceus", "legends-za", "mega-dimension", "the-teal-mask", "the-indigo-disk", "emerald", "")],
+                         ["legends-arceus", "legends-za", "legends-za", "the-indigo-disk", "the-indigo-disk", None, "legends-arceus"])
+        self.ohne_fehler()
+
+    def test_spiel_ohne_profil_steht_im_register(self):
+        """Ein Spiel der Datenbank ohne Eintrag in app/spiele.py läuft als Hauptspiel seiner Generation und wird gemeldet."""
+        os.remove(db.pokeapi_path())
+        shutil.copy(minidb.pfad(), db.pokeapi_path())
+        con = sqlite3.connect(db.pokeapi_path())
+        con.execute("INSERT INTO spiel VALUES (2000, 'legends-morgen', 'Legenden: Morgen', 2, 99)")
+        con.execute("UPDATE spiel SET gen = 4 WHERE kennung = 'emerald'")
+        con.commit()
+        con.close()
+        D = abfragen.data()
+        self.assertEqual(dict(abfragen.profil(D.game_by["legends-morgen"])), spiele.grund(2))
+        self.assertTrue(abfragen.no_abilities(D.game_by["legends-morgen"]))
+        self.assertEqual(abfragen.profil(D.game_by["emerald"])["gen"], 4)       # wie überall sonst gilt die Generation der Datenbank
+        self.assertEqual(sorted((e["wo"], e["art"], e["text"]) for e in fehler.liste()),
+                         [("spiele.profil", "Generation weicht ab", "emerald: Datenbank 4, Profil 3; es gilt die der Datenbank"),
+                          ("spiele.profil", "Spiel ohne Profil",
+                           "legends-morgen gilt als Hauptspiel der Generation 2; Eintrag in app/spiele.py fehlt")])
+        self.assertIn("legends-morgen", [g["kennung"] for g in server.meta()["spiele"]])
 
     def test_team(self):
         ev = abfragen.team_view({"spiel": "scarlet-violet", "ids": [3, 5, 7], "details": [{}, {}, {"tera": TYP["Elektro"]}]})
@@ -711,7 +775,7 @@ class Selbsttest(HttpMitDaten):
         for spiel in self.SPIELE:
             liste = erwartete_liste(spiel)
             name = lambda pid: next(f[5] for f in minidb.FORMEN if f[0] == pid) if pid not in minidb.ART else minidb.ART[pid][2]
-            lernspiel = abfragen.LEARN_PARENT.get(spiel, spiel)
+            lernspiel = lernspiel_von(spiel)
             add = lambda ansicht, sieht=(), **k: schritte.append({"spiel": spiel, "ansicht": ansicht, "sieht": list(sieht), **k})
             add("#pokemon", [name(pid) for pid, _, _ in liste], sieht_nicht=["Noch keine Spieldaten"])
             for pid in (liste[0][0], liste[-1][0]):
@@ -733,6 +797,16 @@ class Selbsttest(HttpMitDaten):
             if spiel == "scarlet-violet":
                 add("#raids", [])
             add("#einstellungen", ["Abgleich", sources.VERSION])
+        # 0.60.0: Reiter nach dem Spielprofil: Kampf statt Karte im Kampfspiel, Aufträge und Raids in der Erweiterung über das
+        # Hauptspiel, Aufträge in Mega-Dimension unter Legenden: Z-A; wo das Profil sie nicht nennt, führt der Reiter zur Karte
+        for spiel, ansicht, sieht, wechselt in (("the-teal-mask", "#auftraege", ["Blaubeer"], False),
+                                                ("the-teal-mask", "#raids", [], False),
+                                                ("mega-dimension", "#auftraege", [], False),
+                                                ("champions", "#kampf", ["Schadensrechner"], False),
+                                                ("champions", "#karte", ["Schadensrechner"], True),
+                                                ("emerald", "#auftraege", [], True),
+                                                ("emerald", "#raids", [], True)):
+            schritte.append({"spiel": spiel, "ansicht": ansicht, "sieht": sieht, "wechselt": wechselt})
         return {"breite": self.BREITE, "hoehe": self.HOEHE, "grenze": self.GRENZE, "ruhe": 60, "version": sources.VERSION,
                 "schritte": schritte}
 
